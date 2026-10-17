@@ -1,0 +1,148 @@
+package dev.v1zir.visuals.render.font;
+
+/**
+ * Codepoints of the bundled Lucide icon font (ISC licensed, subset to the icons used here).
+ * Icons are rendered through the SDF text renderer, so they stay sharp at any size.
+ */
+public final class Icons {
+	public static final int USER = 0xe19f;
+	public static final int USERS = 0xe1a4;
+	public static final int GLOBE = 0xe0e8;
+	public static final int SETTINGS = 0xe154;
+	public static final int SLIDERS_HORIZONTAL = 0xe29a;
+	public static final int POWER = 0xe140;
+	public static final int PUZZLE = 0xe29c;
+	public static final int LANGUAGES = 0xe0fe;
+	public static final int ACCESSIBILITY = 0xe297;
+	public static final int SEARCH = 0xe151;
+	public static final int PALETTE = 0xe1dd;
+	public static final int EYE = 0xe0ba;
+	public static final int LAYERS = 0xe529;
+	public static final int SUN = 0xe178;
+	public static final int MOON = 0xe11e;
+	public static final int SPARKLES = 0xe412;
+	public static final int SPARKLE = 0xe47e;
+	public static final int CLOUD = 0xe088;
+	public static final int CLOUD_SUN = 0xe216;
+	public static final int CLOUD_MOON = 0xe215;
+	public static final int GAMEPAD_2 = 0xe0df;
+	public static final int SWORDS = 0xe2b4;
+	public static final int MONITOR = 0xe11d;
+	public static final int LAYOUT_DASHBOARD = 0xe1c1;
+	public static final int LAYOUT_GRID = 0xe0ff;
+	public static final int X = 0xe1b2;
+	public static final int CHECK = 0xe06c;
+	public static final int CHEVRON_DOWN = 0xe06d;
+	public static final int CHEVRON_RIGHT = 0xe06f;
+	public static final int CHEVRON_UP = 0xe070;
+	public static final int CHEVRON_LEFT = 0xe06e;
+	public static final int PLUS = 0xe13d;
+	public static final int MINUS = 0xe11c;
+	public static final int KEYBOARD = 0xe284;
+	public static final int MOUSE_POINTER = 0xe11f;
+	public static final int ZAP = 0xe1b4;
+	public static final int FLAME = 0xe0d2;
+	public static final int WAND_SPARKLES = 0xe357;
+	public static final int CROSSHAIR = 0xe0ac;
+	public static final int TARGET = 0xe180;
+	public static final int ORBIT = 0xe3e7;
+	public static final int CIRCLE_DOT = 0xe345;
+	public static final int FOOTPRINTS = 0xe3b9;
+	public static final int STAR = 0xe176;
+	public static final int HEART = 0xe0f2;
+	public static final int CLOCK = 0xe087;
+	public static final int TIMER = 0xe1e0;
+	public static final int COMPASS = 0xe09b;
+	public static final int MAP_PIN = 0xe111;
+	public static final int NAVIGATION = 0xe123;
+	public static final int GAUGE = 0xe1bf;
+	public static final int ACTIVITY = 0xe038;
+	public static final int WIFI = 0xe1ae;
+	public static final int SERVER = 0xe153;
+	public static final int SIGNAL = 0xe25f;
+	public static final int BOX = 0xe061;
+	public static final int SHIELD = 0xe158;
+	public static final int FLASK_CONICAL = 0xe0d5;
+	public static final int SKULL = 0xe221;
+	public static final int CROWN = 0xe1d6;
+	public static final int MOUNTAIN = 0xe231;
+	public static final int SNOWFLAKE = 0xe165;
+	public static final int DROPLET = 0xe0b4;
+	public static final int RAINBOW = 0xe4c2;
+	public static final int PAINTBRUSH = 0xe2e7;
+	public static final int PIPETTE = 0xe13b;
+	public static final int TYPE = 0xe198;
+	public static final int SAVE = 0xe14d;
+	public static final int FOLDER = 0xe0d7;
+	public static final int REFRESH_CW = 0xe145;
+	public static final int ROTATE_CCW = 0xe148;
+	public static final int TRASH_2 = 0xe18e;
+	public static final int PENCIL = 0xe1f9;
+	public static final int INFO = 0xe0f9;
+	public static final int BELL = 0xe059;
+	public static final int LIST = 0xe106;
+	public static final int MOVE = 0xe121;
+	public static final int IMAGE = 0xe0f6;
+	public static final int GLASSES = 0xe20d;
+	public static final int CIRCLE = 0xe076;
+	public static final int GHOST = 0xe20e;
+	public static final int CPU = 0xe0a9;
+	public static final int HOUSE = 0xe0f5;
+	public static final int SUNRISE = 0xe179;
+	public static final int SUNSET = 0xe17a;
+	public static final int TELESCOPE = 0xe5c5;
+	public static final int ROCKET = 0xe286;
+	public static final int HAND = 0xe1d7;
+	public static final int WAVES = 0xe283;
+	public static final int WIND = 0xe1b0;
+	public static final int BRUSH = 0xe1d3;
+	public static final int ELLIPSIS = 0xe0b6;
+	public static final int GRIP_VERTICAL = 0xe0eb;
+	public static final int MENU = 0xe115;
+	public static final int HASH = 0xe0ef;
+	public static final int COMMAND = 0xe09a;
+	public static final int USER_COG = 0xe342;
+	public static final int SWATCH_BOOK = 0xe59f;
+	public static final int SHIRT = 0xe1ca;
+	public static final int GEM = 0xe242;
+	public static final int CLOUD_LIGHTNING = 0xe08c;
+	public static final int APP_WINDOW = 0xe426;
+	public static final int LOCK = 0xe10b;
+	public static final int UNLOCK = 0xe10c;
+	public static final int PIN = 0xe259;
+	public static final int HISTORY = 0xe1f5;
+	public static final int DROPLETS = 0xe0b5;
+	public static final int MOUSE = 0xe28e;
+	public static final int BOLT = 0xe58c;
+	public static final int DIAMOND = 0xe2d2;
+	public static final int FEATHER = 0xe0be;
+	public static final int LEAF = 0xe2de;
+	public static final int CHERRY = 0xe350;
+	public static final int ECLIPSE = 0xe59d;
+	public static final int HAZE = 0xe0f0;
+	public static final int BLEND = 0xe59c;
+	public static final int APERTURE = 0xe040;
+	public static final int SCAN_EYE = 0xe536;
+	public static final int SPLINE = 0xe38b;
+	public static final int MAGNET = 0xe2b5;
+	public static final int PARTY_POPPER = 0xe343;
+	public static final int MUSIC = 0xe122;
+	public static final int VOLUME_2 = 0xe1ab;
+	public static final int EARTH = 0xe1f3;
+	public static final int SATELLITE = 0xe447;
+	public static final int BINOCULARS = 0xe621;
+	public static final int BICEPS_FLEXED = 0xe5eb;
+	public static final int SWORD = 0xe2b3;
+	public static final int AXE = 0xe050;
+	public static final int HAMMER = 0xe0ec;
+	public static final int BED = 0xe2c1;
+	public static final int BATTERY_CHARGING = 0xe054;
+	public static final int THERMOMETER = 0xe186;
+
+	private Icons() {
+	}
+
+	public static String str(int codepoint) {
+		return new String(Character.toChars(codepoint));
+	}
+}

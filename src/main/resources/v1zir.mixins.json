@@ -1,0 +1,22 @@
+{
+	"required": true,
+	"minVersion": "0.8",
+	"package": "dev.v1zir.visuals.mixin",
+	"compatibilityLevel": "JAVA_21",
+	"client": [
+		"ClientPlayNetworkHandlerMixin",
+		"ClientPlayerInteractionManagerMixin",
+		"FogRendererMixin",
+		"GuiRendererMixin",
+		"HeldItemRendererMixin",
+		"KeyboardMixin",
+		"LightmapTextureManagerMixin",
+		"MinecraftClientMixin",
+		"RenderSystemMixin",
+		"SkyRenderingMixin",
+		"WorldRendererMixin"
+	],
+	"injectors": {
+		"defaultRequire": 0
+	}
+}
