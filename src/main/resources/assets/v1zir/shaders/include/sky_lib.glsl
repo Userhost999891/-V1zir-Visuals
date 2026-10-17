@@ -510,7 +510,7 @@ vec3 vSkyMagma(vec3 rd, float t) {
 	float border = vor.x + (vNoise2(p * 6.0) - 0.5) * 0.035;
 	float width = 0.012 + 0.05 * vNoise2(p * 2.5 + 3.1) * vNoise2(p * 0.7 - t * 0.01);
 	// Per-plate values only apply away from the crack, so both sides of a crack match.
-	float side = smoothstep(0.0, 0.15, max(border, 0.0));
+	float side = smoothstep(0.0, 0.15, vor.x);
 	float plateS = mix(0.5, plate, side);
 	// Never thinner than ~1.5 px: thin cracks get wider and dimmer instead of breaking up and crawling.
 	float bpx = max(fwidth(border), 1e-5);
