@@ -46,7 +46,13 @@ jobs:
         env:
           # Leave CPU for the integrated server; llvmpipe takes every core by default.
           LP_NUM_THREADS: 2
-        run: xvfb-run -a -s "-screen 0 1920x1080x24" ./gradlew runClientGameTest --stacktrace
+        run: |
+          # Thread dumps of the client while it runs, to diagnose hangs.
+          (for i in 1 2 3 4 5 6; do
+            sleep 40
+            for p in $(pgrep -f net.fabricmc.devlaunchinjector.Main); do jstack -l "$p" > "/tmp/thread-dump-$i.txt" 2>&1; done
+          done) &
+          xvfb-run -a -s "-screen 0 1920x1080x24" ./gradlew runClientGameTest --stacktrace
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -64,6 +70,7 @@ jobs:
         run: |
           shopt -s nullglob
           for f in build/run/clientGameTest/crash-reports/*.txt; do echo "=== $f"; cat "$f"; done
+          for f in /tmp/thread-dump-*.txt; do echo "=== $f"; cat "$f"; done
           for f in build/run/clientGameTest/screenshots/*.png; do
             convert "$f" -resize 800x450 -quality 72 /tmp/preview.jpg
             echo "V1ZIR-PREVIEW-BEGIN $(basename "$f")"

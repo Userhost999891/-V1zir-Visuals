@@ -13,6 +13,7 @@
 		"LightmapTextureManagerMixin",
 		"MinecraftClientMixin",
 		"RenderSystemMixin",
+		"ScreenMixin",
 		"SkyRenderingMixin",
 		"WorldRendererMixin"
 	],
