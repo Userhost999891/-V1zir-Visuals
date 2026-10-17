@@ -47,10 +47,17 @@ jobs:
           # Leave CPU for the integrated server; llvmpipe takes every core by default.
           LP_NUM_THREADS: 2
         run: |
-          # Thread dumps of the client while it runs, to diagnose hangs.
-          (for i in 1 2 3 4 5 6; do
-            sleep 40
-            for p in $(pgrep -f net.fabricmc.devlaunchinjector.Main); do jstack -l "$p" > "/tmp/thread-dump-$i.txt" 2>&1; done
+          # Two thread dumps of the client JVM if world loading stalls, to diagnose the hang.
+          (log=build/run/clientGameTest/logs/latest.log
+          for _ in $(seq 1 120); do
+            sleep 5
+            if [ -f "$log" ] && [ "$(grep -c 'Preparing spawn area' "$log")" -ge 30 ]; then
+              for i in 1 2; do
+                for p in $(jps -l | awk '/devlaunchinjector|KnotClient/ {print $1}'); do jstack -l "$p" > "/tmp/thread-dump-$i.txt" 2>&1; done
+                sleep 10
+              done
+              break
+            fi
           done) &
           xvfb-run -a -s "-screen 0 1920x1080x24" ./gradlew runClientGameTest --stacktrace
       - uses: actions/upload-artifact@v4

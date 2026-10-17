@@ -14,7 +14,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * Menus opened outside a world (options, world list, server list...) show our shader background
- * instead of the vanilla rotating panorama, which vanilla then blurs and darkens as usual.
+ * instead of the vanilla rotating panorama.
  */
 @Mixin(Screen.class)
 public abstract class ScreenMixin {
@@ -28,7 +28,8 @@ public abstract class ScreenMixin {
 		MainMenuModule module = ModuleManager.get(MainMenuModule.class);
 		if (module == null || !module.isEnabled()) return;
 		MenuSky.prepare(module.preset(), width, height, 0f, 0f, module.speed.f());
-		Render2D.menuBackground(context, width, height, 0xFFD2D2D2);
+		// Dimmer than on the main menu so vanilla widgets stay readable on top of it.
+		Render2D.menuBackground(context, width, height, 0xFF6E6E6E);
 		ci.cancel();
 	}
 }
