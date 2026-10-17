@@ -15,6 +15,22 @@ repositories {
 
 loom {
 	accessWidenerPath = file('src/main/resources/v1zir.accesswidener')
+
+	mods {
+		v1zir {
+			sourceSet sourceSets.main
+		}
+	}
+}
+
+// Client game test (src/gametest): ./gradlew runClientGameTest starts the real client, walks through
+// the menu, sky presets, HUD and Click GUI and saves screenshots to build/run/clientGameTest/screenshots.
+fabricApi {
+	configureTests {
+		createSourceSet = true
+		modId = 'v1zir-gametest'
+		enableGameTests = false
+	}
 }
 
 dependencies {

@@ -1,0 +1,69 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build mod
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build
+        run: ./gradlew build --stacktrace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v1zir-visuals-jar
+          path: build/libs/
+
+  client:
+    name: Dev client
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install Xvfb and Mesa
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q xvfb libgl1-mesa-dri imagemagick
+      - name: Run dev client (client game test)
+        timeout-minutes: 40
+        run: xvfb-run -a -s "-screen 0 1920x1080x24" ./gradlew runClientGameTest --stacktrace
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dev-client-screenshots
+          path: build/run/clientGameTest/screenshots/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dev-client-logs
+          path: |
+            build/run/clientGameTest/logs/
+            build/run/clientGameTest/crash-reports/
+      - name: Screenshot previews
+        if: always()
+        run: |
+          shopt -s nullglob
+          for f in build/run/clientGameTest/crash-reports/*.txt; do echo "=== $f"; cat "$f"; done
+          for f in build/run/clientGameTest/screenshots/*.png; do
+            convert "$f" -resize 800x450 -quality 72 /tmp/preview.jpg
+            echo "V1ZIR-PREVIEW-BEGIN $(basename "$f")"
+            base64 -w 4000 /tmp/preview.jpg
+            echo "V1ZIR-PREVIEW-END"
+          done

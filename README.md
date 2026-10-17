@@ -69,6 +69,11 @@ gradlew.bat build      # Windows
 Gotowy plik: `build/libs/v1zir-visuals-1.0.0.jar` → wrzuć do folderu `mods` razem z
 **Fabric API** dla 1.21.11. Test w środowisku deweloperskim: `./gradlew runClient`.
 
+Automatyczny test klienta: `./gradlew runClientGameTest` uruchamia prawdziwego klienta, przechodzi
+przez menu główne, wszystkie presety nieba, HUD i Click GUI, a zrzuty ekranu zapisuje w
+`build/run/clientGameTest/screenshots`. To samo robi GitHub Actions przy każdym PR (artefakty
+`v1zir-visuals-jar` i `dev-client-screenshots`).
+
 Konfiguracja zapisuje się w `config/v1zir/config.json`.
 
 ## Struktura
