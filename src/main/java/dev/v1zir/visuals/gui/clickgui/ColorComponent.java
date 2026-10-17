@@ -49,7 +49,7 @@ public final class ColorComponent extends SettingComponent<ColorSetting> {
 		Render2D.circle(ctx, x + width - r, y + ROW / 2f, r, ColorUtil.withAlpha(color, 255));
 		Render2D.ring(ctx, x + width - r, y + ROW / 2f, r, 1f, ColorUtil.withAlpha(0xFFFFFF, 60));
 
-		float t = Anim.easeOutCubic(open.target(expanded ? 1f : 0f).get());
+		float t = open.target(expanded ? 1f : 0f).get();
 		if (t <= 0.01f) return ROW;
 		float py = y + ROW + 2f;
 		float alphaBackup = Render2D.alpha();

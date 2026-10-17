@@ -47,7 +47,7 @@ public final class ModuleRow {
 
 	/** Height this row will take next frame (used for layout before drawing). */
 	float height() {
-		return Ui.ROW_HEIGHT + settingsHeight * Anim.easeOutCubic(expand.value());
+		return Ui.ROW_HEIGHT + settingsHeight * expand.target(expanded ? 1f : 0f).value();
 	}
 
 	float render(DrawContext ctx, float x, float y, float width, double mouseX, double mouseY) {
@@ -87,7 +87,7 @@ public final class ModuleRow {
 			Render2D.textMiddle(ctx, small, key, right - kw + 3f, y + Ui.ROW_HEIGHT / 2f, 5.5f, Theme.textDim());
 		}
 
-		float t = Anim.easeOutCubic(expand.target(expanded ? 1f : 0f).get());
+		float t = expand.target(expanded ? 1f : 0f).get();
 		float total = Ui.ROW_HEIGHT;
 		if (t > 0.005f) {
 			float sy = y + Ui.ROW_HEIGHT;

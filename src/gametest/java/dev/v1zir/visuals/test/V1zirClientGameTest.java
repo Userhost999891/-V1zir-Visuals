@@ -19,6 +19,9 @@ import dev.v1zir.visuals.render.sky.SkyPreset;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.screen.TitleScreen;
+import net.minecraft.client.gui.screen.option.OptionsScreen;
 import org.lwjgl.glfw.GLFW;
 
 import java.lang.reflect.Field;
@@ -32,16 +35,16 @@ import java.util.List;
 public class V1zirClientGameTest implements FabricClientGameTest {
 	@Override
 	public void runTest(ClientGameTestContext context) {
-		context.getInput().resizeWindow(1600, 900);
-		context.runOnClient(client -> {
-			client.options.getGuiScale().setValue(2);
-			client.onResolutionChanged();
-		});
-
+		resize(context, 1280, 720);
 		mainMenu(context);
+		vanillaMenuNeverShows(context);
 
+		// Software rendering in CI is slow: load the world in a small window so the integrated
+		// server gets enough CPU, then go back to a large window for the screenshots.
+		resize(context, 854, 480);
 		try (TestSingleplayerContext singleplayer = context.worldBuilder().create()) {
 			singleplayer.getClientWorld().waitForChunksRender();
+			resize(context, 1280, 720);
 			singleplayer.getServer().runCommand("effect give @a minecraft:speed 9999 1 true");
 			singleplayer.getServer().runCommand("effect give @a minecraft:night_vision 9999 0 true");
 
@@ -54,9 +57,23 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		}
 	}
 
+	private static void resize(ClientGameTestContext context, int width, int height) {
+		context.getInput().resizeWindow(width, height);
+		context.runOnClient(client -> {
+			client.options.getGuiScale().setValue(2);
+			client.onResolutionChanged();
+		});
+		context.waitTick();
+	}
+
 	private static void mainMenu(ClientGameTestContext context) {
 		context.waitForScreen(V1zirMainMenu.class);
-		context.waitTicks(60);
+		// Intro: fade in, logo, then the buttons.
+		for (int frame = 0; frame < 4; frame++) {
+			context.waitTicks(frame == 0 ? 2 : 6);
+			context.takeScreenshot("main-menu-intro-" + frame);
+		}
+		context.waitTicks(40);
 		context.takeScreenshot("main-menu");
 
 		// Hover the first round button: it only highlights.
@@ -69,7 +86,36 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.getInput().setCursorPos(cursor[0], cursor[1]);
 		context.waitTicks(10);
 		context.takeScreenshot("main-menu-hover");
-		context.getInput().setCursorPos(800, 450);
+		context.getInput().setCursorPos(640, 360);
+	}
+
+	/** Every way back to the title screen must land on our menu, never on the vanilla one. */
+	private static void vanillaMenuNeverShows(ClientGameTestContext context) {
+		context.setScreen(() -> {
+			MinecraftClient client = MinecraftClient.getInstance();
+			return new OptionsScreen(client.currentScreen, client.options);
+		});
+		context.waitTicks(10);
+		context.takeScreenshot("options-from-menu");
+		context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+		context.waitTicks(2);
+		assertMainMenu(context, "closing Options with Escape");
+
+		context.setScreen(() -> null);
+		context.waitTicks(2);
+		assertMainMenu(context, "setScreen(null) outside a world");
+
+		context.setScreen(TitleScreen::new);
+		context.waitTicks(2);
+		assertMainMenu(context, "opening the vanilla TitleScreen");
+	}
+
+	private static void assertMainMenu(ClientGameTestContext context, String action) {
+		String screen = context.computeOnClient(client -> client.currentScreen == null ? "null" : client.currentScreen.getClass().getName());
+		if (!screen.equals(V1zirMainMenu.class.getName())) {
+			context.takeScreenshot("unexpected-screen");
+			throw new AssertionError("After " + action + " the screen is " + screen + " instead of the V1zir main menu");
+		}
 	}
 
 	private static void sky(ClientGameTestContext context, TestSingleplayerContext singleplayer) {

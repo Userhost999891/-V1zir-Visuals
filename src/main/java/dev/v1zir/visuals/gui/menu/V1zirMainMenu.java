@@ -40,14 +40,15 @@ public final class V1zirMainMenu extends Screen {
 	private final List<RoundButton> buttons = new ArrayList<>();
 	private final Anim parallaxX = new Anim(0f, 3.5f);
 	private final Anim parallaxY = new Anim(0f, 3.5f);
-	private final long openedAt = System.nanoTime();
-	private final float introLength;
+	/** 1 for the first intro of the session, shorter when coming back to the menu later. */
+	private final float introScale;
+	private long introStart = -1L;
 	private Particle[] particles = new Particle[0];
 	private long lastFrame = System.nanoTime();
 
 	public V1zirMainMenu() {
 		super(Text.literal(V1zir.NAME));
-		introLength = playedIntro ? 0.55f : 1.6f;
+		introScale = playedIntro ? 0.45f : 1f;
 		playedIntro = true;
 	}
 
@@ -111,7 +112,10 @@ public final class V1zirMainMenu extends Screen {
 		long now = System.nanoTime();
 		float dt = Math.min((now - lastFrame) / 1.0e9f, 0.1f);
 		lastFrame = now;
-		float t = (now - openedAt) / 1.0e9f;
+		// The intro starts on the first frame that is not hidden behind the loading overlay.
+		if (introStart < 0L && client.getOverlay() == null) introStart = now;
+		float time = introStart < 0L ? 0f : (now - introStart) / 1.0e9f;
+		float t = time / introScale;
 
 		boolean parallax = module == null || module.parallax.on();
 		parallaxX.target(parallax ? (mouseX / (float) Math.max(width, 1) - 0.5f) * 2f : 0f);
@@ -131,48 +135,62 @@ public final class V1zirMainMenu extends Screen {
 		float scrimH = height * 0.5f;
 		Render2D.shadow(ctx, width / 2f - scrimW / 2f, height * 0.24f, scrimW, scrimH, scrimH / 2f, scrimH * 0.45f, 0x8C000000);
 
-		// Intro: fade from black, then the logo rises in, then the buttons appear.
-		float fade = Anim.easeOutCubic(Anim.progress(t, 0f, introLength));
+		// Intro: the background rises out of black, the logo slides up and comes into focus,
+		// the underline grows from the centre and the buttons fade in (they never move).
+		float fade = Anim.easeInOutSine(Anim.progress(t, 0f, 1.1f));
 		if (fade < 1f) Render2D.rect(ctx, 0, 0, width, height, ColorUtil.withAlpha(0x000000, Math.round((1f - fade) * 255)));
 
-		float titleT = Anim.easeOutCubic(Anim.progress(t, introLength * 0.3f, introLength * 0.75f));
-		renderTitle(ctx, titleT, px, py);
+		float titleT = Anim.easeOutQuart(Anim.progress(t, 0.25f, 0.9f));
+		float subT = Anim.easeOutCubic(Anim.progress(t, 0.55f, 0.6f));
+		float lineT = Anim.easeInOutCubic(Anim.progress(t, 0.6f, 0.75f));
+		renderTitle(ctx, titleT, subT, lineT, time, px, py);
 
-		float buttonsAlpha = Anim.easeOutCubic(Anim.progress(t, introLength * 0.55f, introLength * 0.6f));
+		float buttonsAlpha = Anim.easeOutCubic(Anim.progress(t, 0.8f, 0.55f));
 		Render2D.setAlpha(buttonsAlpha);
 		for (RoundButton button : buttons) button.render(ctx, mouseX, mouseY);
 		renderFooter(ctx);
 		Render2D.setAlpha(1f);
 	}
 
-	private void renderTitle(DrawContext ctx, float progress, float px, float py) {
-		if (progress <= 0f) return;
+	private void renderTitle(DrawContext ctx, float titleT, float subT, float lineT, float time, float px, float py) {
+		if (titleT <= 0f) return;
 		SdfFont font = Fonts.title();
 		String title = V1zir.NAME;
 		float size = Math.max(24f, Math.min(52f, height * 0.095f));
-		float spacing = size * 0.035f;
+		// Letters start slightly spread out and blurred, then settle into place.
+		float spacing = size * (0.035f + 0.09f * (1f - titleT));
 		float cx = width / 2f - px * 3f;
-		float y = height * 0.33f - size * 0.75f + (1f - progress) * 14f + py * 2f;
+		float baseY = height * 0.33f - size * 0.75f + py * 2f;
+		float y = baseY + (1f - titleT) * 12f;
 		int accent = Theme.accent();
 		int accent2 = Theme.accent2();
+		// The glow breathes slowly once the logo is in place.
+		int glowAlpha = Math.round(150f * (0.82f + 0.18f * (float) Math.sin(time * 1.3f)));
 
-		Render2D.setAlpha(progress);
-		// Soft accent glow behind the logo.
+		Render2D.setAlpha(titleT);
 		Render2D.textCentered(ctx, font, title, cx, y, size,
-			Render2D.TextStyle.of(ColorUtil.withAlpha(accent, 150)).gradient(ColorUtil.withAlpha(accent2, 150)).soft(0.3f).weight(0.16f).spacing(spacing));
+			Render2D.TextStyle.of(ColorUtil.withAlpha(accent, glowAlpha)).gradient(ColorUtil.withAlpha(accent2, glowAlpha))
+				.soft(0.3f + 0.3f * (1f - titleT)).weight(0.16f).spacing(spacing));
 		Render2D.textCentered(ctx, font, title, cx, y, size,
-			Render2D.TextStyle.of(0xFFFFFFFF).gradient(ColorUtil.lerp(0xFFFFFFFF, accent2, 0.45f)).weight(0.03f).spacing(spacing).shadow(0x70000000));
+			Render2D.TextStyle.of(0xFFFFFFFF).gradient(ColorUtil.lerp(0xFFFFFFFF, accent2, 0.45f)).weight(0.03f)
+				.soft(0.45f * (1f - titleT)).spacing(spacing).shadow(0x70000000));
 
 		SdfFont small = Fonts.medium();
 		float subSize = Math.max(6f, size * 0.17f);
-		float subY = y + font.lineHeight(size) * 0.98f;
-		Render2D.textCentered(ctx, small, "VISUALS  ·  MINECRAFT 1.21.11", cx, subY, subSize,
-			Render2D.TextStyle.of(0xC8FFFFFF).spacing(subSize * 0.38f));
-		float lineW = size * 2.2f * progress;
-		float lineY = subY + small.lineHeight(subSize) + 6f;
-		Render2D.glow(ctx, cx - lineW / 4f, lineY, lineW / 2f, 1.2f, 0.6f, 6f, ColorUtil.withAlpha(accent, 80), ColorUtil.withAlpha(accent2, 80));
-		Render2D.gradientH(ctx, cx - lineW / 2f, lineY, lineW / 2f, 1.2f, 0.6f, ColorUtil.withAlpha(accent, 0), accent);
-		Render2D.gradientH(ctx, cx, lineY, lineW / 2f, 1.2f, 0.6f, accent2, ColorUtil.withAlpha(accent2, 0));
+		float subY = baseY + font.lineHeight(size) * 0.98f;
+		if (subT > 0f) {
+			Render2D.setAlpha(subT);
+			Render2D.textCentered(ctx, small, "VISUALS  ·  MINECRAFT 1.21.11", cx, subY + (1f - subT) * 5f, subSize,
+				Render2D.TextStyle.of(0xC8FFFFFF).spacing(subSize * 0.38f));
+		}
+		if (lineT > 0f) {
+			float lineW = size * 2.2f * lineT;
+			float lineY = subY + small.lineHeight(subSize) + 6f;
+			Render2D.setAlpha(Math.min(1f, lineT * 1.6f));
+			Render2D.glow(ctx, cx - lineW / 4f, lineY, lineW / 2f, 1.2f, 0.6f, 6f, ColorUtil.withAlpha(accent, 80), ColorUtil.withAlpha(accent2, 80));
+			Render2D.gradientH(ctx, cx - lineW / 2f, lineY, lineW / 2f, 1.2f, 0.6f, ColorUtil.withAlpha(accent, 0), accent);
+			Render2D.gradientH(ctx, cx, lineY, lineW / 2f, 1.2f, 0.6f, accent2, ColorUtil.withAlpha(accent2, 0));
+		}
 		Render2D.setAlpha(1f);
 	}
 

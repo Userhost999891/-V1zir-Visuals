@@ -43,6 +43,9 @@ jobs:
           sudo apt-get install -y -q xvfb libgl1-mesa-dri imagemagick
       - name: Run dev client (client game test)
         timeout-minutes: 40
+        env:
+          # Leave CPU for the integrated server; llvmpipe takes every core by default.
+          LP_NUM_THREADS: 2
         run: xvfb-run -a -s "-screen 0 1920x1080x24" ./gradlew runClientGameTest --stacktrace
       - uses: actions/upload-artifact@v4
         if: always()

@@ -3,14 +3,17 @@ package dev.v1zir.visuals;
 import dev.v1zir.visuals.config.ConfigManager;
 import dev.v1zir.visuals.gui.clickgui.ClickGuiScreen;
 import dev.v1zir.visuals.gui.hud.HudRenderer;
+import dev.v1zir.visuals.gui.menu.V1zirMainMenu;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.client.ClickGuiModule;
+import dev.v1zir.visuals.module.impl.client.MainMenuModule;
 import dev.v1zir.visuals.render.V1zirPipelines;
 import dev.v1zir.visuals.render.world.Effects;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.screen.TitleScreen;
 import org.lwjgl.glfw.GLFW;
 
 public final class V1zirClient implements ClientModInitializer {
@@ -22,6 +25,10 @@ public final class V1zirClient implements ClientModInitializer {
 		HudRenderer.register();
 
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
+			// Safety net for any code path that shows the vanilla title screen without setScreen.
+			if (client.currentScreen instanceof TitleScreen && ModuleManager.isEnabled(MainMenuModule.class)) {
+				client.setScreen(new V1zirMainMenu());
+			}
 			ModuleManager.tick();
 			Effects.tick(client);
 			HudRenderer.tick(client);

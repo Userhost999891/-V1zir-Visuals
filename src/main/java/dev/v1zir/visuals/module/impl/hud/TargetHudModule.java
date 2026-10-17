@@ -58,7 +58,7 @@ public final class TargetHudModule extends HudModule {
 		float h = 38f;
 		width = w;
 		height = h;
-		float a = Anim.easeOutCubic(appear.value());
+		float a = appear.value();
 		Render2D.setAlpha(a);
 
 		float max = Math.max(1f, e.getMaxHealth());

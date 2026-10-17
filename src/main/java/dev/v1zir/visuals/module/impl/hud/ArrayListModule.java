@@ -58,7 +58,7 @@ public final class ArrayListModule extends HudModule {
 		float cy = y;
 		int index = 0;
 		for (Module module : shown) {
-			float t = Anim.easeOutCubic(animations.get(module).value());
+			float t = animations.get(module).value();
 			float w = label(module, font, size) + 12f;
 			float rx = right ? x + width - w : x;
 			float slide = (1f - t) * (w + 10f) * (right ? 1f : -1f);

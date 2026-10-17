@@ -43,6 +43,7 @@ public final class ClickGuiScreen extends Screen {
 
 	private final List<CategoryPanel> panels = new ArrayList<>();
 	private final Anim open = new Anim(0f, 9f);
+	private final Anim exit = new Anim(1f, 16f);
 	private final Anim tabSlide = new Anim(tab, 14f);
 	private final List<SettingComponent<?>> themeComponents = new ArrayList<>();
 	private String search = "";
@@ -88,7 +89,7 @@ public final class ClickGuiScreen extends Screen {
 		ClickGuiModule gui = ModuleManager.get(ClickGuiModule.class);
 		float base = gui != null ? gui.scale.f() : 1f;
 		boolean animations = gui == null || gui.animations.on();
-		float t = animations ? Anim.easeOutCubic(open.value()) : 1f;
+		float t = animations ? open.value() * exit.value() : 1f;
 		return base * (0.94f + 0.06f * t);
 	}
 
@@ -112,12 +113,13 @@ public final class ClickGuiScreen extends Screen {
 		if (theme != null) theme.apply();
 		ClickGuiModule gui = ModuleManager.get(ClickGuiModule.class);
 		boolean animations = gui == null || gui.animations.on();
-		float t = open.target(closing ? 0f : 1f).get();
-		if (closing && t < 0.03f) {
+		float t = open.target(1f).get();
+		float exitT = exit.target(closing ? 0f : 1f).get();
+		if (closing && exitT < 0.02f) {
 			super.close();
 			return;
 		}
-		float alpha = animations ? Anim.easeOutCubic(t) : 1f;
+		float alpha = animations ? Anim.clamp01(t * exitT) : 1f;
 
 		// Background: blurred, dimmed world (not on the HUD tab, where the HUD must stay visible).
 		if (!isHudTab() && (gui == null || gui.dimBackground.on())) {
@@ -140,10 +142,19 @@ public final class ClickGuiScreen extends Screen {
 			case 1 -> renderHudEditor(ctx, gx, gy);
 			case 2 -> renderThemes(ctx, gx, gy);
 			default -> {
+				// Panels cascade in from left to right while the GUI opens.
+				int index = 0;
 				for (CategoryPanel panel : panels) {
 					if (!search.isEmpty() && !panel.matches(search)) continue;
-					panel.render(ctx, gx, gy, search, height);
+					float pt = animations ? Anim.clamp01((t - index++ * 0.07f) / 0.65f) : 1f;
+					float rise = (1f - pt) * 10f;
+					Render2D.setAlpha(alpha * pt);
+					ctx.getMatrices().pushMatrix();
+					ctx.getMatrices().translate(0f, rise);
+					panel.render(ctx, gx, gy - rise, search, height);
+					ctx.getMatrices().popMatrix();
 				}
+				Render2D.setAlpha(alpha);
 			}
 		}
 		SdfFont font = Fonts.medium();
