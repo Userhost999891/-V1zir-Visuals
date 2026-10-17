@@ -253,8 +253,15 @@ public final class ClickGuiScreen extends Screen {
 		int rows = (presets.length + cols - 1) / cols;
 		float gridH = rows * cardH + (rows - 1) * gap;
 
-		float settingsH = 0f;
-		for (SettingComponent<?> c : themeComponents) if (c.visible()) settingsH += estimate(c) + 4f;
+		float leftH = 0f;
+		float rightH = 0f;
+		int column = 0;
+		for (SettingComponent<?> c : themeComponents) {
+			if (!c.visible()) continue;
+			if (column++ % 2 == 0) leftH += estimate(c) + 4f;
+			else rightH += estimate(c) + 4f;
+		}
+		float settingsH = Math.max(leftH, rightH);
 		float h = 24f + 8f + gridH + 12f + settingsH + 8f;
 		h = Math.min(h, height - y - 20f);
 

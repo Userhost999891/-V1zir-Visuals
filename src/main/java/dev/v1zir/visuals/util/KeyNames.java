@@ -36,6 +36,7 @@ public final class KeyNames {
 			default -> {
 				if (key >= GLFW.GLFW_KEY_F1 && key <= GLFW.GLFW_KEY_F25) yield "F" + (key - GLFW.GLFW_KEY_F1 + 1);
 				if (key >= GLFW.GLFW_KEY_KP_0 && key <= GLFW.GLFW_KEY_KP_9) yield "Num" + (key - GLFW.GLFW_KEY_KP_0);
+				if (key >= GLFW.GLFW_KEY_A && key <= GLFW.GLFW_KEY_Z || key >= GLFW.GLFW_KEY_0 && key <= GLFW.GLFW_KEY_9) yield String.valueOf((char) key);
 				String name = GLFW.glfwGetKeyName(key, 0);
 				yield name != null ? name.toUpperCase(Locale.ROOT) : "Key " + key;
 			}

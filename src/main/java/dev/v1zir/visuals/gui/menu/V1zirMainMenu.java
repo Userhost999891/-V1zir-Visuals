@@ -124,8 +124,12 @@ public final class V1zirMainMenu extends Screen {
 		MenuSky.prepare(preset, width, height, px, py, speed);
 
 		Render2D.setAlpha(1f);
-		Render2D.menuBackground(ctx, width, height, 0xFFFFFFFF);
+		Render2D.menuBackground(ctx, width, height, 0xFFD2D2D2);
 		renderParticles(ctx, dt, px, py);
+		// Soft dark scrim behind the logo and the buttons keeps them readable on bright presets.
+		float scrimW = Math.min(width * 0.62f, 560f);
+		float scrimH = height * 0.5f;
+		Render2D.shadow(ctx, width / 2f - scrimW / 2f, height * 0.24f, scrimW, scrimH, scrimH / 2f, scrimH * 0.45f, 0x8C000000);
 
 		// Intro: fade from black, then the logo rises in, then the buttons appear.
 		float fade = Anim.easeOutCubic(Anim.progress(t, 0f, introLength));
@@ -161,13 +165,14 @@ public final class V1zirMainMenu extends Screen {
 
 		SdfFont small = Fonts.medium();
 		float subSize = Math.max(6f, size * 0.17f);
-		float subY = y + font.lineHeight(size) * 0.92f;
+		float subY = y + font.lineHeight(size) * 0.98f;
 		Render2D.textCentered(ctx, small, "VISUALS  ·  MINECRAFT 1.21.11", cx, subY, subSize,
 			Render2D.TextStyle.of(0xC8FFFFFF).spacing(subSize * 0.38f));
-		float lineW = size * 1.4f * progress;
-		float lineY = subY + small.lineHeight(subSize) + 4f;
-		Render2D.glow(ctx, cx - lineW / 2f, lineY, lineW, 1.2f, 0.6f, 6f, ColorUtil.withAlpha(accent, 90), ColorUtil.withAlpha(accent2, 90));
-		Render2D.gradientH(ctx, cx - lineW / 2f, lineY, lineW, 1.2f, 0.6f, ColorUtil.withAlpha(accent, 0), accent);
+		float lineW = size * 2.2f * progress;
+		float lineY = subY + small.lineHeight(subSize) + 6f;
+		Render2D.glow(ctx, cx - lineW / 4f, lineY, lineW / 2f, 1.2f, 0.6f, 6f, ColorUtil.withAlpha(accent, 80), ColorUtil.withAlpha(accent2, 80));
+		Render2D.gradientH(ctx, cx - lineW / 2f, lineY, lineW / 2f, 1.2f, 0.6f, ColorUtil.withAlpha(accent, 0), accent);
+		Render2D.gradientH(ctx, cx, lineY, lineW / 2f, 1.2f, 0.6f, accent2, ColorUtil.withAlpha(accent2, 0));
 		Render2D.setAlpha(1f);
 	}
 

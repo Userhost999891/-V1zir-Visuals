@@ -10,7 +10,7 @@ import java.nio.ByteBuffer;
  */
 public final class GlyphAtlas {
 	public static final int SIZE = 1024;
-	private static final int GAP = 1;
+	private static final int GAP = 4;
 
 	private final ByteBuffer pixels = MemoryUtil.memCalloc(SIZE * SIZE);
 	private int shelfX;
