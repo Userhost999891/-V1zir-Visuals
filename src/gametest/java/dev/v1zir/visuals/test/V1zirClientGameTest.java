@@ -20,6 +20,7 @@ import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.screen.AccessibilityOnboardingScreen;
 import net.minecraft.client.gui.screen.TitleScreen;
 import net.minecraft.client.gui.screen.option.OptionsScreen;
 import org.lwjgl.glfw.GLFW;
@@ -53,7 +54,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			clickGui(context);
 
 			// The test runner expects to end on the vanilla title screen.
-			context.runOnClient(client -> ModuleManager.get(MainMenuModule.class).setEnabled(false, false));
+			context.runOnClient(client -> MainMenuModule.suspended = true);
 		}
 	}
 
@@ -108,6 +109,11 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.setScreen(TitleScreen::new);
 		context.waitTicks(2);
 		assertMainMenu(context, "opening the vanilla TitleScreen");
+
+		// First launch: vanilla opens the accessibility onboarding screen before the title screen.
+		context.setScreen(() -> new AccessibilityOnboardingScreen(MinecraftClient.getInstance().options, () -> {}));
+		context.waitTicks(2);
+		assertMainMenu(context, "the first-launch accessibility onboarding screen");
 	}
 
 	private static void assertMainMenu(ClientGameTestContext context, String action) {

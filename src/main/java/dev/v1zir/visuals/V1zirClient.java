@@ -26,7 +26,7 @@ public final class V1zirClient implements ClientModInitializer {
 
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			// Safety net for any code path that shows the vanilla title screen without setScreen.
-			if (client.currentScreen instanceof TitleScreen && ModuleManager.isEnabled(MainMenuModule.class)) {
+			if (client.currentScreen instanceof TitleScreen && MainMenuModule.active()) {
 				client.setScreen(new V1zirMainMenu());
 			}
 			ModuleManager.tick();

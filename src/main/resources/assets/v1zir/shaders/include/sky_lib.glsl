@@ -252,7 +252,8 @@ vec3 vMilkyWay(vec3 rd, float strength) {
 	float lon = atan(dot(rd, v), dot(rd, u));
 	float band = exp(-lat * lat * 22.0);
 	if (band < 0.002) return vec3(0.0);
-	float bulge = exp(-pow(lon - 0.9, 2.0) * 1.2) * exp(-lat * lat * 40.0);
+	float dl = lon - 0.9;
+	float bulge = exp(-dl * dl * 1.2) * exp(-lat * lat * 40.0);
 	vec3 q = rd * 3.0;
 	float glow = vFbm3(q * 2.2, 5);
 	float detail = vFbm3(q * 7.0 + 11.0, 4);
@@ -492,8 +493,8 @@ vec3 vSkyMagma(vec3 rd, float t) {
 	uv += vec2(t * 0.010, -t * 0.006);
 
 	// Slow convection: the whole field is advected by a warped flow.
-	vec2 q = vec2(vFbm2(uv * 0.8 + vec2(0.0, t * 0.03), 4), vFbm2(uv * 0.8 + vec2(5.2, 1.3) - t * 0.025, 4));
-	vec2 w = (q - 0.5) * 2.2;
+	vec2 q = vec2(vFbm2(uv * 0.5 + vec2(0.0, t * 0.03), 4), vFbm2(uv * 0.5 + vec2(5.2, 1.3) - t * 0.025, 4));
+	vec2 w = (q - 0.5) * 1.4;
 	vec2 p = uv * 1.6 + w;
 	// Detail fades out with distance (towards the horizon) instead of aliasing.
 	float lod = clamp(length(fwidth(p)) * 7.0, 0.0, 1.0);
@@ -507,17 +508,23 @@ vec3 vSkyMagma(vec3 rd, float t) {
 	vec3 vor = vVoronoi(p * 1.6, t * 0.08);
 	float plate = vHash12(vec2(vor.z * 113.0, 7.0));
 	float border = vor.x + (vNoise2(p * 6.0) - 0.5) * 0.035;
-	float width = 0.012 + 0.05 * vNoise2(p * 2.5 + vor.z * 9.0) * vNoise2(p * 0.7 - t * 0.01);
-	float crack = 1.0 - smoothstep(0.0, width, max(border, 0.0));
+	float width = 0.012 + 0.05 * vNoise2(p * 2.5 + 3.1) * vNoise2(p * 0.7 - t * 0.01);
+	// Per-plate values only apply away from the crack, so both sides of a crack match.
+	float side = smoothstep(0.0, 0.15, max(border, 0.0));
+	float plateS = mix(0.5, plate, side);
+	// Never thinner than ~1.5 px: thin cracks get wider and dimmer instead of breaking up and crawling.
+	float bpx = max(fwidth(border), 1e-5);
+	float wAA = max(width, 1.5 * bpx);
+	float crack = (1.0 - smoothstep(0.0, wAA, max(border, 0.0))) * (width / wAA);
 	float crackGlow = exp(-max(border, 0.0) * 10.0) * 0.32 + exp(-max(border, 0.0) * 3.5) * 0.07;
-	float edgeHeat = exp(-max(border, 0.0) * 5.0) * (0.15 + 0.3 * plate);
-	float pores = smoothstep(0.70, 0.95, vFbm2(p * 7.0 + vor.z * 5.0, 3)) * 0.08 * plate;
+	float edgeHeat = exp(-max(border, 0.0) * 5.0) * (0.15 + 0.3 * plateS);
+	float pores = smoothstep(0.70, 0.95, vFbm2(p * 7.0 + vor.z * 5.0, 3)) * 0.08 * plate * side;
 
 	// Lava lake inside the pools: thin crust broken into small dark islands drifting on a
 	// white-hot surface, separated by wide glowing gaps.
 	vec2 fp = p * 2.2 + vec2(t * 0.05, -t * 0.035);
 	float surf = vFbm2(fp + w * 2.0, 5);
-	vec3 isl = vVoronoi(p * 4.4 + w * 1.5, t * 0.18);
+	vec3 isl = vVoronoi(p * 4.4 + w * 0.6, t * 0.18);
 	float gap = 0.05 + 0.17 * vNoise2(p * 1.4 + vec2(t * 0.02, 0.0)) + (1.0 - pool) * 0.02;
 	float lakeGap = 1.0 - smoothstep(0.0, gap, isl.x);
 	float islandRock = vFbm2(p * 18.0 + isl.z * 7.0, 3);
@@ -525,13 +532,13 @@ vec3 vSkyMagma(vec3 rd, float t) {
 	lava = mix(lava, 0.32 + 0.2 * surf, lodFine);
 
 	// Rough basalt crust: high frequency rock texture, lit by the glow of nearby cracks.
-	float rock = vFbm2(p * 14.0 + vor.z * 3.0, 4);
+	float rock = vFbm2(p * 14.0, 4);
 	float rockLit = exp(-max(border, 0.0) * 6.0) * (0.25 + 0.75 * rock) * 0.22;
 
-	float pulse = 0.85 + 0.15 * sin(t * (0.5 + plate) + vor.z * 30.0);
+	float pulse = mix(0.85 + 0.15 * sin(t * 0.8 + vNoise2(p * 0.9 + 2.7) * 9.0), 0.85 + 0.15 * sin(t * (0.5 + plate) + vor.z * 30.0), side);
 	// Some crack segments run hotter than others.
 	float hot = 0.55 + 0.45 * vNoise2(p * 0.9 + vec2(t * 0.03, -t * 0.02));
-	float crustHeat = crack * (0.75 + 0.35 * plate) * pulse * hot + crackGlow * pulse * (0.6 + 0.4 * rock) + edgeHeat * 0.25 * rock + pores;
+	float crustHeat = crack * (0.75 + 0.35 * plateS) * pulse * hot + crackGlow * pulse * (0.6 + 0.4 * rock) + edgeHeat * 0.25 * rock + pores;
 	float heat = mix(crustHeat, lava, pool);
 	heat = mix(heat, 0.05 + pool * 0.3, lod * 0.9);
 
@@ -542,8 +549,17 @@ vec3 vSkyMagma(vec3 rd, float t) {
 	col += tint * (smoothstep(0.5, 0.75, m) * 0.06 + 0.004);
 
 	// Rising embers.
-	vec3 emberDir = normalize(rd + vec3(0.0, -t * 0.0015, 0.0));
-	col += vStarLayer(emberDir, 140.0, 0.03, t * 3.0, vPixelAngle(rd), 1.2) * tint * 0.5 * smoothstep(-0.1, 0.3, up);
+	// Two phase-shifted layers; each fades out before its drift wraps, so the offset stays bounded
+	// (an unbounded offset squeezes the field into streaks and blobs after a few minutes).
+	float emberPa = vPixelAngle(rd);
+	vec3 embers = vec3(0.0);
+	for (int k = 0; k < 2; k++) {
+		float ph = fract(t / 120.0 + 0.5 * float(k));
+		vec3 ed = normalize(rd + vec3(0.0, -ph * 0.18, 0.0));
+		if (k == 1) ed = vec3(ed.z, ed.y, -ed.x);
+		embers += vStarLayer(ed, 140.0, 0.03, t * 3.0, emberPa, 1.2) * (1.0 - abs(ph * 2.0 - 1.0));
+	}
+	col += embers * tint * 0.5 * smoothstep(-0.1, 0.3, up);
 
 	// Fade into black at and below the horizon, with a faint heat haze.
 	float horizon = smoothstep(-0.03, 0.2, up);
@@ -575,7 +591,8 @@ vec3 vSkyAurora(vec3 rd, float t, int quality, vec2 fragCoord) {
 
 	if (rd.y > 0.0) {
 		int steps = quality == 0 ? 18 : (quality == 1 ? 28 : 42);
-		float dither = vHash12(fragCoord + fract(t) * 37.0);
+		// Static per-pixel jitter: re-rolling it every frame (fract(t)) makes the curtains boil without TAA.
+		float dither = vHash12(fragCoord * 1.37 + 7.3);
 		vec3 acc = vec3(0.0);
 		for (int i = 0; i < 42; i++) {
 			if (i >= steps) break;

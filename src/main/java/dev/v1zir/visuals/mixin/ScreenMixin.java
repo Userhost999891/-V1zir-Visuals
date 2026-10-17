@@ -25,8 +25,8 @@ public abstract class ScreenMixin {
 
 	@Inject(method = "renderPanoramaBackground", at = @At("HEAD"), cancellable = true)
 	private void v1zir$shaderPanorama(DrawContext context, float deltaTicks, CallbackInfo ci) {
+		if (!MainMenuModule.active()) return;
 		MainMenuModule module = ModuleManager.get(MainMenuModule.class);
-		if (module == null || !module.isEnabled()) return;
 		MenuSky.prepare(module.preset(), width, height, 0f, 0f, module.speed.f());
 		// Dimmer than on the main menu so vanilla widgets stay readable on top of it.
 		Render2D.menuBackground(context, width, height, 0xFF6E6E6E);

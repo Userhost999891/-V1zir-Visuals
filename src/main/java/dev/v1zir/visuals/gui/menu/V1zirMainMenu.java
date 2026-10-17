@@ -112,14 +112,24 @@ public final class V1zirMainMenu extends Screen {
 		long now = System.nanoTime();
 		float dt = Math.min((now - lastFrame) / 1.0e9f, 0.1f);
 		lastFrame = now;
-		// The intro starts on the first frame that is not hidden behind the loading overlay.
-		if (introStart < 0L && client.getOverlay() == null) introStart = now;
+		// The loading overlay renders this screen with a fake mouse at (0, 0) while it fades out,
+		// so mouse input is ignored until it is gone. The intro starts on the first real frame.
+		boolean overlay = client.getOverlay() != null;
+		boolean firstFrame = introStart < 0L && !overlay;
+		if (firstFrame) introStart = now;
 		float time = introStart < 0L ? 0f : (now - introStart) / 1.0e9f;
 		float t = time / introScale;
 
 		boolean parallax = module == null || module.parallax.on();
-		parallaxX.target(parallax ? (mouseX / (float) Math.max(width, 1) - 0.5f) * 2f : 0f);
-		parallaxY.target(parallax ? (0.5f - mouseY / (float) Math.max(height, 1)) * 2f : 0f);
+		float targetX = parallax ? (mouseX / (float) Math.max(width, 1) - 0.5f) * 2f : 0f;
+		float targetY = parallax ? (0.5f - mouseY / (float) Math.max(height, 1)) * 2f : 0f;
+		if (firstFrame) {
+			parallaxX.snap(targetX);
+			parallaxY.snap(targetY);
+		} else if (!overlay) {
+			parallaxX.target(targetX);
+			parallaxY.target(targetY);
+		}
 		float px = parallaxX.get();
 		float py = parallaxY.get();
 
@@ -147,7 +157,9 @@ public final class V1zirMainMenu extends Screen {
 
 		float buttonsAlpha = Anim.easeOutCubic(Anim.progress(t, 0.8f, 0.55f));
 		Render2D.setAlpha(buttonsAlpha);
-		for (RoundButton button : buttons) button.render(ctx, mouseX, mouseY);
+		int hoverX = overlay ? -10000 : mouseX;
+		int hoverY = overlay ? -10000 : mouseY;
+		for (RoundButton button : buttons) button.render(ctx, hoverX, hoverY);
 		renderFooter(ctx);
 		Render2D.setAlpha(1f);
 	}
