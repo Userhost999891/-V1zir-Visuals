@@ -25,6 +25,12 @@ public abstract class SkyRenderingMixin {
 		if (SkyRenderer.active() && SkyRenderer.hideVanillaCelestials()) ci.cancel();
 	}
 
+	/** Vanilla stars rotate with the world time and would float over the shader sky as a second star field. */
+	@Inject(method = "renderStars", at = @At("HEAD"), cancellable = true)
+	private void v1zir$renderStars(CallbackInfo ci) {
+		if (SkyRenderer.active()) ci.cancel();
+	}
+
 	@Inject(method = "renderSkyDark", at = @At("HEAD"), cancellable = true)
 	private void v1zir$renderSkyDark(CallbackInfo ci) {
 		if (SkyRenderer.active()) ci.cancel();
