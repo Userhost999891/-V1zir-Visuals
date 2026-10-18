@@ -27,6 +27,7 @@ import org.lwjgl.glfw.GLFW;
 
 import java.lang.reflect.Field;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Starts the real client and walks through everything the mod draws: the main menu, every sky
@@ -34,6 +35,8 @@ import java.util.List;
  * build/run/clientGameTest/screenshots.
  */
 public class V1zirClientGameTest implements FabricClientGameTest {
+	private static final int BENCH_TICKS = 40;
+
 	@Override
 	public void runTest(ClientGameTestContext context) {
 		resize(context, 1280, 720);
@@ -76,6 +79,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		}
 		context.waitTicks(40);
 		context.takeScreenshot("main-menu");
+		bench(context, "main-menu");
 
 		// Hover the first round button: it only highlights.
 		double[] cursor = context.computeOnClient(client -> {
@@ -125,8 +129,10 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 	}
 
 	private static void sky(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
-		context.runOnClient(client -> ModuleManager.get(ShaderSkyModule.class).setEnabled(true, false));
 		look(singleplayer, 0, -25);
+		singleplayer.getServer().runCommand("time set 6000");
+		bench(context, "world-vanilla-sky");
+		context.runOnClient(client -> ModuleManager.get(ShaderSkyModule.class).setEnabled(true, false));
 
 		skyShot(context, singleplayer, SkyPreset.REALISTIC, 6000, "sky-realistic-noon");
 		look(singleplayer, 90, -8);
@@ -145,6 +151,17 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.runOnClient(client -> ModuleManager.get(ShaderSkyModule.class).preset.set(preset.title()));
 		context.waitTicks(20);
 		context.takeScreenshot(name);
+		bench(context, name);
+	}
+
+	/** Average wall time per client tick (one frame each in the game test), for the CI benchmark table. */
+	private static void bench(ClientGameTestContext context, String scene) {
+		context.waitTicks(5);
+		long start = System.nanoTime();
+		context.waitTicks(BENCH_TICKS);
+		double ms = (System.nanoTime() - start) / 1.0e6 / BENCH_TICKS;
+		int fps = context.computeOnClient(client -> client.getCurrentFps());
+		System.out.printf(Locale.ROOT, "V1ZIR-BENCH %-26s %8.2f ms/frame  %4d fps%n", scene, ms, fps);
 	}
 
 	private static void hud(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
@@ -162,6 +179,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.getInput().holdKeyFor(options -> options.jumpKey, 2);
 		context.waitTicks(14);
 		context.takeScreenshot("hud-effects");
+		bench(context, "world-hud-effects");
 	}
 
 	private static void clickGui(ClientGameTestContext context) {
@@ -174,6 +192,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		}
 		context.waitTicks(30);
 		context.takeScreenshot("clickgui-modules");
+		bench(context, "clickgui");
 
 		context.getInput().typeChars("sky");
 		context.waitTicks(10);
