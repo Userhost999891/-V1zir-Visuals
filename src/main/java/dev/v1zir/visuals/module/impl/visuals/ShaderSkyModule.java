@@ -16,6 +16,8 @@ public final class ShaderSkyModule extends Module {
 	public final NumberSetting brightness = add(new NumberSetting("Brightness", 1.0, 0.2, 2.0, 0.05));
 	public final NumberSetting speed = add(new NumberSetting("Speed", 1.0, 0.0, 4.0, 0.05).suffix("x"));
 	public final ModeSetting quality = add(new ModeSetting("Quality", "Medium", "Low", "Medium", "High"));
+	/** Fraction of the screen resolution the sky is rendered at before it is upsampled. */
+	public final NumberSetting renderScale = add(new NumberSetting("Render scale", 0.5, 0.25, 1.0, 0.05).suffix("x"));
 	public final BoolSetting clouds = add(new BoolSetting("Clouds", true));
 	public final NumberSetting coverage = add(new NumberSetting("Cloud coverage", 0.45, 0.0, 1.0, 0.01).visibleIf(clouds::on));
 	public final BoolSetting hideVanillaClouds = add(new BoolSetting("Hide vanilla clouds", true));

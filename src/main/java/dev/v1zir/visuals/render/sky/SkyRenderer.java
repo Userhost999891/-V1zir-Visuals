@@ -10,6 +10,7 @@ import dev.v1zir.visuals.module.impl.visuals.ShaderSkyModule;
 import dev.v1zir.visuals.render.Fullscreen;
 import dev.v1zir.visuals.render.V1zirPipelines;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gl.Framebuffer;
 import net.minecraft.util.math.Vec3d;
 import org.joml.Matrix4f;
 
@@ -20,6 +21,7 @@ public final class SkyRenderer {
 	private static final Matrix4f VIEW = new Matrix4f();
 	private static final Matrix4f PROJECTION = new Matrix4f();
 	private static final SkyUniforms.Data DATA = new SkyUniforms.Data();
+	private static final SkyTarget TARGET = new SkyTarget("V1zir shader sky");
 	private static boolean captured;
 
 	private SkyRenderer() {
@@ -81,6 +83,15 @@ public final class SkyRenderer {
 			GpuTextureView color = RenderSystem.outputColorTextureOverride != null
 				? RenderSystem.outputColorTextureOverride
 				: mc.getFramebuffer().getColorAttachmentView();
+			float scale = sky.renderScale.f();
+			if (scale < 0.99f && RenderSystem.outputColorTextureOverride == null) {
+				// Sky at a fraction of the resolution, then upsampled: the cost drops with the pixel count.
+				Framebuffer fb = mc.getFramebuffer();
+				TARGET.ensure(fb.textureWidth, fb.textureHeight, scale);
+				TARGET.render(params);
+				TARGET.upsampleTo(color);
+				return true;
+			}
 			try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(() -> "V1zir shader sky", color, OptionalInt.empty())) {
 				pass.setPipeline(V1zirPipelines.SKY);
 				pass.setUniform("SkyParams", params);

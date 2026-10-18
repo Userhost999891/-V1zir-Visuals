@@ -62,7 +62,7 @@ public final class V1zirPipelines {
 		.withVertexShader(V1zir.id("core/menu_background"))
 		.withFragmentShader(V1zir.id("core/menu_background"))
 		.withVertexFormat(VertexFormats.POSITION_TEXTURE_COLOR, VertexFormat.DrawMode.QUADS)
-		.withUniform("SkyParams", UniformType.UNIFORM_BUFFER)
+		.withSampler("Sampler0")
 		.withUniform("V1zirGui", UniformType.UNIFORM_BUFFER)
 		.withCull(false)
 		.build();
@@ -74,6 +74,19 @@ public final class V1zirPipelines {
 		.withFragmentShader(V1zir.id("core/shader_sky"))
 		.withVertexFormat(VertexFormats.POSITION, VertexFormat.DrawMode.TRIANGLES)
 		.withUniform("SkyParams", UniformType.UNIFORM_BUFFER)
+		.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+		.withDepthWrite(false)
+		.withoutBlend()
+		.withCull(false)
+		.build();
+
+	/** Upsamples the reduced-resolution sky texture onto the screen (see SkyTarget). */
+	public static final RenderPipeline SKY_UPSAMPLE = RenderPipeline.builder()
+		.withLocation(V1zir.id("pipeline/sky_upsample"))
+		.withVertexShader(V1zir.id("core/fullscreen"))
+		.withFragmentShader(V1zir.id("core/sky_upsample"))
+		.withVertexFormat(VertexFormats.POSITION, VertexFormat.DrawMode.TRIANGLES)
+		.withSampler("Sampler0")
 		.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
 		.withDepthWrite(false)
 		.withoutBlend()
@@ -131,6 +144,7 @@ public final class V1zirPipelines {
 		RenderPipelines.register(TEXT);
 		RenderPipelines.register(MENU_BACKGROUND);
 		RenderPipelines.register(SKY);
+		RenderPipelines.register(SKY_UPSAMPLE);
 		RenderPipelines.register(BLUR_DOWN);
 		RenderPipelines.register(BLUR_UP);
 		RenderPipelines.register(WORLD_GLOW);

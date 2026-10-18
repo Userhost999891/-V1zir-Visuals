@@ -1,13 +1,23 @@
 package dev.v1zir.visuals.render.sky;
 
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import dev.v1zir.visuals.V1zir;
 import dev.v1zir.visuals.module.ModuleManager;
+import dev.v1zir.visuals.module.impl.client.MainMenuModule;
 import dev.v1zir.visuals.module.impl.visuals.ShaderSkyModule;
+import net.minecraft.client.gl.Framebuffer;
+import net.minecraft.client.texture.TextureSetup;
 import org.joml.Matrix4f;
 
-/** SkyParams for the main menu background: a slowly drifting virtual camera. */
+/**
+ * Menu background sky: a slowly drifting virtual camera. The screen prepares it while it builds
+ * the GUI; the sky is then rendered at reduced resolution right before the GUI is drawn
+ * (GuiRendererMixin) and the background element upsamples it.
+ */
 public final class MenuSky {
 	private static final SkyUniforms.Data DATA = new SkyUniforms.Data();
+	private static final SkyTarget TARGET = new SkyTarget("V1zir menu sky");
+	private static boolean pending;
 	private static final Matrix4f PROJECTION = new Matrix4f();
 	private static final Matrix4f VIEW = new Matrix4f();
 	private static GpuBufferSlice slice;
@@ -17,8 +27,15 @@ public final class MenuSky {
 	private MenuSky() {
 	}
 
-	public static GpuBufferSlice slice() {
-		return slice;
+	public static TextureSetup textureSetup() {
+		return TARGET.textureSetup();
+	}
+
+	/** Renders the background prepared this frame into its texture. */
+	public static void renderPending() {
+		if (!pending) return;
+		pending = false;
+		if (slice != null) TARGET.render(slice);
 	}
 
 	/**
@@ -87,6 +104,12 @@ public final class MenuSky {
 		VIEW.identity().rotateX(-pitch).rotateY(-yaw);
 		DATA.invViewProj.set(PROJECTION).mul(VIEW).invert();
 		slice = SkyUniforms.write(DATA);
+
+		MainMenuModule menu = ModuleManager.get(MainMenuModule.class);
+		float scale = menu != null ? menu.renderScale.f() : 0.5f;
+		Framebuffer fb = V1zir.mc().getFramebuffer();
+		TARGET.ensure(fb.textureWidth, fb.textureHeight, scale);
+		pending = true;
 	}
 
 	/** Yaw that makes the camera look towards the given horizontal direction. */

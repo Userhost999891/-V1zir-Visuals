@@ -131,6 +131,8 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 	private static void sky(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
 		look(singleplayer, 0, -25);
 		singleplayer.getServer().runCommand("time set 6000");
+		// Let chunk meshing finish so the first measurement is not inflated.
+		context.waitTicks(100);
 		bench(context, "world-vanilla-sky");
 		context.runOnClient(client -> ModuleManager.get(ShaderSkyModule.class).setEnabled(true, false));
 
@@ -144,6 +146,9 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			SkyPreset.INK, SkyPreset.SYNTHWAVE, SkyPreset.BLOOD_MOON)) {
 			skyShot(context, singleplayer, preset, 18000, "sky-" + preset.name().toLowerCase().replace('_', '-'));
 		}
+		context.runOnClient(client -> ModuleManager.get(ShaderSkyModule.class).setEnabled(false, false));
+		bench(context, "world-vanilla-sky-end");
+		context.runOnClient(client -> ModuleManager.get(ShaderSkyModule.class).setEnabled(true, false));
 	}
 
 	private static void skyShot(ClientGameTestContext context, TestSingleplayerContext singleplayer, SkyPreset preset, int time, String name) {

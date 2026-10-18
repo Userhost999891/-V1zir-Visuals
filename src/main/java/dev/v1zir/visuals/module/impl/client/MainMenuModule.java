@@ -15,6 +15,8 @@ public final class MainMenuModule extends Module {
 
 	public final ModeSetting background = add(new ModeSetting("Background", SkyPreset.MAGMA.title(), SkyPreset.titles()));
 	public final NumberSetting speed = add(new NumberSetting("Animation speed", 1.0, 0.1, 3.0, 0.05).suffix("x"));
+	/** Fraction of the screen resolution the background sky is rendered at before it is upsampled. */
+	public final NumberSetting renderScale = add(new NumberSetting("Render scale", 0.5, 0.25, 1.0, 0.05).suffix("x"));
 	public final BoolSetting parallax = add(new BoolSetting("Mouse parallax", true));
 	public final BoolSetting particles = add(new BoolSetting("Particles", true));
 	public final NumberSetting particleCount = add(new NumberSetting("Particle count", 70, 10, 200, 1).visibleIf(particles::on));

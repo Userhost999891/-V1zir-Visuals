@@ -22,6 +22,7 @@ public abstract class GuiRendererMixin {
 	private void v1zir$beforeGui(GpuBufferSlice fogBuffer, CallbackInfo ci) {
 		FrameUniforms.gui();
 		BackdropBlur.runIfRequested();
+		MenuSky.renderPending();
 	}
 
 	/** Binds the extra uniform blocks our GUI pipelines declare. */
@@ -35,8 +36,6 @@ public abstract class GuiRendererMixin {
 			pass.setUniform("V1zirGui", FrameUniforms.gui());
 		} else if (pipeline == V1zirPipelines.MENU_BACKGROUND) {
 			pass.setUniform("V1zirGui", FrameUniforms.gui());
-			GpuBufferSlice sky = MenuSky.slice();
-			if (sky != null) pass.setUniform("SkyParams", sky);
 		}
 	}
 }

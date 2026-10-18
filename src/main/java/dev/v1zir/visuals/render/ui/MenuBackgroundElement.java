@@ -2,6 +2,7 @@ package dev.v1zir.visuals.render.ui;
 
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import dev.v1zir.visuals.render.V1zirPipelines;
+import dev.v1zir.visuals.render.sky.MenuSky;
 import net.minecraft.client.gui.ScreenRect;
 import net.minecraft.client.gui.render.state.SimpleGuiElementRenderState;
 import net.minecraft.client.render.VertexConsumer;
@@ -9,7 +10,7 @@ import net.minecraft.client.texture.TextureSetup;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix3x2f;
 
-/** Full screen quad running the sky shader with a virtual camera (main menu background). */
+/** Full screen quad showing the menu sky, rendered at reduced resolution by MenuSky and upsampled. */
 public record MenuBackgroundElement(
 	Matrix3x2f pose,
 	@Nullable ScreenRect scissorArea,
@@ -33,6 +34,6 @@ public record MenuBackgroundElement(
 
 	@Override
 	public TextureSetup textureSetup() {
-		return TextureSetup.empty();
+		return MenuSky.textureSetup();
 	}
 }
