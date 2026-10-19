@@ -1,6 +1,7 @@
 package dev.v1zir.visuals.gui.hud;
 
 import dev.v1zir.visuals.V1zir;
+import dev.v1zir.visuals.gui.clickgui.ClickGuiScreen;
 import dev.v1zir.visuals.gui.custom.CustomHotbar;
 import dev.v1zir.visuals.gui.custom.CustomUi;
 import dev.v1zir.visuals.module.Module;
@@ -50,8 +51,10 @@ public final class HudRenderer {
 		int w = ctx.getScaledWindowWidth();
 		int h = ctx.getScaledWindowHeight();
 		Render2D.setAlpha(1f);
+		// In the HUD editor every element is drawn, so empty ones can still be placed.
+		boolean editing = mc.currentScreen instanceof ClickGuiScreen screen && screen.isHudTab();
 		for (Module module : ModuleManager.all()) {
-			if (!(module instanceof HudModule hud) || !hud.isEnabled() || !hud.hasContent()) continue;
+			if (!(module instanceof HudModule hud) || !hud.isEnabled() || !(editing || hud.hasContent())) continue;
 			try {
 				hud.renderAt(ctx, tickDelta, w, h);
 			} catch (RuntimeException e) {

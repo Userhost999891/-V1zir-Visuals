@@ -416,8 +416,8 @@ vec4 vClouds(vec3 rd, vec3 lightDir, vec3 lightColor, vec3 ambient, float covera
 	if (density <= 0.002) return vec4(0.0);
 
 	vec2 lightStep = normalize(lightDir.xz + vec2(1e-4)) * 0.11;
-	float n2 = vFbm2(p + lightStep, 5) * 0.82 + detail * 0.18;
-	float n3 = vFbm2(p + lightStep * 2.2, 4) * 0.82 + detail * 0.18;
+	float n2 = vFbm2(p + lightStep, 4) * 0.82 + detail * 0.18;
+	float n3 = vFbm2(p + lightStep * 2.2, 3) * 0.82 + detail * 0.18;
 	float shadow = clamp(1.0 - ((n2 - n) * 2.2 + (n3 - n) * 1.4), 0.0, 1.0);
 	float thickness = smoothstep(threshold, threshold + 0.5, n);
 
@@ -438,8 +438,9 @@ vec3 vSkyRealistic(vec3 rd, float t, int quality) {
 	vec3 sunDir = normalize(SunDir.xyz);
 	vec3 moonDir = normalize(MoonDir.xyz);
 	float rain = Timing.z;
-	int viewSteps = quality == 0 ? 8 : (quality == 1 ? 12 : 18);
-	int lightSteps = quality == 0 ? 3 : (quality == 1 ? 4 : 6);
+	// The scattering integral is smooth: a few steps look the same as many.
+	int viewSteps = quality == 0 ? 6 : (quality == 1 ? 8 : 12);
+	int lightSteps = quality == 0 ? 2 : (quality == 1 ? 2 : 4);
 
 	vec3 sunColor;
 	vec3 col = vAtmosphere(rd, sunDir, 22.0, viewSteps, lightSteps, sunColor);
@@ -648,9 +649,9 @@ vec3 vSkySunset(vec3 rd, float t, int quality) {
 	vec3 s = SunDir.xyz;
 	vec2 az = normalize(s.xz + vec2(1e-3, 0.0));
 	vec3 sunDir = normalize(vec3(az.x, 0.055, az.y));
-	int viewSteps = quality == 0 ? 8 : (quality == 1 ? 12 : 18);
+	int viewSteps = quality == 0 ? 6 : (quality == 1 ? 8 : 12);
 	vec3 sunColor;
-	vec3 col = vAtmosphere(rd, sunDir, 26.0, viewSteps, quality == 0 ? 3 : 5, sunColor);
+	vec3 col = vAtmosphere(rd, sunDir, 26.0, viewSteps, quality == 2 ? 4 : 2, sunColor);
 	col = vSaturate(col, 1.3);
 	col += vec3(0.9, 0.3, 0.6) * 0.06 * exp(-abs(rd.y - 0.12) * 5.0);
 	col *= mix(1.0, 0.35, (1.0 - smoothstep(-0.25, 0.0, rd.y)));

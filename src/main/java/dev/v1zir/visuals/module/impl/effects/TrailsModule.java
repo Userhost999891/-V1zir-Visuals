@@ -10,9 +10,7 @@ import dev.v1zir.visuals.util.Theme;
 import net.minecraft.util.math.Vec3d;
 
 import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.Deque;
-import java.util.List;
 
 /** A glowing ribbon that follows you. */
 public final class TrailsModule extends Module implements WorldEffect {
@@ -43,25 +41,45 @@ public final class TrailsModule extends Module implements WorldEffect {
 	@Override
 	public void render3D(float tickDelta) {
 		if (mc.player == null || points.size() < 2) return;
-		List<Vec3d> list = new ArrayList<>(points);
-		list.set(0, mc.player.getLerpedPos(tickDelta));
 		WorldEffectRenderer.Mesh mesh = WorldEffectRenderer.glow();
 		double h = ribbonHeight.f();
 		int a1 = Theme.accent();
 		int a2 = Theme.accent2();
-		int n = list.size();
-		for (int i = 0; i < n - 1; i++) {
-			Vec3d p0 = list.get(i);
-			Vec3d p1 = list.get(i + 1);
-			float f0 = 1f - i / (float) (n - 1);
-			float f1 = 1f - (i + 1) / (float) (n - 1);
-			int c0 = ColorUtil.withAlpha(ColorUtil.lerp(a1, a2, 1f - f0), Math.round(200 * f0));
-			int c1 = ColorUtil.withAlpha(ColorUtil.lerp(a1, a2, 1f - f1), Math.round(200 * f1));
-			double base = 0.05;
-			mesh.vertex(p0.x, p0.y + base, p0.z, -1f, 0f, c0);
-			mesh.vertex(p0.x, p0.y + base + h, p0.z, 1f, 0f, c0);
-			mesh.vertex(p1.x, p1.y + base + h, p1.z, 1f, 1f, c1);
-			mesh.vertex(p1.x, p1.y + base, p1.z, -1f, 1f, c1);
+		int n = points.size();
+		// In first person the newest part of the ribbon runs right past the eyes: segments near the
+		// camera fade out so they never cover the screen (and cost nothing there).
+		boolean firstPerson = mc.options.getPerspective().isFirstPerson();
+		Vec3d head = mc.player.getLerpedPos(tickDelta);
+		Vec3d p0 = head;
+		float near0 = nearFade(p0, firstPerson);
+		int i = 0;
+		for (Vec3d p1 : points) {
+			if (i++ == 0) continue;
+			float f0 = 1f - (i - 2) / (float) (n - 1);
+			float f1 = 1f - (i - 1) / (float) (n - 1);
+			float near1 = nearFade(p1, firstPerson);
+			if (near0 > 0.01f || near1 > 0.01f) {
+				int c0 = ColorUtil.withAlpha(ColorUtil.lerp(a1, a2, 1f - f0), Math.round(200 * f0 * near0));
+				int c1 = ColorUtil.withAlpha(ColorUtil.lerp(a1, a2, 1f - f1), Math.round(200 * f1 * near1));
+				double base = 0.05;
+				mesh.vertex(p0.x, p0.y + base, p0.z, -1f, 0f, c0);
+				mesh.vertex(p0.x, p0.y + base + h, p0.z, 1f, 0f, c0);
+				mesh.vertex(p1.x, p1.y + base + h, p1.z, 1f, 1f, c1);
+				mesh.vertex(p1.x, p1.y + base, p1.z, -1f, 1f, c1);
+			}
+			p0 = p1;
+			near0 = near1;
 		}
+	}
+
+	/** 0 within 1.5 blocks of the camera, 1 from 3 blocks on (first person only). */
+	private static float nearFade(Vec3d p, boolean firstPerson) {
+		if (!firstPerson) return 1f;
+		double dx = p.x - WorldEffectRenderer.camX;
+		double dy = p.y - WorldEffectRenderer.camY;
+		double dz = p.z - WorldEffectRenderer.camZ;
+		float d = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
+		float t = Math.max(0f, Math.min(1f, (d - 1.5f) / 1.5f));
+		return t * t * (3f - 2f * t);
 	}
 }

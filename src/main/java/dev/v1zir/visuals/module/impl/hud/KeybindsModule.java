@@ -17,6 +17,8 @@ import java.util.List;
 
 /** List of modules that have a keybind, with their state. */
 public final class KeybindsModule extends HudModule {
+	private final List<Module> bound = new ArrayList<>();
+
 	public KeybindsModule() {
 		super("Keybinds", "Shows bound modules", 0.008f, 0.25f);
 	}
@@ -26,9 +28,18 @@ public final class KeybindsModule extends HudModule {
 		return false;
 	}
 
+	/** Hidden in game while nothing is bound; the HUD editor still shows it with a hint. */
+	@Override
+	public boolean hasContent() {
+		for (Module module : ModuleManager.all()) {
+			if (module.key() != GLFW.GLFW_KEY_UNKNOWN && module.canToggle()) return true;
+		}
+		return false;
+	}
+
 	@Override
 	protected void render(DrawContext ctx, float tickDelta, float x, float y) {
-		List<Module> bound = new ArrayList<>();
+		bound.clear();
 		for (Module module : ModuleManager.all()) {
 			if (module.key() != GLFW.GLFW_KEY_UNKNOWN && module.canToggle()) bound.add(module);
 		}
