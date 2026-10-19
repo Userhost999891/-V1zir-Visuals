@@ -23,12 +23,21 @@ public final class AtlasTexture {
 
 	/** Returns the texture setup for a page, uploading pending glyphs first. Render thread only. */
 	public static TextureSetup prepare(GlyphAtlas atlas) {
+		return sync(atlas).setup;
+	}
+
+	/** The page's texture for render passes that bind it themselves; uploads pending glyphs first, so call it outside a pass. */
+	public static GpuTextureView view(GlyphAtlas atlas) {
+		return sync(atlas).view;
+	}
+
+	private static AtlasTexture sync(GlyphAtlas atlas) {
 		if (atlas.texture == null) atlas.texture = new AtlasTexture();
 		if (atlas.isDirty()) {
 			atlas.texture.upload(atlas);
 			atlas.markClean();
 		}
-		return atlas.texture.setup;
+		return atlas.texture;
 	}
 
 	private void upload(GlyphAtlas atlas) {

@@ -23,10 +23,12 @@ import org.lwjgl.system.MemoryUtil;
 import java.nio.ByteBuffer;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
+import java.util.function.Supplier;
 
 /**
  * Immediate renderer for the 3D effects. Geometry is built camera-relative into two batches
- * (additive glow and alpha blended) and drawn right after the world, depth tested against it.
+ * (additive glow and alpha blended) and drawn right after the world, depth tested against it;
+ * {@link WorldText} strings queued by the effects are drawn last, on top of both.
  */
 public final class WorldEffectRenderer {
 	private static final int UBO_SIZE = new Std140SizeCalculator().putMat4f().putMat4f().putVec4().get();
@@ -86,6 +88,7 @@ public final class WorldEffectRenderer {
 
 		GLOW.reset();
 		TRANSLUCENT.reset();
+		WorldText.begin();
 		for (Module module : ModuleManager.all()) {
 			if (module instanceof WorldEffect effect && module.isEnabled()) {
 				try {
@@ -96,26 +99,32 @@ public final class WorldEffectRenderer {
 				}
 			}
 		}
-		if (GLOW.quads == 0 && TRANSLUCENT.quads == 0) return;
+		if (GLOW.quads == 0 && TRANSLUCENT.quads == 0 && WorldText.isEmpty()) return;
 
 		if (storage == null) storage = new DynamicUniformStorage<>("V1zir world effects UBO", UBO_SIZE, 4);
 		GpuBufferSlice params = storage.write(new WorldData(PROJECTION, VIEW, V1zir.time()));
 		draw(V1zirPipelines.WORLD_TRANSLUCENT, TRANSLUCENT, params);
 		draw(V1zirPipelines.WORLD_GLOW, GLOW, params);
+		WorldText.flush(params);
+	}
+
+	/** Opens a pass on the world's colour and depth targets, or on the overrides vanilla sets while it renders into other targets. */
+	static RenderPass openPass(Supplier<String> label) {
+		MinecraftClient mc = V1zir.mc();
+		GpuTextureView color = RenderSystem.outputColorTextureOverride != null ? RenderSystem.outputColorTextureOverride : mc.getFramebuffer().getColorAttachmentView();
+		GpuTextureView depth = RenderSystem.outputDepthTextureOverride != null ? RenderSystem.outputDepthTextureOverride : mc.getFramebuffer().getDepthAttachmentView();
+		return RenderSystem.getDevice().createCommandEncoder().createRenderPass(label, color, OptionalInt.empty(), depth, OptionalDouble.empty());
 	}
 
 	private static void draw(RenderPipeline pipeline, Mesh mesh, GpuBufferSlice params) {
 		if (mesh.quads == 0) return;
-		MinecraftClient mc = V1zir.mc();
 		ByteBuffer data = mesh.buffer.duplicate();
 		data.position(0).limit(mesh.quads * 4 * Mesh.STRIDE);
 		GpuBuffer vertices = pipeline.getVertexFormat().uploadImmediateVertexBuffer(data);
 		var indices = RenderSystem.getSequentialBuffer(VertexFormat.DrawMode.QUADS);
 		int indexCount = mesh.quads * 6;
 		GpuBuffer indexBuffer = indices.getIndexBuffer(indexCount);
-		GpuTextureView color = RenderSystem.outputColorTextureOverride != null ? RenderSystem.outputColorTextureOverride : mc.getFramebuffer().getColorAttachmentView();
-		GpuTextureView depth = RenderSystem.outputDepthTextureOverride != null ? RenderSystem.outputDepthTextureOverride : mc.getFramebuffer().getDepthAttachmentView();
-		try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(() -> "V1zir world effects", color, OptionalInt.empty(), depth, OptionalDouble.empty())) {
+		try (RenderPass pass = openPass(() -> "V1zir world effects")) {
 			pass.setPipeline(pipeline);
 			pass.setUniform("WorldParams", params);
 			pass.setVertexBuffer(0, vertices);

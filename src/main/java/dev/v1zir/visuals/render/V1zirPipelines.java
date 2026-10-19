@@ -26,9 +26,12 @@ import net.minecraft.client.render.VertexFormats;
  *     UV0    float2  SDF atlas coordinates
  *     UV2    short2  weight shift * 256, extra softness * 256
  * </pre>
+ * WORLD_TEXT uses the TEXT layout with camera-relative positions; UV2.y gains 16384 on additive layers.
  */
 public final class V1zirPipelines {
 	public static final BlendFunction ADDITIVE = new BlendFunction(SourceFactor.SRC_ALPHA, DestFactor.ONE);
+	/** Premultiplied alpha: a fragment with zero alpha adds light, so blended and additive layers share one draw. */
+	public static final BlendFunction PREMULTIPLIED = new BlendFunction(SourceFactor.ONE, DestFactor.ONE_MINUS_SRC_ALPHA);
 
 	public static final RenderPipeline SHAPE = RenderPipeline.builder(RenderPipelines.GUI_SNIPPET)
 		.withLocation(V1zir.id("pipeline/gui_shape"))
@@ -100,6 +103,10 @@ public final class V1zirPipelines {
 	public static final RenderPipeline WORLD_GLOW = worldPipeline("world_glow", ADDITIVE, true);
 	/** Regular alpha blended world geometry (china hat body...). */
 	public static final RenderPipeline WORLD_TRANSLUCENT = worldPipeline("world_translucent", BlendFunction.TRANSLUCENT, true);
+	/** World-space SDF text (WorldText), depth tested against the world. */
+	public static final RenderPipeline WORLD_TEXT = worldTextPipeline("world_text", true);
+	/** World-space SDF text that shows through walls. */
+	public static final RenderPipeline WORLD_TEXT_SEE_THROUGH = worldTextPipeline("world_text_see_through", false);
 
 	private static boolean registered;
 
@@ -136,6 +143,21 @@ public final class V1zirPipelines {
 			.build();
 	}
 
+	private static RenderPipeline worldTextPipeline(String name, boolean depthTest) {
+		return RenderPipeline.builder()
+			.withLocation(V1zir.id("pipeline/" + name))
+			.withVertexShader(V1zir.id("core/world_text"))
+			.withFragmentShader(V1zir.id("core/world_text"))
+			.withVertexFormat(VertexFormats.POSITION_TEXTURE_COLOR_LIGHT, VertexFormat.DrawMode.QUADS)
+			.withSampler("Sampler0")
+			.withUniform("WorldParams", UniformType.UNIFORM_BUFFER)
+			.withDepthTestFunction(depthTest ? DepthTestFunction.LEQUAL_DEPTH_TEST : DepthTestFunction.NO_DEPTH_TEST)
+			.withDepthWrite(false)
+			.withBlend(PREMULTIPLIED)
+			.withCull(false)
+			.build();
+	}
+
 	public static void register() {
 		if (registered) return;
 		registered = true;
@@ -149,6 +171,8 @@ public final class V1zirPipelines {
 		RenderPipelines.register(BLUR_UP);
 		RenderPipelines.register(WORLD_GLOW);
 		RenderPipelines.register(WORLD_TRANSLUCENT);
+		RenderPipelines.register(WORLD_TEXT);
+		RenderPipelines.register(WORLD_TEXT_SEE_THROUGH);
 	}
 
 	public static boolean isOurs(RenderPipeline pipeline) {
