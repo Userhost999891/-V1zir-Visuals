@@ -2,6 +2,7 @@ package dev.v1zir.visuals.module;
 
 import dev.v1zir.visuals.V1zir;
 import dev.v1zir.visuals.module.impl.client.ClickGuiModule;
+import dev.v1zir.visuals.module.impl.client.CustomUiModule;
 import dev.v1zir.visuals.module.impl.client.MainMenuModule;
 import dev.v1zir.visuals.module.impl.client.ThemeModule;
 import dev.v1zir.visuals.module.impl.effects.ChinaHatModule;
@@ -64,6 +65,7 @@ public final class ModuleManager {
 		register(new ClickGuiModule());
 		register(new ThemeModule());
 		register(new MainMenuModule());
+		register(new CustomUiModule());
 		V1zir.LOGGER.info("Registered {} modules", MODULES.size());
 	}
 

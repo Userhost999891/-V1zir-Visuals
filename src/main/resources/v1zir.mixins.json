@@ -12,9 +12,11 @@
 		"KeyboardMixin",
 		"LightmapTextureManagerMixin",
 		"MinecraftClientMixin",
+		"PressableWidgetMixin",
 		"RenderSystemMixin",
 		"ScreenMixin",
 		"SkyRenderingMixin",
+		"TooltipBackgroundRendererMixin",
 		"WorldRendererMixin"
 	],
 	"injectors": {
