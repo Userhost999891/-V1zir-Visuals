@@ -87,14 +87,18 @@ public final class CustomUi {
 		label(ctx, message, x + w / 2f, y + h / 2f, w - 8f, color);
 	}
 
-	/** Background of a text field; vanilla still draws the text and the cursor on top. */
-	public static void textField(DrawContext ctx, int x, int y, int w, int h, boolean focused, boolean hovered) {
+	/** Background of a text field; vanilla still draws the text, selection and cursor on top. */
+	public static void textField(DrawContext ctx, int x, int y, int w, int h, boolean focused, boolean hovered, boolean active) {
 		applyTheme();
 		float r = Math.min(5f, h / 2f);
 		int accent = Theme.accent();
-		Render2D.round(ctx, x, y, w, h, r, ColorUtil.withAlpha(0x000000, 120));
-		Render2D.outline(ctx, x, y, w, h, r, 1f, focused ? ColorUtil.withAlpha(accent, 230)
-			: hovered ? ColorUtil.withAlpha(0xFFFFFF, 60) : ColorUtil.withAlpha(0xFFFFFF, 28));
+		if (focused) Render2D.shadow(ctx, x, y, w, h, r, 7f, ColorUtil.withAlpha(accent, 70));
+		Render2D.round(ctx, x, y, w, h, r, ColorUtil.withAlpha(0x000000, active ? 125 : 80));
+		// The border is brightest along the top, like light catching the lip of an inset field.
+		Render2D.outline(ctx, x, y, w, h, r, 1f, focused ? ColorUtil.withAlpha(accent, 235)
+			: hovered ? ColorUtil.withAlpha(0xFFFFFF, 70) : ColorUtil.withAlpha(0xFFFFFF, 26),
+			focused ? ColorUtil.withAlpha(Theme.accent2(), 200) : hovered ? ColorUtil.withAlpha(0xFFFFFF, 45) : ColorUtil.withAlpha(0xFFFFFF, 16),
+			ColorUtil.withAlpha(0xFFFFFF, focused ? 40 : 12), ColorUtil.withAlpha(0xFFFFFF, focused ? 60 : 20));
 	}
 
 	/** Tooltip background (x, y, w, h are the text area, as vanilla passes them). */

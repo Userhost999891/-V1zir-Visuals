@@ -28,9 +28,17 @@ import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.client.gui.screen.option.OptionsScreen;
 import org.lwjgl.glfw.GLFW;
 
+import jdk.jfr.Recording;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.lang.reflect.Field;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * Starts the real client and walks through everything the mod draws: the main menu, every sky
@@ -56,6 +64,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			singleplayer.getServer().runCommand("effect give @a minecraft:night_vision 9999 0 true");
 
 			sky(context, singleplayer);
+			walk(context, singleplayer);
 			hud(context, singleplayer);
 			clickGui(context);
 
@@ -170,6 +179,66 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		double ms = (System.nanoTime() - start) / 1.0e6 / BENCH_TICKS;
 		int fps = context.computeOnClient(client -> client.getCurrentFps());
 		System.out.printf(Locale.ROOT, "V1ZIR-BENCH %-26s %8.2f ms/frame  %4d fps%n", scene, ms, fps);
+	}
+
+	/**
+	 * Walking benchmark: sprints through fresh terrain while turning, once with every module off
+	 * (the vanilla baseline) and once with the default modules and the Realistic sky. Both runs are
+	 * profiled with Java Flight Recorder; CI prints the hottest methods of each.
+	 */
+	private static void walk(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
+		singleplayer.getServer().runCommand("time set 6000");
+		singleplayer.getServer().runCommand("effect give @a minecraft:speed 9999 4 true");
+		look(singleplayer, 0, 0);
+		Map<Module, Boolean> defaults = context.computeOnClient(client -> {
+			Map<Module, Boolean> states = new HashMap<>();
+			for (Module module : ModuleManager.all()) {
+				states.put(module, module.isEnabled());
+				if (module.canToggle()) module.setEnabled(false, false);
+			}
+			return states;
+		});
+		profiled("walk-vanilla", () -> walkFor(context, "walk-vanilla"));
+		context.runOnClient(client -> {
+			defaults.forEach((module, on) -> {
+				if (module.canToggle()) module.setEnabled(on, false);
+			});
+			ModuleManager.get(ShaderSkyModule.class).preset.set(SkyPreset.REALISTIC.title());
+		});
+		profiled("walk-default", () -> walkFor(context, "walk-default"));
+		singleplayer.getServer().runCommand("effect give @a minecraft:speed 9999 1 true");
+	}
+
+	/** Sprints forward while slowly turning, then reports the frame time of the walk. */
+	private static void walkFor(ClientGameTestContext context, String scene) {
+		int ticks = 120;
+		context.getInput().holdKey(options -> options.forwardKey);
+		context.getInput().holdKey(options -> options.sprintKey);
+		long start = System.nanoTime();
+		for (int i = 0; i < ticks; i++) {
+			context.getInput().moveCursor(6.0, i % 40 < 20 ? 1.5 : -1.5);
+			context.waitTick();
+		}
+		double ms = (System.nanoTime() - start) / 1.0e6 / ticks;
+		context.getInput().releaseKey(options -> options.forwardKey);
+		context.getInput().releaseKey(options -> options.sprintKey);
+		int fps = context.computeOnClient(client -> client.getCurrentFps());
+		System.out.printf(Locale.ROOT, "V1ZIR-BENCH %-26s %8.2f ms/frame  %4d fps%n", scene, ms, fps);
+	}
+
+	/** Runs the body under a Java Flight Recorder recording saved as v1zir-<name>.jfr in the run directory. */
+	private static void profiled(String name, Runnable body) {
+		try (Recording recording = new Recording()) {
+			recording.enable("jdk.ExecutionSample").withPeriod(Duration.ofMillis(4));
+			recording.enable("jdk.ObjectAllocationSample");
+			recording.enable("jdk.GarbageCollection");
+			recording.start();
+			body.run();
+			recording.stop();
+			recording.dump(Path.of("v1zir-" + name + ".jfr"));
+		} catch (IOException e) {
+			throw new UncheckedIOException(e);
+		}
 	}
 
 	private static void hud(ClientGameTestContext context, TestSingleplayerContext singleplayer) {

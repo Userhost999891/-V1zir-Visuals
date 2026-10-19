@@ -591,8 +591,9 @@ vec3 vSkyAurora(vec3 rd, float t, int quality, vec2 fragCoord) {
 
 	if (rd.y > 0.0) {
 		int steps = quality == 0 ? 18 : (quality == 1 ? 28 : 42);
-		// Static per-pixel jitter: re-rolling it every frame (fract(t)) makes the curtains boil without TAA.
-		float dither = vHash12(fragCoord * 1.37 + 7.3);
+		// Jitter locked to the sky direction: locked to screen pixels it stays put while the
+		// curtains slide past during a turn, so they boil.
+		float dither = vHash13(floor(rd * 700.0) + 7.3);
 		vec3 acc = vec3(0.0);
 		for (int i = 0; i < 42; i++) {
 			if (i >= steps) break;
@@ -616,7 +617,7 @@ vec3 vSkyAurora(vec3 rd, float t, int quality, vec2 fragCoord) {
 vec3 vSkyNebula(vec3 rd, float t, int quality, vec2 fragCoord) {
 	vec3 col = vec3(0.004, 0.003, 0.010);
 	int steps = quality == 0 ? 10 : (quality == 1 ? 16 : 26);
-	float dither = vHash12(fragCoord * 1.37 + 3.1);
+	float dither = vHash13(floor(rd * 700.0) + 3.1);
 	vec3 acc = vec3(0.0);
 	float trans = 1.0;
 	vec3 drift = vec3(t * 0.004, 0.0, t * 0.002);

@@ -12,6 +12,7 @@ import dev.v1zir.visuals.render.V1zirPipelines;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.Framebuffer;
 import net.minecraft.util.math.Vec3d;
+import org.joml.Matrix4d;
 import org.joml.Matrix4f;
 
 import java.util.OptionalInt;
@@ -20,6 +21,8 @@ import java.util.OptionalInt;
 public final class SkyRenderer {
 	private static final Matrix4f VIEW = new Matrix4f();
 	private static final Matrix4f PROJECTION = new Matrix4f();
+	// The inverse is taken in double: the float inverse of a perspective matrix is too imprecise.
+	private static final Matrix4d INVERSE = new Matrix4d();
 	private static final SkyUniforms.Data DATA = new SkyUniforms.Data();
 	private static final SkyTarget TARGET = new SkyTarget("V1zir shader sky");
 	private static boolean captured;
@@ -78,7 +81,7 @@ public final class SkyRenderer {
 			float tickDelta = mc.getRenderTickCounter().getTickProgress(false);
 			Vec3d cam = mc.gameRenderer.getCamera().getCameraPos();
 			sky.fill(DATA, mc.world, tickDelta, cam.x, cam.y, cam.z);
-			DATA.invViewProj.set(PROJECTION).mul(VIEW).invert();
+			DATA.invViewProj.set(INVERSE.set(PROJECTION).mul(VIEW).invert());
 			GpuBufferSlice params = SkyUniforms.write(DATA);
 			GpuTextureView color = RenderSystem.outputColorTextureOverride != null
 				? RenderSystem.outputColorTextureOverride

@@ -80,7 +80,8 @@ public final class ShaderSkyModule extends Module {
 		fillColors(data, p);
 		data.settings.set(brightness.f(), coverage.f(), stars.f(), quality.index());
 		data.camera.set((float) camX, (float) camY, (float) camZ, p.index());
-		data.extra.set(1f, clouds.on() ? 1f : 0f, vanillaCelestial.on() ? 1f : 0f, (float) (System.nanoTime() % 1000L));
+		// Constant dither seed: a new one every frame made the whole sky boil faintly.
+		data.extra.set(1f, clouds.on() ? 1f : 0f, vanillaCelestial.on() ? 1f : 0f, 0f);
 	}
 
 	public void fillColors(SkyUniforms.Data data, SkyPreset p) {

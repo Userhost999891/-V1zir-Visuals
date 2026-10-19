@@ -8,6 +8,7 @@ import dev.v1zir.visuals.module.impl.visuals.ShaderSkyModule;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import net.minecraft.client.gl.Framebuffer;
 import net.minecraft.client.texture.TextureSetup;
+import org.joml.Matrix4d;
 import org.joml.Matrix4f;
 
 /**
@@ -23,6 +24,7 @@ public final class MenuSky {
 	private static int frame;
 	private static final Matrix4f PROJECTION = new Matrix4f();
 	private static final Matrix4f VIEW = new Matrix4f();
+	private static final Matrix4d INVERSE = new Matrix4d();
 	private static GpuBufferSlice slice;
 	private static float time;
 	private static long last;
@@ -93,7 +95,7 @@ public final class MenuSky {
 			DATA.settings.set(1.0f, 0.42f, 1f, 1f);
 		}
 		DATA.camera.set(time * 18f, 80f, time * 6f, preset.index());
-		DATA.extra.set(1f, 1f, 0f, (float) (now % 1000L));
+		DATA.extra.set(1f, 1f, 0f, 0f);
 
 		float yaw;
 		float pitch;
@@ -130,7 +132,7 @@ public final class MenuSky {
 
 		PROJECTION.identity().perspective((float) Math.toRadians(fov), Math.max(width, 1f) / Math.max(height, 1f), 0.05f, 100f);
 		VIEW.identity().rotateX(-pitch).rotateY(-yaw);
-		DATA.invViewProj.set(PROJECTION).mul(VIEW).invert();
+		DATA.invViewProj.set(INVERSE.set(PROJECTION).mul(VIEW).invert());
 		slice = SkyUniforms.write(DATA);
 
 		MainMenuModule menu = ModuleManager.get(MainMenuModule.class);
