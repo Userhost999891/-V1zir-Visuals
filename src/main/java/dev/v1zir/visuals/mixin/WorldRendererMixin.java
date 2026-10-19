@@ -13,11 +13,16 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(WorldRenderer.class)
 public abstract class WorldRendererMixin {
-	/** Captures the view and projection matrices of the frame (shader sky and 3D effects). */
+	/**
+	 * Captures the view and projection matrices of the frame (shader sky and 3D effects). The
+	 * second Matrix4f argument is the projection the world is drawn with, which includes view
+	 * bobbing, the hurt tilt and nausea; the third is a plain one vanilla only uses for frustum
+	 * culling, so a sky drawn with it would swim against the terrain while walking.
+	 */
 	@Inject(method = "render", at = @At("HEAD"))
 	private void v1zir$captureMatrices(CallbackInfo ci,
 									   @Local(argsOnly = true, ordinal = 0) Matrix4f positionMatrix,
-									   @Local(argsOnly = true, ordinal = 2) Matrix4f projectionMatrix) {
+									   @Local(argsOnly = true, ordinal = 1) Matrix4f projectionMatrix) {
 		SkyRenderer.captureMatrices(positionMatrix, projectionMatrix);
 		WorldEffectRenderer.captureMatrices(positionMatrix, projectionMatrix);
 	}

@@ -14,6 +14,7 @@ import dev.v1zir.visuals.V1zir;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.client.ThemeModule;
 import dev.v1zir.visuals.render.sky.MenuSky;
+import dev.v1zir.visuals.util.ColorUtil;
 import dev.v1zir.visuals.util.Theme;
 import net.minecraft.client.gl.DynamicUniformStorage;
 import net.minecraft.client.gl.Framebuffer;
@@ -40,6 +41,10 @@ public final class BackdropBlur {
 	private static int sourceHeight = -1;
 	private static boolean requested;
 	private static DynamicUniformStorage<BlurData> storage;
+	// Full-screen dimming drawn over the scene so far this frame (at the top and bottom of the
+	// screen). The blur is taken before the GUI, so glass panes apply it themselves.
+	private static int dimTop;
+	private static int dimBottom;
 
 	private BackdropBlur() {
 	}
@@ -56,6 +61,36 @@ public final class BackdropBlur {
 
 	public static void flip() {
 		if (storage != null) storage.clear();
+		dimTop = 0;
+		dimBottom = 0;
+	}
+
+	/** Records a full-screen dim (a vertical gradient) drawn over everything drawn before it. */
+	public static void dim(int top, int bottom) {
+		dimTop = over(dimTop, top);
+		dimBottom = over(dimBottom, bottom);
+	}
+
+	/**
+	 * Tint of a glass pane at screen height {@code t} (0 top, 1 bottom): the dimming drawn so far
+	 * with the pane's own haze over it, folded into one colour.
+	 */
+	public static int paneTint(int haze, float t) {
+		return over(ColorUtil.lerp(dimTop, dimBottom, t), haze);
+	}
+
+	/** Layer {@code top} composited over layer {@code under}, as a single layer. */
+	private static int over(int under, int top) {
+		float au = ColorUtil.alpha(under) / 255f;
+		float at = ColorUtil.alpha(top) / 255f;
+		float a = 1f - (1f - au) * (1f - at);
+		if (a <= 0f) return 0;
+		float ku = au * (1f - at) / a;
+		float kt = at / a;
+		return ColorUtil.argb(Math.round(a * 255f),
+			Math.round(ColorUtil.red(under) * ku + ColorUtil.red(top) * kt),
+			Math.round(ColorUtil.green(under) * ku + ColorUtil.green(top) * kt),
+			Math.round(ColorUtil.blue(under) * ku + ColorUtil.blue(top) * kt));
 	}
 
 	public static TextureSetup textureSetup() {

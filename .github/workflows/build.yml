@@ -40,7 +40,12 @@ jobs:
                    net.minecraft.client.gui.screen.ingame.HandledScreen net.minecraft.client.gui.screen.ingame.InventoryScreen \
                    net.minecraft.client.gui.screen.ingame.GenericContainerScreen net.minecraft.client.gui.tooltip.TooltipBackgroundRenderer \
                    net.minecraft.client.render.SkyRendering net.minecraft.client.render.GameRenderer \
-                   com.mojang.blaze3d.systems.RenderSystem net.minecraft.client.gl.DynamicUniforms; do
+                   com.mojang.blaze3d.systems.RenderSystem net.minecraft.client.gl.DynamicUniforms \
+                   net.minecraft.client.gui.hud.InGameHud net.minecraft.client.gui.DrawContext net.minecraft.client.gui.screen.Screen \
+                   net.minecraft.client.particle.ParticleManager net.minecraft.client.render.WorldRenderer \
+                   net.minecraft.client.render.entity.EntityRenderManager net.minecraft.client.render.entity.EntityRenderer \
+                   net.minecraft.client.render.block.entity.BlockEntityRenderManager net.minecraft.client.MinecraftClient \
+                   net.minecraft.client.render.Frustum net.minecraft.client.option.InactivityFpsLimiter; do
             echo "=== SIG $c"; sig "$c"
           done
           echo "=== CODE PressableWidget.renderWidget"; code net.minecraft.client.gui.widget.PressableWidget renderWidget
@@ -54,6 +59,19 @@ jobs:
           echo "=== CODE TooltipBackgroundRenderer.render"; code net.minecraft.client.gui.tooltip.TooltipBackgroundRenderer render
           echo "=== CODE SkyRendering.renderTopSky"; code net.minecraft.client.render.SkyRendering renderTopSky
           echo "=== CODE GameRenderer.renderWorld"; code net.minecraft.client.render.GameRenderer renderWorld
+          echo "=== CODE InGameHud.renderHotbar"; code net.minecraft.client.gui.hud.InGameHud renderHotbar
+          echo "=== CODE InGameHud.renderHotbarItem"; code net.minecraft.client.gui.hud.InGameHud renderHotbarItem
+          echo "=== CODE Screen.renderBackground"; code net.minecraft.client.gui.screen.Screen renderBackground
+          echo "=== CODE Screen.renderInGameBackground"; code net.minecraft.client.gui.screen.Screen renderInGameBackground
+          echo "=== CODE Screen.renderDarkening"; code net.minecraft.client.gui.screen.Screen renderDarkening
+          echo "=== CODE HandledScreen.renderBackground"; code net.minecraft.client.gui.screen.ingame.HandledScreen renderBackground
+          echo "=== CODE InventoryScreen.drawForeground"; code net.minecraft.client.gui.screen.ingame.InventoryScreen drawForeground
+          echo "=== CODE ParticleManager.render"; code net.minecraft.client.particle.ParticleManager render
+          echo "=== CODE MinecraftClient.render"; code net.minecraft.client.MinecraftClient render
+          echo "=== CODE InactivityFpsLimiter.update"; code net.minecraft.client.option.InactivityFpsLimiter update
+          echo "=== PNG alpha of the menu darkening textures"
+          unzip -o -q "$jar" 'assets/minecraft/textures/gui/*menu_background*.png' -d /tmp/tex 2>/dev/null || true
+          for f in /tmp/tex/assets/minecraft/textures/gui/*.png; do echo "$f"; identify -format '%wx%h mean=%[fx:mean] alpha=%[fx:mean.a]\n' "$f" 2>&1; done
 
   client:
     name: Dev client

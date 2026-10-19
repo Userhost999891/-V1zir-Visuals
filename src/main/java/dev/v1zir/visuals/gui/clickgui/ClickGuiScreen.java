@@ -122,10 +122,12 @@ public final class ClickGuiScreen extends Screen {
 		float alpha = animations ? Anim.clamp01(t * exitT) : 1f;
 
 		// Background: blurred, dimmed world (not on the HUD tab, where the HUD must stay visible).
+		// With glassmorphism the world stays sharp and only the panes frost it, as real glass does.
 		if (!isHudTab() && (gui == null || gui.dimBackground.on())) {
 			Render2D.setAlpha(alpha);
-			if (client != null && client.world != null) Render2D.glass(ctx, 0, 0, width, height, 0, 0x48000000);
-			else Render2D.rect(ctx, 0, 0, width, height, 0xB0000000);
+			if (client == null || client.world == null) Render2D.rect(ctx, 0, 0, width, height, 0xB0000000);
+			else if (Theme.style() == Theme.Style.GLASS) Render2D.screenDim(ctx, width, height, 0x66000000);
+			else Render2D.glass(ctx, 0, 0, width, height, 0, 0x48000000);
 		}
 
 		double gx = toGuiX(mouseX);

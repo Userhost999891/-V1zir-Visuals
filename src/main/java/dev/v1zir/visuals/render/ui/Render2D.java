@@ -1,6 +1,7 @@
 package dev.v1zir.visuals.render.ui;
 
 import com.mojang.blaze3d.pipeline.RenderPipeline;
+import dev.v1zir.visuals.V1zir;
 import dev.v1zir.visuals.render.BackdropBlur;
 import dev.v1zir.visuals.render.V1zirPipelines;
 import dev.v1zir.visuals.render.font.AtlasTexture;
@@ -204,11 +205,24 @@ public final class Render2D {
 		ScreenRect scissor = scissor(ctx);
 		ScreenRect bounds = bounds(x - 2, y - 2, w + 4, h + 4, pose, scissor);
 		if (bounds == null) return;
-		int tint = Theme.glassTint();
-		// The thickness channel carries the pane's opacity (fades), the tint its milky haze.
+		// The tint is the pane's milky haze over any dimming drawn behind it (the blurred scene is
+		// captured before the GUI); the thickness channel carries the pane's opacity (fades).
+		int haze = Theme.glassTint();
+		float screenH = Math.max(1f, V1zir.mc().getWindow().getScaledHeight());
+		float top = (pose.m01() * x + pose.m11() * y + pose.m21()) / screenH;
+		float bottom = (pose.m01() * x + pose.m11() * (y + h) + pose.m21()) / screenH;
+		int tintTop = BackdropBlur.paneTint(haze, top);
+		int tintBottom = BackdropBlur.paneTint(haze, bottom);
 		ctx.state.addSimpleElement(new ShapeElement(V1zirPipelines.FROSTED, BackdropBlur.textureSetup(), pose, scissor, bounds,
-			x, y, w, h, radius, 0, alpha * 16f, ShapeElement.FILL, corners, tint, tint, tint, tint));
+			x, y, w, h, radius, 0, alpha * 16f, ShapeElement.FILL, corners, tintTop, tintTop, tintBottom, tintBottom));
 		outline(ctx, x, y, w, h, radius, 1f, 0x73FFFFFF, 0x38FFFFFF, 0x14FFFFFF, 0x30FFFFFF);
+	}
+
+	/** Full-screen dim; glass panes drawn after it show the scene behind it dimmed the same way. */
+	public static void screenDim(DrawContext ctx, float width, float height, int color) {
+		rect(ctx, 0, 0, width, height, color);
+		int c = a(color);
+		BackdropBlur.dim(c, c);
 	}
 
 	public static void menuBackground(DrawContext ctx, float width, float height, int color) {
