@@ -48,17 +48,6 @@ public final class V1zirPipelines {
 		.withCull(false)
 		.build();
 
-	/** Glassmorphism pane: frosted, refracting glass over the blurred scene (Theme style "Glassmorphism"). */
-	public static final RenderPipeline FROSTED = RenderPipeline.builder(RenderPipelines.GUI_SNIPPET)
-		.withLocation(V1zir.id("pipeline/gui_frosted"))
-		.withVertexShader(V1zir.id("core/gui_shape"))
-		.withFragmentShader(V1zir.id("core/gui_frosted"))
-		.withVertexFormat(VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL, VertexFormat.DrawMode.QUADS)
-		.withSampler("Sampler0")
-		.withUniform("V1zirGui", UniformType.UNIFORM_BUFFER)
-		.withCull(false)
-		.build();
-
 	public static final RenderPipeline TEXT = RenderPipeline.builder(RenderPipelines.GUI_SNIPPET)
 		.withLocation(V1zir.id("pipeline/gui_sdf_text"))
 		.withVertexShader(V1zir.id("core/gui_sdf_text"))
@@ -152,7 +141,6 @@ public final class V1zirPipelines {
 		registered = true;
 		RenderPipelines.register(SHAPE);
 		RenderPipelines.register(GLASS);
-		RenderPipelines.register(FROSTED);
 		RenderPipelines.register(TEXT);
 		RenderPipelines.register(MENU_BACKGROUND);
 		RenderPipelines.register(SKY);

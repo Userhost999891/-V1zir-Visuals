@@ -61,8 +61,7 @@ public final class Theme {
 	/** How panels are drawn. */
 	public enum Style {
 		NORMAL("Normal"),
-		BLUR("Blur"),
-		GLASS("Glassmorphism");
+		BLUR("Blur");
 
 		private final String title;
 
@@ -134,11 +133,6 @@ public final class Theme {
 	/** Opaque neutral grey of the Normal style. */
 	public static int solidPanel() {
 		return ColorUtil.withAlpha(ColorUtil.brighten(preset().base(), 0.075f), Math.round(255 * Math.max(0.93f, panelOpacity())));
-	}
-
-	/** Tint of a glassmorphism pane: a faint milky white, stronger with higher panel opacity. */
-	public static int glassTint() {
-		return ColorUtil.withAlpha(0xFFFFFF, Math.round(255 * (0.03f + 0.07f * panelOpacity())));
 	}
 
 	/** Header strip / slightly raised surfaces. */

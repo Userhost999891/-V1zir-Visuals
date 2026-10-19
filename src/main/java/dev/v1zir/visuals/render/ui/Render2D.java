@@ -1,7 +1,6 @@
 package dev.v1zir.visuals.render.ui;
 
 import com.mojang.blaze3d.pipeline.RenderPipeline;
-import dev.v1zir.visuals.V1zir;
 import dev.v1zir.visuals.render.BackdropBlur;
 import dev.v1zir.visuals.render.V1zirPipelines;
 import dev.v1zir.visuals.render.font.AtlasTexture;
@@ -171,18 +170,13 @@ public final class Render2D {
 		}
 	}
 
-	/** Animated shader background (sky presets in "menu" mode) covering the given area. */
-	/** A UI panel (fill and border, no shadow) drawn in the Theme style: Normal (solid grey), Blur or Glassmorphism. */
+	/** A UI panel (fill and border, no shadow) drawn in the Theme style: Normal (solid grey) or Blur. */
 	public static void panel(DrawContext ctx, float x, float y, float w, float h, float radius) {
 		panel(ctx, x, y, w, h, radius, 0);
 	}
 
 	public static void panel(DrawContext ctx, float x, float y, float w, float h, float radius, int corners) {
 		switch (Theme.style()) {
-			case GLASS -> {
-				if (BackdropBlur.available()) frosted(ctx, x, y, w, h, radius, corners);
-				else round(ctx, x, y, w, h, radius, corners, Theme.panel());
-			}
 			case BLUR -> {
 				glass(ctx, x, y, w, h, radius, corners, Theme.panel());
 				outline(ctx, x, y, w, h, radius, 1f, Theme.outline());
@@ -194,37 +188,7 @@ public final class Render2D {
 		}
 	}
 
-	/**
-	 * Glassmorphism pane: frosted, refracting glass over the blurred scene and a thin border that
-	 * catches the light from the top-left.
-	 */
-	public static void frosted(DrawContext ctx, float x, float y, float w, float h, float radius, int corners) {
-		if (w <= 0 || h <= 0 || alpha <= 0.01f) return;
-		BackdropBlur.request();
-		Matrix3x2f pose = pose(ctx);
-		ScreenRect scissor = scissor(ctx);
-		ScreenRect bounds = bounds(x - 2, y - 2, w + 4, h + 4, pose, scissor);
-		if (bounds == null) return;
-		// The tint is the pane's milky haze over any dimming drawn behind it (the blurred scene is
-		// captured before the GUI); the thickness channel carries the pane's opacity (fades).
-		int haze = Theme.glassTint();
-		float screenH = Math.max(1f, V1zir.mc().getWindow().getScaledHeight());
-		float top = (pose.m01() * x + pose.m11() * y + pose.m21()) / screenH;
-		float bottom = (pose.m01() * x + pose.m11() * (y + h) + pose.m21()) / screenH;
-		int tintTop = BackdropBlur.paneTint(haze, top);
-		int tintBottom = BackdropBlur.paneTint(haze, bottom);
-		ctx.state.addSimpleElement(new ShapeElement(V1zirPipelines.FROSTED, BackdropBlur.textureSetup(), pose, scissor, bounds,
-			x, y, w, h, radius, 0, alpha * 16f, ShapeElement.FILL, corners, tintTop, tintTop, tintBottom, tintBottom));
-		outline(ctx, x, y, w, h, radius, 1f, 0x73FFFFFF, 0x38FFFFFF, 0x14FFFFFF, 0x30FFFFFF);
-	}
-
-	/** Full-screen dim; glass panes drawn after it show the scene behind it dimmed the same way. */
-	public static void screenDim(DrawContext ctx, float width, float height, int color) {
-		rect(ctx, 0, 0, width, height, color);
-		int c = a(color);
-		BackdropBlur.dim(c, c);
-	}
-
+	/** Animated shader background (sky presets in "menu" mode) covering the given area. */
 	public static void menuBackground(DrawContext ctx, float width, float height, int color) {
 		Matrix3x2f pose = pose(ctx);
 		ScreenRect bounds = bounds(0, 0, width, height, pose, scissor(ctx));

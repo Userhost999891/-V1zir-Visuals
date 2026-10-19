@@ -15,7 +15,7 @@ public final class ThemeModule extends Module {
 	public final ColorSetting accent = add(new ColorSetting("Accent", 0xFF9B7BFF, false).visibleIf(this::custom));
 	public final ColorSetting accent2 = add(new ColorSetting("Accent 2", 0xFF4FD1FF, false).visibleIf(this::custom));
 	public final NumberSetting panelOpacity = add(new NumberSetting("Panel opacity", 0.72, 0.3, 1.0, 0.01));
-	/** Panel style: Normal (solid grey), Blur (tinted blur) or Glassmorphism (frosted glass). */
+	/** Panel style: Normal (solid grey) or Blur (tinted blur). */
 	public final ModeSetting style = add(new ModeSetting("Style", Theme.Style.BLUR.title(), Theme.Style.titles()));
 	public final NumberSetting blurStrength = add(new NumberSetting("Blur strength", 0.6, 0.0, 1.0, 0.05).visibleIf(() -> !style.is(Theme.Style.NORMAL.title())));
 	public final ModeSetting font = add(new ModeSetting("Font", "Inter", "Inter", "Montserrat", "Rubik", "Nunito", "Comfortaa"));

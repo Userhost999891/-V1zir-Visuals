@@ -2,7 +2,6 @@ package dev.v1zir.visuals.mixin;
 
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.client.MainMenuModule;
-import dev.v1zir.visuals.render.BackdropBlur;
 import dev.v1zir.visuals.render.sky.MenuSky;
 import dev.v1zir.visuals.render.ui.Render2D;
 import net.minecraft.client.gui.DrawContext;
@@ -15,8 +14,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * Menus opened outside a world (options, world list, server list...) show our shader background
- * instead of the vanilla rotating panorama. In a world, glass panes learn about the darkening
- * vanilla draws behind in-game screens.
+ * instead of the vanilla rotating panorama.
  */
 @Mixin(Screen.class)
 public abstract class ScreenMixin {
@@ -33,11 +31,5 @@ public abstract class ScreenMixin {
 		// Dimmer than on the main menu so vanilla widgets stay readable on top of it.
 		Render2D.menuBackground(context, width, height, 0xFF6E6E6E);
 		ci.cancel();
-	}
-
-	/** Vanilla's in-game screen background: a translucent dark gradient over the world. */
-	@Inject(method = "renderInGameBackground", at = @At("HEAD"))
-	private void v1zir$inGameBackground(DrawContext context, CallbackInfo ci) {
-		BackdropBlur.dim(0xC0101010, 0xD0101010);
 	}
 }

@@ -260,7 +260,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 
 		// Custom UI: the restyled survival inventory, in every Theme style.
 		context.setScreen(() -> new InventoryScreen(MinecraftClient.getInstance().player));
-		for (Theme.Style style : new Theme.Style[]{Theme.Style.BLUR, Theme.Style.GLASS, Theme.Style.NORMAL}) {
+		for (Theme.Style style : new Theme.Style[]{Theme.Style.BLUR, Theme.Style.NORMAL}) {
 			context.runOnClient(client -> ModuleManager.get(ThemeModule.class).style.set(style.title()));
 			context.waitTicks(10);
 			context.takeScreenshot("custom-inventory-" + style.name().toLowerCase());
@@ -286,7 +286,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.takeScreenshot("clickgui-search");
 
 		// Every panel style of the Theme module.
-		for (Theme.Style style : new Theme.Style[]{Theme.Style.GLASS, Theme.Style.NORMAL, Theme.Style.BLUR}) {
+		for (Theme.Style style : new Theme.Style[]{Theme.Style.NORMAL, Theme.Style.BLUR}) {
 			context.runOnClient(client -> ModuleManager.get(ThemeModule.class).style.set(style.title()));
 			context.waitTicks(8);
 			if (style != Theme.Style.BLUR) context.takeScreenshot("clickgui-style-" + style.name().toLowerCase());
