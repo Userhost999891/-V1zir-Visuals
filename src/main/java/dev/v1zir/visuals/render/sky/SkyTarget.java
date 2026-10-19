@@ -50,6 +50,14 @@ public final class SkyTarget {
 		return view;
 	}
 
+	public int width() {
+		return width;
+	}
+
+	public int height() {
+		return height;
+	}
+
 	public TextureSetup textureSetup() {
 		return setup;
 	}

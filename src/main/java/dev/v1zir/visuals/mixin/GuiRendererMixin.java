@@ -21,8 +21,9 @@ public abstract class GuiRendererMixin {
 	@Inject(method = "render(Lcom/mojang/blaze3d/buffers/GpuBufferSlice;)V", at = @At("HEAD"))
 	private void v1zir$beforeGui(GpuBufferSlice fogBuffer, CallbackInfo ci) {
 		FrameUniforms.gui();
-		BackdropBlur.runIfRequested();
+		// The menu sky first: outside a world it is what glass panels blur.
 		MenuSky.renderPending();
+		BackdropBlur.runIfRequested();
 	}
 
 	/** Binds the extra uniform blocks our GUI pipelines declare. */
@@ -32,7 +33,7 @@ public abstract class GuiRendererMixin {
 	)
 	private void v1zir$bindUniforms(GuiRenderer.Draw draw, RenderPass pass, GpuBuffer indexBuffer, VertexFormat.IndexType indexType, CallbackInfo ci) {
 		RenderPipeline pipeline = draw.pipeline();
-		if (pipeline == V1zirPipelines.GLASS) {
+		if (pipeline == V1zirPipelines.GLASS || pipeline == V1zirPipelines.FROSTED) {
 			pass.setUniform("V1zirGui", FrameUniforms.gui());
 		} else if (pipeline == V1zirPipelines.MENU_BACKGROUND) {
 			pass.setUniform("V1zirGui", FrameUniforms.gui());

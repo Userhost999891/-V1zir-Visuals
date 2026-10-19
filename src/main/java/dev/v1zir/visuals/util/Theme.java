@@ -58,7 +58,41 @@ public final class Theme {
 		}
 	}
 
+	/** How panels are drawn. */
+	public enum Style {
+		NORMAL("Normal"),
+		BLUR("Blur"),
+		GLASS("Glassmorphism");
+
+		private final String title;
+
+		Style(String title) {
+			this.title = title;
+		}
+
+		public String title() {
+			return title;
+		}
+
+		public static String[] titles() {
+			Style[] values = values();
+			String[] titles = new String[values.length];
+			for (int i = 0; i < values.length; i++) titles[i] = values[i].title;
+			return titles;
+		}
+
+		public static Style byTitle(String title) {
+			for (Style style : values()) if (style.title.equals(title)) return style;
+			return BLUR;
+		}
+	}
+
 	private Theme() {
+	}
+
+	public static Style style() {
+		ThemeModule m = module();
+		return m == null ? Style.BLUR : Style.byTitle(m.style.get());
 	}
 
 	private static ThemeModule module() {
@@ -95,6 +129,16 @@ public final class Theme {
 	/** Main panel colour (translucent, lies on top of the blurred world). */
 	public static int panel() {
 		return ColorUtil.withAlpha(preset().base(), Math.round(255 * panelOpacity()));
+	}
+
+	/** Opaque neutral grey of the Normal style. */
+	public static int solidPanel() {
+		return ColorUtil.withAlpha(ColorUtil.brighten(preset().base(), 0.075f), Math.round(255 * Math.max(0.93f, panelOpacity())));
+	}
+
+	/** Tint of a glassmorphism pane: a faint milky white, stronger with higher panel opacity. */
+	public static int glassTint() {
+		return ColorUtil.withAlpha(0xFFFFFF, Math.round(255 * (0.03f + 0.07f * panelOpacity())));
 	}
 
 	/** Header strip / slightly raised surfaces. */

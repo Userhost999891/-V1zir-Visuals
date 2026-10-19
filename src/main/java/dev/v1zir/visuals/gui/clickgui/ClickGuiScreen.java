@@ -185,8 +185,7 @@ public final class ClickGuiScreen extends Screen {
 		total += pad + 6f + searchW + pad;
 		float x = width / 2f - total / 2f;
 		Render2D.shadow(ctx, x, y + 2f, total, h, h / 2f, 12f, 0x66000000);
-		Render2D.glass(ctx, x, y, total, h, h / 2f, Theme.panel());
-		Render2D.outline(ctx, x, y, total, h, h / 2f, 1f, Theme.outline());
+		Render2D.panel(ctx, x, y, total, h, h / 2f);
 
 		float slide = tabSlide.target(tab).get();
 		float cx = x + pad;
@@ -277,8 +276,7 @@ public final class ClickGuiScreen extends Screen {
 		h = Math.min(h, height - y - 20f);
 
 		Render2D.shadow(ctx, x, y + 2f, w, h, Ui.RADIUS, 16f, 0x70000000);
-		Render2D.glass(ctx, x, y, w, h, Ui.RADIUS, Theme.panel());
-		Render2D.outline(ctx, x, y, w, h, Ui.RADIUS, 1f, Theme.outline());
+		Render2D.panel(ctx, x, y, w, h, Ui.RADIUS);
 		Render2D.round(ctx, x, y, w, 24f, Ui.RADIUS, Render2D.CORNERS_TOP, ColorUtil.withAlpha(0xFFFFFF, 7));
 		Render2D.icon(ctx, Icons.SWATCH_BOOK, x + 14f, y + 12f, 9.5f, Theme.accent());
 		Render2D.textMiddle(ctx, Fonts.semibold(), "Theme Editor", x + 24f, y + 12f, 8.5f, Theme.text());

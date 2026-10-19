@@ -8,6 +8,7 @@ import dev.v1zir.visuals.render.font.Fonts;
 import dev.v1zir.visuals.render.font.GlyphAtlas;
 import dev.v1zir.visuals.render.font.SdfFont;
 import dev.v1zir.visuals.util.ColorUtil;
+import dev.v1zir.visuals.util.Theme;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.ScreenRect;
 import net.minecraft.client.texture.TextureSetup;
@@ -170,6 +171,46 @@ public final class Render2D {
 	}
 
 	/** Animated shader background (sky presets in "menu" mode) covering the given area. */
+	/** A UI panel (fill and border, no shadow) drawn in the Theme style: Normal (solid grey), Blur or Glassmorphism. */
+	public static void panel(DrawContext ctx, float x, float y, float w, float h, float radius) {
+		panel(ctx, x, y, w, h, radius, 0);
+	}
+
+	public static void panel(DrawContext ctx, float x, float y, float w, float h, float radius, int corners) {
+		switch (Theme.style()) {
+			case GLASS -> {
+				if (BackdropBlur.available()) frosted(ctx, x, y, w, h, radius, corners);
+				else round(ctx, x, y, w, h, radius, corners, Theme.panel());
+			}
+			case BLUR -> {
+				glass(ctx, x, y, w, h, radius, corners, Theme.panel());
+				outline(ctx, x, y, w, h, radius, 1f, Theme.outline());
+			}
+			default -> {
+				round(ctx, x, y, w, h, radius, corners, Theme.solidPanel());
+				outline(ctx, x, y, w, h, radius, 1f, Theme.outline());
+			}
+		}
+	}
+
+	/**
+	 * Glassmorphism pane: frosted, refracting glass over the blurred scene and a thin border that
+	 * catches the light from the top-left.
+	 */
+	public static void frosted(DrawContext ctx, float x, float y, float w, float h, float radius, int corners) {
+		if (w <= 0 || h <= 0 || alpha <= 0.01f) return;
+		BackdropBlur.request();
+		Matrix3x2f pose = pose(ctx);
+		ScreenRect scissor = scissor(ctx);
+		ScreenRect bounds = bounds(x - 2, y - 2, w + 4, h + 4, pose, scissor);
+		if (bounds == null) return;
+		int tint = Theme.glassTint();
+		// The thickness channel carries the pane's opacity (fades), the tint its milky haze.
+		ctx.state.addSimpleElement(new ShapeElement(V1zirPipelines.FROSTED, BackdropBlur.textureSetup(), pose, scissor, bounds,
+			x, y, w, h, radius, 0, alpha * 16f, ShapeElement.FILL, corners, tint, tint, tint, tint));
+		outline(ctx, x, y, w, h, radius, 1f, 0x73FFFFFF, 0x38FFFFFF, 0x14FFFFFF, 0x30FFFFFF);
+	}
+
 	public static void menuBackground(DrawContext ctx, float width, float height, int color) {
 		Matrix3x2f pose = pose(ctx);
 		ScreenRect bounds = bounds(0, 0, width, height, pose, scissor(ctx));

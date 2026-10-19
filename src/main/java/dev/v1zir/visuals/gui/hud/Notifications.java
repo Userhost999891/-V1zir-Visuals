@@ -65,8 +65,7 @@ public final class Notifications {
 			Render2D.setAlpha(Math.min(1f, out * 1.2f));
 			int accent = toast.positive ? Theme.accent() : 0xFFFF5C6C;
 			Render2D.shadow(ctx, x, y + 1f, w, h, 6f, 10f, 0x66000000);
-			Render2D.round(ctx, x, y, w, h, 6f, Theme.panel());
-			Render2D.outline(ctx, x, y, w, h, 6f, 1f, Theme.outline());
+			Render2D.panel(ctx, x, y, w, h, 6f);
 			Render2D.circle(ctx, x + 12f, y + h / 2f, 7f, ColorUtil.withAlpha(accent, 50));
 			Render2D.icon(ctx, toast.icon, x + 12f, y + h / 2f, 8f, accent);
 			Render2D.text(ctx, titleFont, toast.title, x + 24f, y + 4f, 7.5f, Theme.text());

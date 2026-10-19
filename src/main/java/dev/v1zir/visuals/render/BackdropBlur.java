@@ -13,6 +13,8 @@ import com.mojang.blaze3d.textures.TextureFormat;
 import dev.v1zir.visuals.V1zir;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.client.ThemeModule;
+import dev.v1zir.visuals.render.sky.MenuSky;
+import dev.v1zir.visuals.util.Theme;
 import net.minecraft.client.gl.DynamicUniformStorage;
 import net.minecraft.client.gl.Framebuffer;
 import net.minecraft.client.texture.TextureSetup;
@@ -42,10 +44,10 @@ public final class BackdropBlur {
 	private BackdropBlur() {
 	}
 
-	/** Blur is only meaningful when a world is rendered behind the GUI. */
+	/** Blur needs something behind the GUI: the world, or outside a world the menu sky. */
 	public static boolean available() {
-		ThemeModule theme = ModuleManager.get(ThemeModule.class);
-		return V1zir.mc().world != null && (theme == null || theme.blur.on());
+		if (Theme.style() == Theme.Style.NORMAL) return false;
+		return V1zir.mc().world != null || MenuSky.renderedThisFrame();
 	}
 
 	public static void request() {
@@ -87,12 +89,20 @@ public final class BackdropBlur {
 
 		ThemeModule theme = ModuleManager.get(ThemeModule.class);
 		float strength = theme != null ? theme.blurStrength.f() : 0.6f;
+		// Glassmorphism wants the very soft, wide blur of frosted glass.
+		if (Theme.style() == Theme.Style.GLASS) strength = Math.max(strength, 0.85f);
 		int levels = Math.max(2, Math.min(MAX_LEVELS, 2 + Math.round(strength * 3f)));
 		float offset = 1.0f + strength * 1.5f;
 
 		GpuTextureView source = fb.getColorAttachmentView();
 		int sw = fb.textureWidth;
 		int sh = fb.textureHeight;
+		if (V1zir.mc().world == null && MenuSky.renderedThisFrame()) {
+			// Outside a world the GUI draws over the menu sky, which lives in its own texture.
+			source = MenuSky.view();
+			sw = MenuSky.width();
+			sh = MenuSky.height();
+		}
 		for (int i = 0; i < levels; i++) {
 			pass(V1zirPipelines.BLUR_DOWN, source, sw, sh, views[i], offset);
 			source = views[i];

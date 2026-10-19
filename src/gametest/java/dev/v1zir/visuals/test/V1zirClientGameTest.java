@@ -5,6 +5,7 @@ import dev.v1zir.visuals.gui.menu.V1zirMainMenu;
 import dev.v1zir.visuals.module.Module;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.client.MainMenuModule;
+import dev.v1zir.visuals.module.impl.client.ThemeModule;
 import dev.v1zir.visuals.module.impl.effects.CrosshairModule;
 import dev.v1zir.visuals.module.impl.effects.JumpCirclesModule;
 import dev.v1zir.visuals.module.impl.hud.ArrayListModule;
@@ -16,6 +17,7 @@ import dev.v1zir.visuals.module.impl.hud.WatermarkModule;
 import dev.v1zir.visuals.module.impl.visuals.ShaderSkyModule;
 import dev.v1zir.visuals.module.impl.visuals.WorldParticlesModule;
 import dev.v1zir.visuals.render.sky.SkyPreset;
+import dev.v1zir.visuals.util.Theme;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
@@ -202,6 +204,13 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.getInput().typeChars("sky");
 		context.waitTicks(10);
 		context.takeScreenshot("clickgui-search");
+
+		// Every panel style of the Theme module.
+		for (Theme.Style style : new Theme.Style[]{Theme.Style.GLASS, Theme.Style.NORMAL, Theme.Style.BLUR}) {
+			context.runOnClient(client -> ModuleManager.get(ThemeModule.class).style.set(style.title()));
+			context.waitTicks(8);
+			if (style != Theme.Style.BLUR) context.takeScreenshot("clickgui-style-" + style.name().toLowerCase());
+		}
 
 		for (int tab : new int[]{2, 1}) {
 			context.setScreen(() -> null);

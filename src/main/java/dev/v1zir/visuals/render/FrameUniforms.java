@@ -4,6 +4,7 @@ import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.Std140Builder;
 import com.mojang.blaze3d.buffers.Std140SizeCalculator;
 import dev.v1zir.visuals.V1zir;
+import dev.v1zir.visuals.render.sky.MenuSky;
 import dev.v1zir.visuals.render.sky.SkyUniforms;
 import dev.v1zir.visuals.render.world.WorldEffectRenderer;
 import net.minecraft.client.gl.DynamicUniformStorage;
@@ -28,6 +29,7 @@ public final class FrameUniforms {
 		if (guiStorage != null) guiStorage.clear();
 		guiSlice = null;
 		SkyUniforms.flip();
+		MenuSky.flip();
 		BackdropBlur.flip();
 		WorldEffectRenderer.flip();
 	}

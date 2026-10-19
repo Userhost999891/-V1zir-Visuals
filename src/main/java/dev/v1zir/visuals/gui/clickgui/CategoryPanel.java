@@ -64,8 +64,7 @@ public final class CategoryPanel {
 
 		int accent = Theme.accent();
 		Render2D.shadow(ctx, x, y + 2f, w, h, Ui.RADIUS, 14f, 0x70000000);
-		Render2D.glass(ctx, x, y, w, h, Ui.RADIUS, Theme.panel());
-		Render2D.outline(ctx, x, y, w, h, Ui.RADIUS, 1f, Theme.outline());
+		Render2D.panel(ctx, x, y, w, h, Ui.RADIUS);
 
 		// Header: icon + title, accent hairline underneath.
 		Render2D.round(ctx, x, y, w, Ui.HEADER_HEIGHT, Ui.RADIUS, Render2D.CORNERS_TOP, ColorUtil.withAlpha(0xFFFFFF, 7));

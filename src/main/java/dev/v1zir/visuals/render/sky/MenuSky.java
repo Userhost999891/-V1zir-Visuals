@@ -5,6 +5,7 @@ import dev.v1zir.visuals.V1zir;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.client.MainMenuModule;
 import dev.v1zir.visuals.module.impl.visuals.ShaderSkyModule;
+import com.mojang.blaze3d.textures.GpuTextureView;
 import net.minecraft.client.gl.Framebuffer;
 import net.minecraft.client.texture.TextureSetup;
 import org.joml.Matrix4f;
@@ -18,6 +19,8 @@ public final class MenuSky {
 	private static final SkyUniforms.Data DATA = new SkyUniforms.Data();
 	private static final SkyTarget TARGET = new SkyTarget("V1zir menu sky");
 	private static boolean pending;
+	private static int renderedFrame = -1;
+	private static int frame;
 	private static final Matrix4f PROJECTION = new Matrix4f();
 	private static final Matrix4f VIEW = new Matrix4f();
 	private static GpuBufferSlice slice;
@@ -35,7 +38,32 @@ public final class MenuSky {
 	public static void renderPending() {
 		if (!pending) return;
 		pending = false;
-		if (slice != null) TARGET.render(slice);
+		if (slice != null) {
+			TARGET.render(slice);
+			renderedFrame = frame;
+		}
+	}
+
+	/** Called once per frame (RenderSystem.flipFrame). */
+	public static void flip() {
+		frame++;
+	}
+
+	/** Whether the menu sky was drawn (or is about to be) in the current frame. */
+	public static boolean renderedThisFrame() {
+		return renderedFrame == frame || pending;
+	}
+
+	public static GpuTextureView view() {
+		return TARGET.view();
+	}
+
+	public static int width() {
+		return TARGET.width();
+	}
+
+	public static int height() {
+		return TARGET.height();
 	}
 
 	/**

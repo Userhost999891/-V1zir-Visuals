@@ -26,6 +26,34 @@ jobs:
         with:
           name: v1zir-visuals-jar
           path: build/libs/
+      # Temporary: method signatures of the mapped 1.21.11 classes the mod hooks into, so mixin
+      # targets can be checked against the real game (javap prints declarations and bytecode only).
+      - name: API signatures
+        run: |
+          jar=$(find .gradle ~/.gradle -path '*minecraftMaven*' -name 'minecraft-*.jar' ! -name '*sources*' 2>/dev/null | head -1)
+          echo "mapped jar: $jar"
+          sig() { javap -p -cp "$jar" "$@" 2>&1; }
+          code() { javap -c -p -cp "$jar" "$1" 2>&1 | awk -v m="$2" 'index($0, " " m "(") && /\(/ {p=1} p {print} p && /^$/ {p=0}'; }
+          for c in net.minecraft.client.gui.widget.PressableWidget net.minecraft.client.gui.widget.ButtonWidget \
+                   net.minecraft.client.gui.widget.SliderWidget net.minecraft.client.gui.widget.TextFieldWidget \
+                   net.minecraft.client.gui.widget.ClickableWidget net.minecraft.client.gui.widget.CyclingButtonWidget \
+                   net.minecraft.client.gui.screen.ingame.HandledScreen net.minecraft.client.gui.screen.ingame.InventoryScreen \
+                   net.minecraft.client.gui.screen.ingame.GenericContainerScreen net.minecraft.client.gui.tooltip.TooltipBackgroundRenderer \
+                   net.minecraft.client.render.SkyRendering net.minecraft.client.render.GameRenderer \
+                   com.mojang.blaze3d.systems.RenderSystem net.minecraft.client.gl.DynamicUniforms; do
+            echo "=== SIG $c"; sig "$c"
+          done
+          echo "=== CODE PressableWidget.renderWidget"; code net.minecraft.client.gui.widget.PressableWidget renderWidget
+          echo "=== CODE PressableWidget.drawButton"; code net.minecraft.client.gui.widget.PressableWidget drawButton
+          echo "=== CODE SliderWidget.renderWidget"; code net.minecraft.client.gui.widget.SliderWidget renderWidget
+          echo "=== CODE TextFieldWidget.renderWidget"; code net.minecraft.client.gui.widget.TextFieldWidget renderWidget
+          echo "=== CODE InventoryScreen.drawBackground"; code net.minecraft.client.gui.screen.ingame.InventoryScreen drawBackground
+          echo "=== CODE HandledScreen.drawForeground"; code net.minecraft.client.gui.screen.ingame.HandledScreen drawForeground
+          echo "=== CODE HandledScreen.renderMain"; code net.minecraft.client.gui.screen.ingame.HandledScreen renderMain
+          echo "=== CODE GenericContainerScreen.drawBackground"; code net.minecraft.client.gui.screen.ingame.GenericContainerScreen drawBackground
+          echo "=== CODE TooltipBackgroundRenderer.render"; code net.minecraft.client.gui.tooltip.TooltipBackgroundRenderer render
+          echo "=== CODE SkyRendering.renderTopSky"; code net.minecraft.client.render.SkyRendering renderTopSky
+          echo "=== CODE GameRenderer.renderWorld"; code net.minecraft.client.render.GameRenderer renderWorld
 
   client:
     name: Dev client

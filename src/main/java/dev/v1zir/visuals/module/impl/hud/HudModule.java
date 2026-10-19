@@ -95,8 +95,7 @@ public abstract class HudModule extends Module {
 
 	protected static void panel(DrawContext ctx, float x, float y, float w, float h, float radius) {
 		Render2D.shadow(ctx, x, y + 1f, w, h, radius, 8f, 0x55000000);
-		Render2D.round(ctx, x, y, w, h, radius, Theme.panel());
-		Render2D.outline(ctx, x, y, w, h, radius, 1f, Theme.outline());
+		Render2D.panel(ctx, x, y, w, h, radius);
 	}
 
 	/** Panel with a header strip carrying an icon and a title. Returns the y where content starts. */
