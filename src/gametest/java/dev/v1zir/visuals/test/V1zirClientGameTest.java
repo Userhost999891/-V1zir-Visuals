@@ -2,6 +2,7 @@ package dev.v1zir.visuals.test;
 
 import dev.v1zir.visuals.gui.clickgui.ClickGuiScreen;
 import dev.v1zir.visuals.gui.menu.V1zirMainMenu;
+import dev.v1zir.visuals.module.Category;
 import dev.v1zir.visuals.module.Module;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.client.MainMenuModule;
@@ -26,6 +27,8 @@ import net.minecraft.client.gui.screen.AccessibilityOnboardingScreen;
 import net.minecraft.client.gui.screen.TitleScreen;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.client.gui.screen.option.OptionsScreen;
+import net.minecraft.client.option.GameOptions;
+import net.minecraft.client.option.KeyBinding;
 import org.lwjgl.glfw.GLFW;
 
 import jdk.jfr.Recording;
@@ -35,10 +38,12 @@ import java.io.UncheckedIOException;
 import java.lang.reflect.Field;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.Function;
 
 /**
  * Starts the real client and walks through everything the mod draws: the main menu, every sky
@@ -206,13 +211,69 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			ModuleManager.get(ShaderSkyModule.class).preset.set(SkyPreset.REALISTIC.title());
 		});
 		profiled("walk-default", () -> walkFor(context, "walk-default"));
+		moduleCosts(context, defaults);
 		singleplayer.getServer().runCommand("effect give @a minecraft:speed 9999 1 true");
+	}
+
+	/**
+	 * What each module costs: walks with exactly one module on (each sky preset separately), then
+	 * with none again, and prints the frame time of every run. Runs alternate between walking
+	 * forwards and backwards so they stay on terrain that is already generated.
+	 */
+	private static void moduleCosts(ClientGameTestContext context, Map<Module, Boolean> defaults) {
+		List<Module> modules = context.computeOnClient(client -> {
+			List<Module> list = new ArrayList<>();
+			for (Module module : ModuleManager.all()) {
+				if (module.canToggle() && module.category() != Category.CLIENT) list.add(module);
+			}
+			return list;
+		});
+		List<Runnable> setups = new ArrayList<>();
+		List<String> names = new ArrayList<>();
+		setups.add(() -> {
+		});
+		names.add("cost-none");
+		for (Module module : modules) {
+			if (module instanceof ShaderSkyModule sky) {
+				for (SkyPreset preset : SkyPreset.values()) {
+					setups.add(() -> {
+						sky.setEnabled(true, false);
+						sky.preset.set(preset.title());
+					});
+					names.add("cost-sky-" + preset.name().toLowerCase(Locale.ROOT));
+				}
+			} else {
+				setups.add(() -> module.setEnabled(true, false));
+				names.add("cost-" + module.name().toLowerCase(Locale.ROOT).replace(' ', '-'));
+			}
+		}
+		setups.add(() -> {
+		});
+		names.add("cost-none-again");
+		for (int i = 0; i < setups.size(); i++) {
+			Runnable setup = setups.get(i);
+			context.runOnClient(client -> {
+				for (Module module : ModuleManager.all()) {
+					if (module.canToggle()) module.setEnabled(false, false);
+				}
+				setup.run();
+			});
+			context.waitTicks(10);
+			walkFor(context, names.get(i), 60, i % 2 == 0);
+		}
+		context.runOnClient(client -> defaults.forEach((module, on) -> {
+			if (module.canToggle()) module.setEnabled(on, false);
+		}));
 	}
 
 	/** Sprints forward while slowly turning, then reports the frame time of the walk. */
 	private static void walkFor(ClientGameTestContext context, String scene) {
-		int ticks = 120;
-		context.getInput().holdKey(options -> options.forwardKey);
+		walkFor(context, scene, 120, true);
+	}
+
+	private static void walkFor(ClientGameTestContext context, String scene, int ticks, boolean forward) {
+		Function<GameOptions, KeyBinding> key = forward ? options -> options.forwardKey : options -> options.backKey;
+		context.getInput().holdKey(key);
 		context.getInput().holdKey(options -> options.sprintKey);
 		long start = System.nanoTime();
 		for (int i = 0; i < ticks; i++) {
@@ -220,7 +281,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			context.waitTick();
 		}
 		double ms = (System.nanoTime() - start) / 1.0e6 / ticks;
-		context.getInput().releaseKey(options -> options.forwardKey);
+		context.getInput().releaseKey(key);
 		context.getInput().releaseKey(options -> options.sprintKey);
 		int fps = context.computeOnClient(client -> client.getCurrentFps());
 		System.out.printf(Locale.ROOT, "V1ZIR-BENCH %-26s %8.2f ms/frame  %4d fps%n", scene, ms, fps);
