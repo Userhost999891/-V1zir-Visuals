@@ -44,6 +44,11 @@ public final class CustomUi {
 		return m != null && m.inventory.on();
 	}
 
+	public static boolean hotbar() {
+		CustomUiModule m = module();
+		return m != null && m.hotbar.on();
+	}
+
 	public static boolean tooltips() {
 		CustomUiModule m = module();
 		return m != null && m.tooltips.on();

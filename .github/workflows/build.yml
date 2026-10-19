@@ -73,36 +73,6 @@ jobs:
           unzip -o -q "$jar" 'assets/minecraft/textures/gui/*menu_background*.png' -d /tmp/tex 2>/dev/null || true
           for f in /tmp/tex/assets/minecraft/textures/gui/*.png; do echo "V1ZIR-PNG $(basename "$f") $(base64 -w0 "$f")"; done
 
-  # Temporary: the yarn-mapped game jar and the compile classpath, printed into the log so the mod
-  # can be compiled and the game code read offline (the build machine cannot reach Mojang/Fabric).
-  classpath:
-    name: Export classpath
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
-      - uses: gradle/actions/setup-gradle@v4
-      - name: Export
-        run: |
-          ./gradlew -q printCompileClasspath > /tmp/cp.txt
-          mkdir -p /tmp/cpx
-          grep '^V1ZIR-CP ' /tmp/cp.txt | cut -c10- | while read -r f; do
-            n=$(basename "$f")
-            case "$n" in *natives*|icu4j*|lwjgl*|fastutil*|netty*|oshi*|jna*|jtracy*|*sources*) continue;; esac
-            [ -f "$f" ] || continue
-            mkdir -p "/tmp/cpx/$n"
-            (cd "/tmp/cpx/$n" && unzip -q -o "$f" -x 'assets/*' 'data/*' '*.png' '*.ogg' 'META-INF/jars/*' 2>/dev/null || true)
-          done
-          du -sh /tmp/cpx; ls /tmp/cpx
-          tar -C /tmp/cpx -cf - . | xz -9 -T0 > /tmp/cp.tar.xz
-          ls -la /tmp/cp.tar.xz
-          echo "V1ZIR-BLOB-BEGIN classpath.tar.xz"
-          base64 -w 50000 /tmp/cp.tar.xz
-          echo "V1ZIR-BLOB-END"
-
   client:
     name: Dev client
     runs-on: ubuntu-24.04

@@ -21,8 +21,7 @@ public final class ModuleRow {
 	final Module module;
 	private final List<SettingComponent<?>> components = new ArrayList<>();
 	private final Anim expand = new Anim(0f, 13f);
-	private final Anim hover = new Anim(0f, 20f);
-	private final Anim active;
+	private final Anim hover = new Anim(0f, 24f);
 	private boolean expanded;
 	private boolean binding;
 	private float settingsHeight;
@@ -33,7 +32,6 @@ public final class ModuleRow {
 	ModuleRow(Module module) {
 		this.module = module;
 		for (Setting<?> setting : module.settings()) components.add(SettingComponent.of(setting));
-		active = new Anim(module.isEnabled() ? 1f : 0f, 14f);
 	}
 
 	boolean isBinding() {
@@ -57,21 +55,27 @@ public final class ModuleRow {
 		SdfFont font = Fonts.medium();
 		boolean hovered = Ui.inside(mouseX, mouseY, x, y, width, Ui.ROW_HEIGHT);
 		float h = hover.target(hovered ? 1f : 0f).get();
-		float on = active.target(module.isEnabled() ? 1f : 0f).get();
+		boolean on = module.isEnabled();
 		int accent = Theme.accent();
 
-		if (h > 0.01f) Render2D.round(ctx, x + 3f, y + 1f, width - 6f, Ui.ROW_HEIGHT - 2f, 4f, ColorUtil.withAlpha(0xFFFFFF, Math.round(14 * h)));
-		if (on > 0.01f) {
-			Render2D.round(ctx, x + 3f, y + 1f, width - 6f, Ui.ROW_HEIGHT - 2f, 4f,
-				ColorUtil.withAlpha(accent, Math.round(52 * on)), ColorUtil.withAlpha(Theme.accent2(), Math.round(10 * on)),
-				ColorUtil.withAlpha(Theme.accent2(), Math.round(10 * on)), ColorUtil.withAlpha(accent, Math.round(52 * on)));
-			float barH = (Ui.ROW_HEIGHT - 8f) * on;
-			Render2D.glow(ctx, x + 4f, y + Ui.ROW_HEIGHT / 2f - barH / 2f, 2f, barH, 1f, 4f, ColorUtil.withAlpha(accent, 150), ColorUtil.withAlpha(accent, 150));
-			Render2D.round(ctx, x + 4f, y + Ui.ROW_HEIGHT / 2f - barH / 2f, 2f, barH, 1f, accent);
+		// Every module is a small cell; an enabled one simply lights up (no enable animation).
+		float cellX = x + 3f;
+		float cellY = y + 1f;
+		float cellW = width - 6f;
+		float cellH = Ui.ROW_HEIGHT - 2f;
+		int light = ColorUtil.lerp(0xFFFFFFFF, accent, 0.22f);
+		if (on) {
+			Render2D.gradientV(ctx, cellX, cellY, cellW, cellH, 4f, ColorUtil.withAlpha(light, Math.round(46 + 12 * h)), ColorUtil.withAlpha(light, Math.round(28 + 10 * h)));
+			Render2D.outline(ctx, cellX, cellY, cellW, cellH, 4f, 1f, ColorUtil.withAlpha(light, 92), ColorUtil.withAlpha(light, 92),
+				ColorUtil.withAlpha(light, 44), ColorUtil.withAlpha(light, 44));
+		} else {
+			Render2D.round(ctx, cellX, cellY, cellW, cellH, 4f, ColorUtil.withAlpha(0x000000, 46));
+			Render2D.round(ctx, cellX, cellY, cellW, cellH, 4f, ColorUtil.withAlpha(0xFFFFFF, Math.round(12 * h)));
+			Render2D.outline(ctx, cellX, cellY, cellW, cellH, 4f, 1f, ColorUtil.withAlpha(0xFFFFFF, Math.round(16 + 14 * h)));
 		}
 		String label = binding ? "Press a key..." : module.name();
-		int textColor = binding ? accent : ColorUtil.lerp(Theme.textDim(), Theme.text(), Math.max(on, h * 0.6f));
-		Render2D.textMiddle(ctx, font, label, x + 10f, y + Ui.ROW_HEIGHT / 2f, Ui.TEXT, textColor);
+		int textColor = binding ? accent : on ? 0xFFFFFFFF : ColorUtil.lerp(Theme.textDim(), Theme.text(), h * 0.7f);
+		Render2D.textCentered(ctx, font, label, x + width / 2f, Render2D.middle(font, y + Ui.ROW_HEIGHT / 2f, Ui.TEXT), Ui.TEXT, textColor);
 
 		float right = x + width - 8f;
 		if (hasSettings()) {

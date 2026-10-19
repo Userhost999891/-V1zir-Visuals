@@ -1,6 +1,8 @@
 package dev.v1zir.visuals.gui.hud;
 
 import dev.v1zir.visuals.V1zir;
+import dev.v1zir.visuals.gui.custom.CustomHotbar;
+import dev.v1zir.visuals.gui.custom.CustomUi;
 import dev.v1zir.visuals.module.Module;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.client.ThemeModule;
@@ -12,6 +14,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.render.RenderTickCounter;
+import net.minecraft.entity.player.PlayerEntity;
 
 /** Draws every enabled HUD module through Fabric's HUD element registry. */
 public final class HudRenderer {
@@ -20,6 +23,13 @@ public final class HudRenderer {
 
 	public static void register() {
 		HudElementRegistry.attachElementBefore(VanillaHudElements.CHAT, V1zir.id("hud"), HudRenderer::render);
+		HudElementRegistry.replaceElement(VanillaHudElements.HOTBAR, vanilla -> (ctx, tickCounter) -> {
+			if (CustomUi.hotbar() && V1zir.mc().getCameraEntity() instanceof PlayerEntity player && !player.isSpectator()) {
+				CustomHotbar.render(ctx, tickCounter, player);
+			} else {
+				vanilla.render(ctx, tickCounter);
+			}
+		});
 		HudElementRegistry.replaceElement(VanillaHudElements.CROSSHAIR, vanilla -> (ctx, tickCounter) -> {
 			CrosshairModule crosshair = ModuleManager.get(CrosshairModule.class);
 			if (crosshair != null && crosshair.isEnabled()) crosshair.render(ctx, tickCounter.getTickProgress(false));

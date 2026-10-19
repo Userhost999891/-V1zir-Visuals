@@ -49,14 +49,6 @@ dependencies {
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 }
 
-// Prints the compile classpath; CI exports those jars so the mod can be compiled offline against the real game.
-tasks.register('printCompileClasspath') {
-	def classpath = sourceSets.main.compileClasspath
-	doLast {
-		classpath.files.each { println "V1ZIR-CP ${it}" }
-	}
-}
-
 processResources {
 	def props = [version: project.version, minecraft_version: project.minecraft_version, loader_version: project.loader_version]
 	inputs.properties props
