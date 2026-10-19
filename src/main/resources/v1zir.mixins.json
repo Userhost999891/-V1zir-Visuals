@@ -8,7 +8,9 @@
 		"ClientPlayerInteractionManagerMixin",
 		"FogRendererMixin",
 		"GuiRendererMixin",
+		"HandledScreenMixin",
 		"HeldItemRendererMixin",
+		"InventoryScreenMixin",
 		"KeyboardMixin",
 		"LightmapTextureManagerMixin",
 		"MinecraftClientMixin",
@@ -16,6 +18,7 @@
 		"RenderSystemMixin",
 		"ScreenMixin",
 		"SkyRenderingMixin",
+		"SliderWidgetMixin",
 		"TooltipBackgroundRendererMixin",
 		"WorldRendererMixin"
 	],

@@ -24,6 +24,7 @@ import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContex
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.AccessibilityOnboardingScreen;
 import net.minecraft.client.gui.screen.TitleScreen;
+import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.client.gui.screen.option.OptionsScreen;
 import org.lwjgl.glfw.GLFW;
 
@@ -187,6 +188,16 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.waitTicks(14);
 		context.takeScreenshot("hud-effects");
 		bench(context, "world-hud-effects");
+
+		// Custom UI: the restyled survival inventory, in every Theme style.
+		context.setScreen(() -> new InventoryScreen(MinecraftClient.getInstance().player));
+		for (Theme.Style style : new Theme.Style[]{Theme.Style.BLUR, Theme.Style.GLASS, Theme.Style.NORMAL}) {
+			context.runOnClient(client -> ModuleManager.get(ThemeModule.class).style.set(style.title()));
+			context.waitTicks(10);
+			context.takeScreenshot("custom-inventory-" + style.name().toLowerCase());
+		}
+		context.runOnClient(client -> ModuleManager.get(ThemeModule.class).style.set(Theme.Style.BLUR.title()));
+		context.setScreen(() -> null);
 	}
 
 	private static void clickGui(ClientGameTestContext context) {
