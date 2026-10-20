@@ -15,9 +15,9 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.util.Arm;
 
 /**
- * Custom UI hotbar: a Theme-style bar with rounded slots and an accent selection that glides
- * between them. It keeps vanilla's footprint and item positions, so the health, food and
- * experience bars above it stay where they always are.
+ * Custom UI hotbar: a Theme-style bar with recessed slots and an accent selection that glides
+ * between them. It keeps vanilla's footprint, so the health, food and experience bars above it
+ * stay where they always are.
  */
 public final class CustomHotbar {
 	private static final Anim SELECTION = new Anim(0f, 22f);
@@ -61,9 +61,9 @@ public final class CustomHotbar {
 			slot(ctx, ox + 2f, h - 21);
 		}
 
-		// Items exactly where vanilla draws them.
-		for (int i = 0; i < 9; i++) item(ctx, client, tickCounter, player, player.getInventory().getStack(i), cx - 88 + i * 20, h - 19, i + 1);
-		if (!offHand.isEmpty()) item(ctx, client, tickCounter, player, offHand, offSide == Arm.LEFT ? cx - 117 : cx + 101, h - 19, 10);
+		// Items centred in their frames: vanilla's columns, one pixel higher because the bar floats above the edge.
+		for (int i = 0; i < 9; i++) item(ctx, client, tickCounter, player, player.getInventory().getStack(i), cx - 88 + i * 20, h - 20, i + 1);
+		if (!offHand.isEmpty()) item(ctx, client, tickCounter, player, offHand, offSide == Arm.LEFT ? cx - 117 : cx + 101, h - 20, 10);
 
 		// Attack cooldown, when vanilla's indicator is set to the hotbar: a slim pill that fills up.
 		if (client.options.getAttackIndicator().getValue() == AttackIndicator.HOTBAR) {
@@ -85,18 +85,17 @@ public final class CustomHotbar {
 		Render2D.setAlpha(alpha);
 	}
 
+	/** Same recessed well as the inventory slots, so the hotbar and the inventory read as one set. */
 	private static void slot(DrawContext ctx, float x, float y) {
-		Render2D.round(ctx, x, y, 18f, 18f, 5f, ColorUtil.withAlpha(0x000000, 70));
-		Render2D.outline(ctx, x, y, 18f, 18f, 5f, 1f, ColorUtil.withAlpha(0xFFFFFF, 20), ColorUtil.withAlpha(0xFFFFFF, 20),
-			ColorUtil.withAlpha(0xFFFFFF, 8), ColorUtil.withAlpha(0xFFFFFF, 8));
+		CustomUi.well(ctx, x, y, 18f, 18f, 5f);
 	}
 
 	private static void selection(DrawContext ctx, float x, float y) {
 		int accent = Theme.accent();
 		int accent2 = Theme.accent2();
-		Render2D.glow(ctx, x, y, 18f, 18f, 5f, 7f, ColorUtil.withAlpha(accent, 90), ColorUtil.withAlpha(accent2, 90));
-		Render2D.round(ctx, x, y, 18f, 18f, 5f, ColorUtil.withAlpha(accent, 70), ColorUtil.withAlpha(accent2, 50),
-			ColorUtil.withAlpha(accent2, 30), ColorUtil.withAlpha(accent, 45));
+		Render2D.glow(ctx, x, y, 18f, 18f, 5f, 7f, ColorUtil.withAlpha(accent, 100), ColorUtil.withAlpha(accent2, 100));
+		Render2D.round(ctx, x, y, 18f, 18f, 5f, ColorUtil.withAlpha(accent, 80), ColorUtil.withAlpha(accent2, 55),
+			ColorUtil.withAlpha(accent2, 35), ColorUtil.withAlpha(accent, 50));
 		Render2D.outline(ctx, x, y, 18f, 18f, 5f, 1f, ColorUtil.withAlpha(accent, 240), ColorUtil.withAlpha(accent2, 230),
 			ColorUtil.withAlpha(accent2, 150), ColorUtil.withAlpha(accent, 170));
 	}

@@ -6,11 +6,16 @@ import dev.v1zir.visuals.module.setting.KeySetting;
 import dev.v1zir.visuals.module.setting.ModeSetting;
 import dev.v1zir.visuals.module.setting.NumberSetting;
 import dev.v1zir.visuals.module.setting.Setting;
+import dev.v1zir.visuals.util.Anim;
+import dev.v1zir.visuals.util.ColorUtil;
+import dev.v1zir.visuals.util.Theme;
 import net.minecraft.client.gui.DrawContext;
 
 /** Base of the inline setting widgets shown under an expanded module. */
 public abstract class SettingComponent<S extends Setting<?>> {
 	protected final S setting;
+	/** Hover glow of the whole component; hovering only lights a widget up, nothing moves. */
+	protected final Anim hover = new Anim(0f, 20f);
 	protected float x;
 	protected float y;
 	protected float width;
@@ -32,6 +37,9 @@ public abstract class SettingComponent<S extends Setting<?>> {
 		return setting.isVisible();
 	}
 
+	/** Height before the component has been laid out, so the first expansion animates to the right size. */
+	public abstract float estimateHeight();
+
 	/** Lays out and draws the component; returns its height. */
 	public float render(DrawContext ctx, float x, float y, float width, double mouseX, double mouseY) {
 		this.x = x;
@@ -41,6 +49,11 @@ public abstract class SettingComponent<S extends Setting<?>> {
 	}
 
 	protected abstract float draw(DrawContext ctx, double mouseX, double mouseY);
+
+	/** Label colour: dim at rest, full text colour while hovered or active. */
+	protected int labelColor(float light) {
+		return ColorUtil.lerp(Theme.textDim(), Theme.text(), light);
+	}
 
 	public boolean mouseClicked(double mouseX, double mouseY, int button) {
 		return false;

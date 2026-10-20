@@ -243,6 +243,74 @@ vec3 vStars(vec3 rd, float t, float density) {
 	return s;
 }
 
+// In the sky cache (V1ZIR_SKY_CACHE) a panorama texel only records how visible the stars are in its
+// direction (gStarWeight, stored in alpha): the screen pass draws the stars themselves, crisp at full
+// resolution (vCrispStars). Presets add stars with vStarsW and lay clouds over them with vOver.
+float gStarWeight = 0.0;
+
+vec3 vStarsW(vec3 rd, float t, float density, float weight) {
+#ifdef V1ZIR_SKY_CACHE
+	gStarWeight += weight;
+	return vec3(0.0);
+#else
+	return vStars(rd, t, density) * weight;
+#endif
+}
+
+vec3 vOver(vec3 under, vec4 over) {
+	// Even thin cloud hides starlight: any visible cloud covers the stars behind it.
+	gStarWeight *= 1.0 - smoothstep(0.0, 0.25, over.a);
+	return mix(under, over.rgb, over.a);
+}
+
+// Stars drawn as small round points in screen pixels: the offset to each star is mapped to pixels
+// through the pseudo inverse of the view direction's screen derivatives (dx, dy), so stars stay round
+// and crisp at any resolution and field of view, even at the edges of a wide one. Each star keeps the
+// light it has in vStarLayer (its flux, from its angular size), spread over a fixed ~0.6 px point, so
+// the faint dense layers stay faint and nothing pulses as a star crosses pixel boundaries.
+vec3 vCrispStarLayer(vec3 rd, vec3 dx, vec3 dy, float scale, float density, float t, float sizeBoost, float minBright) {
+	vec3 base = floor(rd * scale - 0.5);
+	float a = dot(dx, dx);
+	float b = dot(dx, dy);
+	float c = dot(dy, dy);
+	float det = max(a * c - b * b, 1e-24);
+	float pixelArea = sqrt(det);
+	float pixelAngle = sqrt(pixelArea);
+	const float SIGMA = 0.6;
+	const float HALO = 2.2;
+	vec3 col = vec3(0.0);
+	for (int i = 0; i < 8; i++) {
+		vec3 cell = base + vec3(float(i & 1), float((i >> 1) & 1), float((i >> 2) & 1));
+		float h = vHash13(cell + 17.0);
+		if (h > density) continue;
+		vec3 j = vHash33(cell);
+		vec3 o = rd - normalize(cell + 0.3 + j * 0.4);
+		float ox = dot(o, dx);
+		float oy = dot(o, dy);
+		vec2 px = vec2(c * ox - b * oy, a * oy - b * ox) / det;
+		float r2 = dot(px, px);
+		if (r2 > 49.0) continue;
+		// Only stars bright enough to read as stars, decided by the star itself so the count is
+		// the same at any resolution (a per-pixel threshold let thousands more through at 1080p).
+		float bright = pow(vHash13(cell + 3.7), 9.0) * 3.0 + 0.15;
+		if (bright < minBright) continue;
+		float radius = min(pixelAngle * (0.6 + 0.35 * sqrt(bright)) * sizeBoost, 0.1 / scale);
+		float flux = 3.14159 * radius * radius / pixelArea * bright;
+		float core = flux * exp(-r2 / (2.0 * SIGMA * SIGMA)) / (6.28318 * SIGMA * SIGMA);
+		float halo = 0.7 * flux * exp(-r2 / (2.0 * HALO * HALO)) / (6.28318 * HALO * HALO);
+		float twinkle = 0.86 + 0.14 * sin(t * (1.1 + j.y * 1.9) + h * 91.0);
+		col += vStarTint(j.z) * (core + halo) * twinkle;
+	}
+	return col;
+}
+
+vec3 vCrispStars(vec3 rd, vec3 dx, vec3 dy, float t, float density) {
+	// Two layers: the third, densest one of vStars only added dots too faint to matter.
+	vec3 s = vCrispStarLayer(rd, dx, dy, 95.0, 0.075 * density, t, 1.15, 0.3);
+	s += vCrispStarLayer(rd, dx, dy, 210.0, 0.11 * density, t * 1.3, 1.0, 1.8) * 0.5;
+	return s;
+}
+
 // Milky way: a tilted great circle with a warm bulge, glow and dark dust lanes.
 vec3 vMilkyWay(vec3 rd, float strength) {
 	vec3 n = normalize(vec3(0.28, 0.62, -0.73));
@@ -452,7 +520,7 @@ vec3 vSkyRealistic(vec3 rd, float t, int quality) {
 	col += nightSky * night;
 	float starVis = night * (1.0 - rain) * Timing.w * smoothstep(-0.05, 0.12, rd.y);
 	if (starVis > 0.001) {
-		col += (vStars(rd, t, Settings.z) * 0.9 + vMilkyWay(rd, 1.0)) * starVis;
+		col += vStarsW(rd, t, Settings.z, 0.9 * starVis) + vMilkyWay(rd, 1.0) * starVis;
 	}
 
 	bool drawCelestial = Extra.z < 0.5;
@@ -471,7 +539,7 @@ vec3 vSkyRealistic(vec3 rd, float t, int quality) {
 		vec3 ambient = vAtmosphere(normalize(vec3(0.0, 1.0, 0.0)), sunDir, 22.0, 6, 2, dummy) * 0.9 + vec3(0.012, 0.016, 0.03) * night;
 		ambient = mix(ambient, vec3(dot(ambient, vec3(0.33))), rain * 0.7);
 		vec4 clouds = vClouds(rd, lightDir, lightCol, ambient, Settings.y + rain * 0.6, t, Camera.xyz);
-		col = mix(col, clouds.rgb, clouds.a);
+		col = vOver(col, clouds);
 	}
 
 	// Below the horizon: darker haze (terrain covers most of it in game).
@@ -587,7 +655,7 @@ vec3 vSkyAurora(vec3 rd, float t, int quality, vec2 fragCoord) {
 	vec3 col = mix(vec3(0.020, 0.040, 0.070), vec3(0.003, 0.006, 0.018), pow(up, 0.6));
 	col += vec3(0.02, 0.05, 0.06) * exp(-abs(rd.y) * 9.0);
 	col *= mix(1.0, 0.25, (1.0 - smoothstep(-0.3, 0.0, rd.y)));
-	col += vStars(rd, t, Settings.z) * smoothstep(-0.05, 0.2, rd.y) * Timing.w;
+	col += vStarsW(rd, t, Settings.z, smoothstep(-0.05, 0.2, rd.y) * Timing.w);
 	col += vMilkyWay(rd, 0.6) * smoothstep(0.0, 0.3, rd.y);
 
 	if (rd.y > 0.0) {
@@ -638,7 +706,7 @@ vec3 vSkyNebula(vec3 rd, float t, int quality, vec2 fragCoord) {
 		trans *= exp(-d * 0.55);
 	}
 	col += acc;
-	col += vStars(rd, t, Settings.z * 1.6) * (0.4 + 0.6 * trans) * Timing.w;
+	col += vStarsW(rd, t, Settings.z * 1.6, (0.4 + 0.6 * trans) * Timing.w);
 	col += vMilkyWay(rd, 0.5);
 	col *= Settings.x;
 	return vToDisplay(vAces(col * 1.05));
@@ -656,12 +724,12 @@ vec3 vSkySunset(vec3 rd, float t, int quality) {
 	col += vec3(0.9, 0.3, 0.6) * 0.06 * exp(-abs(rd.y - 0.12) * 5.0);
 	col *= mix(1.0, 0.35, (1.0 - smoothstep(-0.25, 0.0, rd.y)));
 	if (Extra.z < 0.5) col += vSunDisk(rd, sunDir, sunColor, 2.6);
-	col += vStars(rd, t, Settings.z * 0.5) * smoothstep(0.35, 0.9, rd.y) * 0.25 * Timing.w;
+	col += vStarsW(rd, t, Settings.z * 0.5, smoothstep(0.35, 0.9, rd.y) * 0.25 * Timing.w);
 	if (Extra.y > 0.5) {
 		vec3 ambient = vec3(0.32, 0.22, 0.30);
 		vec4 clouds = vClouds(rd, sunDir, sunColor * 0.12 * vec3(1.0, 0.75, 0.6), ambient * 0.35, Settings.y * 0.8 + 0.1, t, Camera.xyz);
 		clouds.rgb = vSaturate(clouds.rgb, 1.35);
-		col = mix(col, clouds.rgb, clouds.a);
+		col = vOver(col, clouds);
 	}
 	col *= Settings.x;
 	return vToDisplay(vAces(col * 1.1));
@@ -679,7 +747,7 @@ vec3 vSkyInk(vec3 rd, float t) {
 	float ink = smoothstep(0.46, 0.9, smoke) * 0.55 + pow(filaments, 3.5) * 1.35;
 	ink *= smoothstep(0.25, 0.75, q.x + 0.2);
 	vec3 col = tint * ink;
-	col += vStars(rd, t, Settings.z) * (1.0 - ink) * 0.8 * Timing.w;
+	col += vStarsW(rd, t, Settings.z, (1.0 - ink) * 0.8 * Timing.w);
 	col *= smoothstep(-0.05, 0.25, up);
 	col *= Settings.x;
 	return col / (1.0 + col * 0.25);
@@ -736,14 +804,14 @@ vec3 vSkyBloodMoon(vec3 rd, float t) {
 	float up = rd.y;
 	vec3 col = mix(vec3(0.07, 0.006, 0.01), vec3(0.012, 0.0015, 0.004), smoothstep(-0.05, 0.6, up));
 	col *= mix(1.0, 0.3, (1.0 - smoothstep(-0.3, 0.0, up)));
-	col += vStars(rd, t, Settings.z) * vec3(1.0, 0.55, 0.5) * smoothstep(0.1, 0.6, up) * 0.6 * Timing.w;
+	col += vStarsW(rd, t, Settings.z, smoothstep(0.1, 0.6, up) * 0.6 * Timing.w) * vec3(1.0, 0.55, 0.5);
 	float cover;
 	vec3 moon = vMoon(rd, moonDir, 0.0, vec3(1.0, 0.28, 0.18), 4.2, cover);
 	col = col * (1.0 - cover) + moon * 1.6;
 	col += vec3(0.9, 0.12, 0.08) * exp(-acos(clamp(dot(rd, moonDir), -1.0, 1.0)) * 3.0) * 0.18;
 	if (Extra.y > 0.5) {
 		vec4 clouds = vClouds(rd, moonDir, vec3(0.2, 0.018, 0.012), vec3(0.012, 0.0015, 0.003), Settings.y * 0.8 + 0.15, t, Camera.xyz);
-		col = mix(col, clouds.rgb, clouds.a * 0.9);
+		col = vOver(col, vec4(clouds.rgb, clouds.a * 0.9));
 	}
 	col *= Settings.x;
 	return vToDisplay(vAces(col * 1.3));
@@ -755,11 +823,11 @@ vec3 vSkyCustom(vec3 rd, float t) {
 	vec3 horizon = ColorB.rgb;
 	vec3 col = mix(horizon, zenith, smoothstep(-0.05, 0.6, up));
 	vec3 lin = col;
-	lin += vStars(rd, t, Settings.z) * smoothstep(0.0, 0.3, up) * Timing.w * (1.0 - dot(lin, vec3(0.33)));
+	lin += vStarsW(rd, t, Settings.z, smoothstep(0.0, 0.3, up) * Timing.w * (1.0 - dot(lin, vec3(0.33))));
 	if (Extra.y > 0.5) {
 		vec3 sunDir = normalize(SunDir.xyz);
 		vec4 clouds = vClouds(rd, sunDir, vec3(0.9), lin * 0.7 + 0.05, Settings.y, t, Camera.xyz);
-		lin = mix(lin, clouds.rgb, clouds.a);
+		lin = vOver(lin, clouds);
 	}
 	lin *= Settings.x;
 	return vToDisplay(lin / (1.0 + lin * 0.15));
@@ -771,6 +839,7 @@ vec3 vSkyCustom(vec3 rd, float t) {
 
 vec3 v1zirSky(vec3 rd, vec2 fragCoord) {
 	rd = normalize(rd);
+	gStarWeight = 0.0;
 	float t = Timing.x;
 	int preset = int(Camera.w + 0.5);
 	int quality = int(Settings.w + 0.5);
@@ -785,8 +854,10 @@ vec3 v1zirSky(vec3 rd, vec2 fragCoord) {
 	else if (preset == PRESET_CUSTOM) col = vSkyCustom(rd, t);
 	else col = vSkyRealistic(rd, t, quality);
 
-	// Triangular dither removes banding in the dark gradients.
+#ifndef V1ZIR_SKY_CACHE
+	// Triangular dither removes banding in the dark gradients (the cache's screen pass dithers itself).
 	float n = vHash12(fragCoord + Extra.w) + vHash12(fragCoord.yx + 13.7 + Extra.w) - 1.0;
 	col += n / 255.0;
+#endif
 	return clamp(col, 0.0, 1.0);
 }

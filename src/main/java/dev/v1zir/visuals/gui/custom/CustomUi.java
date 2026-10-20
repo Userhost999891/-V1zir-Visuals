@@ -130,21 +130,33 @@ public final class CustomUi {
 
 	/** One 18x18 inventory slot frame; (x, y) is the item position (slot interior). */
 	public static void slot(DrawContext ctx, int x, int y) {
-		Render2D.round(ctx, x - 1f, y - 1f, 18f, 18f, 4f, ColorUtil.withAlpha(0x000000, 105));
-		Render2D.outline(ctx, x - 1f, y - 1f, 18f, 18f, 4f, 1f, ColorUtil.withAlpha(0xFFFFFF, 22));
+		well(ctx, x - 1f, y - 1f, 18f, 18f, 4f);
 	}
 
-	/** Hover highlight of a slot. */
-	public static void slotHighlight(DrawContext ctx, int x, int y) {
+	/**
+	 * A recessed well (slots, the player preview): darkest under the top lip, whose edge is in shadow,
+	 * while the bottom edge catches the light.
+	 */
+	public static void well(DrawContext ctx, float x, float y, float w, float h, float radius) {
+		Render2D.gradientV(ctx, x, y, w, h, radius, 0x7A000000, 0x4C000000);
+		Render2D.outline(ctx, x, y, w, h, radius, 1f, 0x42000000, 0x42000000, 0x1EFFFFFF, 0x1EFFFFFF);
+	}
+
+	/** Hover highlight of a slot at the given strength (0..1); it only lights up, nothing moves. */
+	public static void slotHighlight(DrawContext ctx, float x, float y, float strength) {
 		int accent = Theme.accent();
-		Render2D.round(ctx, x - 1f, y - 1f, 18f, 18f, 4f, ColorUtil.withAlpha(accent, 60));
-		Render2D.outline(ctx, x - 1f, y - 1f, 18f, 18f, 4f, 1f, ColorUtil.withAlpha(accent, 220));
+		int accent2 = Theme.accent2();
+		Render2D.shadow(ctx, x - 1f, y - 1f, 18f, 18f, 4f, 5f, ColorUtil.withAlpha(accent, Math.round(80 * strength)));
+		Render2D.gradientV(ctx, x - 1f, y - 1f, 18f, 18f, 4f, ColorUtil.withAlpha(accent, Math.round(70 * strength)),
+			ColorUtil.withAlpha(accent2, Math.round(40 * strength)));
+		Render2D.outline(ctx, x - 1f, y - 1f, 18f, 18f, 4f, 1f, ColorUtil.withAlpha(accent, Math.round(230 * strength)),
+			ColorUtil.withAlpha(accent, Math.round(230 * strength)), ColorUtil.withAlpha(accent2, Math.round(150 * strength)),
+			ColorUtil.withAlpha(accent2, Math.round(150 * strength)));
 	}
 
 	/** A framed area (player preview, result box...). */
 	public static void frame(DrawContext ctx, float x, float y, float w, float h) {
-		Render2D.round(ctx, x, y, w, h, 5f, ColorUtil.withAlpha(0x000000, 90));
-		Render2D.outline(ctx, x, y, w, h, 5f, 1f, ColorUtil.withAlpha(0xFFFFFF, 18));
+		well(ctx, x, y, w, h, 5f);
 	}
 
 	private static void label(DrawContext ctx, Text message, float cx, float cy, float maxWidth, int color) {

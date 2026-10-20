@@ -28,6 +28,7 @@ public final class WatermarkModule extends HudModule {
 
 	public WatermarkModule() {
 		super("Watermark", "Logo with session information", 0.008f, 0.012f);
+		setSubCategory("Info");
 	}
 
 	@Override

@@ -17,6 +17,7 @@ public final class CoordinatesModule extends HudModule {
 
 	public CoordinatesModule() {
 		super("Coordinates", "Shows your position", 0.008f, 0.985f);
+		setSubCategory("Info");
 	}
 
 	@Override

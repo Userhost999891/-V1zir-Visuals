@@ -86,6 +86,10 @@ public final class SkyRenderer {
 			GpuTextureView color = RenderSystem.outputColorTextureOverride != null
 				? RenderSystem.outputColorTextureOverride
 				: mc.getFramebuffer().getColorAttachmentView();
+			if (sky.cache.on() && sky.currentPreset().cacheable() && RenderSystem.outputColorTextureOverride == null) {
+				SkyCache.render(DATA, params, color, sky.cacheRefresh.f());
+				return true;
+			}
 			float scale = sky.renderScale.f();
 			if (scale < 0.99f && RenderSystem.outputColorTextureOverride == null) {
 				// Sky at a fraction of the resolution, then upsampled: the cost drops with the pixel count.
