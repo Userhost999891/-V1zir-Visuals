@@ -334,28 +334,24 @@ vec3 vMilkyWay(vec3 rd, float strength) {
 }
 
 // ---------------------------------------------------------------------------
-//  Physically based atmosphere (single scattering: Rayleigh, Mie and ozone). Distances in km.
-//  The optical depth towards the light comes from an analytic Chapman function instead of a
-//  second march, so every view sample is cheap and accurate down to grazing angles; past the
-//  horizon it runs on through the tangent point, which gives the soft, red-edged Earth shadow
-//  of dusk on its own.
+//  Physically based atmosphere: single scattering by air (Rayleigh) and haze (Mie) with ozone
+//  absorption, along the whole view ray up to the top of the atmosphere, plus a cheap estimate of
+//  multiple scattering. Distances in km. The optical depth towards the sun or moon comes from an
+//  analytic Chapman function instead of a second march, so every sample is cheap and accurate down
+//  to grazing angles; past the horizon it runs on through the tangent point, which gives the
+//  reddened twilight glow and the Earth's shadow at dusk on its own.
 // ---------------------------------------------------------------------------
 
 const float V_RG = 6360.0;
-const float V_RT = 6420.0;
-const vec3 V_BETA_R = vec3(5.8e-3, 13.5e-3, 33.1e-3);
-const float V_BETA_M = 12e-3;
-const float V_HR = 8.0;
-const float V_HM = 1.2;
+const float V_RT = 6460.0;
+const vec3 V_BETA_R = vec3(5.802e-3, 13.558e-3, 33.1e-3);
+const float V_BETA_M = 8.0e-3;
+// Haze also absorbs a little: extinction over scattering.
+const float V_MIE_EXT = 1.11;
 const vec3 V_BETA_O = vec3(0.650e-3, 1.881e-3, 0.085e-3);
-const float V_OBSERVER = 0.25;
-// Strength of the multiple scattering approximation (an effective path in km).
-const float V_MS_GAIN = 40.0;
-
-// Ozone: a tent around 25 km, 15 km either side (a column of 15 km at full density).
-float vOzone(float h) {
-	return max(0.0, 1.0 - abs(h - 25.0) / 15.0);
-}
+const float V_HR = 8.0;
+const float V_HM = 1.4;
+const float V_OBSERVER = 0.3;
 
 vec2 vRaySphere(vec3 ro, vec3 rd, float radius) {
 	float b = dot(ro, rd);
@@ -366,8 +362,8 @@ vec2 vRaySphere(vec3 ro, vec3 rd, float radius) {
 	return vec2(-b - h, -b + h);
 }
 
-// Column of an exponential layer (scale height H, density 1 at sea level) from altitude h
-// along a ray with zenith cosine mu: Schueler's approximation of the Chapman function.
+// Column of an exponential layer (scale height H, density 1 at the ground) from altitude h along
+// a ray with zenith cosine mu, in km of ground-level air: Schueler's Chapman approximation.
 float vChapman(float h, float mu, float H) {
 	float r = V_RG + h;
 	float c = sqrt(1.5708 * r / H);
@@ -380,37 +376,62 @@ float vChapman(float h, float mu, float H) {
 	return max(2.0 * c0 * exp(min(-h0 / H, 30.0)) - up, up) * H;
 }
 
-// Ozone column above altitude h along mu, stretched by the slant of the ray through the layer.
+// Ozone (a layer 15 km either side of 25 km) above altitude h along mu, stretched by the slant
+// of the ray through the layer.
 float vOzoneColumn(float h, float mu) {
-	float above = h < 25.0 ? 15.0 - 0.5 * max(h - 10.0, 0.0) * max(h - 10.0, 0.0) / 15.0 : 0.5 * max(40.0 - h, 0.0) * max(40.0 - h, 0.0) / 15.0;
+	float lo = max(h - 10.0, 0.0);
+	float hi = max(40.0 - h, 0.0);
+	float above = h < 25.0 ? 15.0 - 0.5 * lo * lo / 15.0 : 0.5 * hi * hi / 15.0;
 	float s = (V_RG + h) * sqrt(max(1.0 - mu * mu, 0.0)) / (V_RG + 25.0);
 	return above * inversesqrt(max(1.0 - s * s, 0.0025));
 }
 
-// Optical depth (rgb) from altitude h towards a light at zenith cosine mu.
-vec3 vLightDepth(float h, float mu) {
-	return V_BETA_R * vChapman(h, mu, V_HR) + V_BETA_M * 1.11 * vChapman(h, mu, V_HM) + V_BETA_O * vOzoneColumn(h, mu);
+float vOzone(float h) {
+	return max(0.0, 1.0 - abs(h - 25.0) / 15.0);
 }
 
-// Light reaching an observer at altitude h from a light at zenith cosine mu (1 = no extinction).
+// Optical depth (rgb) from altitude h towards a light at zenith cosine mu.
+vec3 vLightDepth(float h, float mu) {
+	return V_BETA_R * vChapman(h, mu, V_HR) + V_BETA_M * V_MIE_EXT * vChapman(h, mu, V_HM) + V_BETA_O * vOzoneColumn(h, mu);
+}
+
+// Fraction of the light of a source at zenith cosine mu that reaches altitude h.
 vec3 vLightTransmittance(float h, float mu) {
 	return exp(-vLightDepth(h, mu));
 }
 
+float vPhaseRayleigh(float mu) {
+	return 3.0 / (16.0 * V_PI) * (1.0 + mu * mu);
+}
+
+// Cornette-Shanks: Henyey-Greenstein with the Rayleigh-like (1 + mu^2) term, normalised.
 float vPhaseMie(float mu, float g) {
 	float g2 = g * g;
 	return 3.0 / (8.0 * V_PI) * ((1.0 - g2) * (1.0 + mu * mu)) / ((2.0 + g2) * pow(max(1.0 + g2 - 2.0 * g * mu, 1e-4), 1.5));
 }
 
-// Linear radiance of the sky in direction rd, lit by the sun (sunI) and the moon (moonI). The
-// view ray ends at maxDist: past ~150 km single scattering only darkens and browns the horizon,
-// which multiple scattering keeps bright in reality. mieG sets how tight the glow around the sun is.
-vec3 vAtmosphere(vec3 rd, vec3 sunDir, float sunI, vec3 moonDir, float moonI, int steps, float maxDist, float mieG) {
+// Light of a source at zenith cosine mu that reaches altitude h after scattering more than once,
+// per unit of scattering coefficient. It is mostly skylight, so it stays blue when the direct light
+// turns orange (a third keeps the colour of the direct light, which warms the twilight horizon), and
+// it follows the direct light into the Earth's shadow with a soft edge because the lit sky above
+// still shines in for a while: the twilight sky stays blue instead of turning grey or black.
+vec3 vMultiScatter(float h, float mu) {
+	vec3 t = exp(-vLightDepth(h + 3.0, mu + 0.06));
+	vec3 sky = dot(t, vec3(0.2, 0.7, 0.1)) * vec3(0.3, 0.52, 1.0);
+	return mix(sky, t * 0.85, 0.35) * 0.05;
+}
+
+// Linear radiance of the sky in direction rd, lit by the sun (sunI) and the moon (moonI). Rays
+// below the horizon see the haze over the ground. mieG sets how tight the glow around the light is.
+vec3 vAtmosphere(vec3 rd, vec3 sunDir, float sunI, vec3 moonDir, float moonI, int steps, float mieG) {
 	vec3 ro = vec3(0.0, V_RG + V_OBSERVER, 0.0);
-	// Below the horizon the haze of the horizon continues; the presets darken it into the ground.
-	vec3 dir = normalize(vec3(rd.x, max(rd.y, 0.0), rd.z));
-	float tMax = min(vRaySphere(ro, dir, V_RT).y, maxDist);
-	bool moonOn = moonI > 0.0;
+	// Below the horizon the sky is mirrored (the presets darken it towards the ground): terrain hides
+	// it in game, and where it shows, at the edge of the world or from high up, a hazy reflection
+	// that is brightest at the horizon looks better than the line where a real ground would start.
+	vec3 dir = normalize(vec3(rd.x, abs(rd.y), rd.z));
+	float tMax = vRaySphere(ro, dir, V_RT).y;
+	bool sunOn = sunI > 0.0 && sunDir.y > -0.35;
+	bool moonOn = moonI > 0.0 && moonDir.y > -0.35;
 
 	vec3 odView = vec3(0.0);
 	vec3 sunR = vec3(0.0);
@@ -418,148 +439,413 @@ vec3 vAtmosphere(vec3 rd, vec3 sunDir, float sunI, vec3 moonDir, float moonI, in
 	vec3 moonR = vec3(0.0);
 	vec3 moonM = vec3(0.0);
 	vec3 ms = vec3(0.0);
-	vec3 moonMs = vec3(0.0);
 	float prev = 0.0;
 	float n = float(steps);
 	for (int i = 0; i < 32; i++) {
 		if (i >= steps) break;
-		// Quadratic spacing: dense near the ground where the air is.
+		// Quadratic spacing: dense near the observer where the air is.
 		float f = (float(i) + 1.0) / n;
 		float t1 = tMax * f * f;
 		float ds = t1 - prev;
 		vec3 p = ro + dir * (prev + 0.5 * ds);
 		prev = t1;
 		float r = length(p);
-		float h = r - V_RG;
+		float h = max(r - V_RG, 0.0);
 		vec3 up = p / r;
 		vec3 dens = vec3(exp(-h / V_HR), exp(-h / V_HM), vOzone(h)) * ds;
-		vec3 tauView = V_BETA_R * (odView.x + 0.5 * dens.x) + V_BETA_M * 1.11 * (odView.y + 0.5 * dens.y) + V_BETA_O * (odView.z + 0.5 * dens.z);
+		vec3 tauView = V_BETA_R * (odView.x + 0.5 * dens.x) + V_BETA_M * V_MIE_EXT * (odView.y + 0.5 * dens.y) + V_BETA_O * (odView.z + 0.5 * dens.z);
 		odView += dens;
 		vec3 tV = exp(-tauView);
-		float muS = dot(up, sunDir);
-		vec3 tS = tV * exp(-vLightDepth(h, muS));
-		sunR += dens.x * tS;
-		sunM += dens.y * tS;
-		// Multiple scattering, roughly: light scattered once more by the sky above the point. It
-		// still arrives a while after the sun has set there, so the twilight sky stays blue.
-		ms += (dens.x + dens.y * 0.3) * tV * exp(-vLightDepth(h, max(muS, 0.0) + 0.03)) * smoothstep(-0.3, 0.05, muS);
+		vec3 scatter = V_BETA_R * dens.x + V_BETA_M * dens.y;
+		if (sunOn) {
+			float muS = dot(up, sunDir);
+			vec3 tS = tV * exp(-vLightDepth(h, muS));
+			sunR += dens.x * tS;
+			sunM += dens.y * tS;
+			ms += scatter * tV * vMultiScatter(h, muS) * sunI;
+		}
 		if (moonOn) {
 			float muM = dot(up, moonDir);
 			vec3 tM = tV * exp(-vLightDepth(h, muM));
 			moonR += dens.x * tM;
 			moonM += dens.y * tM;
-			moonMs += (dens.x + dens.y * 0.3) * tV * exp(-vLightDepth(h, max(muM, 0.0) + 0.03)) * smoothstep(-0.3, 0.05, muM);
+			ms += scatter * tV * vMultiScatter(h, muM) * moonI;
 		}
 	}
-	// Twice scattered light is mostly Rayleigh twice: blue squared.
-	vec3 msTint = V_BETA_R * V_BETA_R * (V_MS_GAIN / (4.0 * V_PI));
-	float mu = dot(dir, sunDir);
-	vec3 col = (sunR * V_BETA_R * (3.0 / (16.0 * V_PI) * (1.0 + mu * mu)) + sunM * V_BETA_M * vPhaseMie(mu, mieG) + ms * msTint) * sunI;
+	vec3 col = ms;
+	if (sunOn) {
+		float mu = dot(dir, sunDir);
+		col += (sunR * V_BETA_R * vPhaseRayleigh(mu) + sunM * V_BETA_M * vPhaseMie(mu, mieG)) * sunI;
+	}
 	if (moonOn) {
-		float mm = dot(dir, moonDir);
-		col += (moonR * V_BETA_R * (3.0 / (16.0 * V_PI) * (1.0 + mm * mm)) + moonM * V_BETA_M * vPhaseMie(mm, mieG) + moonMs * msTint) * moonI;
+		float mu = dot(dir, moonDir);
+		col += (moonR * V_BETA_R * vPhaseRayleigh(mu) + moonM * V_BETA_M * vPhaseMie(mu, mieG)) * moonI;
 	}
 	return col;
+}
+
+// Filmic tone curve on the brightest channel: the hue of saturated light survives (a curve per
+// channel turns a deep orange sunset yellow), and only light far above white bleaches towards it.
+vec3 vTonemap(vec3 c) {
+	float m = max(max(c.r, c.g), c.b);
+	vec3 hue = c * (vAces(vec3(m)).r / max(m, 1e-6));
+	return mix(hue, vAces(c), smoothstep(1.0, 10.0, m) * 0.85);
 }
 
 // ---------------------------------------------------------------------------
 //  Sun, moon & clouds
 // ---------------------------------------------------------------------------
 
+// Angle between two unit vectors, precise for small angles too (acos of a dot product is not).
+float vAngle(vec3 a, vec3 b) {
+	float s = length(cross(a, b));
+	return dot(a, b) >= 0.0 ? asin(min(s, 1.0)) : V_PI - asin(min(s, 1.0));
+}
+
+// Sun disk with limb darkening (darker and redder towards the edge) and a soft bloom. sunColor is
+// the sunlight reaching the observer: the disk takes its hue at a fixed brightness, so it reads as
+// a crisp white-yellow disk at noon and a deep orange one at sunset, never a blown-out blob.
 vec3 vSunDisk(vec3 rd, vec3 sunDir, vec3 sunColor, float size) {
-	float cosA = dot(rd, sunDir);
-	float angle = acos(clamp(cosA, -1.0, 1.0));
+	if (dot(rd, sunDir) < 0.8) return vec3(0.0);
+	float angle = vAngle(rd, sunDir);
 	float radius = 0.0095 * size;
-	float edge = vPixelAngle(rd) * 1.5;
+	float edge = max(vPixelAngle(rd), radius * 0.03);
 	float disk = 1.0 - smoothstep(radius - edge, radius + edge, angle);
 	float r = clamp(angle / radius, 0.0, 1.0);
-	float limb = 1.0 - 0.55 * (1.0 - sqrt(max(1.0 - r * r, 0.0)));
-	vec3 col = sunColor * disk * limb * 40.0;
-	col += sunColor * exp(-angle * 55.0 / size) * 0.9;
-	col += sunColor * exp(-angle * 9.0) * 0.12;
+	float mu = sqrt(max(1.0 - r * r, 0.0));
+	vec3 limb = pow(vec3(max(mu, 0.02)), vec3(0.32, 0.45, 0.65));
+	float peak = max(max(sunColor.r, sunColor.g), max(sunColor.b, 1e-6));
+	vec3 hue = sunColor / peak;
+	vec3 col = hue * limb * disk * 7.0;
+	col += sunColor * (exp(-angle * 75.0 / size) * 0.35 + exp(-angle * 14.0) * 0.04);
 	return col;
 }
 
-// Moon with phase shading, maria and craters. phase: 0 = full, 0.5 = new.
+// A dark mare: an ellipse (centre c, radii r) with a soft shore.
+float vMare(vec2 p, vec2 c, vec2 r) {
+	return 1.0 - smoothstep(0.7, 1.05, length((p - c) / r));
+}
+
+// The maria of the near side, so the moon shows its familiar face (uv: disk coordinates, y up).
+float vMoonMaria(vec2 uv) {
+	vec2 w = uv + (vec2(vFbm2(uv * 3.1 + 1.7, 3), vFbm2(uv * 3.1 + 8.3, 3)) - 0.5) * 0.2;
+	float m = vMare(w, vec2(-0.28, 0.45), vec2(0.27, 0.22));  // Imbrium
+	m = max(m, vMare(w, vec2(-0.62, 0.08), vec2(0.25, 0.44)));  // Oceanus Procellarum
+	m = max(m, vMare(w, vec2(0.20, 0.42), vec2(0.16, 0.15)));   // Serenitatis
+	m = max(m, vMare(w, vec2(0.38, 0.12), vec2(0.19, 0.16)));   // Tranquillitatis
+	m = max(m, vMare(w, vec2(0.74, 0.30), vec2(0.09, 0.11)));   // Crisium
+	m = max(m, vMare(w, vec2(0.62, -0.10), vec2(0.12, 0.17)));  // Fecunditatis
+	m = max(m, vMare(w, vec2(0.42, -0.28), vec2(0.08, 0.09)));  // Nectaris
+	m = max(m, vMare(w, vec2(-0.18, -0.36), vec2(0.18, 0.14))); // Nubium
+	m = max(m, vMare(w, vec2(-0.52, -0.40), vec2(0.09, 0.09))); // Humorum
+	m = max(m, vMare(w, vec2(0.0, 0.74), vec2(0.44, 0.06)));    // Frigoris
+	m = max(m, vMare(w, vec2(0.05, 0.18), vec2(0.10, 0.07)));   // Vaporum
+	m = max(m, vMare(w, vec2(-0.30, 0.02), vec2(0.15, 0.12)));  // Insularum
+	return m;
+}
+
+// One layer of craters on a unit grid: x = albedo change (bright rims and ejecta, darker floors),
+// yz = slope of the relief, which shades the craters near the terminator.
+vec3 vCraterLayer(vec2 p, float density, float seed) {
+	vec2 n = floor(p);
+	vec2 f = fract(p);
+	vec3 res = vec3(0.0);
+	for (int j = -1; j <= 1; j++) {
+		for (int i = -1; i <= 1; i++) {
+			vec2 g = vec2(float(i), float(j));
+			vec2 id = n + g + seed;
+			if (vHash12(id + 31.7) > density) continue;
+			vec2 o = g + 0.25 + 0.5 * vHash22(id) - f;
+			float rad = 0.16 + 0.26 * vHash12(id + 7.1);
+			float len = length(o);
+			float d = len / rad;
+			if (d > 1.7) continue;
+			// Height: a bowl, a raised rim at d = 1 and ejecta outside; its slope along d.
+			float rim = exp(-(d - 1.0) * (d - 1.0) * 14.0);
+			float dh = (d < 1.0 ? 1.0 * d : 0.0) - rim * (d - 1.0) * 7.0;
+			res.yz -= o / max(len, 1e-4) * dh / rad;
+			res.x += rim * 0.10 - (d < 1.0 ? 0.05 * (1.0 - d * d) : 0.0) + exp(-d * 1.4) * 0.05 * vHash12(id + 2.9);
+		}
+	}
+	return res;
+}
+
+// Moon disk with a real face: maria, craters with relief, Tycho's rays, a soft terminator for the
+// phases and faint earthshine on the dark side. phase: 0 = full .. 0.5 = new (waning first, like
+// the game). Returns the disk (with a little glow around it); coverage = how much of the sky
+// behind it hides.
 vec3 vMoon(vec3 rd, vec3 moonDir, float phase, vec3 tint, float size, out float coverage) {
 	coverage = 0.0;
+	if (dot(rd, moonDir) < 0.7) return vec3(0.0);
 	float radius = 0.024 * size;
-	float cosA = dot(rd, moonDir);
-	float angle = acos(clamp(cosA, -1.0, 1.0));
-	vec3 glow = tint * (exp(-angle * 18.0 / size) * 0.12 + exp(-angle * 4.0) * 0.025);
-	if (angle > radius * 1.6) return glow;
+	float angle = vAngle(rd, moonDir);
+	float lit = 0.5 + 0.5 * cos(phase * V_TAU);
+	vec3 glow = tint * (exp(-angle * 22.0 / size) * 0.10 + exp(-angle * 5.0) * 0.02) * (0.2 + 0.8 * lit);
+	if (angle > radius * 1.2) return glow;
 
 	vec3 up = abs(moonDir.y) > 0.99 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
 	vec3 right = normalize(cross(up, moonDir));
 	vec3 top = cross(moonDir, right);
 	vec2 uv = vec2(dot(rd, right), dot(rd, top)) / sin(radius);
-	float r2 = dot(uv, uv);
-	float edge = vPixelAngle(rd) / sin(radius) * 1.5;
-	float mask = 1.0 - smoothstep(1.0 - edge, 1.0 + edge, sqrt(r2));
+	float r = length(uv);
+	float edge = max(vPixelAngle(rd), radius * 0.02) / sin(radius);
+	float mask = 1.0 - smoothstep(1.0 - edge, 1.0 + edge, r);
 	coverage = mask;
-	vec3 normal = vec3(uv, sqrt(max(1.0 - r2, 0.0)));
+	vec2 suv = uv / max(r, 1.0);
+	vec3 sphere = vec3(suv, sqrt(max(1.0 - dot(suv, suv), 0.0)));
 
-	// Surface: dark maria + craters.
-	float maria = smoothstep(0.45, 0.62, vFbm2(uv * 1.6 + 4.0, 5));
-	float craters = 0.0;
-	for (int i = 0; i < 3; i++) {
-		vec3 vor = vVoronoi(uv * (3.0 + float(i) * 2.7) + float(i) * 7.3, 0.0);
-		craters += (1.0 - smoothstep(0.0, 0.32, vor.y)) * smoothstep(0.0, 0.08, vor.y) * 0.5 / (1.0 + float(i));
-	}
-	float albedo = 0.78 - maria * 0.28 + craters * 0.18 + (vFbm2(uv * 9.0, 3) - 0.5) * 0.12;
+	// Albedo: bright highlands, dark maria, mottling, craters and Tycho's bright ray system.
+	float maria = vMoonMaria(suv);
+	float mottle = vFbm2(suv * 7.0 + 2.3, 4);
+	vec3 cr = vCraterLayer(suv * 4.5, 0.55, 0.0) + vCraterLayer(suv * 9.0, 0.5, 13.0) * 0.6 + vCraterLayer(suv * 17.0, 0.45, 27.0) * 0.35;
+	vec2 tycho = suv - vec2(-0.13, -0.70);
+	float tl = length(tycho);
+	float rays = pow(vNoise2(vec2(atan(tycho.y, tycho.x) * 7.0, 3.0)), 4.0) * exp(-tl * 2.2) * smoothstep(0.03, 0.08, tl);
+	float albedo = mix(0.80, 0.42, maria) * (0.86 + 0.28 * mottle) + cr.x * (1.0 - maria * 0.5) + rays * 0.35;
+	albedo += exp(-tl * tl * 900.0) * 0.4;
+	vec2 cop = suv - vec2(-0.30, 0.15);
+	albedo += exp(-dot(cop, cop) * 700.0) * 0.25 + pow(vNoise2(vec2(atan(cop.y, cop.x) * 5.0, 9.0)), 4.0) * exp(-length(cop) * 9.0) * 0.12;
 
-	// Phase lighting: light direction rotates around the moon.
+	// Relief: the crater slopes tilt the normal, strongest in the maria-free highlands.
+	vec3 n = normalize(sphere - vec3(cr.yz, 0.0) * 0.035 * sphere.z);
 	float a = phase * V_TAU;
-	vec3 lightDir = normalize(vec3(sin(a), 0.0, cos(a)));
-	float lambert = max(dot(normal, lightDir), 0.0);
-	float earthshine = 0.035;
-	vec3 surface = tint * albedo * (lambert * 1.35 + earthshine);
+	vec3 sunL = normalize(vec3(-sin(a), 0.0, cos(a)));
+	// A rough surface scatters light back to the sun (the full moon looks flat, not like a ball).
+	float ndl = dot(n, sunL);
+	float lambert = smoothstep(-0.04, 0.12, ndl) * mix(max(ndl, 0.0), 1.0, 0.55);
+	float earthshine = 0.03 * (1.0 - lit * 0.7);
+	vec3 surface = tint * albedo * (lambert * 1.4 + earthshine * vec3(0.8, 0.9, 1.1));
 	return glow * (1.0 - mask) + surface * mask;
 }
 
-// Fast 2.5D cloud layer: projected plane, domain-warped fbm, self shadowing
-// towards the light and forward scattering ("silver lining").
-vec4 vClouds(vec3 rd, vec3 lightDir, vec3 lightColor, vec3 ambient, float coverage, float t, vec3 camPos) {
-	if (rd.y <= 0.0) return vec4(0.0);
-	vec2 uv = rd.xz / (rd.y + 0.045) * 0.9;
-	uv += camPos.xz * 0.00035 + vec2(t * 0.011, t * 0.0045);
-	vec2 warp = vec2(vFbm2(uv * 0.55 + vec2(t * 0.004, 0.0), 4), vFbm2(uv * 0.55 + vec2(5.2, 1.3), 4));
-	vec2 p = uv * 1.25 + (warp - 0.5) * 1.1;
-	float n = vFbm2(p, 6);
-	float detail = vFbm2(p * 3.1 + 7.0, 4);
-	n = n * 0.82 + detail * 0.18;
-	float threshold = mix(0.66, 0.36, clamp(coverage, 0.0, 1.0));
-	float density = smoothstep(threshold, threshold + 0.24, n);
-	if (density <= 0.002) return vec4(0.0);
+// ---------------------------------------------------------------------------
+//  Volumetric clouds: a layer of cumulus between V_CLOUD_BASE and V_CLOUD_TOP km above the
+//  observer, on a curved Earth (so the layer drops towards the horizon, where the clouds pile up
+//  small, flat and dense and fade into the haze). A short march through the layer integrates
+//  density and light; a few samples towards the light give the self shadowing, so the tops facing
+//  the light are bright, the bases dark, thin edges let the light through and glow when the light
+//  is behind them (silver lining).
+// ---------------------------------------------------------------------------
 
-	vec2 lightStep = normalize(lightDir.xz + vec2(1e-4)) * 0.11;
-	float n2 = vFbm2(p + lightStep, 4) * 0.82 + detail * 0.18;
-	float n3 = vFbm2(p + lightStep * 2.2, 3) * 0.82 + detail * 0.18;
-	float shadow = clamp(1.0 - ((n2 - n) * 2.2 + (n3 - n) * 1.4), 0.0, 1.0);
-	float thickness = smoothstep(threshold, threshold + 0.5, n);
+const float V_CLOUD_BASE = 1.4;
+const float V_CLOUD_TOP = 3.0;
 
-	float mu = dot(rd, lightDir);
-	float forward = pow(max(mu, 0.0), 10.0) * (1.0 - thickness) * 3.0;
-	float elevation = clamp(lightDir.y * 4.0 + 0.25, 0.0, 1.0);
-	vec3 lit = lightColor * (0.45 + 0.9 * shadow + forward) * elevation;
-	vec3 col = ambient * (0.9 - thickness * 0.45) + lit * (1.0 - thickness * 0.55);
-	float fade = smoothstep(0.0, 0.16, rd.y);
-	return vec4(col, density * fade);
+// Lighting of the cloud layer.
+struct VCloudLight {
+	vec3 dir;    // towards the main light (sun or moon)
+	vec3 color;  // its light where the clouds are
+	vec3 top;    // skylight from above
+	vec3 bottom; // light from below (ground bounce)
+};
+
+// Distance along a ray (zenith cosine mu) from the observer to the altitude h on a curved Earth.
+float vShellDistance(float mu, float h) {
+	float r0 = V_RG + V_OBSERVER;
+	float r = V_RG + V_OBSERVER + h;
+	return -r0 * mu + sqrt(max(r0 * r0 * (mu * mu - 1.0) + r * r, 0.0));
+}
+
+// Cloud cover of a column (0 = clear sky .. 1 = towering core), from the 2D shape at xz in km:
+// large weather patches decide where the cumulus fields are, a domain-warped fbm gives every cloud
+// its lumpy outline. coverage is the cloud coverage setting (0..1).
+float vCloudColumn(vec2 xz, float coverage, int octaves) {
+	float weather = vNoise2(xz * 0.05 + 3.7);
+	vec2 warp = vec2(vNoise2(xz * 0.3), vNoise2(xz * 0.3 + vec2(5.2, 1.3)));
+	float base = vFbm2(xz * 0.65 + warp * 1.4, octaves);
+	float cover = clamp(coverage + (weather - 0.5) * 0.6, 0.0, 1.0);
+	// The fbm sits around 0.5: more coverage lowers the threshold the column has to clear.
+	float threshold = mix(0.76, 0.30, cover);
+	return clamp((base - threshold) / (1.0 - threshold) * 1.8, 0.0, 1.0);
+}
+
+// Density (0..1) at height fraction hf (0 = cloud base, 1 = top of the layer) of a column with cover
+// c: a flat base and a rounded top that rises with the cover, so stronger columns tower higher.
+float vCloudProfile(float c, float hf) {
+	float top = c * 0.95;
+	float d = c - hf * hf / max(top, 0.05) * c;
+	return clamp(d * 2.5, 0.0, 1.0) * smoothstep(0.0, 0.07, hf);
+}
+
+// Billowy erosion: a 3D noise eats into the thin outer parts of the cloud and leaves the dense
+// core, so the outline breaks into round puffs (upper part) and soft wisps (base).
+float vCloudErode(float d, vec3 p, float hf, float detailFade) {
+	float n = vNoise3(p * 3.3) * 0.65 + vNoise3(p * 8.1 + 7.0) * 0.35;
+	// Inverted noise looks like puffs, plain noise like wisps.
+	float puff = mix(n, 1.0 - n, smoothstep(0.1, 0.6, hf));
+	float e = puff * 0.55 * detailFade;
+	return clamp((d - e) / (1.0 - e), 0.0, 1.0);
+}
+
+float vHG(float mu, float g) {
+	float g2 = g * g;
+	return (1.0 - g2) / (4.0 * V_PI * pow(max(1.0 + g2 - 2.0 * g * mu, 1e-4), 1.5));
+}
+
+// rgb = cloud colour, a = coverage of the sky behind (lay it over the sky with vOver).
+vec4 vClouds(vec3 rd, VCloudLight light, float coverage, float t, vec3 camPos, int quality) {
+	if (rd.y < -0.02 || coverage <= 0.0) return vec4(0.0);
+	float t0 = vShellDistance(rd.y, V_CLOUD_BASE);
+	float t1 = vShellDistance(rd.y, V_CLOUD_TOP);
+	// Beyond ~110 km the layer is lost in the haze.
+	if (t0 > 110.0) return vec4(0.0);
+	// March at most 9 km through the layer: further on the clouds are hidden anyway.
+	float len = min(t1 - t0, 9.0);
+	int steps = quality == 0 ? 10 : (quality == 1 ? 14 : 20);
+	float dt = len / float(steps);
+	// Per-direction jitter of the start: the sky cache jitters the direction every build, so the
+	// slicing averages out into smooth density over a few builds.
+	float jitter = vHash13(rd * 4096.0 + fract(t * 0.37) * 0.0);
+	// Wind (km): a slow drift, and the camera moves the layer with real parallax (at half the
+	// strength, which keeps fast flight from smearing it in the cache).
+	vec2 wind = vec2(t * 0.0045, t * 0.0018) + camPos.xz * 0.0005;
+	vec3 windDetail = vec3(t * 0.006, 0.0, t * 0.003);
+	// Fine detail fades out with distance instead of turning into noise.
+	float detailFade = 1.0 - smoothstep(25.0, 70.0, t0);
+	int octaves = t0 < 30.0 ? 5 : 4;
+
+	float mu = dot(rd, light.dir);
+	// Strong forward lobe (silver lining) plus a soft backward one.
+	float phase = mix(vHG(mu, 0.75), vHG(mu, -0.2), 0.3);
+	float phase2 = mix(vHG(mu, 0.35), 0.08, 0.5);
+	vec3 lightStep = light.dir / max(light.dir.y, 0.25);
+
+	vec3 scattered = vec3(0.0);
+	float trans = 1.0;
+	float depthSum = 0.0;
+	float weightSum = 0.0;
+	for (int i = 0; i < 20; i++) {
+		if (i >= steps || trans < 0.03) break;
+		float s = t0 + (float(i) + jitter) * dt;
+		vec3 p = rd * s;
+		// Height above the observer's ground, with the Earth's curvature.
+		float h = p.y + dot(p.xz, p.xz) / (2.0 * V_RG);
+		float hf = (h - V_CLOUD_BASE) / (V_CLOUD_TOP - V_CLOUD_BASE);
+		if (hf < 0.0 || hf > 1.0) continue;
+		vec2 xz = p.xz + wind;
+		float c = vCloudColumn(xz, coverage, octaves);
+		float d = vCloudProfile(c, hf);
+		if (d <= 0.0) continue;
+		vec3 q = vec3(xz.x, h, xz.y) + windDetail;
+		d = vCloudErode(d, q, hf, detailFade);
+		if (d <= 0.01) continue;
+
+		float sigma = d * 18.0;
+		// Optical depth towards the light: two samples of the cloud above this point.
+		float od = 0.0;
+		for (int k = 0; k < 2; k++) {
+			float ls = k == 0 ? 0.18 : 0.6;
+			vec3 lp = q + lightStep * ls;
+			float lhf = (lp.y - V_CLOUD_BASE) / (V_CLOUD_TOP - V_CLOUD_BASE);
+			float lc = vCloudColumn(lp.xz - windDetail.xz, coverage, 3);
+			od += vCloudProfile(lc, clamp(lhf, 0.0, 1.0)) * (lhf > 1.0 ? 0.0 : 1.0) * 18.0 * (k == 0 ? 0.3 : 0.5);
+		}
+		od += sigma * 0.05;
+		// Multiple scattering, after Wrenninge: fainter, wider lobes that reach deeper.
+		vec3 sun = light.color * (exp(-od) * phase + exp(-od * 0.25) * 0.45 * phase2 + exp(-od * 0.06) * 0.2 * 0.08) * 2.0;
+		// Skylight from above is shadowed by the cloud above the point, light from the ground is not.
+		vec3 amb = light.top * smoothstep(0.0, 1.0, hf) * exp(-od * 0.12) + light.bottom * (1.0 - hf * 0.6);
+		vec3 S = (sun + amb) * sigma;
+		float st = exp(-sigma * dt);
+		scattered += trans * S * (1.0 - st) / sigma;
+		depthSum += s * trans * (1.0 - st);
+		weightSum += trans * (1.0 - st);
+		trans *= st;
+	}
+	float alpha = 1.0 - trans;
+	if (alpha < 0.002) return vec4(0.0);
+	// Aerial perspective: distant clouds fade into the haze of the sky behind them.
+	float dist = depthSum / max(weightSum, 1e-4);
+	float haze = exp(-dist / 55.0);
+	vec3 col = scattered / alpha;
+	return vec4(col, alpha * haze * smoothstep(-0.02, 0.01, rd.y));
 }
 
 // ---------------------------------------------------------------------------
 //  Presets
 // ---------------------------------------------------------------------------
 
+// Sunlight at the top of the atmosphere, in the units of vAtmosphere.
+const float V_SUN_I = 14.0;
+
+// Exposure of the daylight skies for a sun at height y (the sine of its elevation): the eye
+// adapts, so the sky darkens through the twilight without going black at once.
+float vDayExposure(float y) {
+	return exp(0.13 - 0.3 * smoothstep(0.17, 0.9, y) + 0.5 * smoothstep(0.17, 0.0, y) + 2.2 * smoothstep(0.0, -0.14, y));
+}
+
+// Light for the clouds of a physically lit sky: sunlight (or moonlight at night) where the clouds
+// are, skylight from above (the zenith radiance, which tracks the colour of the sky through the
+// day) and light bounced off the ground below. ex is the exposure applied to the sky.
+VCloudLight vSkyCloudLight(vec3 sunDir, vec3 moonDir, float moonI, float ex, vec3 nightAir) {
+	VCloudLight L;
+	vec3 zenith = vAtmosphere(vec3(0.0, 1.0, 0.0), sunDir, V_SUN_I, moonDir, moonI, 5, 0.8) * ex + nightAir;
+	float h = 0.5 * (V_CLOUD_BASE + V_CLOUD_TOP);
+	bool day = sunDir.y > -0.06;
+	L.dir = day ? sunDir : moonDir;
+	L.color = (day ? V_SUN_I : moonI) * vLightTransmittance(h, L.dir.y) * ex;
+	vec3 groundLight = (vLightTransmittance(0.0, sunDir.y) * max(sunDir.y, 0.0) * V_SUN_I + vLightTransmittance(0.0, moonDir.y) * max(moonDir.y, 0.0) * moonI) * ex;
+	L.top = zenith * 1.5;
+	L.bottom = groundLight * vec3(0.030, 0.034, 0.028) + zenith * 0.3;
+	return L;
+}
+
 vec3 vSkyRealistic(vec3 rd, float t, int quality) {
 	vec3 sunDir = normalize(SunDir.xyz);
 	vec3 moonDir = normalize(MoonDir.xyz);
-	int steps = quality == 0 ? 8 : (quality == 1 ? 12 : 16);
-	float ex = 1.0 + 7.0 * smoothstep(0.12, -0.12, sunDir.y);
-	vec3 col = vAtmosphere(rd, sunDir, 22.0, moonDir, 0.0, steps, Settings.x * 150.0, 0.76) * ex;
-	col *= mix(1.0, 0.38, (1.0 - smoothstep(-0.25, 0.0, rd.y)));
-	col = vAces(col * 1.05);
-	return vToDisplay(col);
+	float rain = Timing.z;
+	float storm = max(rain, Timing.y);
+	float phase = MoonDir.w;
+	float moonLit = 0.5 + 0.5 * cos(phase * V_TAU);
+	int steps = quality == 0 ? 10 : (quality == 1 ? 14 : 18);
+	float ex = vDayExposure(sunDir.y);
+	// The moon lights the night sky a little: a deep blue around it, more at full moon.
+	float moonI = 0.045 * (0.1 + 0.9 * moonLit);
+	vec3 air = vAtmosphere(rd, sunDir, V_SUN_I, moonDir, moonI, steps, 0.8) * ex;
+	// Night: airglow and starlight keep the darkest sky a deep blue, lighter at the horizon.
+	float night = smoothstep(0.05, -0.2, sunDir.y);
+	float e = abs(rd.y);
+	vec3 nightAir = mix(vec3(0.011, 0.018, 0.036), vec3(0.0035, 0.0065, 0.017), smoothstep(0.0, 0.5, e)) * night;
+	air += nightAir;
+
+	// Space behind the air: stars (drawn crisp by the sky cache) and a faint Milky Way.
+	vec3 space = vec3(0.0);
+	float starVis = smoothstep(-0.03, -0.17, sunDir.y) * (1.0 - storm) * smoothstep(-0.02, 0.1, rd.y);
+	if (starVis > 0.001) {
+		space += vStarsW(rd, t, Settings.z, 0.9 * starVis * Timing.w);
+		space += vMilkyWay(rd, 0.5) * starVis;
+	}
+
+	vec3 col = air + space;
+	if (Extra.z < 0.5 && rd.y > -0.02) {
+		float horizonCut = smoothstep(-0.004, 0.004, rd.y) * (1.0 - storm * 0.92);
+		vec3 sunCol = V_SUN_I * vLightTransmittance(V_OBSERVER, sunDir.y) * ex;
+		float cover;
+		vec3 moonTint = vec3(1.0, 0.97, 0.92) * normalize(vLightTransmittance(V_OBSERVER, max(moonDir.y, 0.0)) + 0.05) * 1.7;
+		vec3 moon = vMoon(rd, moonDir, phase, moonTint, 1.5, cover);
+		float moonVis = smoothstep(-0.04, 0.02, moonDir.y) * horizonCut;
+		// The moon hides the stars behind it; the air in front of it still glows over it.
+		col = air + space * (1.0 - cover * moonVis) + moon * moonVis;
+		gStarWeight *= 1.0 - cover * moonVis;
+		col += vSunDisk(rd, sunDir, sunCol, 1.6) * horizonCut;
+	}
+
+	if (Extra.y > 0.5 && rd.y > -0.02) {
+		VCloudLight L = vSkyCloudLight(sunDir, moonDir, moonI, ex, nightAir);
+		// Rain greys the clouds out: less direct light, a uniform overcast.
+		L.color *= 1.0 - storm * 0.85;
+		float coverage = mix(Settings.y, 1.0, rain * 0.85);
+		col = vOver(col, vClouds(rd, L, coverage, t, Camera.xyz, quality));
+	}
+
+	// Below the horizon: the mirrored haze darkens and greys towards the ground.
+	float below = smoothstep(0.0, -0.15, rd.y);
+	col = mix(col, vec3(dot(col, vec3(0.2126, 0.7152, 0.0722))), below * 0.5) * (1.0 - 0.65 * below);
+	// Rain and thunder: a grey, darker sky.
+	float grey = dot(col, vec3(0.2126, 0.7152, 0.0722));
+	col = mix(col, vec3(grey) * 0.75, storm * 0.6);
+	col *= 1.0 - Timing.y * 0.45;
+	col *= Settings.x;
+	return vToDisplay(vTonemap(col));
 }
 
 vec3 vSkyMagma(vec3 rd, float t) {
@@ -724,9 +1010,9 @@ vec3 vSkySunset(vec3 rd, float t, int quality) {
 	vec3 s = SunDir.xyz;
 	vec2 az = normalize(s.xz + vec2(1e-3, 0.0));
 	vec3 sunDir = normalize(vec3(az.x, 0.055, az.y));
-	vec3 col = vAtmosphere(rd, sunDir, 26.0, sunDir, 0.0, 12, 150.0, 0.76);
+	vec3 col = vAtmosphere(rd, sunDir, 26.0, sunDir, 0.0, 12, 0.76);
 	col *= Settings.x;
-	return vToDisplay(vAces(col * 1.1));
+	return vToDisplay(vTonemap(col * 1.1));
 }
 
 vec3 vSkyInk(vec3 rd, float t) {
@@ -804,7 +1090,12 @@ vec3 vSkyBloodMoon(vec3 rd, float t) {
 	col = col * (1.0 - cover) + moon * 1.6;
 	col += vec3(0.9, 0.12, 0.08) * exp(-acos(clamp(dot(rd, moonDir), -1.0, 1.0)) * 3.0) * 0.18;
 	if (Extra.y > 0.5) {
-		vec4 clouds = vClouds(rd, moonDir, vec3(0.2, 0.018, 0.012), vec3(0.012, 0.0015, 0.003), Settings.y * 0.8 + 0.15, t, Camera.xyz);
+		VCloudLight L;
+		L.dir = moonDir;
+		L.color = vec3(0.2, 0.018, 0.012);
+		L.top = vec3(0.012, 0.0015, 0.003);
+		L.bottom = L.top * 0.5;
+		vec4 clouds = vClouds(rd, L, Settings.y * 0.8 + 0.15, t, Camera.xyz, 1);
 		col = vOver(col, vec4(clouds.rgb, clouds.a * 0.9));
 	}
 	col *= Settings.x;
@@ -820,7 +1111,12 @@ vec3 vSkyCustom(vec3 rd, float t) {
 	lin += vStarsW(rd, t, Settings.z, smoothstep(0.0, 0.3, up) * Timing.w * (1.0 - dot(lin, vec3(0.33))));
 	if (Extra.y > 0.5) {
 		vec3 sunDir = normalize(SunDir.xyz);
-		vec4 clouds = vClouds(rd, sunDir, vec3(0.9), lin * 0.7 + 0.05, Settings.y, t, Camera.xyz);
+		VCloudLight L;
+		L.dir = sunDir;
+		L.color = vec3(0.9);
+		L.top = lin * 0.7 + 0.05;
+		L.bottom = L.top * 0.6;
+		vec4 clouds = vClouds(rd, L, Settings.y, t, Camera.xyz, 1);
 		lin = vOver(lin, clouds);
 	}
 	lin *= Settings.x;
