@@ -2,6 +2,7 @@ package dev.v1zir.visuals.gui.clickgui;
 
 import dev.v1zir.visuals.module.setting.NumberSetting;
 import dev.v1zir.visuals.render.font.Fonts;
+import dev.v1zir.visuals.render.font.SdfFont;
 import dev.v1zir.visuals.render.ui.Render2D;
 import dev.v1zir.visuals.util.Anim;
 import dev.v1zir.visuals.util.ColorUtil;
@@ -9,11 +10,16 @@ import dev.v1zir.visuals.util.Theme;
 import net.minecraft.client.gui.DrawContext;
 import org.lwjgl.glfw.GLFW;
 
-/** Label + value with a gradient slider underneath. */
+/** Label and value over a slim gradient track; the knob carries an accent core. */
 public final class SliderComponent extends SettingComponent<NumberSetting> {
-	private static final float HEIGHT = 21f;
+	private static final float HEIGHT = 22f;
+	private static final float TRACK = 3f;
 	private final Anim fill;
+	private final Label valueWidth = new Label();
 	private boolean dragging;
+	/** The formatted value, rebuilt only when the value changes. */
+	private double shownValue = Double.NaN;
+	private String shownText = "";
 
 	public SliderComponent(NumberSetting setting) {
 		super(setting);
@@ -21,21 +27,36 @@ public final class SliderComponent extends SettingComponent<NumberSetting> {
 	}
 
 	@Override
+	public float estimateHeight() {
+		return HEIGHT;
+	}
+
+	@Override
 	protected float draw(DrawContext ctx, double mouseX, double mouseY) {
-		boolean hover = Ui.inside(mouseX, mouseY, x, y, width, HEIGHT) || dragging;
-		Render2D.text(ctx, Fonts.regular(), setting.name(), x, y + 1.5f, Ui.SMALL + 0.5f, hover ? Theme.text() : Theme.textDim());
-		String value = setting.display();
-		float vw = Fonts.semibold().width(value, Ui.SMALL + 0.5f);
-		Render2D.text(ctx, Fonts.semibold(), value, x + width - vw, y + 1.5f, Ui.SMALL + 0.5f, Theme.accent());
-		float ty = y + 14f;
-		float th = 3f;
+		float h = hover.target(dragging || Ui.inside(mouseX, mouseY, x, y, width, HEIGHT) ? 1f : 0f).get();
+		Render2D.text(ctx, Fonts.regular(), setting.name(), x, y + 1.5f, Ui.LABEL, labelColor(h));
+		if (setting.get() != shownValue) {
+			shownValue = setting.get();
+			shownText = setting.display();
+		}
+		SdfFont valueFont = Fonts.semibold();
+		float vw = valueWidth.width(valueFont, shownText, Ui.LABEL);
+		int accent = Theme.accent();
+		int accent2 = Theme.accent2();
+		Render2D.text(ctx, valueFont, shownText, x + width - vw, y + 1.5f, Ui.LABEL, ColorUtil.lerp(ColorUtil.lerp(accent, Theme.text(), 0.25f), accent, h));
+
+		float ty = y + 15f;
 		float f = fill.target((float) setting.fraction()).get();
-		Render2D.round(ctx, x, ty, width, th, th / 2f, ColorUtil.withAlpha(0xFFFFFF, 26));
-		Render2D.gradientH(ctx, x, ty, Math.max(th, width * f), th, th / 2f, Theme.accent(), Theme.accent2());
+		float fw = Math.max(TRACK, width * f);
+		Render2D.round(ctx, x, ty, width, TRACK, TRACK / 2f, ColorUtil.withAlpha(0xFFFFFF, Math.round(20 + 10 * h)));
+		if (h > 0.01f) Render2D.glow(ctx, x, ty, fw, TRACK, TRACK / 2f, 5f, ColorUtil.withAlpha(accent, Math.round(80 * h)), ColorUtil.withAlpha(accent2, Math.round(80 * h)));
+		Render2D.gradientH(ctx, x, ty, fw, TRACK, TRACK / 2f, accent, accent2);
 		float kx = x + width * f;
-		float kr = dragging ? 4f : hover ? 3.6f : 3.2f;
-		if (hover) Render2D.shadow(ctx, kx - kr, ty + th / 2f - kr, kr * 2, kr * 2, kr, 6f, ColorUtil.withAlpha(Theme.accent2(), 120));
-		Render2D.circle(ctx, kx, ty + th / 2f, kr, 0xFFFFFFFF);
+		float ky = ty + TRACK / 2f;
+		float kr = 3.6f;
+		Render2D.shadow(ctx, kx - kr, ky - kr + 0.6f, kr * 2f, kr * 2f, kr, 3f, 0x60000000);
+		Render2D.circle(ctx, kx, ky, kr, 0xFFFFFFFF);
+		Render2D.circle(ctx, kx, ky, 1.5f, ColorUtil.lerp(accent, accent2, f));
 		return HEIGHT;
 	}
 

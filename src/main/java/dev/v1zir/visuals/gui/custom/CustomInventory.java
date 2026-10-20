@@ -2,6 +2,7 @@ package dev.v1zir.visuals.gui.custom;
 
 import dev.v1zir.visuals.render.font.Icons;
 import dev.v1zir.visuals.render.ui.Render2D;
+import dev.v1zir.visuals.util.Anim;
 import dev.v1zir.visuals.util.ColorUtil;
 import dev.v1zir.visuals.util.Theme;
 import net.minecraft.client.MinecraftClient;
@@ -14,6 +15,7 @@ import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.client.gui.screen.ingame.ShulkerBoxScreen;
 import net.minecraft.screen.ScreenHandler;
 import net.minecraft.screen.slot.Slot;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Custom UI inventory: the vanilla container texture is replaced by a Theme-style panel with
@@ -50,6 +52,45 @@ public final class CustomInventory {
 			MinecraftClient client = MinecraftClient.getInstance();
 			if (client.player != null) {
 				InventoryScreen.drawEntity(ctx, x + 26, y + 8, x + 75, y + 78, 30, 0.0625f, mouseX, mouseY, client.player);
+			}
+		}
+	}
+
+	/**
+	 * Hover glow of the slots of one screen: the hovered slot lights up on a spring and the ones the
+	 * mouse just left fade out, so sweeping across the grid leaves a short soft trail.
+	 */
+	public static final class SlotGlow {
+		private static final int SIZE = 6;
+		private final Slot[] slots = new Slot[SIZE];
+		private final Anim[] glow = new Anim[SIZE];
+
+		public SlotGlow() {
+			for (int i = 0; i < SIZE; i++) glow[i] = new Anim(0f, 18f);
+		}
+
+		/** Draws the glows; coordinates are relative to the container (vanilla's slot highlight space). */
+		public void render(DrawContext ctx, @Nullable Slot focused) {
+			if (focused != null && !focused.isEnabled()) focused = null;
+			int current = -1;
+			if (focused != null) {
+				for (int i = 0; i < SIZE; i++) if (slots[i] == focused) current = i;
+				if (current < 0) {
+					// Take over the faintest entry.
+					current = 0;
+					for (int i = 1; i < SIZE; i++) if (slots[i] == null || glow[i].value() < glow[current].value()) current = i;
+					slots[current] = focused;
+					glow[current].snap(0f);
+				}
+			}
+			for (int i = 0; i < SIZE; i++) {
+				if (slots[i] == null) continue;
+				float g = glow[i].target(i == current ? 1f : 0f).get();
+				if (i != current && g <= 0.005f) {
+					slots[i] = null;
+					continue;
+				}
+				CustomUi.slotHighlight(ctx, slots[i].x, slots[i].y, g);
 			}
 		}
 	}

@@ -10,12 +10,16 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+/** A toggleable feature with settings, shown in its category panel of the click GUI. */
 public abstract class Module {
+	/** Sub-category of modules that do not pick one. */
+	public static final String GENERAL = "General";
 	protected static final MinecraftClient mc = MinecraftClient.getInstance();
 
 	private final String name;
 	private final String description;
 	private final Category category;
+	private String subCategory = GENERAL;
 	private final List<Setting<?>> settings = new ArrayList<>();
 	private boolean enabled;
 	private int key = GLFW.GLFW_KEY_UNKNOWN;
@@ -41,6 +45,15 @@ public abstract class Module {
 
 	public Category category() {
 		return category;
+	}
+
+	/** Tab inside the category panel; a panel whose modules share one hides its tabs. */
+	public String subCategory() {
+		return subCategory;
+	}
+
+	protected void setSubCategory(String subCategory) {
+		this.subCategory = subCategory;
 	}
 
 	public List<Setting<?>> settings() {

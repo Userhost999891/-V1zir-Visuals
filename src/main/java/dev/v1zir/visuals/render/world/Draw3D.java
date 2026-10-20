@@ -1,5 +1,7 @@
 package dev.v1zir.visuals.render.world;
 
+import dev.v1zir.visuals.util.ColorUtil;
+
 import java.util.function.IntUnaryOperator;
 
 /** Helpers that turn simple shapes into glowing quads. */
@@ -62,5 +64,46 @@ public final class Draw3D {
 		mesh.vertex(x0 + px, y0 + py, z0 + pz, 1f, 0f, color0);
 		mesh.vertex(x1 + px, y1 + py, z1 + pz, 1f, 1f, color1);
 		mesh.vertex(x1 - px, y1 - py, z1 - pz, -1f, 1f, color1);
+	}
+
+	/**
+	 * 0 within {@code near} blocks of the camera, 1 from {@code far} on (smooth in between). Effects
+	 * fade out in front of the eyes, where their quads would otherwise fill the screen.
+	 */
+	public static float cameraFade(double x, double y, double z, float near, float far) {
+		double dx = x - WorldEffectRenderer.camX;
+		double dy = y - WorldEffectRenderer.camY;
+		double dz = z - WorldEffectRenderer.camZ;
+		float t = (float) ((Math.sqrt(dx * dx + dy * dy + dz * dz) - near) / (far - near));
+		t = Math.max(0f, Math.min(1f, t));
+		return t * t * (3f - 2f * t);
+	}
+
+	/**
+	 * Ring colours that wave between two colours around the circle. One instance is kept and set
+	 * again every frame, so drawing rings allocates nothing.
+	 */
+	public static final class Wave implements IntUnaryOperator {
+		private int from;
+		private int to;
+		private float phase;
+		private int alpha;
+		private int segments;
+
+		/** alpha is 0..1; phase turns the wave around the ring (radians). */
+		public Wave set(int from, int to, float phase, float alpha, int segments) {
+			this.from = from;
+			this.to = to;
+			this.phase = phase;
+			this.alpha = Math.round(Math.max(0f, Math.min(1f, alpha)) * 255f);
+			this.segments = segments;
+			return this;
+		}
+
+		@Override
+		public int applyAsInt(int i) {
+			float k = (float) (Math.sin(i * Math.PI * 2 / segments + phase) * 0.5 + 0.5);
+			return ColorUtil.withAlpha(ColorUtil.lerp(from, to, k), alpha);
+		}
 	}
 }
