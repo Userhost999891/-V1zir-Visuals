@@ -36,7 +36,7 @@ public final class SkyCache {
 	 * At most this much of a build per frame: at low frame rates the refresh slows down instead of
 	 * each frame doing more work, so a slow frame never makes the next one slower.
 	 */
-	private static final float MAX_STEP = 1f / 16f;
+	private static final float MAX_STEP = 1f / 24f;
 	/** A sun or moon jump larger than this (a /time set) rebuilds the cache at once. */
 	private static final float JUMP_COS = (float) Math.cos(Math.toRadians(2.0));
 

@@ -258,7 +258,8 @@ vec3 vStarsW(vec3 rd, float t, float density, float weight) {
 }
 
 vec3 vOver(vec3 under, vec4 over) {
-	gStarWeight *= 1.0 - over.a;
+	// Even thin cloud hides most starlight, so the stars fade faster than the cloud's coverage.
+	gStarWeight *= (1.0 - over.a) * (1.0 - over.a);
 	return mix(under, over.rgb, over.a);
 }
 
@@ -292,8 +293,8 @@ vec3 vCrispStarLayer(vec3 rd, vec3 dx, vec3 dy, float scale, float density, floa
 		float bright = pow(vHash13(cell + 3.7), 9.0) * 3.0 + 0.15;
 		float radius = min(pixelAngle * (0.6 + 0.35 * sqrt(bright)) * sizeBoost, 0.1 / scale);
 		float flux = 3.14159 * radius * radius / pixelArea * bright;
-		// Stars too faint to see would only lift the black of the sky into a grey haze.
-		if (flux < 0.02) continue;
+		// Faint stars would only fill the sky with a carpet of dots: keep the ones that read as stars.
+		if (flux < 0.09) continue;
 		float core = flux * exp(-r2 / (2.0 * SIGMA * SIGMA)) / (6.28318 * SIGMA * SIGMA);
 		float halo = 0.7 * flux * exp(-r2 / (2.0 * HALO * HALO)) / (6.28318 * HALO * HALO);
 		float twinkle = 0.86 + 0.14 * sin(t * (1.1 + j.y * 1.9) + h * 91.0);
@@ -303,9 +304,9 @@ vec3 vCrispStarLayer(vec3 rd, vec3 dx, vec3 dy, float scale, float density, floa
 }
 
 vec3 vCrispStars(vec3 rd, vec3 dx, vec3 dy, float t, float density) {
+	// Two layers: the third, densest one of vStars only added dots too faint to matter.
 	vec3 s = vCrispStarLayer(rd, dx, dy, 95.0, 0.075 * density, t, 1.15);
-	s += vCrispStarLayer(rd, dx, dy, 210.0, 0.11 * density, t * 1.3, 1.0) * 0.5;
-	s += vCrispStarLayer(rd, dx, dy, 420.0, 0.16 * density, t * 0.7, 0.9) * 0.18;
+	s += vCrispStarLayer(rd, dx, dy, 210.0, 0.11 * density, t * 1.3, 1.0) * 0.45;
 	return s;
 }
 
