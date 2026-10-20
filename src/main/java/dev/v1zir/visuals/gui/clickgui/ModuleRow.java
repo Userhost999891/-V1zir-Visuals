@@ -34,8 +34,11 @@ public final class ModuleRow {
 		for (Setting<?> setting : module.settings()) components.add(SettingComponent.of(setting));
 	}
 
+	/** True while this row waits for a key: its own bind or a key setting. */
 	boolean isBinding() {
-		return binding;
+		if (binding) return true;
+		for (SettingComponent<?> c : components) if (c instanceof KeyComponent key && key.listening()) return true;
+		return false;
 	}
 
 	boolean hasSettings() {
@@ -155,7 +158,10 @@ public final class ModuleRow {
 
 	/** Returns true when the key was consumed by bind mode. */
 	boolean keyPressed(int key) {
-		if (!binding) return false;
+		if (!binding) {
+			for (SettingComponent<?> component : components) if (component.keyPressed(key)) return true;
+			return false;
+		}
 		if (key == GLFW.GLFW_KEY_ESCAPE || key == GLFW.GLFW_KEY_BACKSPACE || key == GLFW.GLFW_KEY_DELETE) module.setKey(GLFW.GLFW_KEY_UNKNOWN);
 		else module.setKey(key);
 		binding = false;

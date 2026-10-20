@@ -2,6 +2,7 @@ package dev.v1zir.visuals.gui.clickgui;
 
 import dev.v1zir.visuals.module.setting.BoolSetting;
 import dev.v1zir.visuals.module.setting.ColorSetting;
+import dev.v1zir.visuals.module.setting.KeySetting;
 import dev.v1zir.visuals.module.setting.ModeSetting;
 import dev.v1zir.visuals.module.setting.NumberSetting;
 import dev.v1zir.visuals.module.setting.Setting;
@@ -23,6 +24,7 @@ public abstract class SettingComponent<S extends Setting<?>> {
 		if (setting instanceof NumberSetting n) return new SliderComponent(n);
 		if (setting instanceof ModeSetting m) return new ModeComponent(m);
 		if (setting instanceof ColorSetting c) return new ColorComponent(c);
+		if (setting instanceof KeySetting k) return new KeyComponent(k);
 		throw new IllegalArgumentException("Unsupported setting " + setting.getClass());
 	}
 
@@ -48,5 +50,10 @@ public abstract class SettingComponent<S extends Setting<?>> {
 	}
 
 	public void mouseReleased() {
+	}
+
+	/** Returns true when the component consumed the key (a key setting waiting for input). */
+	public boolean keyPressed(int key) {
+		return false;
 	}
 }
