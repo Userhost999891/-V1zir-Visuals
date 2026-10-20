@@ -47,6 +47,18 @@ public final class Effects {
 		if (chams != null && chams.isEnabled() && entity instanceof PlayerEntity player) chams.onPop(player);
 	}
 
+	/** The server reports a death (entity status 3); unlike the health it is sent even where servers hide the health of others. */
+	public static void onDeath(Entity entity) {
+		for (int i = 0; i < hit.length; i++) {
+			LivingEntity living = hit[i];
+			if (living != null && living == entity) {
+				hit[i] = null;
+				onKill(living);
+				return;
+			}
+		}
+	}
+
 	/** Its own slot if it is already watched, else a free one, else the one hit longest ago. */
 	private static void remember(LivingEntity entity, long now) {
 		int slot = -1;
