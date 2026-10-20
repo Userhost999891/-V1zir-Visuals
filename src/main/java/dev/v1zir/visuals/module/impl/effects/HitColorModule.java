@@ -31,6 +31,7 @@ public final class HitColorModule extends Module {
 
 	public HitColorModule() {
 		super("Hit Color", "Custom colour of the hurt flash", Category.EFFECTS);
+		setSubCategory("Combat");
 	}
 
 	@Override

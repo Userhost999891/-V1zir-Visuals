@@ -53,6 +53,7 @@ public final class PopChamsModule extends Module implements WorldEffect {
 
 	public PopChamsModule() {
 		super("Pop Chams", "Ghost of players who pop a totem", Category.EFFECTS);
+		setSubCategory("Combat");
 	}
 
 	@Override

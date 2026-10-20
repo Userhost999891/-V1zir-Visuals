@@ -35,6 +35,7 @@ public final class HitMarkerModule extends Module {
 
 	public HitMarkerModule() {
 		super("Hit Marker", "Crosshair marker when you hit or kill", Category.EFFECTS);
+		setSubCategory("Combat");
 	}
 
 	public void onHit() {

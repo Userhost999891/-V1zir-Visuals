@@ -13,6 +13,7 @@ import dev.v1zir.visuals.util.Anim;
 import dev.v1zir.visuals.util.ColorUtil;
 import dev.v1zir.visuals.util.Theme;
 import it.unimi.dsi.fastutil.ints.Int2FloatOpenHashMap;
+import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 
@@ -44,11 +45,14 @@ public final class DamageNumbersModule extends Module implements WorldEffect {
 	// Health (plus absorption) per entity id at the last tick; rebuilt every tick so unloaded entities drop out.
 	private Int2FloatOpenHashMap health = new Int2FloatOpenHashMap();
 	private Int2FloatOpenHashMap seen = new Int2FloatOpenHashMap();
+	/** Entity ids start over in a new world, so the health of the old one must not be compared with them. */
+	private ClientWorld world;
 	private final WorldText.Style style = new WorldText.Style().weight(0.06f).shadow();
 	private long lastFrame = System.nanoTime();
 
 	public DamageNumbersModule() {
 		super("Damage Numbers", "Floating damage numbers", Category.EFFECTS);
+		setSubCategory("Combat");
 		health.defaultReturnValue(-1f);
 		seen.defaultReturnValue(-1f);
 	}
@@ -57,14 +61,16 @@ public final class DamageNumbersModule extends Module implements WorldEffect {
 	protected void onDisable() {
 		numbers.clear();
 		health.clear();
+		world = null;
 	}
 
 	@Override
 	public void onTick() {
-		if (mc.world == null || mc.player == null) {
+		if (mc.world != world) {
+			world = mc.world;
 			health.clear();
-			return;
 		}
+		if (mc.world == null || mc.player == null) return;
 		double maxDistance = range.f() * range.f();
 		// Your own numbers would sit right above the camera in first person.
 		boolean showSelf = self.on() && !mc.options.getPerspective().isFirstPerson();

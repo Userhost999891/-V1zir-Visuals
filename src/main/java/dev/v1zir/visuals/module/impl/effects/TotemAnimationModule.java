@@ -31,6 +31,7 @@ public final class TotemAnimationModule extends Module {
 
 	public TotemAnimationModule() {
 		super("Totem Animation", "Size, speed and place of the totem pop", Category.EFFECTS);
+		setSubCategory("Combat");
 	}
 
 	/** The module while it is on, else null. */

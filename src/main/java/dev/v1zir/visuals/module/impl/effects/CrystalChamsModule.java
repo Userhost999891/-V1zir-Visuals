@@ -35,6 +35,7 @@ public final class CrystalChamsModule extends Module {
 
 	public CrystalChamsModule() {
 		super("Crystal Chams", "Colour, size and motion of end crystals", Category.EFFECTS);
+		setSubCategory("Combat");
 	}
 
 	/** The module while it is on, else null. */
