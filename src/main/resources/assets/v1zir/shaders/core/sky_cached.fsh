@@ -6,8 +6,8 @@
 #moj_import <v1zir:upsample.glsl>
 
 // Draws the world sky from the cached panoramas, crossfading between the last two complete builds
-// so the animation stays smooth, and adds the stars crisp at full resolution where the panorama
-// says they are visible.
+// so the animation stays smooth (the outgoing one, which is fading away, is read bilinear), and adds
+// the stars crisp at full resolution where the panorama says they are visible.
 uniform sampler2D Sampler0; // above the horizon, current
 uniform sampler2D Sampler1; // above the horizon, previous
 uniform sampler2D Sampler2; // below the horizon, current
@@ -26,10 +26,10 @@ void main() {
 	vec4 previous;
 	if (d.y >= 0.0) {
 		current = vPanoBicubic(Sampler0, uv);
-		previous = vPanoBicubic(Sampler1, uv);
+		previous = textureLod(Sampler1, uv, 0.0);
 	} else {
 		current = vPanoBicubic(Sampler2, uv);
-		previous = vPanoBicubic(Sampler3, uv);
+		previous = textureLod(Sampler3, uv, 0.0);
 	}
 	vec4 sky = mix(previous, current, CacheParams.x);
 	vec3 col = sky.rgb;
