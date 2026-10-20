@@ -26,6 +26,7 @@ public final class TargetHudModule extends HudModule {
 
 	public TargetHudModule() {
 		super("Target Hud", "Information about your opponent", 0.56f, 0.6f);
+		setSubCategory("Widgets");
 	}
 
 	@Override

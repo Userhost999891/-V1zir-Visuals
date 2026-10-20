@@ -19,6 +19,7 @@ public final class PotionsModule extends HudModule {
 
 	public PotionsModule() {
 		super("Potions", "Shows active effects", 0.008f, 0.42f);
+		setSubCategory("Widgets");
 	}
 
 	@Override

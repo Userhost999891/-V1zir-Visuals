@@ -6,8 +6,8 @@
 #moj_import <v1zir:upsample.glsl>
 
 // Draws the world sky from the cached panoramas, crossfading between the last two complete builds
-// so the animation stays smooth, and adds the stars crisp at full resolution where the panorama
-// says they are visible.
+// so the animation stays smooth (the outgoing one, which is fading away, is read bilinear), and adds
+// the stars crisp at full resolution where the panorama says they are visible.
 uniform sampler2D Sampler0; // above the horizon, current
 uniform sampler2D Sampler1; // above the horizon, previous
 uniform sampler2D Sampler2; // below the horizon, current
@@ -26,18 +26,18 @@ void main() {
 	vec4 previous;
 	if (d.y >= 0.0) {
 		current = vPanoBicubic(Sampler0, uv);
-		previous = vPanoBicubic(Sampler1, uv);
+		previous = textureLod(Sampler1, uv, 0.0);
 	} else {
 		current = vPanoBicubic(Sampler2, uv);
-		previous = vPanoBicubic(Sampler3, uv);
+		previous = textureLod(Sampler3, uv, 0.0);
 	}
 	vec4 sky = mix(previous, current, CacheParams.x);
 	vec3 col = sky.rgb;
 
 	if (sky.a > 0.003) {
 		int preset = int(Camera.w + 0.5);
-		float density = Settings.z * (preset == PRESET_NEBULA ? 1.6 : (preset == PRESET_SUNSET ? 0.5 : 1.0));
-		float exposure = preset == PRESET_AURORA ? 1.6 : (preset == PRESET_BLOOD_MOON ? 1.3 : (preset == PRESET_SUNSET ? 1.1 : 1.0));
+		float density = Settings.z * (preset == PRESET_NEBULA ? 1.6 : (preset == PRESET_SUNSET ? 0.5 : (preset == PRESET_AURORA ? 0.6 : 1.0)));
+		float exposure = preset == PRESET_AURORA ? 1.1 : (preset == PRESET_BLOOD_MOON ? 1.3 : (preset == PRESET_SUNSET ? 1.1 : 1.0));
 		vec3 tint = preset == PRESET_BLOOD_MOON ? vec3(1.0, 0.55, 0.5) : vec3(1.0);
 		vec3 stars = vCrispStars(d, dx, dy, Timing.x, density) * tint * (sky.a * exposure * Settings.x);
 		col += vToDisplay(vAces(stars));

@@ -21,6 +21,7 @@ public final class KeybindsModule extends HudModule {
 
 	public KeybindsModule() {
 		super("Keybinds", "Shows bound modules", 0.008f, 0.25f);
+		setSubCategory("Widgets");
 	}
 
 	@Override

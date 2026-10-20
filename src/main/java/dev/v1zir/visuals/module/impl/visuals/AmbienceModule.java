@@ -15,6 +15,7 @@ public final class AmbienceModule extends Module {
 
 	public AmbienceModule() {
 		super("Ambience", "Changes time of day and weather on your side only", Category.VISUALS);
+		setSubCategory("Render");
 	}
 
 	@Override
