@@ -197,9 +197,9 @@ vec3 vSaturate(vec3 c, float amount) {
 
 // Black-body-ish star tint: 0 = orange dwarf, 1 = blue giant.
 vec3 vStarTint(float k) {
-	vec3 warm = vec3(1.00, 0.72, 0.48);
-	vec3 white = vec3(1.00, 0.96, 0.92);
-	vec3 cold = vec3(0.66, 0.78, 1.00);
+	vec3 warm = vec3(1.00, 0.74, 0.50);
+	vec3 white = vec3(1.00, 0.97, 0.93);
+	vec3 cold = vec3(0.70, 0.81, 1.00);
 	return k < 0.5 ? mix(warm, white, k * 2.0) : mix(white, cold, (k - 0.5) * 2.0);
 }
 
@@ -212,6 +212,7 @@ float vPixelAngle(vec3 rd) {
 	return max(length(fwidth(rd)), 1e-5);
 }
 
+// Glowing points on a jittered grid, sized in screen pixels: the Magma preset's embers.
 vec3 vStarLayer(vec3 rd, float scale, float density, float t, float pixelAngle, float sizeBoost) {
 	vec3 p = rd * scale;
 	vec3 base = floor(p - 0.5);
@@ -222,7 +223,7 @@ vec3 vStarLayer(vec3 rd, float scale, float density, float t, float pixelAngle, 
 		float h = vHash13(cell + 17.0);
 		if (h > density) continue;
 		vec3 j = vHash33(cell);
-		// Keep every star well inside its cell so the glow never gets clipped by the 2x2x2 search.
+		// Keep every point well inside its cell so the glow never gets clipped by the 2x2x2 search.
 		vec3 sp = normalize(cell + 0.3 + j * 0.4);
 		float d = length(rd - sp) * scale;
 		float bright = pow(vHash13(cell + 3.7), 9.0) * 3.0 + 0.15;
@@ -235,12 +236,79 @@ vec3 vStarLayer(vec3 rd, float scale, float density, float t, float pixelAngle, 
 	return col;
 }
 
+// ---------------------------------------------------------------------------
+//  Stars: one fixed catalogue over the whole sky, about 1600 stars at density 1, so a 70 degree
+//  view of a clear night shows some 150 to 250 of them. Their brightness follows a power law like
+//  the real sky: most are faint pin-points, a handful are bright. Every star is a point source
+//  drawn in screen pixels (a fixed 0.6 px Gaussian), so it stays a crisp 1-2 px point at any
+//  resolution and field of view, and whether a star exists depends on the star alone, so the
+//  count is the same at any resolution. Only the brightest get a small, tight glow.
+// ---------------------------------------------------------------------------
+
+// The Milky Way's pole: its band is the great circle at right angles to it.
+const vec3 V_GALAXY_POLE = vec3(0.2757, 0.6105, -0.7188);
+// Cells per radian of the star grid, and the chance that a cell holds a star at density 1.
+const float V_STAR_SCALE = 40.0;
+const float V_STAR_CHANCE = 0.27;
+
+// Screen derivatives of the view direction, taken once in uniform control flow (v1zirSky), for
+// presets that draw stars directly instead of through the sky cache.
+vec3 gRdDx = vec3(0.0);
+vec3 gRdDy = vec3(0.0);
+
+// Linear star light in direction rd; dx, dy = the change of the view direction over one pixel.
+vec3 vCrispStars(vec3 rd, vec3 dx, vec3 dy, float t, float density) {
+	// Offsets on the sky map to pixels through the pseudo inverse of (dx, dy): stars stay round
+	// even at the edges of a wide field of view.
+	float a = dot(dx, dx);
+	float b = dot(dx, dy);
+	float c = dot(dy, dy);
+	float det = max(a * c - b * b, 1e-24);
+	float pixelAngle = sqrt(sqrt(det));
+	// A star is only found from the 2x2x2 cells around rd: its light has to stay within a third
+	// of a cell of its centre, so the glow is cut down where pixels are huge (low res, wide FOV).
+	float reach = 0.33 / (V_STAR_SCALE * pixelAngle);
+	float reach2 = reach * reach;
+	vec3 base = floor(rd * V_STAR_SCALE - 0.5);
+	vec3 col = vec3(0.0);
+	for (int i = 0; i < 8; i++) {
+		vec3 cell = base + vec3(float(i & 1), float((i >> 1) & 1), float((i >> 2) & 1));
+		vec3 j = vHash33(cell);
+		vec3 P = cell + j;
+		float len = length(P);
+		// Only cells right on the sphere hold stars, so every star is well inside the search.
+		if (abs(len - V_STAR_SCALE) > 0.15) continue;
+		vec3 sp = P / len;
+		// A few more faint stars along the Milky Way.
+		float lat = dot(sp, V_GALAXY_POLE);
+		float chance = V_STAR_CHANCE * density * (0.75 + 0.9 * exp(-lat * lat * 22.0));
+		if (vHash13(cell + 17.0) > chance) continue;
+		vec3 o = rd - sp;
+		float ox = dot(o, dx);
+		float oy = dot(o, dy);
+		vec2 px = vec2(c * ox - b * oy, a * oy - b * ox) / det;
+		float r2 = dot(px, px);
+		if (r2 > reach2) continue;
+		// Brightness: a power law, about 7 % of the stars ten times brighter than the faintest.
+		float flux = min(pow(max(vHash13(cell + 3.7), 0.004), -0.85), 60.0);
+		// Gentle twinkle, stronger low in the sky where the light crosses more air.
+		float tw = 0.10 + 0.22 * (1.0 - smoothstep(0.0, 0.45, sp.y));
+		float phase = vHash13(cell + 9.1) * V_TAU;
+		flux *= 1.0 + tw * (0.6 * sin(t * (2.1 + 2.6 * j.x) + phase) + 0.4 * sin(t * (3.7 + 3.1 * j.y) + phase * 2.3));
+		// Faint stars look white (the eye sees no colour in them), bright ones show their tint.
+		vec3 tint = mix(vec3(1.0), vStarTint(j.z), 0.35 + 0.65 * smoothstep(2.0, 14.0, flux));
+		float core = exp(-r2 * 1.39) * 0.44;
+		float glow = exp(-r2 * 0.22) * 0.0045 * max(flux - 4.0, 0.0);
+		// Fade out at the reach instead of clipping.
+		float fade = 1.0 - smoothstep(0.6 * reach2, reach2, r2);
+		col += tint * (core * flux * 0.09 + glow) * fade;
+	}
+	return col;
+}
+
+// The same stars for a preset drawn directly (no sky cache): needs gRdDx / gRdDy.
 vec3 vStars(vec3 rd, float t, float density) {
-	float pa = vPixelAngle(rd);
-	vec3 s = vStarLayer(rd, 95.0, 0.075 * density, t, pa, 1.25);
-	s += vStarLayer(rd, 210.0, 0.11 * density, t * 1.3, pa, 1.0) * 0.55;
-	s += vStarLayer(rd, 420.0, 0.16 * density, t * 0.7, pa, 0.9) * 0.25;
-	return s;
+	return vCrispStars(rd, gRdDx, gRdDy, t, density);
 }
 
 // In the sky cache (V1ZIR_SKY_CACHE) a panorama texel only records how visible the stars are in its
@@ -263,75 +331,34 @@ vec3 vOver(vec3 under, vec4 over) {
 	return mix(under, over.rgb, over.a);
 }
 
-// Stars drawn as small round points in screen pixels: the offset to each star is mapped to pixels
-// through the pseudo inverse of the view direction's screen derivatives (dx, dy), so stars stay round
-// and crisp at any resolution and field of view, even at the edges of a wide one. Each star keeps the
-// light it has in vStarLayer (its flux, from its angular size), spread over a fixed ~0.6 px point, so
-// the faint dense layers stay faint and nothing pulses as a star crosses pixel boundaries.
-vec3 vCrispStarLayer(vec3 rd, vec3 dx, vec3 dy, float scale, float density, float t, float sizeBoost, float minBright) {
-	vec3 base = floor(rd * scale - 0.5);
-	float a = dot(dx, dx);
-	float b = dot(dx, dy);
-	float c = dot(dy, dy);
-	float det = max(a * c - b * b, 1e-24);
-	float pixelArea = sqrt(det);
-	float pixelAngle = sqrt(pixelArea);
-	const float SIGMA = 0.6;
-	const float HALO = 2.2;
-	vec3 col = vec3(0.0);
-	for (int i = 0; i < 8; i++) {
-		vec3 cell = base + vec3(float(i & 1), float((i >> 1) & 1), float((i >> 2) & 1));
-		float h = vHash13(cell + 17.0);
-		if (h > density) continue;
-		vec3 j = vHash33(cell);
-		vec3 o = rd - normalize(cell + 0.3 + j * 0.4);
-		float ox = dot(o, dx);
-		float oy = dot(o, dy);
-		vec2 px = vec2(c * ox - b * oy, a * oy - b * ox) / det;
-		float r2 = dot(px, px);
-		if (r2 > 49.0) continue;
-		// Only stars bright enough to read as stars, decided by the star itself so the count is
-		// the same at any resolution (a per-pixel threshold let thousands more through at 1080p).
-		float bright = pow(vHash13(cell + 3.7), 9.0) * 3.0 + 0.15;
-		if (bright < minBright) continue;
-		float radius = min(pixelAngle * (0.6 + 0.35 * sqrt(bright)) * sizeBoost, 0.1 / scale);
-		float flux = 3.14159 * radius * radius / pixelArea * bright;
-		float core = flux * exp(-r2 / (2.0 * SIGMA * SIGMA)) / (6.28318 * SIGMA * SIGMA);
-		float halo = 0.7 * flux * exp(-r2 / (2.0 * HALO * HALO)) / (6.28318 * HALO * HALO);
-		float twinkle = 0.86 + 0.14 * sin(t * (1.1 + j.y * 1.9) + h * 91.0);
-		col += vStarTint(j.z) * (core + halo) * twinkle;
-	}
-	return col;
-}
-
-vec3 vCrispStars(vec3 rd, vec3 dx, vec3 dy, float t, float density) {
-	// Two layers: the third, densest one of vStars only added dots too faint to matter.
-	vec3 s = vCrispStarLayer(rd, dx, dy, 95.0, 0.075 * density, t, 1.15, 0.3);
-	s += vCrispStarLayer(rd, dx, dy, 210.0, 0.11 * density, t * 1.3, 1.0, 1.8) * 0.5;
-	return s;
-}
-
-// Milky way: a tilted great circle with a warm bulge, glow and dark dust lanes.
+// Milky Way: a band along the great circle around V_GALAXY_POLE, wider and warmer towards the
+// galactic centre, made of mottled star clouds and split by dark dust lanes. The noise is
+// sampled in galactic coordinates stretched along the band, so clouds and lanes run with it.
 vec3 vMilkyWay(vec3 rd, float strength) {
-	vec3 n = normalize(vec3(0.28, 0.62, -0.73));
-	vec3 u = normalize(cross(n, vec3(0.0, 1.0, 0.0)));
-	vec3 v = cross(n, u);
-	float lat = dot(rd, n);
-	float lon = atan(dot(rd, v), dot(rd, u));
-	float band = exp(-lat * lat * 22.0);
-	if (band < 0.002) return vec3(0.0);
-	float dl = lon - 0.9;
-	float bulge = exp(-dl * dl * 1.2) * exp(-lat * lat * 40.0);
-	vec3 q = rd * 3.0;
-	float glow = vFbm3(q * 2.2, 5);
-	float detail = vFbm3(q * 7.0 + 11.0, 4);
-	float dust = smoothstep(0.48, 0.78, vFbm3(q * 4.5 + 3.1, 5)) * exp(-lat * lat * 90.0);
-	vec3 cold = vec3(0.30, 0.42, 0.85);
-	vec3 warm = vec3(1.00, 0.78, 0.55);
-	vec3 col = mix(cold, warm, clamp(bulge * 1.4, 0.0, 1.0));
-	float intensity = band * (0.25 + 0.75 * glow) * (0.7 + 0.6 * detail) + bulge * 0.9 * glow;
-	intensity *= 1.0 - dust * 0.9;
-	return col * intensity * 0.32 * strength;
+	float lat = dot(rd, V_GALAXY_POLE);
+	if (abs(lat) > 0.6) return vec3(0.0);
+	vec3 u = normalize(cross(V_GALAXY_POLE, vec3(0.0, 1.0, 0.0)));
+	vec3 v = cross(V_GALAXY_POLE, u);
+	vec2 g = vec2(dot(rd, u), dot(rd, v));
+	// Closeness to the galactic centre (at longitude 0.9 rad).
+	float centre = 0.5 + 0.5 * dot(normalize(g + 1e-5), vec2(cos(0.9), sin(0.9)));
+	centre = centre * centre * centre;
+	float width = mix(0.085, 0.16, centre);
+	float x = lat / width;
+	float band = exp(-x * x);
+	float halo = exp(-lat * lat * 9.0);
+	vec3 q = vec3(g * 2.6, lat * 6.0);
+	// Star clouds and their fine grain.
+	float clouds = vFbm3(q * 1.7 + 1.3, 5);
+	float grain = vFbm3(q * 8.0 + 7.1, 3);
+	float lum = band * (0.2 + 1.3 * smoothstep(0.35, 0.8, clouds)) * (0.55 + 0.9 * grain * grain);
+	lum = lum * (0.45 + 0.8 * centre) + halo * 0.12;
+	// Dust: lanes along the middle of the band (the Great Rift towards the centre) and patches.
+	float lane = exp(-(lat + 0.012) * (lat + 0.012) / (width * width * 0.18));
+	float dust = smoothstep(0.42, 0.66, vFbm3(q * 3.2 + 3.1, 5));
+	lum *= 1.0 - 0.8 * dust * mix(0.45, 1.0, lane * centre);
+	vec3 col = mix(vec3(0.62, 0.70, 0.95), vec3(1.0, 0.86, 0.68), smoothstep(0.2, 0.9, centre * band));
+	return col * lum * 0.13 * strength;
 }
 
 // ---------------------------------------------------------------------------
@@ -1131,6 +1158,8 @@ vec3 vSkyCustom(vec3 rd, float t) {
 vec3 v1zirSky(vec3 rd, vec2 fragCoord) {
 	rd = normalize(rd);
 	gStarWeight = 0.0;
+	gRdDx = dFdx(rd);
+	gRdDy = dFdy(rd);
 	float t = Timing.x;
 	int preset = int(Camera.w + 0.5);
 	int quality = int(Settings.w + 0.5);
