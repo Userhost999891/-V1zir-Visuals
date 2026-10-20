@@ -7,6 +7,7 @@ import dev.v1zir.visuals.module.impl.client.MainMenuModule;
 import dev.v1zir.visuals.module.impl.client.ThemeModule;
 import dev.v1zir.visuals.module.impl.effects.ChinaHatModule;
 import dev.v1zir.visuals.module.impl.effects.CrosshairModule;
+import dev.v1zir.visuals.module.impl.effects.DamageNumbersModule;
 import dev.v1zir.visuals.module.impl.effects.HitColorModule;
 import dev.v1zir.visuals.module.impl.effects.HitMarkerModule;
 import dev.v1zir.visuals.module.impl.effects.HitParticlesModule;
@@ -56,6 +57,7 @@ public final class ModuleManager {
 		register(new HitParticlesModule());
 		register(new CrosshairModule());
 		register(new HitColorModule());
+		register(new DamageNumbersModule());
 		register(new HitMarkerModule());
 		register(new KillEffectsModule());
 		register(new PopChamsModule());
