@@ -258,8 +258,8 @@ vec3 vStarsW(vec3 rd, float t, float density, float weight) {
 }
 
 vec3 vOver(vec3 under, vec4 over) {
-	// Even thin cloud hides most starlight, so the stars fade faster than the cloud's coverage.
-	gStarWeight *= (1.0 - over.a) * (1.0 - over.a);
+	// Even thin cloud hides starlight: any visible cloud covers the stars behind it.
+	gStarWeight *= 1.0 - smoothstep(0.0, 0.25, over.a);
 	return mix(under, over.rgb, over.a);
 }
 
@@ -268,7 +268,7 @@ vec3 vOver(vec3 under, vec4 over) {
 // and crisp at any resolution and field of view, even at the edges of a wide one. Each star keeps the
 // light it has in vStarLayer (its flux, from its angular size), spread over a fixed ~0.6 px point, so
 // the faint dense layers stay faint and nothing pulses as a star crosses pixel boundaries.
-vec3 vCrispStarLayer(vec3 rd, vec3 dx, vec3 dy, float scale, float density, float t, float sizeBoost) {
+vec3 vCrispStarLayer(vec3 rd, vec3 dx, vec3 dy, float scale, float density, float t, float sizeBoost, float minBright) {
 	vec3 base = floor(rd * scale - 0.5);
 	float a = dot(dx, dx);
 	float b = dot(dx, dy);
@@ -290,11 +290,12 @@ vec3 vCrispStarLayer(vec3 rd, vec3 dx, vec3 dy, float scale, float density, floa
 		vec2 px = vec2(c * ox - b * oy, a * oy - b * ox) / det;
 		float r2 = dot(px, px);
 		if (r2 > 49.0) continue;
+		// Only stars bright enough to read as stars, decided by the star itself so the count is
+		// the same at any resolution (a per-pixel threshold let thousands more through at 1080p).
 		float bright = pow(vHash13(cell + 3.7), 9.0) * 3.0 + 0.15;
+		if (bright < minBright) continue;
 		float radius = min(pixelAngle * (0.6 + 0.35 * sqrt(bright)) * sizeBoost, 0.1 / scale);
 		float flux = 3.14159 * radius * radius / pixelArea * bright;
-		// Faint stars would only fill the sky with a carpet of dots: keep the ones that read as stars.
-		if (flux < 0.09) continue;
 		float core = flux * exp(-r2 / (2.0 * SIGMA * SIGMA)) / (6.28318 * SIGMA * SIGMA);
 		float halo = 0.7 * flux * exp(-r2 / (2.0 * HALO * HALO)) / (6.28318 * HALO * HALO);
 		float twinkle = 0.86 + 0.14 * sin(t * (1.1 + j.y * 1.9) + h * 91.0);
@@ -305,8 +306,8 @@ vec3 vCrispStarLayer(vec3 rd, vec3 dx, vec3 dy, float scale, float density, floa
 
 vec3 vCrispStars(vec3 rd, vec3 dx, vec3 dy, float t, float density) {
 	// Two layers: the third, densest one of vStars only added dots too faint to matter.
-	vec3 s = vCrispStarLayer(rd, dx, dy, 95.0, 0.075 * density, t, 1.15);
-	s += vCrispStarLayer(rd, dx, dy, 210.0, 0.11 * density, t * 1.3, 1.0) * 0.45;
+	vec3 s = vCrispStarLayer(rd, dx, dy, 95.0, 0.075 * density, t, 1.15, 0.3);
+	s += vCrispStarLayer(rd, dx, dy, 210.0, 0.11 * density, t * 1.3, 1.0, 1.8) * 0.5;
 	return s;
 }
 

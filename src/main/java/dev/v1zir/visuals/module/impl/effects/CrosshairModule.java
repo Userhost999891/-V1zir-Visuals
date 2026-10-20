@@ -27,6 +27,7 @@ public final class CrosshairModule extends Module {
 
 	public CrosshairModule() {
 		super("Crosshair", "Custom crosshair", Category.EFFECTS);
+		setSubCategory("Combat");
 	}
 
 	public void render(DrawContext ctx, float tickDelta) {

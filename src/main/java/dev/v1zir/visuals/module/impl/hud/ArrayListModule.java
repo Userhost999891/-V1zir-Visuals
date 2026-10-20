@@ -27,6 +27,7 @@ public final class ArrayListModule extends HudModule {
 
 	public ArrayListModule() {
 		super("Array List", "Lists enabled modules", 0.995f, 0.012f);
+		setSubCategory("Info");
 	}
 
 	@Override
