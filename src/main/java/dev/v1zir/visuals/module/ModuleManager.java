@@ -7,6 +7,7 @@ import dev.v1zir.visuals.module.impl.client.MainMenuModule;
 import dev.v1zir.visuals.module.impl.client.ThemeModule;
 import dev.v1zir.visuals.module.impl.effects.ChinaHatModule;
 import dev.v1zir.visuals.module.impl.effects.CrosshairModule;
+import dev.v1zir.visuals.module.impl.effects.CrystalChamsModule;
 import dev.v1zir.visuals.module.impl.effects.DamageNumbersModule;
 import dev.v1zir.visuals.module.impl.effects.HitColorModule;
 import dev.v1zir.visuals.module.impl.effects.HitMarkerModule;
@@ -15,6 +16,7 @@ import dev.v1zir.visuals.module.impl.effects.JumpCirclesModule;
 import dev.v1zir.visuals.module.impl.effects.KillEffectsModule;
 import dev.v1zir.visuals.module.impl.effects.PopChamsModule;
 import dev.v1zir.visuals.module.impl.effects.TargetEspModule;
+import dev.v1zir.visuals.module.impl.effects.TotemAnimationModule;
 import dev.v1zir.visuals.module.impl.effects.TrailsModule;
 import dev.v1zir.visuals.module.impl.hud.ArrayListModule;
 import dev.v1zir.visuals.module.impl.hud.CoordinatesModule;
@@ -61,6 +63,8 @@ public final class ModuleManager {
 		register(new HitMarkerModule());
 		register(new KillEffectsModule());
 		register(new PopChamsModule());
+		register(new TotemAnimationModule());
+		register(new CrystalChamsModule());
 		// World
 		register(new WorldParticlesModule());
 		// HUD

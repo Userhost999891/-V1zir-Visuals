@@ -6,10 +6,13 @@
 	"client": [
 		"ClientPlayNetworkHandlerMixin",
 		"ClientPlayerInteractionManagerMixin",
+		"EndCrystalEntityModelMixin",
+		"EndCrystalEntityRendererMixin",
 		"FogRendererMixin",
 		"GuiRendererMixin",
 		"HandledScreenMixin",
 		"HeldItemRendererMixin",
+		"InGameOverlayRendererMixin",
 		"InventoryScreenMixin",
 		"KeyboardMixin",
 		"LightmapTextureManagerMixin",
