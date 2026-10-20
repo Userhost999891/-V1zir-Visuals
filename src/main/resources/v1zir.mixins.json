@@ -14,6 +14,7 @@
 		"KeyboardMixin",
 		"LightmapTextureManagerMixin",
 		"MinecraftClientMixin",
+		"MouseClickMixin",
 		"PressableWidgetMixin",
 		"RenderSystemMixin",
 		"ScreenMixin",

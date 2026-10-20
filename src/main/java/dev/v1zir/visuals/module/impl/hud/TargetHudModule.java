@@ -1,6 +1,5 @@
 package dev.v1zir.visuals.module.impl.hud;
 
-import dev.v1zir.visuals.gui.clickgui.ClickGuiScreen;
 import dev.v1zir.visuals.render.font.Fonts;
 import dev.v1zir.visuals.render.font.Icons;
 import dev.v1zir.visuals.render.font.SdfFont;
@@ -39,10 +38,6 @@ public final class TargetHudModule extends HudModule {
 		LivingEntity target = Effects.target();
 		appear.target(target != null || editing() ? 1f : 0f);
 		return appear.get() > 0.01f;
-	}
-
-	private boolean editing() {
-		return mc.currentScreen instanceof ClickGuiScreen screen && screen.isHudTab();
 	}
 
 	@Override
