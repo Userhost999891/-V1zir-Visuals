@@ -8,8 +8,11 @@ import dev.v1zir.visuals.module.impl.client.ThemeModule;
 import dev.v1zir.visuals.module.impl.effects.ChinaHatModule;
 import dev.v1zir.visuals.module.impl.effects.CrosshairModule;
 import dev.v1zir.visuals.module.impl.effects.HitColorModule;
+import dev.v1zir.visuals.module.impl.effects.HitMarkerModule;
 import dev.v1zir.visuals.module.impl.effects.HitParticlesModule;
 import dev.v1zir.visuals.module.impl.effects.JumpCirclesModule;
+import dev.v1zir.visuals.module.impl.effects.KillEffectsModule;
+import dev.v1zir.visuals.module.impl.effects.PopChamsModule;
 import dev.v1zir.visuals.module.impl.effects.TargetEspModule;
 import dev.v1zir.visuals.module.impl.effects.TrailsModule;
 import dev.v1zir.visuals.module.impl.hud.ArrayListModule;
@@ -53,6 +56,9 @@ public final class ModuleManager {
 		register(new HitParticlesModule());
 		register(new CrosshairModule());
 		register(new HitColorModule());
+		register(new HitMarkerModule());
+		register(new KillEffectsModule());
+		register(new PopChamsModule());
 		// World
 		register(new WorldParticlesModule());
 		// HUD

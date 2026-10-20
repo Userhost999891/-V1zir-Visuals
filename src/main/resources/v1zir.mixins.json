@@ -13,6 +13,7 @@
 		"InventoryScreenMixin",
 		"KeyboardMixin",
 		"LightmapTextureManagerMixin",
+		"LivingEntityRendererInvoker",
 		"MinecraftClientMixin",
 		"PressableWidgetMixin",
 		"RenderSystemMixin",
