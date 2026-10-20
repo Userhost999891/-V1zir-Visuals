@@ -32,6 +32,13 @@ public final class Render2D {
 	public static final int CORNERS_LEFT = CORNER_TL | CORNER_BL;
 	public static final int CORNERS_RIGHT = CORNER_TR | CORNER_BR;
 
+	/** Thickness value that gui_glass.fsh reads as full opacity (see glass()). */
+	private static final float GLASS_FADE = 16f;
+	/** Scratch styles for the plain-colour overloads, so drawing text allocates no style per call. */
+	private static final TextStyle PLAIN = new TextStyle();
+	private static final TextStyle ICON = new TextStyle().weight(0f);
+	private static final TextStyle SHADOW = new TextStyle();
+
 	/** Global alpha multiplier, used for fade in/out animations of whole screens. */
 	private static float alpha = 1f;
 
@@ -151,20 +158,15 @@ public final class Render2D {
 
 	public static void glass(DrawContext ctx, float x, float y, float w, float h, float radius, int corners, int tint) {
 		if (BackdropBlur.available()) {
-			BackdropBlur.request();
-			int t = ColorUtil.withAlpha(tint, Math.round(ColorUtil.alpha(tint) * alpha));
-			// The glass pipeline uses vertex alpha as tint strength; coverage alpha comes from the global fade.
 			Matrix3x2f pose = pose(ctx);
 			ScreenRect scissor = scissor(ctx);
 			ScreenRect bounds = bounds(x - 2, y - 2, w + 4, h + 4, pose, scissor);
 			if (bounds == null || alpha <= 0.01f) return;
-			if (alpha < 0.99f) {
-				// While fading, a translucent fill looks better than a half transparent blur.
-				round(ctx, x, y, w, h, radius, corners, ColorUtil.withAlpha(tint, Math.max(ColorUtil.alpha(tint), 200)));
-				return;
-			}
+			BackdropBlur.request();
+			// Vertex alpha is the tint strength, so the global fade travels in the (unused for fills)
+			// thickness channel: the blur itself fades in instead of popping in at the end of a fade.
 			ctx.state.addSimpleElement(new ShapeElement(V1zirPipelines.GLASS, BackdropBlur.textureSetup(), pose, scissor, bounds,
-				x, y, w, h, radius, 0, 0, ShapeElement.FILL, corners, t, t, t, t));
+				x, y, w, h, radius, 0, GLASS_FADE * alpha, ShapeElement.FILL, corners, tint, tint, tint, tint));
 		} else {
 			round(ctx, x, y, w, h, radius, corners, ColorUtil.withAlpha(tint, Math.max(ColorUtil.alpha(tint), 225)));
 		}
@@ -176,16 +178,20 @@ public final class Render2D {
 	}
 
 	public static void panel(DrawContext ctx, float x, float y, float w, float h, float radius, int corners) {
-		switch (Theme.style()) {
-			case BLUR -> {
-				glass(ctx, x, y, w, h, radius, corners, Theme.panel());
-				outline(ctx, x, y, w, h, radius, 1f, Theme.outline());
-			}
-			default -> {
-				round(ctx, x, y, w, h, radius, corners, Theme.solidPanel());
-				outline(ctx, x, y, w, h, radius, 1f, Theme.outline());
-			}
+		if (Theme.style() == Theme.Style.BLUR) {
+			glass(ctx, x, y, w, h, radius, corners, Theme.panel());
+		} else {
+			// Solid grey, a touch lighter at the top so the surface does not look flat.
+			int fill = Theme.solidPanel();
+			int top = ColorUtil.brighten(fill, 0.035f);
+			shape(ctx, V1zirPipelines.SHAPE, TextureSetup.empty(), x, y, w, h, radius, 0, 0, ShapeElement.FILL, corners, top, top, fill, fill);
 		}
+		// Thin rim lit from above: brighter along the top edge, fading towards the bottom.
+		int rim = Theme.outline();
+		int rimTop = ColorUtil.withAlpha(rim, Math.round(ColorUtil.alpha(rim) * 1.6f));
+		int rimBottom = ColorUtil.withAlpha(rim, Math.round(ColorUtil.alpha(rim) * 0.55f));
+		shape(ctx, V1zirPipelines.SHAPE, TextureSetup.empty(), x, y, w, h, radius, 0, 1f, ShapeElement.OUTLINE, corners,
+			rimTop, rimTop, rimBottom, rimBottom);
 	}
 
 	/** Animated shader background (sky presets in "menu" mode) covering the given area. */
@@ -247,19 +253,19 @@ public final class Render2D {
 
 	/** Draws text with its top-left at (x, y). Returns the text width. */
 	public static float text(DrawContext ctx, SdfFont font, String text, float x, float y, float size, int color) {
-		return text(ctx, font, text, x, y, size, TextStyle.of(color));
+		PLAIN.color = color;
+		return text(ctx, font, text, x, y, size, PLAIN);
 	}
 
 	public static float text(DrawContext ctx, SdfFont font, String text, float x, float y, float size, TextStyle style) {
 		if (text == null || text.isEmpty()) return 0;
 		if (style.shadow) {
-			TextStyle shadow = new TextStyle();
-			shadow.color = style.shadowColor;
-			shadow.weight = style.weight + 0.04f;
-			shadow.softness = 0.12f + style.softness;
-			shadow.letterSpacing = style.letterSpacing;
+			SHADOW.color = style.shadowColor;
+			SHADOW.weight = style.weight + 0.04f;
+			SHADOW.softness = 0.12f + style.softness;
+			SHADOW.letterSpacing = style.letterSpacing;
 			float off = Math.max(0.5f, size * 0.06f);
-			emitText(ctx, font, text, x + off * 0.4f, y + off, size, shadow);
+			emitText(ctx, font, text, x + off * 0.4f, y + off, size, SHADOW);
 		}
 		return emitText(ctx, font, text, x, y, size, style);
 	}
@@ -292,7 +298,8 @@ public final class Render2D {
 
 	/** Draws an icon glyph centred at (cx, cy). */
 	public static void icon(DrawContext ctx, int codepoint, float cx, float cy, float size, int color) {
-		icon(ctx, codepoint, cx, cy, size, TextStyle.of(color).weight(0.0f));
+		ICON.color = color;
+		icon(ctx, codepoint, cx, cy, size, ICON);
 	}
 
 	public static void icon(DrawContext ctx, int codepoint, float cx, float cy, float size, TextStyle style) {

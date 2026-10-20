@@ -3,7 +3,6 @@ package dev.v1zir.visuals.mixin;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import dev.v1zir.visuals.gui.custom.CustomInventory;
-import dev.v1zir.visuals.gui.custom.CustomUi;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
@@ -14,12 +13,13 @@ import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** Custom UI inventory: Theme-style panel, rounded slots, accent slot highlight and light labels. */
+/** Custom UI inventory: Theme-style panel, recessed slots, a spring hover glow on slots and light labels. */
 @Mixin(HandledScreen.class)
 public abstract class HandledScreenMixin extends Screen {
 	@Shadow
@@ -53,10 +53,15 @@ public abstract class HandledScreenMixin extends Screen {
 		}
 	}
 
+	@Unique
+	private CustomInventory.SlotGlow v1zir$slotGlow;
+
+	// Called every frame from renderMain (translated to the container), right after focusedSlot is updated.
 	@Inject(method = "drawSlotHighlightBack", at = @At("HEAD"), cancellable = true)
 	private void v1zir$slotHighlightBack(DrawContext context, CallbackInfo ci) {
 		if (!CustomInventory.handles(this)) return;
-		if (focusedSlot != null && focusedSlot.isEnabled()) CustomUi.slotHighlight(context, focusedSlot.x, focusedSlot.y);
+		if (v1zir$slotGlow == null) v1zir$slotGlow = new CustomInventory.SlotGlow();
+		v1zir$slotGlow.render(context, focusedSlot);
 		ci.cancel();
 	}
 

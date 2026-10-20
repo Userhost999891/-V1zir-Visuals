@@ -7,6 +7,7 @@ import dev.v1zir.visuals.module.Module;
 public final class NotificationsModule extends Module {
 	public NotificationsModule() {
 		super("Notifications", "Toasts when modules are toggled", Category.HUD);
+		setSubCategory("Widgets");
 	}
 
 	@Override

@@ -7,5 +7,6 @@ import dev.v1zir.visuals.module.Module;
 public final class FullBrightModule extends Module {
 	public FullBrightModule() {
 		super("Full Bright", "See clearly in the dark", Category.VISUALS);
+		setSubCategory("Render");
 	}
 }

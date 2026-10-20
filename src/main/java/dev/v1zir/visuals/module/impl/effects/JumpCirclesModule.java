@@ -8,24 +8,31 @@ import dev.v1zir.visuals.render.world.Draw3D;
 import dev.v1zir.visuals.render.world.WorldEffect;
 import dev.v1zir.visuals.render.world.WorldEffectRenderer;
 import dev.v1zir.visuals.util.Anim;
-import dev.v1zir.visuals.util.ColorUtil;
 import dev.v1zir.visuals.util.Theme;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 
-/** Expanding glowing rings where you jump and land. */
+/** Expanding shockwave rings where you jump and land: a crisp rotating rim inside a soft halo. */
 public final class JumpCirclesModule extends Module implements WorldEffect {
+	private static final int SEGMENTS = 56;
+
 	public final NumberSetting radius = add(new NumberSetting("Radius", 1.4, 0.5, 3.0, 0.05));
 	public final NumberSetting duration = add(new NumberSetting("Duration", 1.1, 0.4, 3.0, 0.05).suffix("s"));
 	public final BoolSetting onLanding = add(new BoolSetting("On landing", true));
 
 	private final List<Circle> circles = new ArrayList<>();
+	private final Draw3D.Wave wave = new Draw3D.Wave();
 	private boolean wasOnGround = true;
 
 	public JumpCirclesModule() {
 		super("Jump Circles", "Rings when you jump and land", Category.EFFECTS);
+		setSubCategory("Cosmetic");
+	}
+
+	@Override
+	protected void onDisable() {
+		circles.clear();
 	}
 
 	@Override
@@ -48,22 +55,21 @@ public final class JumpCirclesModule extends Module implements WorldEffect {
 		float life = duration.f();
 		int a1 = Theme.accent();
 		int a2 = Theme.accent2();
-		Iterator<Circle> it = circles.iterator();
-		while (it.hasNext()) {
-			Circle c = it.next();
+		WorldEffectRenderer.Mesh mesh = WorldEffectRenderer.glow();
+		for (int i = circles.size() - 1; i >= 0; i--) {
+			Circle c = circles.get(i);
 			float age = (now - c.born) / 1.0e9f;
 			if (age > life) {
-				it.remove();
+				circles.remove(i);
 				continue;
 			}
 			float p = age / life;
-			float r = Anim.easeOutCubic(p) * radius.f();
-			float fade = 1f - Anim.easeInOutCubic(p);
+			double r = Anim.easeOutCubic(p) * radius.f();
+			// Holds its brightness while it spreads, then fades out as it slows down.
+			float fade = 1f - Anim.easeInOutCubic(Math.max(0f, (p - 0.25f) / 0.75f));
 			float spin = age * 2f;
-			Draw3D.flatRing(WorldEffectRenderer.glow(), c.x, c.y, c.z, r, 0.09, 64,
-				i -> ColorUtil.withAlpha(ColorUtil.lerp(a1, a2, (float) (Math.sin(i / 64.0 * Math.PI * 2 + spin) * 0.5 + 0.5)), Math.round(230 * fade)));
-			Draw3D.flatRing(WorldEffectRenderer.glow(), c.x, c.y, c.z, r * 0.62, 0.05, 48,
-				i -> ColorUtil.withAlpha(0xFFFFFF, Math.round(90 * fade)));
+			Draw3D.flatRing(mesh, c.x, c.y, c.z, r, 0.22 + r * 0.06, SEGMENTS, wave.set(a1, a2, spin, 0.32f * fade, SEGMENTS));
+			Draw3D.flatRing(mesh, c.x, c.y, c.z, r, 0.05, SEGMENTS, wave.set(a1, a2, spin, 0.95f * fade, SEGMENTS));
 		}
 	}
 
