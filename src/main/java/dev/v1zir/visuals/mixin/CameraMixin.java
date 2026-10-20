@@ -6,13 +6,14 @@ import dev.v1zir.visuals.module.impl.visuals.FreeLookModule;
 import dev.v1zir.visuals.module.impl.visuals.ZoomModule;
 import net.minecraft.client.render.Camera;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-/** Free Look angles, Camera Tweaks distance, clipping and perspective glide. */
+/** Free Look angles and glide, Camera Tweaks distance, clipping and perspective glide. */
 @Mixin(Camera.class)
 public abstract class CameraMixin {
 	/** Runs once per frame before the camera is placed: polls the hold keys and advances the springs. */
@@ -52,17 +53,30 @@ public abstract class CameraMixin {
 
 	/**
 	 * Distance with clipping. The two handlers below act in exclusive cases, so their order at HEAD
-	 * does not matter: this one when clipping stays on, the next one when it is off.
+	 * does not matter: this one when clipping stays on, the next one when Camera Tweaks turns it off.
 	 */
 	@ModifyVariable(method = "clipToSpace", at = @At("HEAD"), argsOnly = true)
 	private float v1zir$distance(float distance) {
-		CameraTweaksModule tweaks = ModuleManager.get(CameraTweaksModule.class);
-		return tweaks != null && tweaks.isEnabled() && !tweaks.noClip.on() ? tweaks.distance(distance) : distance;
+		return v1zir$clipOff() ? distance : v1zir$scaleDistance(distance);
 	}
 
 	@Inject(method = "clipToSpace", at = @At("HEAD"), cancellable = true)
 	private void v1zir$noClip(float distance, CallbackInfoReturnable<Float> cir) {
+		if (v1zir$clipOff()) cir.setReturnValue(v1zir$scaleDistance(distance));
+	}
+
+	@Unique
+	private static boolean v1zir$clipOff() {
 		CameraTweaksModule tweaks = ModuleManager.get(CameraTweaksModule.class);
-		if (tweaks != null && tweaks.isEnabled() && tweaks.noClip.on()) cir.setReturnValue(tweaks.distance(distance));
+		return tweaks != null && tweaks.isEnabled() && tweaks.noClip.on();
+	}
+
+	/** Free Look's pull towards the head, then Camera Tweaks' distance. */
+	@Unique
+	private static float v1zir$scaleDistance(float distance) {
+		FreeLookModule freeLook = ModuleManager.get(FreeLookModule.class);
+		if (freeLook != null && freeLook.isEnabled()) distance = freeLook.distance(distance);
+		CameraTweaksModule tweaks = ModuleManager.get(CameraTweaksModule.class);
+		return tweaks != null && tweaks.isEnabled() ? tweaks.distance(distance) : distance;
 	}
 }

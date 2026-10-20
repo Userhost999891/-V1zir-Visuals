@@ -46,11 +46,18 @@ public final class CameraTweaksModule extends Module {
 		boolean third = !perspective.isFirstPerson();
 		if (third) front = perspective.isFrontView();
 		float target = third ? distance.f() : 0f;
-		if (!smooth.on()) current.snap(target);
-		else if (third && current.target() == 0f && current.value() < HEAD_CLEARANCE) current.snap(HEAD_CLEARANCE);
-		current.target(target);
-		value = current.get();
+		// The target is 0 only in first person (the distance setting starts at 1), so this spots a switch.
+		boolean switched = third == (current.target() == 0f);
+		if (switched && !smooth.on()) current.snap(target);
+		else if (switched && third && current.value() < HEAD_CLEARANCE) current.snap(HEAD_CLEARANCE);
+		// Distance changes from the scroll wheel always glide.
+		value = current.target(target).get();
 		gliding = !third && value > HEAD_CLEARANCE;
+	}
+
+	/** Whether switching perspective glides; Free Look leaves the glide to this module then. */
+	public boolean glidesPerspective() {
+		return isEnabled() && smooth.on();
 	}
 
 	@Override
