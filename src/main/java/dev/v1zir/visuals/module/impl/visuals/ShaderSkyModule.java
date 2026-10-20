@@ -16,8 +16,12 @@ public final class ShaderSkyModule extends Module {
 	public final NumberSetting brightness = add(new NumberSetting("Brightness", 1.0, 0.2, 2.0, 0.05));
 	public final NumberSetting speed = add(new NumberSetting("Speed", 1.0, 0.0, 4.0, 0.05).suffix("x"));
 	public final ModeSetting quality = add(new ModeSetting("Quality", "Medium", "Low", "Medium", "High"));
-	/** Fraction of the screen resolution the sky is rendered at before it is upsampled. */
-	public final NumberSetting renderScale = add(new NumberSetting("Render scale", 0.5, 0.25, 1.0, 0.05).suffix("x"));
+	/** The sky lives in cached panoramas refreshed a few rows per frame (see SkyCache). */
+	public final BoolSetting cache = add(new BoolSetting("Sky cache", true));
+	/** Seconds one complete panorama refresh takes; shorter follows the animation more closely. */
+	public final NumberSetting cacheRefresh = add(new NumberSetting("Cache refresh", 0.25, 0.1, 1.0, 0.05).suffix("s").visibleIf(cache::on));
+	/** Without the cache: fraction of the screen resolution the sky is rendered at before it is upsampled. */
+	public final NumberSetting renderScale = add(new NumberSetting("Render scale", 0.5, 0.25, 1.0, 0.05).suffix("x").visibleIf(() -> !cache.on()));
 	public final BoolSetting clouds = add(new BoolSetting("Clouds", true));
 	public final NumberSetting coverage = add(new NumberSetting("Cloud coverage", 0.45, 0.0, 1.0, 0.01).visibleIf(clouds::on));
 	public final BoolSetting hideVanillaClouds = add(new BoolSetting("Hide vanilla clouds", true));

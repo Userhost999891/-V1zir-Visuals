@@ -96,6 +96,38 @@ public final class V1zirPipelines {
 		.withCull(false)
 		.build();
 
+	/** Builds rows of a sky cache panorama (render/sky/SkyCache). */
+	public static final RenderPipeline SKY_PANORAMA = RenderPipeline.builder()
+		.withLocation(V1zir.id("pipeline/sky_panorama"))
+		.withVertexShader(V1zir.id("core/fullscreen"))
+		.withFragmentShader(V1zir.id("core/sky_panorama"))
+		.withVertexFormat(VertexFormats.POSITION, VertexFormat.DrawMode.TRIANGLES)
+		.withUniform("SkyParams", UniformType.UNIFORM_BUFFER)
+		.withUniform("SkyCache", UniformType.UNIFORM_BUFFER)
+		.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+		.withDepthWrite(false)
+		.withoutBlend()
+		.withCull(false)
+		.build();
+
+	/** Draws the world sky from the cached panoramas. */
+	public static final RenderPipeline SKY_CACHED = RenderPipeline.builder()
+		.withLocation(V1zir.id("pipeline/sky_cached"))
+		.withVertexShader(V1zir.id("core/shader_sky"))
+		.withFragmentShader(V1zir.id("core/sky_cached"))
+		.withVertexFormat(VertexFormats.POSITION, VertexFormat.DrawMode.TRIANGLES)
+		.withUniform("SkyParams", UniformType.UNIFORM_BUFFER)
+		.withUniform("SkyCache", UniformType.UNIFORM_BUFFER)
+		.withSampler("Sampler0")
+		.withSampler("Sampler1")
+		.withSampler("Sampler2")
+		.withSampler("Sampler3")
+		.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+		.withDepthWrite(false)
+		.withoutBlend()
+		.withCull(false)
+		.build();
+
 	public static final RenderPipeline BLUR_DOWN = blurPipeline("blur_down");
 	public static final RenderPipeline BLUR_UP = blurPipeline("blur_up");
 
@@ -167,6 +199,8 @@ public final class V1zirPipelines {
 		RenderPipelines.register(MENU_BACKGROUND);
 		RenderPipelines.register(SKY);
 		RenderPipelines.register(SKY_UPSAMPLE);
+		RenderPipelines.register(SKY_PANORAMA);
+		RenderPipelines.register(SKY_CACHED);
 		RenderPipelines.register(BLUR_DOWN);
 		RenderPipelines.register(BLUR_UP);
 		RenderPipelines.register(WORLD_GLOW);

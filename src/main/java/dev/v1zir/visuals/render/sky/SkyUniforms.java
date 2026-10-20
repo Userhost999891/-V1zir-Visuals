@@ -43,6 +43,20 @@ public final class SkyUniforms {
 		public final Vector4f camera = new Vector4f();
 		public final Vector4f extra = new Vector4f(1, 1, 0, 0);
 
+		/** Copies every field of another instance. */
+		public Data set(Data other) {
+			invViewProj.set(other.invViewProj);
+			sunDir.set(other.sunDir);
+			moonDir.set(other.moonDir);
+			timing.set(other.timing);
+			colorA.set(other.colorA);
+			colorB.set(other.colorB);
+			settings.set(other.settings);
+			camera.set(other.camera);
+			extra.set(other.extra);
+			return this;
+		}
+
 		@Override
 		public void write(ByteBuffer buffer) {
 			Std140Builder.intoBuffer(buffer)

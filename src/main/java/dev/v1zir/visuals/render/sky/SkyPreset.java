@@ -37,6 +37,11 @@ public enum SkyPreset {
 		return fogColor;
 	}
 
+	/** Synthwave's grid scrolls too fast for the sky cache's refresh rate; it is cheap anyway. */
+	public boolean cacheable() {
+		return this != SYNTHWAVE;
+	}
+
 	public static String[] titles() {
 		SkyPreset[] values = values();
 		String[] titles = new String[values.length];
