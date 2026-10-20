@@ -104,6 +104,7 @@ public final class V1zirPipelines {
 		.withVertexFormat(VertexFormats.POSITION, VertexFormat.DrawMode.TRIANGLES)
 		.withUniform("SkyParams", UniformType.UNIFORM_BUFFER)
 		.withUniform("SkyCache", UniformType.UNIFORM_BUFFER)
+		.withSampler("Sampler0")
 		.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
 		.withDepthWrite(false)
 		.withoutBlend()

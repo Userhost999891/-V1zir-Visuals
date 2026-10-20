@@ -27,16 +27,21 @@ import java.util.OptionalInt;
  * frame, and the sky cannot shimmer while the camera turns because it lives in world directions.
  */
 public final class SkyCache {
-	/** Panorama sizes: about 0.07 degrees per texel above the horizon, where the detail is. */
-	private static final int UPPER = 1280;
+	/** Panorama sizes: about 0.06 degrees per texel above the horizon, where the detail is. */
+	private static final int UPPER = 1536;
 	private static final int LOWER = 512;
 	private static final long TEXELS = (long) UPPER * UPPER + (long) LOWER * LOWER;
 	private static final int UBO_SIZE = new Std140SizeCalculator().putVec4().get();
 	/**
-	 * At most this much of a build per frame: at low frame rates the refresh slows down instead of
-	 * each frame doing more work, so a slow frame never makes the next one slower.
+	 * At most this many texels per frame: at low frame rates the refresh slows down instead of each
+	 * frame doing more work, so a slow frame never makes the next one slower.
 	 */
-	private static final float MAX_STEP = 1f / 24f;
+	private static final float MAX_STEP = 110_000f / TEXELS;
+	/**
+	 * Weight of a new build against the previous one. Every build samples slightly different
+	 * sub-texel directions, so blending them supersamples the sky and averages raymarch noise away.
+	 */
+	private static final float ACCUMULATE = 0.35f;
 	/** A sun or moon jump larger than this (a /time set) rebuilds the cache at once. */
 	private static final float JUMP_COS = (float) Math.cos(Math.toRadians(2.0));
 
@@ -51,6 +56,10 @@ public final class SkyCache {
 	private static boolean valid;
 	private static boolean previousValid;
 	private static float progress;
+	private static int builds;
+	private static float jitterX;
+	private static float jitterY;
+	private static float buildWeight = 1f;
 	private static long lastNanos;
 	private static DynamicUniformStorage<CacheData> storage;
 
@@ -80,44 +89,68 @@ public final class SkyCache {
 			// Settings changed, time skipped or nothing is cached yet: build the current panorama
 			// in full right now and start the next one from here.
 			GpuBufferSlice snapshot = SkyUniforms.write(data);
-			buildRows(current, snapshot, 0f, 1f);
+			jitterX = 0f;
+			jitterY = 0f;
+			buildWeight = 1f;
+			buildRows(current, previous, snapshot, 0f, 1f);
 			System.arraycopy(signature, 0, built, 0, built.length);
-			building.set(data);
 			valid = true;
 			previousValid = false;
-			progress = 0f;
+			startBuild(data);
 		} else {
 			float from = progress;
 			progress = Math.min(1f, progress + Math.min(dt / Math.max(period, 0.05f), MAX_STEP));
-			if (progress > from) buildRows(next, SkyUniforms.write(building), from, progress);
+			if (progress > from) buildRows(next, current, SkyUniforms.write(building), from, progress);
 			if (progress >= 1f) {
 				int oldPrevious = previous;
 				previous = current;
 				current = next;
 				next = oldPrevious;
 				previousValid = true;
-				building.set(data);
-				progress = 0f;
+				startBuild(data);
 			}
 		}
 		composite(target, params, previousValid ? progress : 1f);
 	}
 
-	/** Renders the rows of the build that fall between two progress values. */
-	private static void buildRows(int slot, GpuBufferSlice snapshot, float from, float to) {
+	/**
+	 * Snapshots the parameters of the next build, which blends into the current panorama, and picks
+	 * its sub-texel jitter (Halton 2, 3).
+	 */
+	private static void startBuild(SkyUniforms.Data data) {
+		building.set(data);
+		progress = 0f;
+		builds++;
+		jitterX = halton(builds, 2) - 0.5f;
+		jitterY = halton(builds, 3) - 0.5f;
+		buildWeight = ACCUMULATE;
+	}
+
+	private static float halton(int index, int base) {
+		float result = 0f;
+		float f = 1f;
+		for (int i = index; i > 0; i /= base) {
+			f /= base;
+			result += f * (i % base);
+		}
+		return result;
+	}
+
+	/** Renders the rows of the build that fall between two progress values, blending into history. */
+	private static void buildRows(int slot, int historySlot, GpuBufferSlice snapshot, float from, float to) {
 		long t0 = (long) (from * TEXELS);
 		long t1 = to >= 1f ? TEXELS : (long) (to * TEXELS);
 		long upperTexels = (long) UPPER * UPPER;
 		int u0 = (int) Math.min(UPPER, t0 / UPPER);
 		int u1 = (int) Math.min(UPPER, t1 / UPPER);
-		if (u1 > u0) upper[slot].render(snapshot, 1f, u0, u1);
+		if (u1 > u0) upper[slot].render(upper[historySlot], snapshot, 1f, u0, u1);
 		int l0 = (int) Math.max(0, Math.min(LOWER, (t0 - upperTexels) / LOWER));
 		int l1 = (int) Math.max(0, Math.min(LOWER, (t1 - upperTexels) / LOWER));
-		if (l1 > l0) lower[slot].render(snapshot, -1f, l0, l1);
+		if (l1 > l0) lower[slot].render(lower[historySlot], snapshot, -1f, l0, l1);
 	}
 
 	private static void composite(GpuTextureView target, GpuBufferSlice params, float blend) {
-		GpuBufferSlice cache = storage.write(new CacheData(blend, 0f));
+		GpuBufferSlice cache = storage.write(new CacheData(blend, 0f, 0f, 0f));
 		GpuSampler sampler = RenderSystem.getSamplerCache().get(FilterMode.LINEAR);
 		Panorama prevUpper = previousValid ? upper[previous] : upper[current];
 		Panorama prevLower = previousValid ? lower[previous] : lower[current];
@@ -179,13 +212,14 @@ public final class SkyCache {
 			view = RenderSystem.getDevice().createTextureView(texture);
 		}
 
-		/** Runs the sky shader over rows [from, to) of this panorama. */
-		void render(GpuBufferSlice snapshot, float hemisphere, int from, int to) {
-			GpuBufferSlice cache = storage.write(new CacheData(1f, hemisphere));
+		/** Runs the sky shader over rows [from, to) of this panorama, blended into the history panorama. */
+		void render(Panorama history, GpuBufferSlice snapshot, float hemisphere, int from, int to) {
+			GpuBufferSlice cache = storage.write(new CacheData(buildWeight, hemisphere, jitterX, jitterY));
 			try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(() -> "V1zir sky cache build", view, OptionalInt.empty())) {
 				pass.setPipeline(V1zirPipelines.SKY_PANORAMA);
 				pass.setUniform("SkyParams", snapshot);
 				pass.setUniform("SkyCache", cache);
+				pass.bindTexture("Sampler0", history.view, RenderSystem.getSamplerCache().get(FilterMode.NEAREST));
 				pass.enableScissor(0, from, size, to - from);
 				pass.setVertexBuffer(0, Fullscreen.buffer());
 				pass.draw(0, 3);
@@ -193,10 +227,10 @@ public final class SkyCache {
 		}
 	}
 
-	private record CacheData(float blend, float hemisphere) implements DynamicUniformStorage.Uploadable {
+	private record CacheData(float weight, float hemisphere, float jitterX, float jitterY) implements DynamicUniformStorage.Uploadable {
 		@Override
 		public void write(ByteBuffer buffer) {
-			Std140Builder.intoBuffer(buffer).putVec4(blend, hemisphere, 0f, 0f);
+			Std140Builder.intoBuffer(buffer).putVec4(weight, hemisphere, jitterX, jitterY);
 		}
 
 		@Override

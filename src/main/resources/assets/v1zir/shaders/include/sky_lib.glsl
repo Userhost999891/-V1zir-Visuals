@@ -853,8 +853,10 @@ vec3 v1zirSky(vec3 rd, vec2 fragCoord) {
 	else if (preset == PRESET_CUSTOM) col = vSkyCustom(rd, t);
 	else col = vSkyRealistic(rd, t, quality);
 
-	// Triangular dither removes banding in the dark gradients.
+#ifndef V1ZIR_SKY_CACHE
+	// Triangular dither removes banding in the dark gradients (the cache's screen pass dithers itself).
 	float n = vHash12(fragCoord + Extra.w) + vHash12(fragCoord.yx + 13.7 + Extra.w) - 1.0;
 	col += n / 255.0;
+#endif
 	return clamp(col, 0.0, 1.0);
 }

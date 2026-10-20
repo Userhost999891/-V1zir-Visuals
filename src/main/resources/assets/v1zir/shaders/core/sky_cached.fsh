@@ -25,11 +25,11 @@ void main() {
 	vec4 current;
 	vec4 previous;
 	if (d.y >= 0.0) {
-		current = textureLod(Sampler0, uv, 0.0);
-		previous = textureLod(Sampler1, uv, 0.0);
+		current = vPanoBicubic(Sampler0, uv);
+		previous = vPanoBicubic(Sampler1, uv);
 	} else {
-		current = textureLod(Sampler2, uv, 0.0);
-		previous = textureLod(Sampler3, uv, 0.0);
+		current = vPanoBicubic(Sampler2, uv);
+		previous = vPanoBicubic(Sampler3, uv);
 	}
 	vec4 sky = mix(previous, current, CacheParams.x);
 	vec3 col = sky.rgb;
