@@ -15,13 +15,14 @@ import org.lwjgl.glfw.GLFW;
  * Third-person camera: passes through walls, keeps an adjustable distance that the scroll wheel
  * changes while a key is held, drops the hurt shake and glides between perspectives.
  * <p>
- * The glide is one spring on the camera distance: it grows from zero when leaving first person,
- * and when going back the camera keeps rendering in third person until it reaches the head.
+ * The glide is one spring on the camera distance: it starts just outside the head when leaving
+ * first person, and when going back the camera keeps rendering in third person until it reaches
+ * the head. Closer than that the view would be filled by the inside of the player's own head.
  */
 public final class CameraTweaksModule extends Module {
 	/** Distance vanilla asks for at scale 1; the setting is applied relative to it so entity scale still counts. */
 	private static final float VANILLA_DISTANCE = 4f;
-	private static final float IN_HEAD = 0.05f;
+	private static final float HEAD_CLEARANCE = 0.5f;
 
 	public final BoolSetting noClip = add(new BoolSetting("No clip", true));
 	public final NumberSetting distance = add(new NumberSetting("Distance", 4.0, 1.0, 20.0, 0.1).suffix("m"));
@@ -44,10 +45,11 @@ public final class CameraTweaksModule extends Module {
 		boolean third = !perspective.isFirstPerson();
 		if (third) front = perspective.isFrontView();
 		float target = third ? distance.f() : 0f;
-		if (smooth.on()) current.target(target);
-		else current.snap(target);
+		if (!smooth.on()) current.snap(target);
+		else if (third && current.target() == 0f && current.value() < HEAD_CLEARANCE) current.snap(HEAD_CLEARANCE);
+		current.target(target);
 		value = current.get();
-		gliding = !third && value > IN_HEAD;
+		gliding = !third && value > HEAD_CLEARANCE;
 	}
 
 	@Override

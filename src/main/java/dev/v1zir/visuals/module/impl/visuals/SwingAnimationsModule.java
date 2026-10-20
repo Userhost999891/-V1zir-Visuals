@@ -18,10 +18,13 @@ import org.joml.Quaternionf;
 /**
  * First-person swing styles. Vanilla's swing (swingArm and applySwingOffset) is skipped for held
  * items and the style is applied right before the item is drawn, where View Model applies its
- * offsets; vanilla's equip offset stays in place. Item size is View Model's Scale.
+ * offsets; vanilla's equip offset stays in place. Item size is View Model's Scale, so the two
+ * modules share one item transform instead of stacking two.
  * <p>
  * Every style is a translation followed by rotations inside the frame vanilla swings in (turned
  * 45 degrees about Y), so p = 0 and p = 1 are the resting pose and swings start and end cleanly.
+ * The sword block pose comes last, like 1.8 applied it after the swing, so hits swing the blocking
+ * sword ("block hitting").
  */
 public final class SwingAnimationsModule extends Module {
 	private static final float PI = (float) Math.PI;
@@ -129,21 +132,21 @@ public final class SwingAnimationsModule extends Module {
 				rotate(m, -25f * sq, 1f, 0f, 0f);
 			}
 			default -> {
-				// Exhibition: a diagonal wobble that dips into the block pose on every hit.
-				b = Math.max(b, sq);
+				// Exhibition: a diagonal wobble that dips part way into the block pose on every hit.
+				b = Math.max(b, 0.4f * sq);
 				rotate(m, 45f * s, 0f, 1f, 0f);
 				rotate(m, -20f * sq, sq / 2f, s, 4f * s);
 				rotate(m, -30f * sq, 1f, sq / 3f * s, 0f);
 			}
 		}
-		if (b > 0.001f) {
-			// The 1.8 sword block pose, expressed in the same frame.
-			m.translate(s * -0.2f * b, 0.08f * b, 0f);
-			rotate(m, 30f * b * s, 0f, 1f, 0f);
-			rotate(m, -80f * b, 1f, 0f, 0f);
-			rotate(m, 60f * b * s, 0f, 1f, 0f);
-		}
 		rotate(m, -45f * s, 0f, 1f, 0f);
+		if (b > 0.001f) {
+			// Vanilla's own pose for blocking with a non-shield item, faded in by b.
+			m.translate(s * -0.14142136f * b, 0.08f * b, 0.14142136f * b);
+			rotate(m, -102.25f * b, 1f, 0f, 0f);
+			rotate(m, 13.365f * b * s, 0f, 1f, 0f);
+			rotate(m, 78.05f * b * s, 0f, 0f, 1f);
+		}
 	}
 
 	/** Visual only: holding use with a sword shows the old block pose; nothing is sent or used. */

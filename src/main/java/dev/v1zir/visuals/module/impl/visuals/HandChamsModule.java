@@ -12,7 +12,11 @@ import dev.v1zir.visuals.util.Theme;
 /**
  * Tints the first-person arm and held items. Items are tinted through the vertex colour of their
  * quads while a first-person item is drawn (ItemRendererMixin), the arm through the model part tint
- * (PlayerEntityRendererMixin). Glow renders them at full brightness so they light up in the dark.
+ * (PlayerEntityRendererMixin). Both go through vanilla's own draw, so the cost is nothing extra.
+ * <p>
+ * Glow makes them emissive: full brightness, so they light up in the dark, and for the arm the
+ * emissive layer without shading, which reads as a soft self-lit glow. A real halo would need an
+ * extra full-screen blur pass for two small models, which is not worth the frame time.
  */
 public final class HandChamsModule extends Module {
 	/** Packed light of a fully lit vertex (block and sky light 15). */
@@ -82,6 +86,10 @@ public final class HandChamsModule extends Module {
 
 	public int handLight(int light) {
 		return glow.on() ? FULL_BRIGHT : light;
+	}
+
+	public boolean glowingHand() {
+		return tintsHand() && glow.on();
 	}
 
 	/** Tint colour with the opacity as alpha; glow lifts it towards white so it reads as lit. */

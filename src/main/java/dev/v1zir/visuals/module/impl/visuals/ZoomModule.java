@@ -26,7 +26,6 @@ public final class ZoomModule extends Module {
 	// The spring runs on ln(zoom), so doubling the zoom always takes the same time.
 	private final Anim level = new Anim(0f, 10f);
 	private boolean zooming;
-	private boolean zoomed;
 	private boolean savedSmoothCamera;
 	private float holdFactor = 4f;
 	private float divisor = 1f;
@@ -52,21 +51,12 @@ public final class ZoomModule extends Module {
 		float now = level.target(zooming ? (float) Math.log(holdFactor) : 0f).get();
 		divisor = (float) Math.exp(now);
 		progress = Anim.clamp01(now / (float) Math.log(holdFactor));
-		if (now > 0f) {
-			zoomed = true;
-		} else if (zoomed) {
-			// Back at normal FOV: rebuild the visible chunk list once, in case it was culled to the narrow view.
-			zoomed = false;
-			mc.worldRenderer.scheduleTerrainUpdate();
-		}
 	}
 
 	@Override
 	protected void onDisable() {
 		if (zooming) mc.options.smoothCameraEnabled = savedSmoothCamera;
-		if (zoomed && mc.worldRenderer != null) mc.worldRenderer.scheduleTerrainUpdate();
 		zooming = false;
-		zoomed = false;
 		level.snap(0f);
 		divisor = 1f;
 		progress = 0f;
@@ -74,6 +64,11 @@ public final class ZoomModule extends Module {
 
 	public float fov(float fov) {
 		return fov / divisor;
+	}
+
+	/** Undoes the zoom on a FOV that went through {@link #fov(float)} (used for culling). */
+	public float unzoomedFov(float fov) {
+		return fov * divisor;
 	}
 
 	/** Mouse turning slows down with the zoom so aiming feels the same at every zoom level. */
