@@ -39,6 +39,7 @@ public final class HandChamsModule extends Module {
 
 	public HandChamsModule() {
 		super("Hand Chams", "Tint your hand and held items", Category.VISUALS);
+		setSubCategory("Render");
 	}
 
 	/** Start of an item draw; only first-person items are tinted. */

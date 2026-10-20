@@ -27,6 +27,7 @@ public final class AspectRatioModule extends Module {
 
 	public AspectRatioModule() {
 		super("Aspect Ratio", "Stretched resolution look", Category.VISUALS);
+		setSubCategory("Camera");
 	}
 
 	/** True while the projection needs changing, including the glide back after disabling. */

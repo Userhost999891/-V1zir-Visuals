@@ -33,6 +33,7 @@ public final class FreeLookModule extends Module {
 
 	public FreeLookModule() {
 		super("Free Look", "Hold a key to look around yourself", Category.VISUALS);
+		setSubCategory("Camera");
 	}
 
 	/** Called once per frame before the camera is placed. */

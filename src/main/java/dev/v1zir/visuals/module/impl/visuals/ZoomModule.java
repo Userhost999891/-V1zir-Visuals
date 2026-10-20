@@ -33,6 +33,7 @@ public final class ZoomModule extends Module {
 
 	public ZoomModule() {
 		super("Zoom", "Hold a key to zoom smoothly", Category.VISUALS);
+		setSubCategory("Camera");
 	}
 
 	/** Called once per frame before the camera is placed. */

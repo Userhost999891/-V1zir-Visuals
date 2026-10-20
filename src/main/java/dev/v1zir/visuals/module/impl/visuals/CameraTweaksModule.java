@@ -37,6 +37,7 @@ public final class CameraTweaksModule extends Module {
 
 	public CameraTweaksModule() {
 		super("Camera Tweaks", "Third person camera options", Category.VISUALS);
+		setSubCategory("Camera");
 	}
 
 	/** Called once per frame before the camera is placed. */
