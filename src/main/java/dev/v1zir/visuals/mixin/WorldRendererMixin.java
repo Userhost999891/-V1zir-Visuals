@@ -2,6 +2,7 @@ package dev.v1zir.visuals.mixin;
 
 import com.llamalad7.mixinextras.sugar.Local;
 import dev.v1zir.visuals.module.impl.world.BlockHighlightModule;
+import dev.v1zir.visuals.module.impl.world.BreakEffectsModule;
 import dev.v1zir.visuals.render.sky.SkyRenderer;
 import dev.v1zir.visuals.render.world.WorldEffectRenderer;
 import net.minecraft.client.render.RenderTickCounter;
@@ -43,5 +44,10 @@ public abstract class WorldRendererMixin {
 	@Inject(method = "drawBlockOutline", at = @At("HEAD"), cancellable = true)
 	private void v1zir$blockOutline(CallbackInfo ci) {
 		if (BlockHighlightModule.replacesOutline()) ci.cancel();
+	}
+
+	@Inject(method = "renderBlockDamage", at = @At("HEAD"), cancellable = true)
+	private void v1zir$blockDamage(CallbackInfo ci) {
+		if (BreakEffectsModule.hidesCracks()) ci.cancel();
 	}
 }

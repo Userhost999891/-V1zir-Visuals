@@ -24,6 +24,7 @@ import dev.v1zir.visuals.module.impl.visuals.ShaderSkyModule;
 import dev.v1zir.visuals.module.impl.visuals.ViewModelModule;
 import dev.v1zir.visuals.module.impl.visuals.WorldParticlesModule;
 import dev.v1zir.visuals.module.impl.world.BlockHighlightModule;
+import dev.v1zir.visuals.module.impl.world.BreakEffectsModule;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -55,6 +56,7 @@ public final class ModuleManager {
 		// World
 		register(new WorldParticlesModule());
 		register(new BlockHighlightModule());
+		register(new BreakEffectsModule());
 		// HUD
 		register(new WatermarkModule());
 		register(new ArrayListModule());
