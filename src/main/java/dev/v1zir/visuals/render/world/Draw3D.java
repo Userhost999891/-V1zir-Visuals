@@ -67,6 +67,62 @@ public final class Draw3D {
 	}
 
 	/**
+	 * Box whose faces carry a glowing rounded border: a crisp line along the edges with a soft glow
+	 * inwards, both of constant screen size, so it reads like a rounded outline from any distance.
+	 * Colours run from bottom to top; faces may be up to 15 blocks across.
+	 */
+	public static void roundedBox(WorldEffectRenderer.Mesh mesh, double minX, double minY, double minZ,
+								  double maxX, double maxY, double maxZ, int bottom, int top) {
+		float hx = (float) (maxX - minX) * 0.5f;
+		float hy = (float) (maxY - minY) * 0.5f;
+		float hz = (float) (maxZ - minZ) * 0.5f;
+		// Each face packs its half size into UV0 next to the position (decoded in world_effect.fsh).
+		float qx = 16f * quantize(hx);
+		float qy = 16f * quantize(hy) + 8f;
+		float qz = 16f * quantize(hz);
+		float qzv = 16f * quantize(hz) + 8f;
+		box(mesh, minX, minY, minZ, maxX, maxY, maxZ, bottom, top,
+			qx - hx, qx + hx, -hz - qzv, hz - qzv,
+			qz - hz, qz + hz, -hy - qy, hy - qy,
+			qx - hx, qx + hx, -hy - qy, hy - qy);
+	}
+
+	/** Box of plain translucent faces (fills), coloured from bottom to top. */
+	public static void solidBox(WorldEffectRenderer.Mesh mesh, double minX, double minY, double minZ,
+								double maxX, double maxY, double maxZ, int bottom, int top) {
+		box(mesh, minX, minY, minZ, maxX, maxY, maxZ, bottom, top, 3f, 3f, 0f, 0f, 3f, 3f, 0f, 0f, 3f, 3f, 0f, 0f);
+	}
+
+	private static float quantize(float half) {
+		return Math.max(1, Math.min(480, Math.round(half * 64f)));
+	}
+
+	/** Six faces; the UV ranges are given per face orientation (horizontal: x/z, sides along z: z/y, sides along x: x/y). */
+	private static void box(WorldEffectRenderer.Mesh mesh, double x0, double y0, double z0, double x1, double y1, double z1, int bottom, int top,
+							float hu0, float hu1, float hv0, float hv1, float zu0, float zu1, float zv0, float zv1, float xu0, float xu1, float xv0, float xv1) {
+		for (int side = 0; side < 2; side++) {
+			double y = side == 0 ? y0 : y1;
+			int c = side == 0 ? bottom : top;
+			mesh.vertex(x0, y, z0, hu0, hv0, c);
+			mesh.vertex(x1, y, z0, hu1, hv0, c);
+			mesh.vertex(x1, y, z1, hu1, hv1, c);
+			mesh.vertex(x0, y, z1, hu0, hv1, c);
+
+			double x = side == 0 ? x0 : x1;
+			mesh.vertex(x, y0, z0, zu0, zv0, bottom);
+			mesh.vertex(x, y0, z1, zu1, zv0, bottom);
+			mesh.vertex(x, y1, z1, zu1, zv1, top);
+			mesh.vertex(x, y1, z0, zu0, zv1, top);
+
+			double z = side == 0 ? z0 : z1;
+			mesh.vertex(x0, y0, z, xu0, xv0, bottom);
+			mesh.vertex(x1, y0, z, xu1, xv0, bottom);
+			mesh.vertex(x1, y1, z, xu1, xv1, top);
+			mesh.vertex(x0, y1, z, xu0, xv1, top);
+		}
+	}
+
+	/**
 	 * 0 within {@code near} blocks of the camera, 1 from {@code far} on (smooth in between). Effects
 	 * fade out in front of the eyes, where their quads would otherwise fill the screen.
 	 */
