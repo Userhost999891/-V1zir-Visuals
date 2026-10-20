@@ -31,7 +31,7 @@ public final class DamageNumbersModule extends Module implements WorldEffect {
 	private static final int HEAL_COLOR = 0xFF5CFF8A;
 	private static final float GRAVITY = 5.5f;
 
-	public final BoolSetting healing = add(new BoolSetting("Healing", true));
+	public final BoolSetting healing = add(new BoolSetting("Healing", false));
 	public final BoolSetting self = add(new BoolSetting("Self", false));
 	public final BoolSetting hearts = add(new BoolSetting("Hearts", false));
 	public final NumberSetting size = add(new NumberSetting("Size", 1.0, 0.5, 2.5, 0.05).suffix("x"));
