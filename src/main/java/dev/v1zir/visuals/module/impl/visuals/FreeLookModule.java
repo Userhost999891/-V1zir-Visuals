@@ -3,6 +3,7 @@ package dev.v1zir.visuals.module.impl.visuals;
 import dev.v1zir.visuals.module.Category;
 import dev.v1zir.visuals.module.Module;
 import dev.v1zir.visuals.module.setting.KeySetting;
+import dev.v1zir.visuals.module.setting.NumberSetting;
 import dev.v1zir.visuals.util.Anim;
 import net.minecraft.client.option.Perspective;
 import net.minecraft.util.math.MathHelper;
@@ -20,6 +21,7 @@ public final class FreeLookModule extends Module {
 	private static final float MOUSE_TO_DEGREES = 0.15f;
 
 	public final KeySetting key = add(new KeySetting("Key", GLFW.GLFW_KEY_LEFT_ALT));
+	public final NumberSetting sensitivity = add(new NumberSetting("Sensitivity", 1.0, 0.2, 3.0, 0.05).suffix("x"));
 
 	private final Anim returnYaw = new Anim(0f, 9f);
 	private final Anim returnPitch = new Anim(0f, 9f);
@@ -59,8 +61,9 @@ public final class FreeLookModule extends Module {
 	public boolean turn(double cursorDeltaX, double cursorDeltaY) {
 		if (!active || !holding) return false;
 		float pitch = mc.player.getPitch();
-		yawOffset += (float) cursorDeltaX * MOUSE_TO_DEGREES;
-		pitchOffset = MathHelper.clamp(pitchOffset + (float) cursorDeltaY * MOUSE_TO_DEGREES, -90f - pitch, 90f - pitch);
+		float k = MOUSE_TO_DEGREES * sensitivity.f();
+		yawOffset += (float) cursorDeltaX * k;
+		pitchOffset = MathHelper.clamp(pitchOffset + (float) cursorDeltaY * k, -90f - pitch, 90f - pitch);
 		return true;
 	}
 

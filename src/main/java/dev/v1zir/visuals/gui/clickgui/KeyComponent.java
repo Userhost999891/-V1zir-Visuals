@@ -18,10 +18,11 @@ public final class KeyComponent extends SettingComponent<KeySetting> {
 	private static final String WAITING = "...";
 	private final Anim listen = new Anim(0f, 16f);
 	private boolean listening;
-	// Key name and width are cached so a frame does not rebuild the string.
+	// Key name and widths are cached so a frame does not rebuild the string or measure it.
 	private int shownKey = Integer.MIN_VALUE;
 	private String shownName = "";
 	private float shownWidth;
+	private float waitingWidth = -1f;
 
 	public KeyComponent(KeySetting setting) {
 		super(setting);
@@ -40,10 +41,11 @@ public final class KeyComponent extends SettingComponent<KeySetting> {
 			shownName = KeyNames.name(shownKey);
 			shownWidth = font.width(shownName, size);
 		}
+		if (waitingWidth < 0f) waitingWidth = font.width(WAITING, size);
 		boolean hover = Ui.inside(mouseX, mouseY, x, y, width, HEIGHT);
 		Render2D.textMiddle(ctx, Fonts.regular(), setting.name(), x, y + HEIGHT / 2f, Ui.SMALL + 0.5f, hover || listening ? Theme.text() : Theme.textDim());
 		String label = listening ? WAITING : shownName;
-		float cw = Math.max(18f, (listening ? font.width(WAITING, size) : shownWidth) + 8f);
+		float cw = Math.max(18f, (listening ? waitingWidth : shownWidth) + 8f);
 		float cx = x + width - cw;
 		float cy = y + (HEIGHT - CHIP_HEIGHT) / 2f;
 		float t = listen.target(listening ? 1f : 0f).get();
