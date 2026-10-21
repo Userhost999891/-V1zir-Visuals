@@ -8,6 +8,7 @@ import dev.v1zir.visuals.module.Module;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.client.ThemeModule;
 import dev.v1zir.visuals.module.impl.effects.CrosshairModule;
+import dev.v1zir.visuals.module.impl.effects.HitMarkerModule;
 import dev.v1zir.visuals.module.impl.hud.HudModule;
 import dev.v1zir.visuals.render.ui.Render2D;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
@@ -35,6 +36,8 @@ public final class HudRenderer {
 			CrosshairModule crosshair = ModuleManager.get(CrosshairModule.class);
 			if (crosshair != null && crosshair.isEnabled()) crosshair.render(ctx, tickCounter.getTickProgress(false));
 			else vanilla.render(ctx, tickCounter);
+			HitMarkerModule marker = ModuleManager.get(HitMarkerModule.class);
+			if (marker != null && marker.isEnabled()) marker.render(ctx);
 		});
 	}
 
@@ -62,6 +65,7 @@ public final class HudRenderer {
 				hud.setEnabled(false, false);
 			}
 		}
+		CameraIndicator.render(ctx, w, h);
 		Notifications.render(ctx, w, h);
 		Render2D.setAlpha(1f);
 	}
