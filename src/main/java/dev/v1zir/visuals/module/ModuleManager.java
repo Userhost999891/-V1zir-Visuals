@@ -26,10 +26,16 @@ import dev.v1zir.visuals.module.impl.hud.PotionsModule;
 import dev.v1zir.visuals.module.impl.hud.TargetHudModule;
 import dev.v1zir.visuals.module.impl.hud.WatermarkModule;
 import dev.v1zir.visuals.module.impl.visuals.AmbienceModule;
+import dev.v1zir.visuals.module.impl.visuals.AspectRatioModule;
+import dev.v1zir.visuals.module.impl.visuals.CameraTweaksModule;
+import dev.v1zir.visuals.module.impl.visuals.FreeLookModule;
 import dev.v1zir.visuals.module.impl.visuals.FullBrightModule;
+import dev.v1zir.visuals.module.impl.visuals.HandChamsModule;
 import dev.v1zir.visuals.module.impl.visuals.ShaderSkyModule;
+import dev.v1zir.visuals.module.impl.visuals.SwingAnimationsModule;
 import dev.v1zir.visuals.module.impl.visuals.ViewModelModule;
 import dev.v1zir.visuals.module.impl.visuals.WorldParticlesModule;
+import dev.v1zir.visuals.module.impl.visuals.ZoomModule;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -51,6 +57,12 @@ public final class ModuleManager {
 		register(new AmbienceModule());
 		register(new FullBrightModule());
 		register(new ViewModelModule());
+		register(new SwingAnimationsModule());
+		register(new HandChamsModule());
+		register(new ZoomModule());
+		register(new FreeLookModule());
+		register(new CameraTweaksModule());
+		register(new AspectRatioModule());
 		// Effects
 		register(new TargetEspModule());
 		register(new JumpCirclesModule());

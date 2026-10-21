@@ -65,6 +65,7 @@ public final class HudRenderer {
 				hud.setEnabled(false, false);
 			}
 		}
+		CameraIndicator.render(ctx, w, h);
 		Notifications.render(ctx, w, h);
 		Render2D.setAlpha(1f);
 	}
