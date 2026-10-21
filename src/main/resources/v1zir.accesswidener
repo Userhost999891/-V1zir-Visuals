@@ -7,3 +7,4 @@ accessible field net/minecraft/client/gui/DrawContext scissorStack Lnet/minecraf
 accessible field net/minecraft/client/network/ClientPlayerInteractionManager currentBreakingPos Lnet/minecraft/util/math/BlockPos;
 accessible field net/minecraft/client/network/ClientPlayerInteractionManager currentBreakingProgress F
 accessible field net/minecraft/client/render/WorldRenderer blockBreakingInfos Lit/unimi/dsi/fastutil/ints/Int2ObjectMap;
+accessible field net/minecraft/client/render/OverlayTexture texture Lnet/minecraft/client/texture/NativeImageBackedTexture;
