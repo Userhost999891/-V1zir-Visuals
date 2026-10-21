@@ -11,8 +11,10 @@ import dev.v1zir.visuals.module.impl.effects.HitParticlesModule;
 import dev.v1zir.visuals.module.impl.effects.JumpCirclesModule;
 import dev.v1zir.visuals.module.impl.effects.TargetEspModule;
 import dev.v1zir.visuals.module.impl.effects.TrailsModule;
+import dev.v1zir.visuals.module.impl.hud.ArmorModule;
 import dev.v1zir.visuals.module.impl.hud.ArrayListModule;
 import dev.v1zir.visuals.module.impl.hud.ClockModule;
+import dev.v1zir.visuals.module.impl.hud.CompassModule;
 import dev.v1zir.visuals.module.impl.hud.CoordinatesModule;
 import dev.v1zir.visuals.module.impl.hud.InventoryModule;
 import dev.v1zir.visuals.module.impl.hud.ItemCounterModule;
@@ -67,12 +69,14 @@ public final class ModuleManager {
 		register(new PotionsModule());
 		register(new TargetHudModule());
 		register(new CoordinatesModule());
+		register(new CompassModule());
 		register(new ClockModule());
 		register(new SpeedModule());
 		register(new ServerInfoModule());
 		register(new PerformanceModule());
 		register(new KeystrokesModule());
 		register(new InventoryModule());
+		register(new ArmorModule());
 		register(new ItemCounterModule());
 		register(new NotificationsModule());
 		// Client
