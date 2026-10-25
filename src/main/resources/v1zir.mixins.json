@@ -17,6 +17,9 @@
 		"HeldItemRendererMixin",
 		"InGameOverlayRendererMixin",
 		"InventoryScreenMixin",
+		"ItemEntityMixin",
+		"ItemEntityRendererMixin",
+		"ItemEntityRenderStateMixin",
 		"ItemRendererMixin",
 		"KeyboardMixin",
 		"LightmapTextureManagerMixin",
@@ -32,6 +35,7 @@
 		"SkyRenderingMixin",
 		"SliderWidgetMixin",
 		"TextFieldWidgetMixin",
+		"TextureTransformMixin",
 		"TooltipBackgroundRendererMixin",
 		"WorldRendererMixin"
 	],

@@ -39,12 +39,18 @@ import dev.v1zir.visuals.module.impl.visuals.AspectRatioModule;
 import dev.v1zir.visuals.module.impl.visuals.CameraTweaksModule;
 import dev.v1zir.visuals.module.impl.visuals.FreeLookModule;
 import dev.v1zir.visuals.module.impl.visuals.FullBrightModule;
+import dev.v1zir.visuals.module.impl.visuals.GlintColorModule;
 import dev.v1zir.visuals.module.impl.visuals.HandChamsModule;
 import dev.v1zir.visuals.module.impl.visuals.ShaderSkyModule;
 import dev.v1zir.visuals.module.impl.visuals.SwingAnimationsModule;
 import dev.v1zir.visuals.module.impl.visuals.ViewModelModule;
 import dev.v1zir.visuals.module.impl.visuals.WorldParticlesModule;
 import dev.v1zir.visuals.module.impl.visuals.ZoomModule;
+import dev.v1zir.visuals.module.impl.world.BlockHighlightModule;
+import dev.v1zir.visuals.module.impl.world.BreakEffectsModule;
+import dev.v1zir.visuals.module.impl.world.ItemPhysicsModule;
+import dev.v1zir.visuals.module.impl.world.SkyLanternsModule;
+import dev.v1zir.visuals.module.impl.world.TrajectoriesModule;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -68,6 +74,7 @@ public final class ModuleManager {
 		register(new ViewModelModule());
 		register(new SwingAnimationsModule());
 		register(new HandChamsModule());
+		register(new GlintColorModule());
 		register(new ZoomModule());
 		register(new FreeLookModule());
 		register(new CameraTweaksModule());
@@ -88,6 +95,11 @@ public final class ModuleManager {
 		register(new CrystalChamsModule());
 		// World
 		register(new WorldParticlesModule());
+		register(new BlockHighlightModule());
+		register(new BreakEffectsModule());
+		register(new TrajectoriesModule());
+		register(new ItemPhysicsModule());
+		register(new SkyLanternsModule());
 		// HUD
 		register(new WatermarkModule());
 		register(new ArrayListModule());
