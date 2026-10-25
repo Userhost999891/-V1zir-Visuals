@@ -264,7 +264,7 @@ public final class ClickGuiScreen extends Screen {
 			my = -1000;
 		}
 
-		Render2D.shadow(ctx, winX, winY + 8f, winW, winH, Ui.RADIUS, 30f, 0x9C000000);
+		Render2D.panelShadow(ctx, winX, winY + 8f, winW, winH, Ui.RADIUS, 30f, 0x9C000000, winX, winY, winW, winH);
 		Render2D.panel(ctx, winX, winY, winW, winH, Ui.RADIUS, 0, Ui.LIT);
 		topBar.render(ctx, winX, winY, winW, mx, my, search, searchFocused);
 		sidebar.render(ctx, winX + Ui.PAD, contentY, Sidebar.width(winW), contentH, tab, searching(), mx, my);

@@ -17,8 +17,8 @@ import java.util.List;
 /**
  * Renders GUI elements into an offscreen colour texture instead of the screen, with a GuiRenderer of its own
  * (GuiRendererMixin points that renderer at this framebuffer). The click GUI's open and close animations draw
- * its window here and then composite the texture. Nothing is allocated until the first capture, and nothing
- * runs while no animation asks for it.
+ * its window here and then composite the texture. Nothing is allocated until the first capture, nothing
+ * runs while no animation asks for it, and the framebuffer is freed a few seconds after the last capture.
  */
 public final class GuiCapture {
 	private static GuiRenderState state;
@@ -26,6 +26,8 @@ public final class GuiCapture {
 	private static SimpleFramebuffer target;
 	private static DrawContext context;
 	private static boolean rendering;
+	private static final long IDLE_NANOS = 5_000_000_000L;
+	private static long lastUse;
 
 	private GuiCapture() {
 	}
@@ -40,7 +42,16 @@ public final class GuiCapture {
 			context = new DrawContext(mc, state, mouseX, mouseY);
 		}
 		state.clear();
+		lastUse = System.nanoTime();
 		return context;
+	}
+
+	/** Once per frame: frees the full-window framebuffer (several MB) when no animation used it for a while. */
+	public static void flip() {
+		if (target != null && System.nanoTime() - lastUse > IDLE_NANOS) {
+			target.delete();
+			target = null;
+		}
 	}
 
 	/** Draws the captured elements into the texture; called once the frame's GUI is done (GuiRendererMixin). */
@@ -48,6 +59,7 @@ public final class GuiCapture {
 		Window window = MinecraftClient.getInstance().getWindow();
 		int width = Math.max(1, window.getFramebufferWidth());
 		int height = Math.max(1, window.getFramebufferHeight());
+		lastUse = System.nanoTime();
 		if (target == null) target = new SimpleFramebuffer("V1zir GUI capture", width, height, true);
 		else if (target.textureWidth != width || target.textureHeight != height) target.resize(width, height);
 		CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
@@ -80,6 +92,7 @@ public final class GuiCapture {
 
 	/** The captured image: premultiplied colour, transparent where nothing was drawn. */
 	public static GpuTextureView view() {
+		lastUse = System.nanoTime();
 		return target.getColorAttachmentView();
 	}
 }

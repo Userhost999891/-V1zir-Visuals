@@ -1,6 +1,8 @@
 package dev.v1zir.visuals.render.font;
 
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2FloatOpenHashMap;
+import it.unimi.dsi.fastutil.objects.Object2FloatOpenHashMap;
 import org.lwjgl.stb.STBTTFontinfo;
 import org.lwjgl.stb.STBTruetype;
 import org.lwjgl.system.MemoryUtil;
@@ -35,6 +37,9 @@ public final class SdfFont {
 	private final float lineGap;
 	private final int baseSize;
 	private final Int2ObjectOpenHashMap<Glyph> glyphs = new Int2ObjectOpenHashMap<>();
+	/** Kerning per glyph pair and width per string at the base size: both are asked for every frame. */
+	private final Long2FloatOpenHashMap kerning = new Long2FloatOpenHashMap();
+	private final Object2FloatOpenHashMap<String> widths = new Object2FloatOpenHashMap<>();
 	private final List<GlyphAtlas> pages = new ArrayList<>();
 	private SdfFont fallback;
 	private float capHeight = -1;
@@ -66,6 +71,8 @@ public final class SdfFont {
 		this.ascent = a[0] * scale;
 		this.descent = d[0] * scale;
 		this.lineGap = g[0] * scale;
+		kerning.defaultReturnValue(Float.NaN);
+		widths.defaultReturnValue(-1f);
 	}
 
 	public static SdfFont load(String name, String resourcePath) {
@@ -152,7 +159,13 @@ public final class SdfFont {
 	/** Kerning between two glyphs of this font, in base pixels. */
 	public float kerning(Glyph left, Glyph right) {
 		if (left == null || right == null || left.font() != this || right.font() != this) return 0;
-		return STBTruetype.stbtt_GetGlyphKernAdvance(info, left.index(), right.index()) * scale;
+		long key = (long) left.index() << 32 | right.index() & 0xFFFFFFFFL;
+		float kern = kerning.get(key);
+		if (Float.isNaN(kern)) {
+			kern = STBTruetype.stbtt_GetGlyphKernAdvance(info, left.index(), right.index()) * scale;
+			kerning.put(key, kern);
+		}
+		return kern;
 	}
 
 	/** Factor converting base pixels into the requested text size. */
@@ -188,18 +201,29 @@ public final class SdfFont {
 
 	public float width(String text, float size, float letterSpacing) {
 		if (text == null || text.isEmpty()) return 0;
+		float x = widths.getFloat(text);
+		if (x < 0f) {
+			x = measure(text);
+			// Changing texts (timers, coordinates) would grow the cache forever; start over now and then.
+			if (widths.size() >= 4096) widths.clear();
+			widths.put(text, x);
+		}
+		float spacing = letterSpacing != 0f ? Math.max(0, text.codePointCount(0, text.length()) - 1) * letterSpacing : 0f;
+		return x * k(size) + spacing;
+	}
+
+	/** Advance width of the text at the base size. */
+	private float measure(String text) {
 		float x = 0;
 		Glyph prev = null;
-		int count = 0;
 		for (int i = 0; i < text.length(); ) {
 			int cp = text.codePointAt(i);
 			i += Character.charCount(cp);
 			Glyph g = glyph(cp);
 			x += kerning(prev, g) + g.advance();
 			prev = g;
-			count++;
 		}
-		return x * k(size) + Math.max(0, count - 1) * letterSpacing;
+		return x;
 	}
 
 	/** Cuts the text so it fits into maxWidth, appending an ellipsis. */

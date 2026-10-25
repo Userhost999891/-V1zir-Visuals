@@ -64,7 +64,7 @@ public final class Notifications {
 			float x = screenWidth - 8f - w + (1f - in) * (w + 12f);
 			Render2D.setAlpha(Math.min(1f, out * 1.2f));
 			int accent = toast.positive ? Theme.accent() : 0xFFFF5C6C;
-			Render2D.shadow(ctx, x, y + 1f, w, h, 6f, 10f, 0x66000000);
+			Render2D.panelShadow(ctx, x, y + 1f, w, h, 6f, 10f, 0x66000000, x, y, w, h);
 			Render2D.panel(ctx, x, y, w, h, 6f);
 			Render2D.circle(ctx, x + 12f, y + h / 2f, 7f, ColorUtil.withAlpha(accent, 50));
 			Render2D.icon(ctx, toast.icon, x + 12f, y + h / 2f, 8f, accent);

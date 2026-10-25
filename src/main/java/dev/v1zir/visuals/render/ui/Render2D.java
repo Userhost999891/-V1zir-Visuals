@@ -16,8 +16,7 @@ import net.minecraft.client.texture.TextureSetup;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix3x2f;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Arrays;
 
 /**
  * Immediate-style 2D drawing API on top of vanilla's GUI render state.
@@ -42,6 +41,10 @@ public final class Render2D {
 
 	/** Global alpha multiplier, used for fade in/out animations of whole screens. */
 	private static float alpha = 1f;
+	private static Matrix3x2f lastPose = new Matrix3x2f();
+	/** Scratch glyph runs of the text being laid out (one per atlas page), reused for every string. */
+	private static Run[] runs = {new Run()};
+	private static int runCount;
 
 	private Render2D() {
 	}
@@ -60,8 +63,17 @@ public final class Render2D {
 
 	// ------------------------------------------------------------------ helpers
 
+	/**
+	 * The current transform as an immutable copy for the render state. Consecutive elements mostly share
+	 * one transform, so the copy is reused until the matrix changes (elements never modify it).
+	 */
 	private static Matrix3x2f pose(DrawContext ctx) {
-		return new Matrix3x2f(ctx.getMatrices());
+		Matrix3x2f m = ctx.getMatrices();
+		Matrix3x2f last = lastPose;
+		if (m.m00 != last.m00 || m.m01 != last.m01 || m.m10 != last.m10 || m.m11 != last.m11 || m.m20 != last.m20 || m.m21 != last.m21) {
+			lastPose = last = new Matrix3x2f(m);
+		}
+		return last;
 	}
 
 	@Nullable
@@ -84,6 +96,12 @@ public final class Render2D {
 	public static void shape(DrawContext ctx, RenderPipeline pipeline, TextureSetup texture, float x, float y, float w, float h,
 							 float radius, float softness, float thickness, int mode, int cornerMask,
 							 int tl, int tr, int br, int bl) {
+		shape(ctx, pipeline, texture, x, y, w, h, radius, softness, thickness, mode, cornerMask, tl, tr, br, bl, 0f, 0f, 0f, 0f);
+	}
+
+	private static void shape(DrawContext ctx, RenderPipeline pipeline, TextureSetup texture, float x, float y, float w, float h,
+							  float radius, float softness, float thickness, int mode, int cornerMask,
+							  int tl, int tr, int br, int bl, float hx0, float hy0, float hx1, float hy1) {
 		if (w <= 0 || h <= 0) return;
 		tl = a(tl);
 		tr = a(tr);
@@ -96,7 +114,7 @@ public final class Render2D {
 		ScreenRect bounds = bounds(x - pad, y - pad, w + pad * 2, h + pad * 2, pose, scissor);
 		if (bounds == null) return;
 		ctx.state.addSimpleElement(new ShapeElement(pipeline, texture, pose, scissor, bounds,
-			x, y, w, h, radius, softness, thickness, mode, cornerMask, tl, tr, br, bl));
+			x, y, w, h, radius, softness, thickness, mode, cornerMask, tl, tr, br, bl, hx0, hy0, hx1, hy1));
 	}
 
 	public static void rect(DrawContext ctx, float x, float y, float w, float h, int color) {
@@ -137,6 +155,25 @@ public final class Render2D {
 		shape(ctx, V1zirPipelines.SHAPE, TextureSetup.empty(), x, y, w, h, radius, softness, 0, ShapeElement.SHADOW, 0, color, color, color, color);
 	}
 
+	/**
+	 * Drop shadow of a panel(...) at (px, py, pw, ph) drawn on top of it with the same radius. While that panel is
+	 * opaque (no fade, Blur style or full opacity) the shadow's quads leave out the middle the panel hides.
+	 */
+	public static void panelShadow(DrawContext ctx, float x, float y, float w, float h, float radius, float softness, int color,
+								   float px, float py, float pw, float ph) {
+		Matrix3x2f m = ctx.getMatrices();
+		boolean opaque = alpha >= 1f && m.m01 == 0f && m.m10 == 0f
+			&& (Theme.style() == Theme.Style.BLUR ? BackdropBlur.available() : Theme.panelOpacity() >= 1f);
+		// Inside this inset a rounded rectangle of that radius covers every pixel, past its anti-aliased rim.
+		float inset = radius * 0.3f + 1f;
+		if (!opaque || pw <= inset * 2f || ph <= inset * 2f) {
+			shadow(ctx, x, y, w, h, radius, softness, color);
+			return;
+		}
+		shape(ctx, V1zirPipelines.SHAPE, TextureSetup.empty(), x, y, w, h, radius, softness, 0, ShapeElement.SHADOW, 0,
+			color, color, color, color, px + inset, py + inset, px + pw - inset, py + ph - inset);
+	}
+
 	public static void glow(DrawContext ctx, float x, float y, float w, float h, float radius, float softness, int c1, int c2) {
 		shape(ctx, V1zirPipelines.SHAPE, TextureSetup.empty(), x, y, w, h, radius, softness, 0, ShapeElement.SHADOW, 0, c1, c2, c2, c1);
 	}
@@ -164,11 +201,11 @@ public final class Render2D {
 			ScreenRect scissor = scissor(ctx);
 			ScreenRect bounds = bounds(x - 2, y - 2, w + 4, h + 4, pose, scissor);
 			if (bounds == null || alpha <= 0.01f) return;
-			BackdropBlur.request();
+			BackdropBlur.request(bounds);
 			// Vertex alpha is the tint strength, so the global fade travels in the (unused for fills)
 			// thickness channel: the blur itself fades in instead of popping in at the end of a fade.
 			ctx.state.addSimpleElement(new ShapeElement(V1zirPipelines.GLASS, BackdropBlur.textureSetup(), pose, scissor, bounds,
-				x, y, w, h, radius, 0, GLASS_FADE * alpha, flags, corners, tint, tint, tint, tint));
+				x, y, w, h, radius, 0, GLASS_FADE * alpha, flags, corners, tint, tint, tint, tint, 0f, 0f, 0f, 0f));
 		} else {
 			int fill = ColorUtil.withAlpha(tint, Math.max(ColorUtil.alpha(tint), 225));
 			shape(ctx, V1zirPipelines.SHAPE, TextureSetup.empty(), x, y, w, h, radius, 0, 0, flags, corners, fill, fill, fill, fill);
@@ -365,7 +402,7 @@ public final class Render2D {
 		Matrix3x2f pose = pose(ctx);
 		ScreenRect scissor = scissor(ctx);
 
-		List<Run> runs = new ArrayList<>(1);
+		runCount = 0;
 		Run current = null;
 		float penX = x;
 		SdfFont.Glyph prev = null;
@@ -390,14 +427,7 @@ public final class Render2D {
 					left = shade(style, left, x0);
 					right = shade(style, right, x1);
 				}
-				if (current == null || current.page != g.page()) {
-					current = null;
-					for (Run run : runs) if (run.page == g.page()) current = run;
-					if (current == null) {
-						current = new Run(g.page());
-						runs.add(current);
-					}
-				}
+				if (current == null || current.page != g.page()) current = run(g.page());
 				current.add(x0, y0, x1, y1, g.u0(), g.v0(), g.u1(), g.v1(), a(left), a(right));
 			}
 			penX += g.advance() * (g.font() == font ? k : g.font().k(size));
@@ -405,15 +435,28 @@ public final class Render2D {
 		}
 		int weight = Math.round(style.weight * 256f);
 		int softness = Math.round(style.softness * 256f);
-		for (Run run : runs) {
-			if (run.count == 0) continue;
+		for (int r = 0; r < runCount; r++) {
+			Run run = runs[r];
 			ScreenRect bounds = bounds(run.minX, run.minY, run.maxX - run.minX, run.maxY - run.minY, pose, scissor);
 			if (bounds == null) continue;
 			TextureSetup setup = AtlasTexture.prepare(run.page);
+			// The element keeps exact-size copies; the scratch run is reused by the next string.
 			ctx.state.addSimpleElement(new TextElement(V1zirPipelines.TEXT, setup, pose, scissor, bounds,
-				run.quads, run.colors, run.count, weight, softness));
+				Arrays.copyOf(run.quads, run.count * 8), Arrays.copyOf(run.colors, run.count * 2), run.count, weight, softness));
 		}
 		return penX - x;
+	}
+
+	/** The scratch run of this string for the atlas page, started on first use. */
+	private static Run run(GlyphAtlas page) {
+		for (int r = 0; r < runCount; r++) if (runs[r].page == page) return runs[r];
+		if (runCount == runs.length) {
+			runs = Arrays.copyOf(runs, runs.length * 2);
+			for (int r = runCount; r < runs.length; r++) runs[r] = new Run();
+		}
+		Run run = runs[runCount++];
+		run.start(page);
+		return run;
 	}
 
 	/** Applies the style's sweep and edge fade to a glyph edge colour at x. */
@@ -428,23 +471,28 @@ public final class Render2D {
 	}
 
 	private static final class Run {
-		final GlyphAtlas page;
-		float[] quads = new float[64];
-		int[] colors = new int[16];
+		GlyphAtlas page;
+		float[] quads = new float[256];
+		int[] colors = new int[64];
 		int count;
-		float minX = Float.MAX_VALUE;
-		float minY = Float.MAX_VALUE;
-		float maxX = -Float.MAX_VALUE;
-		float maxY = -Float.MAX_VALUE;
+		float minX;
+		float minY;
+		float maxX;
+		float maxY;
 
-		Run(GlyphAtlas page) {
+		void start(GlyphAtlas page) {
 			this.page = page;
+			count = 0;
+			minX = Float.MAX_VALUE;
+			minY = Float.MAX_VALUE;
+			maxX = -Float.MAX_VALUE;
+			maxY = -Float.MAX_VALUE;
 		}
 
 		void add(float x0, float y0, float x1, float y1, float u0, float v0, float u1, float v1, int left, int right) {
 			if ((count + 1) * 8 > quads.length) {
-				quads = java.util.Arrays.copyOf(quads, quads.length * 2);
-				colors = java.util.Arrays.copyOf(colors, colors.length * 2);
+				quads = Arrays.copyOf(quads, quads.length * 2);
+				colors = Arrays.copyOf(colors, colors.length * 2);
 			}
 			int q = count * 8;
 			quads[q] = x0;

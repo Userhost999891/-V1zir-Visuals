@@ -123,7 +123,7 @@ public abstract class HudModule extends Module {
 	}
 
 	protected static void panel(DrawContext ctx, float x, float y, float w, float h, float radius) {
-		shadow(ctx, x, y, w, h, radius);
+		Render2D.panelShadow(ctx, x, y + 1f, w, h, radius, 8f, 0x55000000, x, y, w, h);
 		Render2D.panel(ctx, x, y, w, h, radius);
 	}
 

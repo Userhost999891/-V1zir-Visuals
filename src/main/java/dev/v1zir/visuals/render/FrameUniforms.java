@@ -42,6 +42,7 @@ public final class FrameUniforms {
 		ColorGrade.flip();
 		WindowTransition.flip();
 		WorldEffectRenderer.flip();
+		GuiCapture.flip();
 	}
 
 	/** Lights LIT shapes around this point (GUI coordinates) for the current frame. */
