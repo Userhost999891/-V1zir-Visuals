@@ -159,9 +159,25 @@ public final class CustomUi {
 		well(ctx, x, y, w, h, 5f);
 	}
 
+	/**
+	 * Strings of recently drawn widget messages, by identity: widgets keep their Text between frames, and
+	 * flattening it again for every widget every frame is what vanilla's own buttons avoid too.
+	 */
+	private static final Text[] LABEL_KEYS = new Text[64];
+	private static final String[] LABEL_TEXTS = new String[64];
+
+	private static String string(Text message) {
+		int slot = System.identityHashCode(message) & (LABEL_KEYS.length - 1);
+		if (LABEL_KEYS[slot] != message) {
+			LABEL_KEYS[slot] = message;
+			LABEL_TEXTS[slot] = message.getString();
+		}
+		return LABEL_TEXTS[slot];
+	}
+
 	private static void label(DrawContext ctx, Text message, float cx, float cy, float maxWidth, int color) {
 		if (message == null) return;
-		String text = message.getString();
+		String text = string(message);
 		if (text.isEmpty()) return;
 		SdfFont font = Fonts.medium();
 		float size = 8f;

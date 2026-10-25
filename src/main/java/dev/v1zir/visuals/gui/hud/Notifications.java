@@ -13,7 +13,6 @@ import dev.v1zir.visuals.util.Theme;
 import net.minecraft.client.gui.DrawContext;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 
 /** Toasts in the bottom right corner (module toggles and other messages). */
@@ -44,16 +43,11 @@ public final class Notifications {
 		SdfFont titleFont = Fonts.semibold();
 		SdfFont textFont = Fonts.regular();
 		float y = screenHeight - 8f;
-		Iterator<Toast> it = TOASTS.iterator();
-		List<Toast> alive = new ArrayList<>();
-		while (it.hasNext()) {
-			Toast toast = it.next();
-			float age = (now - toast.created) / 1.0e9f;
-			if (age > DURATION + 0.4f) it.remove();
-			else alive.add(toast);
+		for (int i = TOASTS.size() - 1; i >= 0; i--) {
+			if ((now - TOASTS.get(i).created) / 1.0e9f > DURATION + 0.4f) TOASTS.remove(i);
 		}
-		for (int i = alive.size() - 1; i >= 0; i--) {
-			Toast toast = alive.get(i);
+		for (int i = TOASTS.size() - 1; i >= 0; i--) {
+			Toast toast = TOASTS.get(i);
 			float age = (now - toast.created) / 1.0e9f;
 			float in = Anim.easeOutBack(Anim.progress(age, 0f, 0.35f));
 			float out = 1f - Anim.easeInOutCubic(Anim.progress(age, DURATION, 0.35f));

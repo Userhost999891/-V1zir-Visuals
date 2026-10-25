@@ -33,8 +33,9 @@ public record ShapeElement(
 	/** Flag: the shape catches the soft light that follows the cursor (FrameUniforms.cursor). */
 	public static final int LIT = 16;
 
+	/** How far the quad reaches past the shape: a shadow fades out exactly at its softness, edges need room to anti-alias. */
 	public static float padding(int mode, float softness) {
-		return ((mode & 7) == SHADOW ? softness : 0f) + 2f;
+		return (mode & 7) == SHADOW ? Math.max(softness, 0.5f) + 0.25f : 2f;
 	}
 
 	@Override

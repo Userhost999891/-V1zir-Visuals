@@ -35,6 +35,10 @@ import java.util.Random;
  */
 public final class V1zirMainMenu extends Screen {
 	private static final int DANGER = 0xFFFF4D5E;
+	/** Title text styles, refilled every frame instead of allocated. */
+	private static final Render2D.TextStyle GLOW_STYLE = new Render2D.TextStyle();
+	private static final Render2D.TextStyle TITLE_STYLE = new Render2D.TextStyle();
+	private static final Render2D.TextStyle SUBTITLE_STYLE = Render2D.TextStyle.of(0xC8FFFFFF);
 	private static boolean playedIntro;
 
 	private final List<RoundButton> buttons = new ArrayList<>();
@@ -180,12 +184,11 @@ public final class V1zirMainMenu extends Screen {
 		int glowAlpha = Math.round(150f * (0.82f + 0.18f * (float) Math.sin(time * 1.3f)));
 
 		Render2D.setAlpha(titleT);
+		GLOW_STYLE.color = ColorUtil.withAlpha(accent, glowAlpha);
 		Render2D.textCentered(ctx, font, title, cx, y, size,
-			Render2D.TextStyle.of(ColorUtil.withAlpha(accent, glowAlpha)).gradient(ColorUtil.withAlpha(accent2, glowAlpha))
-				.soft(0.3f + 0.3f * (1f - titleT)).weight(0.16f).spacing(spacing));
+			GLOW_STYLE.gradient(ColorUtil.withAlpha(accent2, glowAlpha)).soft(0.3f + 0.3f * (1f - titleT)).weight(0.16f).spacing(spacing));
 		Render2D.textCentered(ctx, font, title, cx, y, size,
-			Render2D.TextStyle.of(0xFFFFFFFF).gradient(ColorUtil.lerp(0xFFFFFFFF, accent2, 0.45f)).weight(0.03f)
-				.soft(0.45f * (1f - titleT)).spacing(spacing).shadow(0x70000000));
+			TITLE_STYLE.gradient(ColorUtil.lerp(0xFFFFFFFF, accent2, 0.45f)).weight(0.03f).soft(0.45f * (1f - titleT)).spacing(spacing).shadow(0x70000000));
 
 		SdfFont small = Fonts.medium();
 		float subSize = Math.max(6f, size * 0.17f);
@@ -193,7 +196,7 @@ public final class V1zirMainMenu extends Screen {
 		if (subT > 0f) {
 			Render2D.setAlpha(subT);
 			Render2D.textCentered(ctx, small, "VISUALS  ·  MINECRAFT 1.21.11", cx, subY + (1f - subT) * 5f, subSize,
-				Render2D.TextStyle.of(0xC8FFFFFF).spacing(subSize * 0.38f));
+				SUBTITLE_STYLE.spacing(subSize * 0.38f));
 		}
 		if (lineT > 0f) {
 			float lineW = size * 2.2f * lineT;
