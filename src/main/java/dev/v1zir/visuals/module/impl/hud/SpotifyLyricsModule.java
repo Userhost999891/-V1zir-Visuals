@@ -325,6 +325,11 @@ public final class SpotifyLyricsModule extends HudModule implements WorldEffect 
 		} else if (current) {
 			fill = line.text.length();
 		}
+		if (current && focus > 0.5f) {
+			// A soft accent glow behind the sung line.
+			Render2D.shadow(ctx, tx - 4f, y0, line.widest() * textSize + 8f, line.rowCount() * rowH, 6f, 10f,
+				ColorUtil.withAlpha(accent, Math.round(26 * edge * (focus - 0.5f) * 2f)));
+		}
 		SdfFont font = Fonts.bold();
 		for (int r = 0; r < line.rowCount(); r++) {
 			if (current) {
@@ -332,11 +337,6 @@ public final class SpotifyLyricsModule extends HudModule implements WorldEffect 
 				lineStyle.sweep(ColorUtil.fade(0xFFFFFFFF, edge), sweep, 5f * scale);
 			}
 			Render2D.text(ctx, font, line.rows[r], tx, y0 + r * rowH, textSize, lineStyle);
-		}
-		if (current && focus > 0.5f) {
-			// A soft accent glow behind the sung line.
-			Render2D.shadow(ctx, tx - 4f, y0, line.widest() * textSize + 8f, line.rowCount() * rowH, 6f, 10f,
-				ColorUtil.withAlpha(accent, Math.round(26 * edge * (focus - 0.5f) * 2f)));
 		}
 	}
 
