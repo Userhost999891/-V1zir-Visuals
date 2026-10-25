@@ -154,12 +154,14 @@ final class SettingsPage {
 	/** A matte group box with the components flowing into two balanced columns; returns its bottom. */
 	private static float group(DrawContext ctx, List<SettingComponent<?>> components, float x, float y, float w, float viewY, float viewH,
 							   double mx, double my) {
+		// Components alternate between the columns, so one that unfolds (a colour picker) never moves the others across.
 		float colW = (w - GROUP_PAD * 3f) / 2f;
 		float left = 0f;
 		float right = 0f;
+		int index = 0;
 		for (SettingComponent<?> c : components) {
 			if (!c.visible()) continue;
-			if (left <= right) left += c.height() + 4f;
+			if (index++ % 2 == 0) left += c.height() + 4f;
 			else right += c.height() + 4f;
 		}
 		float h = Math.max(left, right) - 4f + GROUP_PAD * 2f;
@@ -169,9 +171,10 @@ final class SettingsPage {
 		Render2D.rim(ctx, x, y, w, h, 7f, ColorUtil.withAlpha(0xFFFFFF, 18), Ui.LIT);
 		float ly = y + GROUP_PAD;
 		float ry = y + GROUP_PAD;
+		index = 0;
 		for (SettingComponent<?> c : components) {
 			if (!c.visible()) continue;
-			boolean toLeft = ly - y <= ry - y;
+			boolean toLeft = index++ % 2 == 0;
 			float cy = toLeft ? ly : ry;
 			Render2D.setAlpha(alpha * Ui.edgeFade(cy, cy + Math.min(c.height(), 22f), viewY, viewY + viewH));
 			float used = c.render(ctx, toLeft ? x + GROUP_PAD : x + GROUP_PAD * 2f + colW, cy, colW, mx, my) + 4f;

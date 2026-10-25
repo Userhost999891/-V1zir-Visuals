@@ -74,9 +74,12 @@ public final class ColorComponent extends SettingComponent<ColorSetting> {
 		Render2D.outline(ctx, sx, sy, SWATCH_W, SWATCH_H, SWATCH_H / 2f, 1f, ColorUtil.withAlpha(0xFFFFFF, Math.round(50 + 60 * h)));
 		if (t <= 0.01f) return ROW;
 
-		float py = y + ROW + 2f;
-		float alphaBackup = Render2D.alpha();
-		Render2D.setAlpha(alphaBackup * t);
+		// The picker unfolds: its area grows with t and is clipped to it, while the content slides down into
+		// place. It is drawn opaque (no fade), so the layered gradients and the hue bar joints stay clean.
+		float top = y + ROW + 2f;
+		float shown = pickerHeight() * t;
+		ctx.enableScissor((int) Math.floor(x - 4f), (int) Math.floor(top - 4f), (int) Math.ceil(x + width + 4f), (int) Math.ceil(top + shown));
+		float py = top - (1f - t) * 12f;
 		// Saturation / value square: white -> hue horizontally, transparent -> black vertically.
 		int hueColor = ColorUtil.fromHsv(hue, 1f, 1f, 255);
 		Render2D.round(ctx, x, py, width, SQUARE, 5f, 0xFFFFFFFF, hueColor, hueColor, 0xFFFFFFFF);
@@ -122,8 +125,8 @@ public final class ColorComponent extends SettingComponent<ColorSetting> {
 		}
 		float hw = hexWidth.width(font, hex, Ui.SMALL);
 		Render2D.textMiddle(ctx, font, hex, x + width - hw, next + CHIP / 2f, Ui.SMALL, Theme.textFaint());
-		Render2D.setAlpha(alphaBackup);
-		return ROW + 2f + pickerHeight() * t;
+		ctx.disableScissor();
+		return ROW + 2f + shown;
 	}
 
 	/** Picker handle: white ring with a dark rim so it reads on light and dark colours alike. */
@@ -164,7 +167,8 @@ public final class ColorComponent extends SettingComponent<ColorSetting> {
 			syncFromSetting();
 			return true;
 		}
-		if (!expanded || button != GLFW.GLFW_MOUSE_BUTTON_LEFT) return false;
+		// The picker only takes clicks once it has unfolded (its parts are still moving before that).
+		if (!expanded || button != GLFW.GLFW_MOUSE_BUTTON_LEFT || open.value() < 0.9f) return false;
 		float py = y + ROW + 2f;
 		float by = py + SQUARE + 6f;
 		float ay = by + BAR + 6f;
