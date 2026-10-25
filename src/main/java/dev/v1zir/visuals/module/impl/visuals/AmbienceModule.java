@@ -12,6 +12,9 @@ public final class AmbienceModule extends Module {
 	public final BoolSetting clearWeather = add(new BoolSetting("Clear weather", true));
 
 	private long serverTime = -1;
+	/** The suffix text, built only when the time changes (the module list asks for it every frame). */
+	private int suffixTime = -1;
+	private String suffix;
 
 	public AmbienceModule() {
 		super("Ambience", "Changes time of day and weather on your side only", Category.SHADERS);
@@ -20,7 +23,12 @@ public final class AmbienceModule extends Module {
 
 	@Override
 	public String suffix() {
-		return customTime.on() ? String.valueOf(time.i()) : null;
+		if (!customTime.on()) return null;
+		if (time.i() != suffixTime) {
+			suffixTime = time.i();
+			suffix = Integer.toString(suffixTime);
+		}
+		return suffix;
 	}
 
 	/** Remembers the real time so it can be restored. Returns true to drop the packet. */

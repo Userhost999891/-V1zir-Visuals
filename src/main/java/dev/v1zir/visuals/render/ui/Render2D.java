@@ -6,6 +6,7 @@ import dev.v1zir.visuals.render.V1zirPipelines;
 import dev.v1zir.visuals.render.font.AtlasTexture;
 import dev.v1zir.visuals.render.font.Fonts;
 import dev.v1zir.visuals.render.font.GlyphAtlas;
+import dev.v1zir.visuals.render.font.Icons;
 import dev.v1zir.visuals.render.font.SdfFont;
 import dev.v1zir.visuals.util.ColorUtil;
 import dev.v1zir.visuals.util.Theme;
@@ -354,8 +355,7 @@ public final class Render2D {
 		// Centre the visible bitmap (minus the SDF padding) instead of the advance box.
 		float gx = (glyph.x0() + glyph.x1()) * 0.5f * k;
 		float gy = (glyph.y0() + glyph.y1()) * 0.5f * k;
-		String s = new String(Character.toChars(codepoint));
-		emitText(ctx, font, s, cx - gx, cy - gy - font.ascent(size), size, style);
+		emitText(ctx, font, Icons.str(codepoint), cx - gx, cy - gy - font.ascent(size), size, style);
 	}
 
 	private static float emitText(DrawContext ctx, SdfFont font, String text, float x, float y, float size, TextStyle style) {

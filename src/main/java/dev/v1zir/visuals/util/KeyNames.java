@@ -1,5 +1,6 @@
 package dev.v1zir.visuals.util;
 
+import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.Locale;
@@ -8,8 +9,17 @@ public final class KeyNames {
 	private KeyNames() {
 	}
 
+	/** Names are built once per key: HUD elements ask for them every frame. */
+	private static final Int2ObjectOpenHashMap<String> CACHE = new Int2ObjectOpenHashMap<>();
+
 	public static String name(int key) {
 		if (key == GLFW.GLFW_KEY_UNKNOWN || key < 0) return "None";
+		String name = CACHE.get(key);
+		if (name == null) CACHE.put(key, name = build(key));
+		return name;
+	}
+
+	private static String build(int key) {
 		return switch (key) {
 			case GLFW.GLFW_KEY_RIGHT_SHIFT -> "RShift";
 			case GLFW.GLFW_KEY_LEFT_SHIFT -> "LShift";

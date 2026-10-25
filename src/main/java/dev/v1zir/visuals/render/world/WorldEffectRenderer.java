@@ -45,6 +45,7 @@ public final class WorldEffectRenderer {
 	/** World-space camera right and up vectors, for billboards. */
 	public static final Vector3f RIGHT = new Vector3f();
 	public static final Vector3f UP = new Vector3f();
+	private static final WorldData DATA = new WorldData();
 
 	private WorldEffectRenderer() {
 	}
@@ -70,9 +71,10 @@ public final class WorldEffectRenderer {
 	public static void render(float tickDelta) {
 		MinecraftClient mc = V1zir.mc();
 		if (mc.world == null || mc.player == null) return;
+		Module[] effects = ModuleManager.worldEffects();
 		boolean any = false;
-		for (Module module : ModuleManager.all()) {
-			if (module instanceof WorldEffect && module.isEnabled()) {
+		for (Module module : effects) {
+			if (module.isEnabled()) {
 				any = true;
 				break;
 			}
@@ -89,10 +91,10 @@ public final class WorldEffectRenderer {
 		GLOW.reset();
 		TRANSLUCENT.reset();
 		WorldText.begin();
-		for (Module module : ModuleManager.all()) {
-			if (module instanceof WorldEffect effect && module.isEnabled()) {
+		for (Module module : effects) {
+			if (module.isEnabled()) {
 				try {
-					effect.render3D(tickDelta);
+					((WorldEffect) module).render3D(tickDelta);
 				} catch (RuntimeException e) {
 					V1zir.LOGGER.error("Effect {} failed", module.name(), e);
 					module.setEnabled(false, false);
@@ -102,7 +104,8 @@ public final class WorldEffectRenderer {
 		if (GLOW.quads == 0 && TRANSLUCENT.quads == 0 && WorldText.isEmpty()) return;
 
 		if (storage == null) storage = new DynamicUniformStorage<>("V1zir world effects UBO", UBO_SIZE, 4);
-		GpuBufferSlice params = storage.write(new WorldData(PROJECTION, VIEW, V1zir.time()));
+		DATA.time = V1zir.time();
+		GpuBufferSlice params = storage.write(DATA);
 		draw(V1zirPipelines.WORLD_TRANSLUCENT, TRANSLUCENT, params);
 		draw(V1zirPipelines.WORLD_GLOW, GLOW, params);
 		WorldText.flush(params);
@@ -118,9 +121,10 @@ public final class WorldEffectRenderer {
 
 	private static void draw(RenderPipeline pipeline, Mesh mesh, GpuBufferSlice params) {
 		if (mesh.quads == 0) return;
-		ByteBuffer data = mesh.buffer.duplicate();
+		ByteBuffer data = mesh.buffer;
 		data.position(0).limit(mesh.quads * 4 * Mesh.STRIDE);
 		GpuBuffer vertices = pipeline.getVertexFormat().uploadImmediateVertexBuffer(data);
+		data.clear();
 		var indices = RenderSystem.getSequentialBuffer(VertexFormat.DrawMode.QUADS);
 		int indexCount = mesh.quads * 6;
 		GpuBuffer indexBuffer = indices.getIndexBuffer(indexCount);
@@ -184,10 +188,13 @@ public final class WorldEffectRenderer {
 		}
 	}
 
-	private record WorldData(Matrix4f projection, Matrix4f view, float time) implements DynamicUniformStorage.Uploadable {
+	/** One reused block: write() copies it into the buffer right away, so nothing is allocated per frame. */
+	private static final class WorldData implements DynamicUniformStorage.Uploadable {
+		float time;
+
 		@Override
 		public void write(ByteBuffer buffer) {
-			Std140Builder.intoBuffer(buffer).putMat4f(projection).putMat4f(view).putVec4(time, 0f, 0f, 0f);
+			Std140Builder.intoBuffer(buffer).putMat4f(PROJECTION).putMat4f(VIEW).putVec4(time, 0f, 0f, 0f);
 		}
 
 		@Override

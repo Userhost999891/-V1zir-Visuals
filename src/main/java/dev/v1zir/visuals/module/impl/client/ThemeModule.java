@@ -20,6 +20,7 @@ public final class ThemeModule extends Module {
 	public final NumberSetting blurStrength = add(new NumberSetting("Blur strength", 0.6, 0.0, 1.0, 0.05).visibleIf(() -> !style.is(Theme.Style.NORMAL.title())));
 	public final ModeSetting font = add(new ModeSetting("Font", "Inter", "Inter", "Montserrat", "Rubik", "Nunito", "Comfortaa"));
 	public final BoolSetting textShadow = add(new BoolSetting("Text shadow", true));
+	private String appliedFont;
 
 	public ThemeModule() {
 		super("Theme", "Colours, glass and font of the interface", Category.SETTINGS);
@@ -40,8 +41,11 @@ public final class ThemeModule extends Module {
 		return false;
 	}
 
-	/** Applies settings that need side effects (the font family). Called every frame by the GUI. */
+	/** Applies settings that need side effects (the font family). Called every frame by the GUI, so it only resolves a change. */
 	public void apply() {
-		Fonts.setFamily(Fonts.Family.byTitle(font.get()));
+		String family = font.get();
+		if (family == appliedFont) return;
+		appliedFont = family;
+		Fonts.setFamily(Fonts.Family.byTitle(family));
 	}
 }

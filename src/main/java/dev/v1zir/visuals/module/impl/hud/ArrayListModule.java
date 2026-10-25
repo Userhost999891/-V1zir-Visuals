@@ -13,9 +13,8 @@ import net.minecraft.client.gui.DrawContext;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.Objects;
 
 /** Enabled modules, sorted by width, sliding in and out. */
 public final class ArrayListModule extends HudModule {
@@ -23,7 +22,11 @@ public final class ArrayListModule extends HudModule {
 	public final BoolSetting background = add(new BoolSetting("Background", true));
 	public final BoolSetting bar = add(new BoolSetting("Accent bar", true));
 
-	private final Map<Module, Anim> animations = new HashMap<>();
+	private static final Comparator<Row> WIDEST_FIRST = (a, b) -> Float.compare(b.width, a.width);
+
+	/** One row per listable module, built once; shown holds the visible ones in drawing order. */
+	private Row[] rows;
+	private final List<Row> shown = new ArrayList<>();
 
 	public ArrayListModule() {
 		super("Array List", "Lists enabled modules", 0.995f, 0.012f);
@@ -40,27 +43,37 @@ public final class ArrayListModule extends HudModule {
 		SdfFont font = Fonts.medium();
 		float size = 7.5f;
 		float rowH = 12.5f;
-		List<Module> shown = new ArrayList<>();
-		for (Module module : ModuleManager.all()) {
-			if (!module.showInList()) continue;
-			Anim anim = animations.computeIfAbsent(module, m -> new Anim(0f, 12f));
-			anim.target(module.isEnabled() ? 1f : 0f);
-			if (anim.get() > 0.01f) shown.add(module);
+		if (rows == null) {
+			List<Row> list = new ArrayList<>();
+			for (Module module : ModuleManager.all()) if (module.showInList()) list.add(new Row(module));
+			rows = list.toArray(new Row[0]);
 		}
-		shown.sort(Comparator.comparingDouble((Module m) -> -label(m, font, size)));
+		boolean withSuffix = suffixes.on();
+		shown.clear();
+		for (Row row : rows) {
+			row.anim.target(row.module.isEnabled() ? 1f : 0f);
+			if (row.anim.get() > 0.01f) {
+				row.measure(font, size, withSuffix);
+				shown.add(row);
+			}
+		}
+		shown.sort(WIDEST_FIRST);
 		float maxW = 40f;
-		for (Module m : shown) maxW = Math.max(maxW, label(m, font, size) + 12f);
-		width = maxW;
 		float total = 0f;
-		for (Module m : shown) total += rowH * animations.get(m).value();
+		for (int i = 0; i < shown.size(); i++) {
+			Row row = shown.get(i);
+			maxW = Math.max(maxW, row.width + 12f);
+			total += rowH * row.anim.value();
+		}
+		width = maxW;
 		height = Math.max(rowH, total);
 
 		boolean right = anchoredRight();
 		float cy = y;
-		int index = 0;
-		for (Module module : shown) {
-			float t = animations.get(module).value();
-			float w = label(module, font, size) + 12f;
+		for (int index = 0; index < shown.size(); index++) {
+			Row row = shown.get(index);
+			float t = row.anim.value();
+			float w = row.width + 12f;
 			float rx = right ? x + width - w : x;
 			float slide = (1f - t) * (w + 10f) * (right ? 1f : -1f);
 			Render2D.setAlpha(t);
@@ -74,17 +87,33 @@ public final class ArrayListModule extends HudModule {
 				Render2D.rect(ctx, bx + slide, cy, 1.5f, rowH * t, accent);
 			}
 			float tx = rx + slide + (right ? 5f : 6.5f);
-			float advance = Render2D.textMiddle(ctx, font, module.name(), tx, cy + rowH * t / 2f, size, ColorUtil.lerp(Theme.text(), accent, 0.25f));
-			String suffix = suffixes.on() ? module.suffix() : null;
-			if (suffix != null) Render2D.textMiddle(ctx, font, suffix, tx + advance + 4f, cy + rowH * t / 2f, size, Theme.textDim());
+			float advance = Render2D.textMiddle(ctx, font, row.module.name(), tx, cy + rowH * t / 2f, size, ColorUtil.lerp(Theme.text(), accent, 0.25f));
+			if (row.suffix != null) Render2D.textMiddle(ctx, font, row.suffix, tx + advance + 4f, cy + rowH * t / 2f, size, Theme.textDim());
 			Render2D.setAlpha(1f);
 			cy += rowH * t;
-			index++;
 		}
 	}
 
-	private float label(Module module, SdfFont font, float size) {
-		String suffix = suffixes.on() ? module.suffix() : null;
-		return font.width(module.name(), size) + (suffix != null ? font.width(suffix, size) + 4f : 0f);
+	/** A listed module with its slide animation and label width, measured again only when its suffix or the font changes. */
+	private static final class Row {
+		final Module module;
+		final Anim anim = new Anim(0f, 12f);
+		String suffix;
+		float width = -1f;
+		private SdfFont font;
+		private float size;
+
+		Row(Module module) {
+			this.module = module;
+		}
+
+		void measure(SdfFont font, float size, boolean withSuffix) {
+			String current = withSuffix ? module.suffix() : null;
+			if (width >= 0f && font == this.font && size == this.size && Objects.equals(current, suffix)) return;
+			this.font = font;
+			this.size = size;
+			suffix = current;
+			width = font.width(module.name(), size) + (current != null ? font.width(current, size) + 4f : 0f);
+		}
 	}
 }

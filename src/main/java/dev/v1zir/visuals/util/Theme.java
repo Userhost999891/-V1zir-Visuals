@@ -86,21 +86,41 @@ public final class Theme {
 		}
 	}
 
+	/** Resolved once per settings change: every widget asks for these several times a frame. */
+	private static ThemeModule module;
+	private static String styleTitle;
+	private static Style style = Style.BLUR;
+	private static String presetTitle;
+	private static Preset preset = Preset.V1ZIR;
+
 	private Theme() {
 	}
 
 	public static Style style() {
 		ThemeModule m = module();
-		return m == null ? Style.BLUR : Style.byTitle(m.style.get());
+		if (m == null) return Style.BLUR;
+		String title = m.style.get();
+		if (title != styleTitle) {
+			styleTitle = title;
+			style = Style.byTitle(title);
+		}
+		return style;
 	}
 
 	private static ThemeModule module() {
-		return ModuleManager.get(ThemeModule.class);
+		if (module == null) module = ModuleManager.get(ThemeModule.class);
+		return module;
 	}
 
 	public static Preset preset() {
 		ThemeModule m = module();
-		return m == null ? Preset.V1ZIR : Preset.byTitle(m.preset.get());
+		if (m == null) return Preset.V1ZIR;
+		String title = m.preset.get();
+		if (title != presetTitle) {
+			presetTitle = title;
+			preset = Preset.byTitle(title);
+		}
+		return preset;
 	}
 
 	public static int accent() {

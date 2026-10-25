@@ -37,6 +37,7 @@ final class Sidebar {
 	private final int[] counts = new int[TABS.length];
 	private final String[] countText = new String[TABS.length];
 	private final int[] enabled = new int[TABS.length];
+	private int countedFor = -1;
 	/** Player name cut to the footer width, rebuilt only when it changes. */
 	private String shownName = "";
 	private String trimmedName = "";
@@ -111,8 +112,10 @@ final class Sidebar {
 		renderFooter(ctx, x, y + h - FOOTER, w);
 	}
 
-	/** Counts enabled (toggleable) modules per tab in one pass over the module list. */
+	/** Counts enabled (toggleable) modules per tab in one pass over the module list, only after a module was toggled. */
 	private void countEnabled() {
+		if (countedFor == ModuleManager.version()) return;
+		countedFor = ModuleManager.version();
 		Arrays.fill(enabled, 0);
 		List<Module> modules = ModuleManager.all();
 		for (int i = 0; i < modules.size(); i++) {

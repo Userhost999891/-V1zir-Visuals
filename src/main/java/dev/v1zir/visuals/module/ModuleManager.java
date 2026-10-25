@@ -23,6 +23,7 @@ import dev.v1zir.visuals.module.impl.hud.ArrayListModule;
 import dev.v1zir.visuals.module.impl.hud.ClockModule;
 import dev.v1zir.visuals.module.impl.hud.CompassModule;
 import dev.v1zir.visuals.module.impl.hud.CoordinatesModule;
+import dev.v1zir.visuals.module.impl.hud.HudModule;
 import dev.v1zir.visuals.module.impl.hud.InventoryModule;
 import dev.v1zir.visuals.module.impl.hud.ItemCounterModule;
 import dev.v1zir.visuals.module.impl.hud.KeybindsModule;
@@ -58,6 +59,7 @@ import dev.v1zir.visuals.module.impl.world.BreakEffectsModule;
 import dev.v1zir.visuals.module.impl.world.ItemPhysicsModule;
 import dev.v1zir.visuals.module.impl.world.SkyLanternsModule;
 import dev.v1zir.visuals.module.impl.world.TrajectoriesModule;
+import dev.v1zir.visuals.render.world.WorldEffect;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -65,9 +67,17 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Every module, registered once at startup. Per-frame callers use the cached arrays (hud(),
+ * worldEffects()) and version() instead of filtering the whole list every frame.
+ */
 public final class ModuleManager {
 	private static final Map<Class<? extends Module>, Module> BY_CLASS = new LinkedHashMap<>();
 	private static final List<Module> MODULES = new ArrayList<>();
+	private static final List<Module> ALL = Collections.unmodifiableList(MODULES);
+	private static HudModule[] hud = new HudModule[0];
+	private static Module[] worldEffects = new Module[0];
+	private static int version;
 
 	private ModuleManager() {
 	}
@@ -137,6 +147,14 @@ public final class ModuleManager {
 		register(new ThemeModule());
 		register(new MainMenuModule());
 		register(new CustomUiModule());
+		List<HudModule> hudModules = new ArrayList<>();
+		List<Module> effects = new ArrayList<>();
+		for (Module module : MODULES) {
+			if (module instanceof HudModule element) hudModules.add(element);
+			if (module instanceof WorldEffect) effects.add(module);
+		}
+		hud = hudModules.toArray(new HudModule[0]);
+		worldEffects = effects.toArray(new Module[0]);
 		V1zir.LOGGER.info("Registered {} modules", MODULES.size());
 	}
 
@@ -156,7 +174,26 @@ public final class ModuleManager {
 	}
 
 	public static List<Module> all() {
-		return Collections.unmodifiableList(MODULES);
+		return ALL;
+	}
+
+	/** HUD elements in render order. */
+	public static HudModule[] hud() {
+		return hud;
+	}
+
+	/** Modules that draw 3D effects after the world (WorldEffect), in render order. */
+	public static Module[] worldEffects() {
+		return worldEffects;
+	}
+
+	/** Changes whenever a module is switched on or off or rebound, so per-frame views rebuild only then. */
+	public static int version() {
+		return version;
+	}
+
+	static void changed() {
+		version++;
 	}
 
 	public static List<Module> byCategory(Category category) {

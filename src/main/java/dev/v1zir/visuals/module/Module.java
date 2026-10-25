@@ -85,6 +85,7 @@ public abstract class Module {
 	public void setEnabled(boolean enabled, boolean notify) {
 		if (this.enabled == enabled || !canToggle() && !enabled) return;
 		this.enabled = enabled;
+		ModuleManager.changed();
 		try {
 			if (enabled) onEnable();
 			else onDisable();
@@ -100,6 +101,7 @@ public abstract class Module {
 
 	public void setKey(int key) {
 		this.key = key;
+		ModuleManager.changed();
 	}
 
 	protected void onEnable() {

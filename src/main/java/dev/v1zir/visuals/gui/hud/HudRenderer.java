@@ -58,8 +58,8 @@ public final class HudRenderer {
 
 	/** Offers a click to the visible HUD elements; true if one used it. */
 	public static boolean click(double x, double y, int button) {
-		for (Module module : ModuleManager.all()) {
-			if (module instanceof HudModule hud && hud.isEnabled() && hud.hasContent() && hud.mouseClicked(x, y, button)) return true;
+		for (HudModule hud : ModuleManager.hud()) {
+			if (hud.isEnabled() && hud.hasContent() && hud.mouseClicked(x, y, button)) return true;
 		}
 		return false;
 	}
@@ -79,8 +79,8 @@ public final class HudRenderer {
 		Render2D.setAlpha(1f);
 		// In the HUD editor every element is drawn, so empty ones can still be placed.
 		boolean editing = mc.currentScreen instanceof ClickGuiScreen screen && screen.isHudEditor();
-		for (Module module : ModuleManager.all()) {
-			if (!(module instanceof HudModule hud) || !hud.isEnabled() || !(editing || hud.hasContent())) continue;
+		for (HudModule hud : ModuleManager.hud()) {
+			if (!hud.isEnabled() || !(editing || hud.hasContent())) continue;
 			try {
 				hud.renderAt(ctx, tickDelta, w, h);
 			} catch (RuntimeException e) {
