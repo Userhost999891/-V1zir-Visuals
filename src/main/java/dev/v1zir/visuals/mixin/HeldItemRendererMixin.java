@@ -49,13 +49,17 @@ public abstract class HeldItemRendererMixin {
 		if (swing != null && swing.isEnabled()) swing.begin(player, hand, swingProgress, item);
 	}
 
-	/** Swing Animations: vanilla's swing translation is replaced by the style (applied before renderItem). */
+	/**
+	 * Swing Animations: vanilla's swing is replaced by the style (applied before renderItem). Held items
+	 * swing through swingArm when their swing animation type is WHACK (also crossbows, and bundles in use);
+	 * type NONE does not swing and STAB (spears) keeps vanilla's Lancing transform.
+	 */
 	@Inject(method = "swingArm", at = @At("HEAD"), cancellable = true)
 	private void v1zir$swingTranslation(float swingProgress, MatrixStack matrices, int armX, Arm arm, CallbackInfo ci) {
 		if (v1zir$swingTakesOver()) ci.cancel();
 	}
 
-	/** Swing Animations: vanilla's swing rotation is replaced by the style as well. */
+	/** renderFirstPersonItem no longer calls this itself (the rotation comes through swingArm); covers any other caller. */
 	@Inject(method = "applySwingOffset", at = @At("HEAD"), cancellable = true)
 	private void v1zir$swingRotation(MatrixStack matrices, Arm arm, float swingProgress, CallbackInfo ci) {
 		if (v1zir$swingTakesOver()) ci.cancel();
