@@ -28,6 +28,7 @@ import dev.v1zir.visuals.module.impl.hud.WatermarkModule;
 import dev.v1zir.visuals.module.impl.visuals.AmbienceModule;
 import dev.v1zir.visuals.module.impl.visuals.AspectRatioModule;
 import dev.v1zir.visuals.module.impl.visuals.CameraTweaksModule;
+import dev.v1zir.visuals.module.impl.visuals.DamageTintModule;
 import dev.v1zir.visuals.module.impl.visuals.FreeLookModule;
 import dev.v1zir.visuals.module.impl.visuals.FullBrightModule;
 import dev.v1zir.visuals.module.impl.visuals.HandChamsModule;
@@ -65,6 +66,7 @@ public final class ModuleManager {
 		register(new CameraTweaksModule());
 		register(new AspectRatioModule());
 		register(new NoRenderModule());
+		register(new DamageTintModule());
 		// Effects
 		register(new TargetEspModule());
 		register(new JumpCirclesModule());
