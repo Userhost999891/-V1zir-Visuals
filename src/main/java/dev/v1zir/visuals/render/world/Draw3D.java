@@ -12,18 +12,27 @@ public final class Draw3D {
 	/** Flat ring lying on the ground; colorAt receives the segment index (0..segments). */
 	public static void flatRing(WorldEffectRenderer.Mesh mesh, double cx, double y, double cz, double radius, double width,
 								int segments, IntUnaryOperator colorAt) {
+		ring(mesh, cx, y, cz, 1, 0, 0, 0, 0, 1, radius, width, segments, colorAt);
+	}
+
+	/** Ring in the plane spanned by the unit axes a and b; colorAt receives the segment index (0..segments). */
+	public static void ring(WorldEffectRenderer.Mesh mesh, double cx, double cy, double cz, double ax, double ay, double az,
+							double bx, double by, double bz, double radius, double width, int segments, IntUnaryOperator colorAt) {
 		double inner = Math.max(0, radius - width);
 		double outer = radius + width;
 		for (int i = 0; i < segments; i++) {
 			double a0 = Math.PI * 2 * i / segments;
 			double a1 = Math.PI * 2 * (i + 1) / segments;
 			double c0 = Math.cos(a0), s0 = Math.sin(a0), c1 = Math.cos(a1), s1 = Math.sin(a1);
+			// Unit directions of both segment ends in the ring plane.
+			double x0 = ax * c0 + bx * s0, y0 = ay * c0 + by * s0, z0 = az * c0 + bz * s0;
+			double x1 = ax * c1 + bx * s1, y1 = ay * c1 + by * s1, z1 = az * c1 + bz * s1;
 			int col0 = colorAt.applyAsInt(i);
 			int col1 = colorAt.applyAsInt(i + 1);
-			mesh.vertex(cx + c0 * inner, y, cz + s0 * inner, -1f, 0f, col0);
-			mesh.vertex(cx + c0 * outer, y, cz + s0 * outer, 1f, 0f, col0);
-			mesh.vertex(cx + c1 * outer, y, cz + s1 * outer, 1f, 1f, col1);
-			mesh.vertex(cx + c1 * inner, y, cz + s1 * inner, -1f, 1f, col1);
+			mesh.vertex(cx + x0 * inner, cy + y0 * inner, cz + z0 * inner, -1f, 0f, col0);
+			mesh.vertex(cx + x0 * outer, cy + y0 * outer, cz + z0 * outer, 1f, 0f, col0);
+			mesh.vertex(cx + x1 * outer, cy + y1 * outer, cz + z1 * outer, 1f, 1f, col1);
+			mesh.vertex(cx + x1 * inner, cy + y1 * inner, cz + z1 * inner, -1f, 1f, col1);
 		}
 	}
 
