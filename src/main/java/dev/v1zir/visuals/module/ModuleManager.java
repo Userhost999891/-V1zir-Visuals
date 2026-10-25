@@ -38,6 +38,7 @@ import dev.v1zir.visuals.module.impl.visuals.WorldParticlesModule;
 import dev.v1zir.visuals.module.impl.visuals.ZoomModule;
 import dev.v1zir.visuals.module.impl.world.BlockHighlightModule;
 import dev.v1zir.visuals.module.impl.world.BreakEffectsModule;
+import dev.v1zir.visuals.module.impl.world.ItemPhysicsModule;
 import dev.v1zir.visuals.module.impl.world.TrajectoriesModule;
 
 import java.util.ArrayList;
@@ -85,6 +86,7 @@ public final class ModuleManager {
 		register(new BlockHighlightModule());
 		register(new BreakEffectsModule());
 		register(new TrajectoriesModule());
+		register(new ItemPhysicsModule());
 		// HUD
 		register(new WatermarkModule());
 		register(new ArrayListModule());
