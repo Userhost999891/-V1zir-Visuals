@@ -31,8 +31,8 @@ public final class TrailsModule extends Module implements WorldEffect {
 	private final double[] lz = new double[CAPACITY];
 
 	public TrailsModule() {
-		super("Trails", "Glowing ribbon behind you", Category.EFFECTS);
-		setSubCategory("Cosmetic");
+		super("Trails", "Glowing ribbon behind you", Category.VISUALS);
+		setSubCategory("Render");
 	}
 
 	@Override

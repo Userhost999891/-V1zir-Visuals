@@ -52,8 +52,8 @@ public final class PopChamsModule extends Module implements WorldEffect {
 	private final Capture capture = new Capture();
 
 	public PopChamsModule() {
-		super("Pop Chams", "Ghost of players who pop a totem", Category.EFFECTS);
-		setSubCategory("Combat");
+		super("Pop Chams", "Ghost of players who pop a totem", Category.COMBAT);
+		setSubCategory("Target");
 	}
 
 	@Override

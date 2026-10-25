@@ -42,8 +42,8 @@ public final class WorldParticlesModule extends Module implements WorldEffect {
 	private double lastCamZ;
 
 	public WorldParticlesModule() {
-		super("World Particles", "Fireflies, snow, stars or embers around you", Category.WORLD);
-		setSubCategory("Ambience");
+		super("World Particles", "Fireflies, snow, stars or embers around you", Category.SHADERS);
+		setSubCategory("World");
 	}
 
 	@Override

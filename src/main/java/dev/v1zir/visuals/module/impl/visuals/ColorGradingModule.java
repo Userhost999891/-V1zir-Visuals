@@ -23,8 +23,8 @@ public final class ColorGradingModule extends Module {
 	public final NumberSetting vignetteStrength = add(new NumberSetting("Vignette strength", 0.35, 0.05, 1.0, 0.05).visibleIf(vignette::on));
 
 	public ColorGradingModule() {
-		super("Color Grading", "Cinematic colour grading of the world", Category.VISUALS);
-		setSubCategory("Render");
+		super("Color Grading", "Cinematic colour grading of the world", Category.SHADERS);
+		setSubCategory("World");
 	}
 
 	/** End of renderWorld (GameRendererMixin). */

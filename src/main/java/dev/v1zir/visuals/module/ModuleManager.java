@@ -74,7 +74,8 @@ public final class ModuleManager {
 
 	public static void init() {
 		if (!MODULES.isEmpty()) return;
-		// Visuals
+		// Registered by package (render order of effects and HUD elements); the GUI tab is each module's category.
+		// impl.visuals
 		register(new ShaderSkyModule());
 		register(new AmbienceModule());
 		register(new FullBrightModule());
@@ -91,7 +92,7 @@ public final class ModuleManager {
 		register(new ColorGradingModule());
 		register(new EntityGlowModule());
 		register(new NametagsModule());
-		// Effects
+		// impl.effects
 		register(new TargetEspModule());
 		register(new JumpCirclesModule());
 		register(new ChinaHatModule());
@@ -105,14 +106,14 @@ public final class ModuleManager {
 		register(new PopChamsModule());
 		register(new TotemAnimationModule());
 		register(new CrystalChamsModule());
-		// World
+		// impl.world
 		register(new WorldParticlesModule());
 		register(new BlockHighlightModule());
 		register(new BreakEffectsModule());
 		register(new TrajectoriesModule());
 		register(new ItemPhysicsModule());
 		register(new SkyLanternsModule());
-		// HUD
+		// impl.hud
 		register(new WatermarkModule());
 		register(new ArrayListModule());
 		register(new KeybindsModule());
@@ -131,7 +132,7 @@ public final class ModuleManager {
 		register(new NotificationsModule());
 		register(new SpotifyModule());
 		register(new SpotifyLyricsModule());
-		// Client
+		// impl.client
 		register(new ClickGuiModule());
 		register(new ThemeModule());
 		register(new MainMenuModule());

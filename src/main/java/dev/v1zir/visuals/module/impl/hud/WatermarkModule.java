@@ -4,6 +4,7 @@ import dev.v1zir.visuals.module.setting.BoolSetting;
 import dev.v1zir.visuals.render.font.Fonts;
 import dev.v1zir.visuals.render.font.Icons;
 import dev.v1zir.visuals.render.font.SdfFont;
+import dev.v1zir.visuals.render.ui.Logo;
 import dev.v1zir.visuals.render.ui.Render2D;
 import dev.v1zir.visuals.util.ColorUtil;
 import dev.v1zir.visuals.util.Theme;
@@ -68,10 +69,7 @@ public final class WatermarkModule extends HudModule {
 		panel(ctx, x, y, w, h, h / 2f);
 		int accent = Theme.accent();
 		int accent2 = Theme.accent2();
-		// Logo bubble with a glowing gradient.
-		Render2D.glow(ctx, x + 3f, y + 3f, h - 6f, h - 6f, (h - 6f) / 2f, 6f, ColorUtil.withAlpha(accent, 110), ColorUtil.withAlpha(accent2, 110));
-		Render2D.round(ctx, x + 3f, y + 3f, h - 6f, h - 6f, (h - 6f) / 2f, accent, accent2, accent2, accent);
-		Render2D.icon(ctx, Icons.SPARKLES, x + h / 2f, y + h / 2f, 8f, 0xFFFFFFFF);
+		Logo.draw(ctx, x + 3f, y + 3f, h - 6f);
 		float cx = x + logo + 3f;
 		Render2D.textMiddle(ctx, bold, title, cx, y + h / 2f, 8f, Render2D.TextStyle.of(accent).gradient(accent2));
 		cx += titleW + 6f;

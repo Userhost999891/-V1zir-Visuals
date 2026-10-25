@@ -41,8 +41,8 @@ public final class ItemPhysicsModule extends Module {
 	private static ItemEntityRenderState pending;
 
 	public ItemPhysicsModule() {
-		super("Item Physics", "Dropped items lie flat, tumble and settle", Category.WORLD);
-		setSubCategory("Render");
+		super("Item Physics", "Dropped items lie flat, tumble and settle", Category.VISUALS);
+		setSubCategory("World");
 	}
 
 	/** Tumble state of one item entity, kept on the entity (ItemEntityMixin). */

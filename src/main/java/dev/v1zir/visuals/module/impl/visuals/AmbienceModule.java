@@ -14,8 +14,8 @@ public final class AmbienceModule extends Module {
 	private long serverTime = -1;
 
 	public AmbienceModule() {
-		super("Ambience", "Changes time of day and weather on your side only", Category.VISUALS);
-		setSubCategory("Render");
+		super("Ambience", "Changes time of day and weather on your side only", Category.SHADERS);
+		setSubCategory("Sky");
 	}
 
 	@Override

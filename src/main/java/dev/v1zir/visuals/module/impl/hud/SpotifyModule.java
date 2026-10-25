@@ -76,7 +76,7 @@ public final class SpotifyModule extends HudModule {
 
 	public SpotifyModule() {
 		super("Spotify", "Now playing with album art and controls", 0.008f, 0.75f);
-		setSubCategory("Widgets");
+		setSubCategory("Media");
 	}
 
 	@Override

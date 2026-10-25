@@ -59,8 +59,8 @@ public final class SkyLanternsModule extends Module implements WorldEffect {
 	private double lastCamZ;
 
 	public SkyLanternsModule() {
-		super("Sky Lanterns", "Glowing lanterns rising into the night sky", Category.WORLD);
-		setSubCategory("Ambience");
+		super("Sky Lanterns", "Glowing lanterns rising into the night sky", Category.SHADERS);
+		setSubCategory("Sky");
 	}
 
 	@Override

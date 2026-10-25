@@ -78,8 +78,8 @@ public final class NametagsModule extends Module implements WorldEffect {
 	private SdfFont smallFont;
 
 	public NametagsModule() {
-		super("Nametags", "Premium nametags for players", Category.VISUALS);
-		setSubCategory("Render");
+		super("Nametags", "Premium nametags for players", Category.COMBAT);
+		setSubCategory("Info");
 	}
 
 	@Override

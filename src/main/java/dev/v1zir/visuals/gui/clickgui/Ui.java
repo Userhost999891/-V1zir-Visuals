@@ -3,63 +3,91 @@ package dev.v1zir.visuals.gui.clickgui;
 import dev.v1zir.visuals.render.font.Fonts;
 import dev.v1zir.visuals.render.font.SdfFont;
 import dev.v1zir.visuals.render.ui.Render2D;
+import dev.v1zir.visuals.render.ui.ShapeElement;
 import dev.v1zir.visuals.util.ColorUtil;
 import dev.v1zir.visuals.util.Theme;
 import net.minecraft.client.gui.DrawContext;
 
-/** Shared metrics (in GUI pixels) and surfaces of the click GUI. */
+/** Shared metrics (in GUI pixels) and small matte widgets of the click GUI. */
 public final class Ui {
-	public static final float PANEL_WIDTH = 116f;
-	public static final float PANEL_GAP = 10f;
-	public static final float HEADER_HEIGHT = 22f;
-	/** Row of sub-category chips under the header (hidden when a panel has one sub-category). */
-	public static final float CHIPS_HEIGHT = 17f;
-	public static final float ROW_HEIGHT = 16f;
-	public static final float RADIUS = 7f;
-	/** Corner radius of module cells, chips and other small surfaces. */
+	/** Corner radius of the window. */
+	public static final float RADIUS = 10f;
+	/** Height of the top bar (logo, title, search). */
+	public static final float BAR = 34f;
+	/** Inner margin between the window edge and its sub-surfaces. */
+	public static final float PAD = 8f;
+	public static final float CARD_HEIGHT = 38f;
+	public static final float CARD_GAP = 6f;
+	public static final float CARD_RADIUS = 6f;
+	/** Corner radius of chips, wells and other small surfaces. */
 	public static final float CELL_RADIUS = 4f;
-	/** Margin between a module cell and the panel edge. */
-	public static final float CELL_INSET = 5f;
 	public static final float TEXT = 7f;
 	public static final float SMALL = 6.5f;
 	/** Size of setting labels. */
 	public static final float LABEL = 7f;
-	private static final float TITLE = 8.5f;
-	private static final float TITLE_ICON = 8f;
-	/** Slate blue-grey that tints the panels; the accent colours it slightly. */
-	private static final int SLATE = 0xFF2A3A50;
+	/** Size of descriptions and hints. */
+	public static final float TINY = 6f;
+	public static final float SWITCH_W = 16f;
+	public static final float SWITCH_H = 9f;
+	/** Shapes that catch the cursor light. */
+	public static final int LIT = ShapeElement.LIT;
 
 	private Ui() {
 	}
 
-	/** Panel of the click GUI: the Theme surface under a slate tint, deeper towards the bottom, and a thin light rim. */
-	static void surface(DrawContext ctx, float x, float y, float w, float h, int accent) {
-		Render2D.shadow(ctx, x, y + 4f, w, h, RADIUS, 18f, Theme.shadow());
-		Render2D.panel(ctx, x, y, w, h, RADIUS);
-		int slate = ColorUtil.lerp(SLATE, accent, 0.12f);
-		Render2D.gradientV(ctx, x, y, w, h, RADIUS, ColorUtil.withAlpha(slate, 100), ColorUtil.withAlpha(slate, 44));
-		Render2D.outline(ctx, x, y, w, h, RADIUS, 1f, 0x38FFFFFF, 0x38FFFFFF, 0x16FFFFFF, 0x16FFFFFF);
+	/** Toggle switch: a recessed matte track that fills with the accent, the knob at position t (0 off, 1 on). */
+	static void toggle(DrawContext ctx, float x, float y, float t, float hover) {
+		float r = SWITCH_H / 2f;
+		Render2D.matte(ctx, x, y, SWITCH_W, SWITCH_H, r, ColorUtil.withAlpha(0xFFFFFF, Math.round(16 + 12 * hover)), 0);
+		if (t > 0.01f) {
+			Render2D.shadow(ctx, x, y, SWITCH_W, SWITCH_H, r, 5f, ColorUtil.withAlpha(Theme.accent(), Math.round((60 + 30 * hover) * t)));
+			Render2D.gradientH(ctx, x, y, SWITCH_W, SWITCH_H, r, ColorUtil.fade(Theme.accent(), t), ColorUtil.fade(Theme.accent2(), t));
+		}
+		float kr = r - 1.5f;
+		float kx = x + 1.5f + kr + t * (SWITCH_W - 3f - kr * 2f);
+		float ky = y + r;
+		Render2D.shadow(ctx, kx - kr, ky - kr + 0.6f, kr * 2f, kr * 2f, kr, 2.5f, 0x55000000);
+		Render2D.circle(ctx, kx, ky, kr, ColorUtil.lerp(0xFFB9BDC8, 0xFFFFFFFF, Math.max(t, hover)));
 	}
 
-	/** Centred icon and bold title in a light accent on a lighter band, over an accent hairline. */
-	static void header(DrawContext ctx, float x, float y, float w, int icon, String title, Label titleWidth, int accent, int accent2) {
-		float mid = y + HEADER_HEIGHT / 2f;
-		Render2D.round(ctx, x, y, w, HEADER_HEIGHT, RADIUS, Render2D.CORNERS_TOP, 0x0DFFFFFF);
+	/** Small key chip ("RShift") in a faint rim; returns its width. */
+	static float keyChip(DrawContext ctx, Label width, String key, float x, float centerY, int textColor) {
+		SdfFont font = Fonts.semibold();
+		float size = 5.5f;
+		float w = width.width(font, key, size) + 7f;
+		float h = 9f;
+		Render2D.round(ctx, x, centerY - h / 2f, w, h, 3f, 0x14FFFFFF);
+		Render2D.outline(ctx, x, centerY - h / 2f, w, h, 3f, 1f, 0x1CFFFFFF);
+		Render2D.textMiddle(ctx, font, key, x + 3.5f, centerY, size, textColor);
+		return w;
+	}
 
-		SdfFont font = Fonts.bold();
-		float tw = titleWidth.width(font, title, TITLE);
-		float group = TITLE_ICON + 4f + tw;
-		float gx = x + (w - group) / 2f;
-		int color = ColorUtil.lerp(accent, 0xFFFFFFFF, 0.3f);
-		Render2D.shadow(ctx, gx - 2f, mid - 3f, group + 4f, 6f, 3f, 10f, ColorUtil.withAlpha(accent, 50));
-		Render2D.icon(ctx, icon, gx + TITLE_ICON / 2f, mid, TITLE_ICON, color);
-		Render2D.text(ctx, font, title, gx + TITLE_ICON + 4f, Render2D.middle(font, mid, TITLE), TITLE, color);
+	/** Square icon button with a matte hover plate; press scales the icon down a little. */
+	static void iconButton(DrawContext ctx, float x, float y, float size, int icon, float hover, float press, boolean active) {
+		int accent = Theme.accent();
+		if (active || hover > 0.01f) {
+			int plate = active ? ColorUtil.withAlpha(accent, 40) : ColorUtil.withAlpha(0xFFFFFF, Math.round(16 * hover));
+			Render2D.matte(ctx, x, y, size, size, 6f, plate, LIT);
+		}
+		Render2D.rim(ctx, x, y, size, size, 6f, active ? ColorUtil.withAlpha(accent, 110) : ColorUtil.withAlpha(0xFFFFFF, Math.round(18 + 22 * hover)), LIT);
+		int color = active ? ColorUtil.lerp(accent, 0xFFFFFFFF, 0.3f) : ColorUtil.lerp(Theme.textDim(), Theme.text(), hover);
+		Render2D.icon(ctx, icon, x + size / 2f, y + size / 2f, 8.5f * (1f - 0.12f * press), color);
+	}
 
-		// Separator: brightest in the middle, fading out towards both edges.
-		float ly = y + HEADER_HEIGHT - 0.5f;
-		float half = w / 2f - 6f;
-		Render2D.gradientH(ctx, x + 6f, ly, half, 1f, 0.5f, ColorUtil.withAlpha(accent, 0), ColorUtil.withAlpha(accent, 190));
-		Render2D.gradientH(ctx, x + w / 2f, ly, half, 1f, 0.5f, ColorUtil.withAlpha(accent2, 190), ColorUtil.withAlpha(accent2, 0));
+	/** Section heading: an accent icon and a semibold title. */
+	static void heading(DrawContext ctx, float x, float y, int icon, String title) {
+		Render2D.icon(ctx, icon, x + 4f, y + 4.5f, 7.5f, ColorUtil.lerp(Theme.accent(), 0xFFFFFFFF, 0.2f));
+		Render2D.textMiddle(ctx, Fonts.semibold(), title, x + 12f, y + 4.5f, 7.5f, Theme.text());
+	}
+
+	/**
+	 * Opacity of an item that scrolls inside a viewport: it fades out over its own height as it
+	 * leaves through the top or bottom edge, which gives scroll areas their soft edges.
+	 */
+	static float edgeFade(float top, float bottom, float viewTop, float viewBottom) {
+		float span = Math.max(8f, Math.min(bottom - top, 28f));
+		float a = Math.min((bottom - viewTop) / span, (viewBottom - top) / span);
+		return Math.max(0f, Math.min(1f, a));
 	}
 
 	public static boolean inside(double mx, double my, float x, float y, float w, float h) {

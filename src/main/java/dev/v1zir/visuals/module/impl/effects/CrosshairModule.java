@@ -26,8 +26,8 @@ public final class CrosshairModule extends Module {
 	private final Anim spread = new Anim(0f, 10f);
 
 	public CrosshairModule() {
-		super("Crosshair", "Custom crosshair", Category.EFFECTS);
-		setSubCategory("Combat");
+		super("Crosshair", "Custom crosshair", Category.COMBAT);
+		setSubCategory("Info");
 	}
 
 	public void render(DrawContext ctx, float tickDelta) {

@@ -62,8 +62,8 @@ public final class ModeComponent extends SettingComponent<ModeSetting> {
 				Render2D.shadow(ctx, cx, cy, w, CHIP_HEIGHT, 4f, 5f, ColorUtil.withAlpha(accent, Math.round(70 + 40 * ch)));
 				Render2D.gradientH(ctx, cx, cy, w, CHIP_HEIGHT, 4f, accent, accent2);
 			} else {
-				Render2D.round(ctx, cx, cy, w, CHIP_HEIGHT, 4f, ColorUtil.withAlpha(0xFFFFFF, Math.round(9 + 13 * ch)));
-				Render2D.outline(ctx, cx, cy, w, CHIP_HEIGHT, 4f, 1f, ColorUtil.withAlpha(0xFFFFFF, Math.round(12 + 18 * ch)));
+				Render2D.matte(ctx, cx, cy, w, CHIP_HEIGHT, 4f, ColorUtil.withAlpha(0xFFFFFF, Math.round(9 + 13 * ch)), Ui.LIT);
+				Render2D.rim(ctx, cx, cy, w, CHIP_HEIGHT, 4f, ColorUtil.withAlpha(0xFFFFFF, Math.round(14 + 20 * ch)), Ui.LIT);
 			}
 			int color = selected ? 0xFFFFFFFF : ColorUtil.lerp(Theme.textDim(), Theme.text(), ch);
 			Render2D.textMiddle(ctx, font, mode, cx + 5f, cy + CHIP_HEIGHT / 2f, Ui.SMALL, color);

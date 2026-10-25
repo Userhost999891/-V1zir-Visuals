@@ -110,8 +110,8 @@ public final class TrajectoriesModule extends Module implements WorldEffect {
 	private boolean riptideOff;
 
 	public TrajectoriesModule() {
-		super("Trajectories", "Predicted flight path of bows, tridents and throwables", Category.WORLD);
-		setSubCategory("Render");
+		super("Trajectories", "Predicted flight path of bows, tridents and throwables", Category.COMBAT);
+		setSubCategory("Info");
 		for (int i = 0; i < MAX_SHOTS; i++) paths[i] = new Path();
 	}
 

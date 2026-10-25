@@ -52,8 +52,8 @@ public final class KeyComponent extends SettingComponent<KeySetting> {
 		float cx = x + width - cw;
 		float cy = y + (HEIGHT - CHIP_HEIGHT) / 2f;
 		if (t > 0.01f) Render2D.shadow(ctx, cx, cy, cw, CHIP_HEIGHT, Ui.CELL_RADIUS, 5f, ColorUtil.withAlpha(Theme.accent(), Math.round(90 * t)));
-		Render2D.round(ctx, cx, cy, cw, CHIP_HEIGHT, Ui.CELL_RADIUS, ColorUtil.lerp(ColorUtil.withAlpha(0xFFFFFF, Math.round(9 + 13 * h)), Theme.accent(), t));
-		Render2D.outline(ctx, cx, cy, cw, CHIP_HEIGHT, Ui.CELL_RADIUS, 1f, ColorUtil.withAlpha(0xFFFFFF, Math.round((12 + 18 * h) * (1f - t))));
+		Render2D.matte(ctx, cx, cy, cw, CHIP_HEIGHT, Ui.CELL_RADIUS, ColorUtil.lerp(ColorUtil.withAlpha(0xFFFFFF, Math.round(9 + 13 * h)), Theme.accent(), t), Ui.LIT);
+		Render2D.rim(ctx, cx, cy, cw, CHIP_HEIGHT, Ui.CELL_RADIUS, ColorUtil.withAlpha(0xFFFFFF, Math.round((14 + 20 * h) * (1f - t))), Ui.LIT);
 		Render2D.textCentered(ctx, font, label, cx + cw / 2f, Render2D.middle(font, cy + CHIP_HEIGHT / 2f, Ui.SMALL), Ui.SMALL,
 			ColorUtil.lerp(labelColor(h), 0xFFFFFFFF, t));
 		return HEIGHT;

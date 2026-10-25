@@ -37,8 +37,8 @@ public final class ShaderSkyModule extends Module {
 	private long lastFrameNanos;
 
 	public ShaderSkyModule() {
-		super("Shader Sky", "Replaces the sky with animated, fully shaded presets", Category.VISUALS);
-		setSubCategory("Render");
+		super("Shader Sky", "Replaces the sky with animated, fully shaded presets", Category.SHADERS);
+		setSubCategory("Sky");
 	}
 
 	private boolean colorsVisible() {

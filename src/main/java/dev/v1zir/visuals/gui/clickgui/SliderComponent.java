@@ -10,7 +10,7 @@ import dev.v1zir.visuals.util.Theme;
 import net.minecraft.client.gui.DrawContext;
 import org.lwjgl.glfw.GLFW;
 
-/** Label and value over a slim gradient track; the knob carries an accent core. */
+/** Label and value over a slim recessed track filled with the accent; the knob carries an accent core. */
 public final class SliderComponent extends SettingComponent<NumberSetting> {
 	private static final float HEIGHT = 22f;
 	private static final float TRACK = 3f;
@@ -48,7 +48,7 @@ public final class SliderComponent extends SettingComponent<NumberSetting> {
 		float ty = y + 15f;
 		float f = fill.target((float) setting.fraction()).get();
 		float fw = Math.max(TRACK, width * f);
-		Render2D.round(ctx, x, ty, width, TRACK, TRACK / 2f, ColorUtil.withAlpha(0xFFFFFF, Math.round(20 + 10 * h)));
+		Render2D.matte(ctx, x, ty, width, TRACK, TRACK / 2f, ColorUtil.withAlpha(0xFFFFFF, Math.round(18 + 10 * h)), 0);
 		if (h > 0.01f) Render2D.glow(ctx, x, ty, fw, TRACK, TRACK / 2f, 5f, ColorUtil.withAlpha(accent, Math.round(80 * h)), ColorUtil.withAlpha(accent2, Math.round(80 * h)));
 		Render2D.gradientH(ctx, x, ty, fw, TRACK, TRACK / 2f, accent, accent2);
 		float kx = x + width * f;

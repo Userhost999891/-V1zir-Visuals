@@ -90,7 +90,7 @@ public final class SpotifyLyricsModule extends HudModule implements WorldEffect 
 
 	public SpotifyLyricsModule() {
 		super("Spotify Lyrics", "Synced lyrics of the playing song", 0.992f, 0.32f);
-		setSubCategory("Widgets");
+		setSubCategory("Media");
 	}
 
 	@Override

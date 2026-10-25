@@ -66,8 +66,8 @@ public final class BreakEffectsModule extends Module implements WorldEffect {
 	private final boolean[] otherSeen = new boolean[OTHERS];
 
 	public BreakEffectsModule() {
-		super("Break Effects", "Glowing progress box on the block being mined", Category.WORLD);
-		setSubCategory("Render");
+		super("Break Effects", "Glowing progress box on the block being mined", Category.VISUALS);
+		setSubCategory("World");
 		for (int i = 0; i < OTHERS; i++) {
 			otherProgress[i] = new Anim(0f, 8f);
 			otherShown[i] = new Anim(0f, 8f);

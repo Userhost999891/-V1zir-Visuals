@@ -33,9 +33,7 @@ public abstract class GuiRendererMixin {
 	)
 	private void v1zir$bindUniforms(GuiRenderer.Draw draw, RenderPass pass, GpuBuffer indexBuffer, VertexFormat.IndexType indexType, CallbackInfo ci) {
 		RenderPipeline pipeline = draw.pipeline();
-		if (pipeline == V1zirPipelines.GLASS) {
-			pass.setUniform("V1zirGui", FrameUniforms.gui());
-		} else if (pipeline == V1zirPipelines.MENU_BACKGROUND) {
+		if (pipeline == V1zirPipelines.SHAPE || pipeline == V1zirPipelines.GLASS || pipeline == V1zirPipelines.MENU_BACKGROUND) {
 			pass.setUniform("V1zirGui", FrameUniforms.gui());
 		}
 	}

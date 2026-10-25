@@ -14,7 +14,7 @@ public final class CustomUiModule extends Module {
 	public final BoolSetting tooltips = add(new BoolSetting("Tooltips", true));
 
 	public CustomUiModule() {
-		super("Custom UI", "Premium buttons, sliders, inventory, hotbar and tooltips", Category.CLIENT);
+		super("Custom UI", "Premium buttons, sliders, inventory, hotbar and tooltips", Category.SETTINGS);
 		setEnabled(true, false);
 	}
 

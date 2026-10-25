@@ -111,8 +111,8 @@ public final class ColorComponent extends SettingComponent<ColorSetting> {
 			Render2D.shadow(ctx, x, next, chipW, CHIP, 4f, 5f, ColorUtil.withAlpha(Theme.accent(), 80));
 			Render2D.gradientH(ctx, x, next, chipW, CHIP, 4f, Theme.accent(), Theme.accent2());
 		} else {
-			Render2D.round(ctx, x, next, chipW, CHIP, 4f, ColorUtil.withAlpha(0xFFFFFF, 10));
-			Render2D.outline(ctx, x, next, chipW, CHIP, 4f, 1f, ColorUtil.withAlpha(0xFFFFFF, 14));
+			Render2D.matte(ctx, x, next, chipW, CHIP, 4f, ColorUtil.withAlpha(0xFFFFFF, 10), Ui.LIT);
+			Render2D.rim(ctx, x, next, chipW, CHIP, 4f, ColorUtil.withAlpha(0xFFFFFF, 16), Ui.LIT);
 		}
 		Render2D.textMiddle(ctx, font, "Rainbow", x + 5f, next + CHIP / 2f, Ui.SMALL, rainbow ? 0xFFFFFFFF : Theme.textDim());
 		int rgb = setting.get() & 0xFFFFFF;

@@ -153,10 +153,11 @@ public final class Render2D {
 	 * translucent panel when blur is off or nothing is rendered behind the GUI.
 	 */
 	public static void glass(DrawContext ctx, float x, float y, float w, float h, float radius, int tint) {
-		glass(ctx, x, y, w, h, radius, 0, tint);
+		glass(ctx, x, y, w, h, radius, 0, ShapeElement.FILL, tint);
 	}
 
-	public static void glass(DrawContext ctx, float x, float y, float w, float h, float radius, int corners, int tint) {
+	/** flags: ShapeElement.MATTE and/or LIT on top of a fill. */
+	public static void glass(DrawContext ctx, float x, float y, float w, float h, float radius, int corners, int flags, int tint) {
 		if (BackdropBlur.available()) {
 			Matrix3x2f pose = pose(ctx);
 			ScreenRect scissor = scissor(ctx);
@@ -166,32 +167,48 @@ public final class Render2D {
 			// Vertex alpha is the tint strength, so the global fade travels in the (unused for fills)
 			// thickness channel: the blur itself fades in instead of popping in at the end of a fade.
 			ctx.state.addSimpleElement(new ShapeElement(V1zirPipelines.GLASS, BackdropBlur.textureSetup(), pose, scissor, bounds,
-				x, y, w, h, radius, 0, GLASS_FADE * alpha, ShapeElement.FILL, corners, tint, tint, tint, tint));
+				x, y, w, h, radius, 0, GLASS_FADE * alpha, flags, corners, tint, tint, tint, tint));
 		} else {
-			round(ctx, x, y, w, h, radius, corners, ColorUtil.withAlpha(tint, Math.max(ColorUtil.alpha(tint), 225)));
+			int fill = ColorUtil.withAlpha(tint, Math.max(ColorUtil.alpha(tint), 225));
+			shape(ctx, V1zirPipelines.SHAPE, TextureSetup.empty(), x, y, w, h, radius, 0, 0, flags, corners, fill, fill, fill, fill);
 		}
 	}
 
-	/** A UI panel (fill and border, no shadow) drawn in the Theme style: Normal (solid grey) or Blur. */
+	/** A UI panel (fill and rim, no shadow) drawn in the Theme style: Normal (solid matte grey) or Blur (matte frost). */
 	public static void panel(DrawContext ctx, float x, float y, float w, float h, float radius) {
-		panel(ctx, x, y, w, h, radius, 0);
+		panel(ctx, x, y, w, h, radius, 0, 0);
 	}
 
 	public static void panel(DrawContext ctx, float x, float y, float w, float h, float radius, int corners) {
+		panel(ctx, x, y, w, h, radius, corners, 0);
+	}
+
+	/** flags: ShapeElement.LIT lets the surface and its rim catch the cursor light. */
+	public static void panel(DrawContext ctx, float x, float y, float w, float h, float radius, int corners, int flags) {
+		int surface = ShapeElement.FILL | ShapeElement.MATTE | flags;
 		if (Theme.style() == Theme.Style.BLUR) {
-			glass(ctx, x, y, w, h, radius, corners, Theme.panel());
+			glass(ctx, x, y, w, h, radius, corners, surface, Theme.panel());
 		} else {
-			// Solid grey, a touch lighter at the top so the surface does not look flat.
+			// One flat matte grey: no gradient, no gloss; the grain gives it its texture.
 			int fill = Theme.solidPanel();
-			int top = ColorUtil.brighten(fill, 0.035f);
-			shape(ctx, V1zirPipelines.SHAPE, TextureSetup.empty(), x, y, w, h, radius, 0, 0, ShapeElement.FILL, corners, top, top, fill, fill);
+			shape(ctx, V1zirPipelines.SHAPE, TextureSetup.empty(), x, y, w, h, radius, 0, 0, surface, corners, fill, fill, fill, fill);
 		}
-		// Thin rim lit from above: brighter along the top edge, fading towards the bottom.
+		// Thin, even rim: a soft edge all around instead of a glossy highlight on top.
 		int rim = Theme.outline();
-		int rimTop = ColorUtil.withAlpha(rim, Math.round(ColorUtil.alpha(rim) * 1.6f));
-		int rimBottom = ColorUtil.withAlpha(rim, Math.round(ColorUtil.alpha(rim) * 0.55f));
-		shape(ctx, V1zirPipelines.SHAPE, TextureSetup.empty(), x, y, w, h, radius, 0, 1f, ShapeElement.OUTLINE, corners,
-			rimTop, rimTop, rimBottom, rimBottom);
+		shape(ctx, V1zirPipelines.SHAPE, TextureSetup.empty(), x, y, w, h, radius, 0, 1f, ShapeElement.OUTLINE | flags, corners,
+			rim, rim, rim, rim);
+	}
+
+	/** A matte sub-surface (card, sidebar, well) of one colour; flags as for panel(). */
+	public static void matte(DrawContext ctx, float x, float y, float w, float h, float radius, int color, int flags) {
+		shape(ctx, V1zirPipelines.SHAPE, TextureSetup.empty(), x, y, w, h, radius, 0, 0, ShapeElement.FILL | ShapeElement.MATTE | flags, 0,
+			color, color, color, color);
+	}
+
+	/** One pixel rim around a rounded rectangle; with ShapeElement.LIT it brightens where the cursor is. */
+	public static void rim(DrawContext ctx, float x, float y, float w, float h, float radius, int color, int flags) {
+		shape(ctx, V1zirPipelines.SHAPE, TextureSetup.empty(), x, y, w, h, radius, 0, 1f, ShapeElement.OUTLINE | flags, 0,
+			color, color, color, color);
 	}
 
 	/** A texture (album art) filling a rounded rectangle; color tints it and carries its opacity (white = unchanged). */

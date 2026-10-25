@@ -78,7 +78,7 @@ public final class HudRenderer {
 		int h = ctx.getScaledWindowHeight();
 		Render2D.setAlpha(1f);
 		// In the HUD editor every element is drawn, so empty ones can still be placed.
-		boolean editing = mc.currentScreen instanceof ClickGuiScreen screen && screen.isHudTab();
+		boolean editing = mc.currentScreen instanceof ClickGuiScreen screen && screen.isHudEditor();
 		for (Module module : ModuleManager.all()) {
 			if (!(module instanceof HudModule hud) || !hud.isEnabled() || !(editing || hud.hasContent())) continue;
 			try {

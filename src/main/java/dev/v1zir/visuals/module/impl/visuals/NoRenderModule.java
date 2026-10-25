@@ -33,7 +33,7 @@ public final class NoRenderModule extends Module {
 
 	public NoRenderModule() {
 		super("No Render", "Hides vanilla overlays and clutter", Category.VISUALS);
-		setSubCategory("Overlay");
+		setSubCategory("Render");
 	}
 
 	/** The module while it is enabled, else null. */

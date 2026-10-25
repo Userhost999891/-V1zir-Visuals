@@ -33,8 +33,8 @@ public final class DamageTintModule extends Module {
 	private long lastFrame = System.nanoTime();
 
 	public DamageTintModule() {
-		super("Damage Tint", "Red vignette at low health and when hurt", Category.VISUALS);
-		setSubCategory("Overlay");
+		super("Damage Tint", "Red vignette at low health and when hurt", Category.COMBAT);
+		setSubCategory("Hits");
 	}
 
 	@Override

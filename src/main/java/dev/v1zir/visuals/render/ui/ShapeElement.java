@@ -26,9 +26,13 @@ public record ShapeElement(
 	public static final int FILL = 0;
 	public static final int OUTLINE = 1;
 	public static final int SHADOW = 2;
+	/** Flag: fine static grain over the fill (the matte surface of panels and cards). */
+	public static final int MATTE = 8;
+	/** Flag: the shape catches the soft light that follows the cursor (FrameUniforms.cursor). */
+	public static final int LIT = 16;
 
 	public static float padding(int mode, float softness) {
-		return (mode == SHADOW ? softness : 0f) + 2f;
+		return ((mode & 7) == SHADOW ? softness : 0f) + 2f;
 	}
 
 	@Override

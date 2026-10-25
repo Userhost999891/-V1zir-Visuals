@@ -27,8 +27,8 @@ public final class JumpCirclesModule extends Module implements WorldEffect {
 	private boolean jumping;
 
 	public JumpCirclesModule() {
-		super("Jump Circles", "Rings when you jump and land", Category.EFFECTS);
-		setSubCategory("Cosmetic");
+		super("Jump Circles", "Rings when you jump and land", Category.VISUALS);
+		setSubCategory("World");
 	}
 
 	@Override

@@ -108,7 +108,7 @@ public abstract class HudModule extends Module {
 
 	/** True while the HUD editor is open: elements then show a preview instead of hiding. */
 	protected static boolean editing() {
-		return mc.currentScreen instanceof ClickGuiScreen screen && screen.isHudTab();
+		return mc.currentScreen instanceof ClickGuiScreen screen && screen.isHudEditor();
 	}
 
 	// ------------------------------------------------------------------ shared drawing helpers

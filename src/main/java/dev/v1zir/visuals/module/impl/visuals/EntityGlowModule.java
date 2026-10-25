@@ -43,8 +43,8 @@ public final class EntityGlowModule extends Module {
 	private int crystal;
 
 	public EntityGlowModule() {
-		super("Entity Glow", "Coloured outlines around entities", Category.VISUALS);
-		setSubCategory("Render");
+		super("Entity Glow", "Coloured outlines around entities", Category.COMBAT);
+		setSubCategory("Target");
 		onTick();
 	}
 

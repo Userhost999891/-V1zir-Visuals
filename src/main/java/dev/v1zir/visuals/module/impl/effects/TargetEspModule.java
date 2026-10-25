@@ -39,8 +39,8 @@ public final class TargetEspModule extends Module implements WorldEffect {
 	private float fade;
 
 	public TargetEspModule() {
-		super("Target ESP", "Highlights your current opponent", Category.EFFECTS);
-		setSubCategory("Combat");
+		super("Target ESP", "Highlights your current opponent", Category.COMBAT);
+		setSubCategory("Target");
 	}
 
 	@Override

@@ -234,7 +234,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		List<Module> modules = context.computeOnClient(client -> {
 			List<Module> list = new ArrayList<>();
 			for (Module module : ModuleManager.all()) {
-				if (module.canToggle() && module.category() != Category.CLIENT) list.add(module);
+				if (module.canToggle() && module.category() != Category.SETTINGS) list.add(module);
 			}
 			return list;
 		});
@@ -368,12 +368,10 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.getInput().releaseKey(options -> options.forwardKey);
 		bench(context, "world-hud-elements");
 
-		context.runOnClient(client -> setStatic(ClickGuiScreen.class, "tab", 1));
-		context.setScreen(ClickGuiScreen::new);
+		context.setScreen(ClickGuiScreen::hudEditor);
 		context.waitTicks(30);
 		context.takeScreenshot("hud-elements-editor");
 		context.runOnClient(client -> {
-			setStatic(ClickGuiScreen.class, "tab", 0);
 			for (Class<? extends Module> type : elements) ModuleManager.get(type).setEnabled(false, false);
 		});
 		context.setScreen(() -> null);
@@ -381,6 +379,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 	}
 
 	private static void clickGui(ClientGameTestContext context) {
+		context.runOnClient(client -> setStatic(ClickGuiScreen.class, "tab", Category.VISUALS.ordinal()));
 		context.getInput().pressKey(GLFW.GLFW_KEY_RIGHT_SHIFT);
 		context.waitTicks(5);
 		boolean opened = context.computeOnClient(client -> client.currentScreen instanceof ClickGuiScreen);
@@ -395,6 +394,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.getInput().typeChars("sky");
 		context.waitTicks(10);
 		context.takeScreenshot("clickgui-search");
+		context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
 
 		// Every panel style of the Theme module.
 		for (Theme.Style style : new Theme.Style[]{Theme.Style.NORMAL, Theme.Style.BLUR}) {
@@ -403,15 +403,32 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			if (style != Theme.Style.BLUR) context.takeScreenshot("clickgui-style-" + style.name().toLowerCase());
 		}
 
-		for (int tab : new int[]{2, 1}) {
+		// One screenshot per tab; Settings holds the theme editor.
+		for (Category category : new Category[]{Category.COMBAT, Category.SHADERS, Category.HUD, Category.SETTINGS}) {
 			context.setScreen(() -> null);
-			context.runOnClient(client -> setStatic(ClickGuiScreen.class, "tab", tab));
+			context.runOnClient(client -> setStatic(ClickGuiScreen.class, "tab", category.ordinal()));
 			context.setScreen(ClickGuiScreen::new);
 			context.waitTicks(30);
-			context.takeScreenshot(tab == 2 ? "clickgui-themes" : "clickgui-hud-editor");
+			context.takeScreenshot(category == Category.SETTINGS ? "clickgui-themes" : "clickgui-tab-" + category.name().toLowerCase(Locale.ROOT));
 		}
 
-		context.runOnClient(client -> setStatic(ClickGuiScreen.class, "tab", 0));
+		// A module's settings column, on the Shaders tab.
+		context.setScreen(() -> null);
+		context.runOnClient(client -> setStatic(ClickGuiScreen.class, "tab", Category.SHADERS.ordinal()));
+		context.setScreen(ClickGuiScreen::new);
+		context.waitTicks(10);
+		context.runOnClient(client -> {
+			if (client.currentScreen instanceof ClickGuiScreen screen) screen.openSettings(ModuleManager.get(ShaderSkyModule.class));
+		});
+		context.waitTicks(20);
+		context.takeScreenshot("clickgui-module-settings");
+
+		context.setScreen(() -> null);
+		context.setScreen(ClickGuiScreen::hudEditor);
+		context.waitTicks(30);
+		context.takeScreenshot("clickgui-hud-editor");
+
+		context.runOnClient(client -> setStatic(ClickGuiScreen.class, "tab", Category.VISUALS.ordinal()));
 		context.setScreen(() -> null);
 	}
 

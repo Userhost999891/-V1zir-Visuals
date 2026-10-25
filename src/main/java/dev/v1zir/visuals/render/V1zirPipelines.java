@@ -21,7 +21,7 @@ import net.minecraft.client.render.VertexFormats;
  *     UV0    float2  position relative to the shape centre (GUI px)
  *     UV1    short2  half size * 8
  *     UV2    short2  corner radius * 8, softness * 8
- *     Normal byte3   outline thickness / 16, mode, corner mask
+ *     Normal byte3   outline thickness / 16, mode (kind | MATTE | LIT flags), corner mask
  *   TEXT (particle vertex format)
  *     UV0    float2  SDF atlas coordinates
  *     UV2    short2  weight shift * 256, extra softness * 256
@@ -38,6 +38,7 @@ public final class V1zirPipelines {
 		.withVertexShader(V1zir.id("core/gui_shape"))
 		.withFragmentShader(V1zir.id("core/gui_shape"))
 		.withVertexFormat(VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL, VertexFormat.DrawMode.QUADS)
+		.withUniform("V1zirGui", UniformType.UNIFORM_BUFFER)
 		.withCull(false)
 		.build();
 

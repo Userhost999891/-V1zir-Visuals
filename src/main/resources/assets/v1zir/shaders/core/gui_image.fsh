@@ -12,12 +12,16 @@ in vec3 style;
 
 out vec4 fragColor;
 
-// A texture (album art) stretched over a rounded rectangle; the vertex colour tints it and carries its opacity.
+// A texture (album art, the logo) stretched over a rounded rectangle; the vertex colour tints it and carries its opacity.
 void main() {
 	float d = v1zirShapeDistance(localPos, shape, style.z);
 	float coverage = v1zirShapeCoverage(d, shape, style);
 	if (coverage <= 0.0) discard;
 	vec2 uv = clamp(localPos / max(shape.xy * 2.0, vec2(1e-3)) + 0.5, 0.0, 1.0);
-	vec4 texel = texture(Sampler0, uv);
+	// Four bilinear taps across the pixel's footprint: large images drawn small stay smooth instead of aliasing.
+	vec2 dx = dFdx(uv) * 0.25;
+	vec2 dy = dFdy(uv) * 0.25;
+	vec4 texel = (texture(Sampler0, uv - dx - dy) + texture(Sampler0, uv + dx - dy)
+		+ texture(Sampler0, uv - dx + dy) + texture(Sampler0, uv + dx + dy)) * 0.25;
 	fragColor = vec4(texel.rgb * vertexColor.rgb, texel.a * vertexColor.a * coverage) * ColorModulator;
 }

@@ -22,7 +22,7 @@ public final class ThemeModule extends Module {
 	public final BoolSetting textShadow = add(new BoolSetting("Text shadow", true));
 
 	public ThemeModule() {
-		super("Theme", "Colours, glass and font of the interface", Category.CLIENT);
+		super("Theme", "Colours, glass and font of the interface", Category.SETTINGS);
 		setEnabled(true, false);
 	}
 

@@ -140,16 +140,24 @@ public final class Theme {
 		return ColorUtil.withAlpha(ColorUtil.brighten(preset().base(), 0.06f), Math.round(255 * Math.min(1f, panelOpacity() + 0.08f)));
 	}
 
-	public static int row() {
-		return ColorUtil.withAlpha(0xFFFFFF, 10);
+	/** Raised matte sub-surface (sidebar, cards): a step lighter than the panel, slightly see-through. */
+	public static int raised() {
+		return ColorUtil.withAlpha(ColorUtil.brighten(preset().base(), 0.1f), 120);
 	}
 
-	public static int rowHover() {
-		return ColorUtil.withAlpha(0xFFFFFF, 22);
+	/** A raised surface that is lit: hovered, or an enabled module (a little of the accent mixes in). */
+	public static int raisedLit() {
+		return ColorUtil.withAlpha(ColorUtil.lerp(ColorUtil.brighten(preset().base(), 0.2f), accent(), 0.08f), 170);
 	}
 
+	/** Recessed well (tracks, fields) cut into a surface. */
+	public static int well() {
+		return 0x30000000;
+	}
+
+	/** Soft 1 px rim of panels and cards. */
 	public static int outline() {
-		return ColorUtil.withAlpha(0xFFFFFF, 20);
+		return ColorUtil.withAlpha(0xFFFFFF, 24);
 	}
 
 	public static int text() {

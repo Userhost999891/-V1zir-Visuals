@@ -47,8 +47,8 @@ public final class BlockHighlightModule extends Module implements WorldEffect {
 	private boolean hasShape;
 
 	public BlockHighlightModule() {
-		super("Block Highlight", "Rounded glowing outline on the block you look at", Category.WORLD);
-		setSubCategory("Render");
+		super("Block Highlight", "Rounded glowing outline on the block you look at", Category.VISUALS);
+		setSubCategory("World");
 		for (int i = 0; i < box.length; i++) box[i] = new Anim(0f, 16f);
 	}
 

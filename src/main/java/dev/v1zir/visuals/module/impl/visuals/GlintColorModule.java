@@ -44,8 +44,8 @@ public final class GlintColorModule extends Module {
 	private long glintLast;
 
 	public GlintColorModule() {
-		super("Glint Color", "Colour and speed of the enchantment glint", Category.VISUALS);
-		setSubCategory("Render");
+		super("Glint Color", "Colour and speed of the enchantment glint", Category.SHADERS);
+		setSubCategory("World");
 	}
 
 	@Override
