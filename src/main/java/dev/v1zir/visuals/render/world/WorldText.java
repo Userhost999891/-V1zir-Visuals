@@ -27,9 +27,15 @@ import java.util.Arrays;
  * SDF text in world space, for damage numbers, nametags and 3D lyrics.
  *
  * <p>Call {@link #draw} from {@link WorldEffect#render3D}. Every string of the frame is queued,
- * sorted back to front and drawn after the other world effects with one draw call per font
- * atlas page and depth mode. Positions are world coordinates and sizes are in blocks. A
- * {@link Style} is mutable and reusable: keep one per use and change it freely between calls.
+ * sorted back to front and drawn after the other world effects; neighbours in that order that
+ * share a font atlas page and depth mode share one draw call. Positions are world coordinates and
+ * sizes are in blocks. A {@link Style} is mutable and reusable: keep one per use and change it
+ * freely between calls.
+ *
+ * <p>Labels (nametags) are built from several parts around one anchor: text moved within the text
+ * plane by an offset, and rounded {@link #plate plates} and soft {@link #halo halos} for
+ * backgrounds and bars. Parts with the same anchor sort as one and draw in the order they were
+ * queued, so a near label always covers a far one.
  * <pre>
  *   private final WorldText.Style style = new WorldText.Style().size(0.3f).shadow().glow(0, 0.6f);
  *
@@ -46,6 +52,10 @@ public final class WorldText {
 	/** Edge shifts beyond this would reach the end of the glyph padding and show the quad's border. */
 	private static final float MAX_SHIFT = 0.42f;
 	private static final int ADDITIVE = 16384;
+	/** UV2.y flag of plate quads: UV0 is then the position in half heights from the plate's centre. */
+	private static final int PLATE = 8192;
+	/** Plates have no atlas page and fit into any batch of their depth mode. */
+	private static final int ANY_PAGE = -1;
 	private static final IntComparator BACK_TO_FRONT = WorldText::backToFront;
 
 	// Quads of the frame in queue order, and the copy re-ordered for upload.
@@ -53,16 +63,18 @@ public final class WorldText {
 	private static ByteBuffer upload = MemoryUtil.memAlloc(QUAD * 512);
 	private static int quads;
 
-	// One span per string and atlas page; spans are what gets sorted.
+	// One span per string and atlas page (or per plate); spans are what gets sorted.
 	private static int[] spanFirst = new int[64];
 	private static int[] spanQuads = new int[64];
-	private static int[] spanBucket = new int[64];
+	private static int[] spanPage = new int[64];
+	private static boolean[] spanSeeThrough = new boolean[64];
 	private static float[] spanDepth = new float[64];
 	private static int[] order = new int[64];
 	private static int spans;
 
-	// Draw calls of the sorted upload: bucket = page slot * 2 + see-through.
-	private static int[] batchBucket = new int[64];
+	// Draw calls of the sorted upload: page slot (ANY_PAGE until a string joins) and depth mode.
+	private static int[] batchPage = new int[64];
+	private static boolean[] batchSeeThrough = new boolean[64];
 	private static int[] batchFirst = new int[64];
 	private static int[] batchQuads = new int[64];
 
@@ -264,25 +276,96 @@ public final class WorldText {
 	 * alignment and vertically at the middle of the capital letters.
 	 */
 	public static void draw(String text, double x, double y, double z, Style style) {
+		draw(text, x, y, z, 0f, 0f, style);
+	}
+
+	/**
+	 * Queues text moved by (dx, dy) blocks along the right and up directions of the text plane, for
+	 * the lines of a label that share one anchor.
+	 */
+	public static void draw(String text, double x, double y, double z, float dx, float dy, Style style) {
 		if (text == null || text.isEmpty() || style.alpha <= 0.004f) return;
-		ax = (float) (x - WorldEffectRenderer.camX);
-		ay = (float) (y - WorldEffectRenderer.camY);
-		az = (float) (z - WorldEffectRenderer.camZ);
-		// Entirely behind the camera (letters are rarely wider than the size).
-		if (ax * fwdX + ay * fwdY + az * fwdZ < -(text.length() + 2) * style.size) return;
+		// Letters are rarely wider than the size.
+		if (!anchor(x, y, z, (text.length() + 2) * style.size + Math.abs(dx) + Math.abs(dy))) return;
 		SdfFont font = font(style);
 		layout(font, text, style);
 		if (glyphs == 0) return;
+		for (int i = 0; i < glyphs; i++) {
+			int o = i * 8;
+			layout[o] += dx;
+			layout[o + 1] += dy;
+			layout[o + 2] += dx;
+			layout[o + 3] += dy;
+		}
+		lineLeft += dx;
 		orient(style);
 		float depth = ax * ax + ay * ay + az * az;
-		int seeThrough = style.seeThrough ? 1 : 0;
 		for (int i = 0; i < glyphs; i++) {
 			GlyphAtlas page = glyphPage[i];
 			if (queued(page, i)) continue;
 			int first = quads;
 			emit(font, page, style);
-			addSpan(first, quads - first, slot(page) * 2 + seeThrough, depth);
+			addSpan(first, quads - first, slot(page), style.seeThrough, depth);
 		}
+	}
+
+	/**
+	 * Queues a rounded rectangle of width x height blocks centred at (dx, dy) in the text plane of
+	 * the anchor, coloured from left to right: label backgrounds and bars. The style gives the
+	 * facing, the fade and the depth mode.
+	 */
+	public static void plate(double x, double y, double z, float dx, float dy, float width, float height, float radius,
+							 int left, int right, Style style) {
+		shape(x, y, z, dx, dy, width, height, radius, 0f, left, right, false, style);
+	}
+
+	/**
+	 * Queues the soft shadow (additive false) or glow (additive true) of a rounded rectangle; it
+	 * fades out over softness blocks around the rectangle.
+	 */
+	public static void halo(double x, double y, double z, float dx, float dy, float width, float height, float radius,
+							float softness, int argb, boolean additive, Style style) {
+		shape(x, y, z, dx, dy, width, height, radius, Math.max(softness, 1e-3f), argb, argb, additive, style);
+	}
+
+	private static void shape(double x, double y, double z, float dx, float dy, float width, float height, float radius,
+							  float softness, int left, int right, boolean additive, Style style) {
+		if (style.alpha <= 0.004f || width <= 0f || height <= 0f) return;
+		float hh = height * 0.5f;
+		// Everything in half heights: the shader gets the aspect ratio, radius and softness of the quad.
+		float aspect = Math.min(width * 0.5f / hh, 127f);
+		float r = Math.min(radius / hh, Math.min(1f, aspect));
+		float soft = Math.min(softness / hh, 7.8f);
+		// Crisp plates keep a little room around the edge for its antialiasing.
+		float margin = soft > 0f ? soft : 0.25f;
+		float ex = (aspect + margin) * hh;
+		float ey = (1f + margin) * hh;
+		if (!anchor(x, y, z, ex + ey + Math.abs(dx) + Math.abs(dy))) return;
+		orient(style);
+		// A batch of plates alone still binds an atlas page.
+		if (pageCount == 0) slot(font(style).glyph('0').page());
+		short aspectBits = (short) Math.round(aspect * 256f);
+		short shapeBits = (short) (PLATE + (additive ? ADDITIVE : 0) + (Math.round(soft * 8f) << 6) + Math.round(r * 63f));
+		int a = ColorUtil.fade(left, style.alpha);
+		int b = ColorUtil.fade(right, style.alpha);
+		float u = aspect + margin;
+		float v = 1f + margin;
+		ensureStaging(quads + 1);
+		long p = MemoryUtil.memAddress(staging) + (long) quads * QUAD;
+		vertex(p, ax, ay, az, dx - ex, dy + ey, -u, v, a, aspectBits, shapeBits);
+		vertex(p + STRIDE, ax, ay, az, dx - ex, dy - ey, -u, -v, a, aspectBits, shapeBits);
+		vertex(p + STRIDE * 2, ax, ay, az, dx + ex, dy - ey, u, -v, b, aspectBits, shapeBits);
+		vertex(p + STRIDE * 3, ax, ay, az, dx + ex, dy + ey, u, v, b, aspectBits, shapeBits);
+		quads++;
+		addSpan(quads - 1, 1, ANY_PAGE, style.seeThrough, ax * ax + ay * ay + az * az);
+	}
+
+	/** Moves the anchor of the next part into camera space; false when it lies entirely behind the camera. */
+	private static boolean anchor(double x, double y, double z, float reach) {
+		ax = (float) (x - WorldEffectRenderer.camX);
+		ay = (float) (y - WorldEffectRenderer.camY);
+		az = (float) (z - WorldEffectRenderer.camZ);
+		return ax * fwdX + ay * fwdY + az * fwdZ >= -reach;
 	}
 
 	private static SdfFont font(Style style) {
@@ -489,28 +572,30 @@ public final class WorldText {
 		return pageCount++;
 	}
 
-	private static void addSpan(int first, int count, int bucket, float depth) {
+	private static void addSpan(int first, int count, int page, boolean seeThrough, float depth) {
 		if (spans == spanFirst.length) {
 			int n = spans * 2;
 			spanFirst = Arrays.copyOf(spanFirst, n);
 			spanQuads = Arrays.copyOf(spanQuads, n);
-			spanBucket = Arrays.copyOf(spanBucket, n);
+			spanPage = Arrays.copyOf(spanPage, n);
+			spanSeeThrough = Arrays.copyOf(spanSeeThrough, n);
 			spanDepth = Arrays.copyOf(spanDepth, n);
 			order = Arrays.copyOf(order, n);
-			batchBucket = Arrays.copyOf(batchBucket, n);
+			batchPage = Arrays.copyOf(batchPage, n);
+			batchSeeThrough = Arrays.copyOf(batchSeeThrough, n);
 			batchFirst = Arrays.copyOf(batchFirst, n);
 			batchQuads = Arrays.copyOf(batchQuads, n);
 		}
 		spanFirst[spans] = first;
 		spanQuads[spans] = count;
-		spanBucket[spans] = bucket;
+		spanPage[spans] = page;
+		spanSeeThrough[spans] = seeThrough;
 		spanDepth[spans] = depth;
 		spans++;
 	}
 
-	/** Groups spans by page and depth mode; within a group far strings come first, ties keep queue order. */
+	/** Far spans first; ties (the parts of one label share their anchor's depth) keep queue order. */
 	private static int backToFront(int a, int b) {
-		if (spanBucket[a] != spanBucket[b]) return Integer.compare(spanBucket[a], spanBucket[b]);
 		if (spanDepth[a] != spanDepth[b]) return Float.compare(spanDepth[b], spanDepth[a]);
 		return Integer.compare(a, b);
 	}
@@ -533,7 +618,7 @@ public final class WorldText {
 		return spans == 0;
 	}
 
-	/** Draws everything queued this frame, sorted, with one draw per page and depth mode (WorldEffectRenderer). */
+	/** Draws everything queued this frame back to front, merging neighbours that can share a draw (WorldEffectRenderer). */
 	static void flush(GpuBufferSlice params) {
 		if (spans == 0) return;
 		for (int i = 0; i < spans; i++) order[i] = i;
@@ -547,11 +632,17 @@ public final class WorldText {
 		int largest = 0;
 		for (int i = 0; i < spans; i++) {
 			int s = order[i];
-			if (batches == 0 || batchBucket[batches - 1] != spanBucket[s]) {
-				batchBucket[batches] = spanBucket[s];
+			int page = spanPage[s];
+			int last = batches - 1;
+			if (batches == 0 || batchSeeThrough[last] != spanSeeThrough[s]
+				|| page != ANY_PAGE && batchPage[last] != ANY_PAGE && batchPage[last] != page) {
+				batchPage[batches] = page;
+				batchSeeThrough[batches] = spanSeeThrough[s];
 				batchFirst[batches] = written;
 				batchQuads[batches] = 0;
 				batches++;
+			} else if (batchPage[last] == ANY_PAGE) {
+				batchPage[last] = page;
 			}
 			MemoryUtil.memCopy(src + (long) spanFirst[s] * QUAD, dst + (long) written * QUAD, (long) spanQuads[s] * QUAD);
 			written += spanQuads[s];
@@ -569,10 +660,9 @@ public final class WorldText {
 		GpuSampler sampler = RenderSystem.getSamplerCache().get(FilterMode.LINEAR);
 		try (RenderPass pass = WorldEffectRenderer.openPass(() -> "V1zir world text")) {
 			for (int b = 0; b < batches; b++) {
-				int bucket = batchBucket[b];
-				pass.setPipeline((bucket & 1) != 0 ? V1zirPipelines.WORLD_TEXT_SEE_THROUGH : V1zirPipelines.WORLD_TEXT);
+				pass.setPipeline(batchSeeThrough[b] ? V1zirPipelines.WORLD_TEXT_SEE_THROUGH : V1zirPipelines.WORLD_TEXT);
 				pass.setUniform("WorldParams", params);
-				pass.bindTexture("Sampler0", views[bucket >> 1], sampler);
+				pass.bindTexture("Sampler0", views[Math.max(batchPage[b], 0)], sampler);
 				pass.setVertexBuffer(0, vertices);
 				pass.setIndexBuffer(indexBuffer, indices.getIndexType());
 				// Quad indices restart at 0 for every batch; baseVertex moves them onto its vertices.

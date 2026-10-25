@@ -34,6 +34,7 @@ import dev.v1zir.visuals.module.impl.visuals.EntityGlowModule;
 import dev.v1zir.visuals.module.impl.visuals.FreeLookModule;
 import dev.v1zir.visuals.module.impl.visuals.FullBrightModule;
 import dev.v1zir.visuals.module.impl.visuals.HandChamsModule;
+import dev.v1zir.visuals.module.impl.visuals.NametagsModule;
 import dev.v1zir.visuals.module.impl.visuals.NoRenderModule;
 import dev.v1zir.visuals.module.impl.visuals.ShaderSkyModule;
 import dev.v1zir.visuals.module.impl.visuals.SwingAnimationsModule;
@@ -71,6 +72,7 @@ public final class ModuleManager {
 		register(new DamageTintModule());
 		register(new ColorGradingModule());
 		register(new EntityGlowModule());
+		register(new NametagsModule());
 		// Effects
 		register(new TargetEspModule());
 		register(new JumpCirclesModule());
