@@ -33,12 +33,14 @@ import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.hud.DebugHud;
 import net.minecraft.client.gui.screen.AccessibilityOnboardingScreen;
 import net.minecraft.client.gui.screen.TitleScreen;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.client.gui.screen.option.OptionsScreen;
 import net.minecraft.client.option.GameOptions;
 import net.minecraft.client.option.KeyBinding;
+import net.minecraft.util.profiler.log.MultiValueDebugSampleLog;
 import org.lwjgl.glfw.GLFW;
 
 import jdk.jfr.Recording;
@@ -54,6 +56,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.function.IntConsumer;
 
 /**
  * Starts the real client and walks through everything the mod draws: the main menu, every sky
@@ -187,14 +190,11 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		bench(context, name);
 	}
 
-	/** Average wall time per client tick (one frame each in the game test), for the CI benchmark table. */
+	/** Frame time of a scene the test does not touch, for the CI benchmark table. */
 	private static void bench(ClientGameTestContext context, String scene) {
 		context.waitTicks(5);
-		long start = System.nanoTime();
-		context.waitTicks(BENCH_TICKS);
-		double ms = (System.nanoTime() - start) / 1.0e6 / BENCH_TICKS;
-		int fps = context.computeOnClient(client -> client.getCurrentFps());
-		System.out.printf(Locale.ROOT, "V1ZIR-BENCH %-26s %8.2f ms/frame  %4d fps%n", scene, ms, fps);
+		measure(context, scene, BENCH_TICKS, tick -> {
+		});
 	}
 
 	/**
@@ -286,16 +286,41 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		Function<GameOptions, KeyBinding> key = forward ? options -> options.forwardKey : options -> options.backKey;
 		context.getInput().holdKey(key);
 		context.getInput().holdKey(options -> options.sprintKey);
-		long start = System.nanoTime();
-		for (int i = 0; i < ticks; i++) {
-			context.getInput().moveCursor(6.0, i % 40 < 20 ? 1.5 : -1.5);
-			context.waitTick();
-		}
-		double ms = (System.nanoTime() - start) / 1.0e6 / ticks;
+		measure(context, scene, ticks, tick -> context.getInput().moveCursor(6.0, tick % 40 < 20 ? 1.5 : -1.5));
 		context.getInput().releaseKey(key);
 		context.getInput().releaseKey(options -> options.sprintKey);
-		int fps = context.computeOnClient(client -> client.getCurrentFps());
-		System.out.printf(Locale.ROOT, "V1ZIR-BENCH %-26s %8.2f ms/frame  %4d fps%n", scene, ms, fps);
+	}
+
+	/**
+	 * Runs the given number of client ticks and prints the mean frame time, the matching FPS and
+	 * the 99th percentile frame time. The client renders freely between game test ticks, so every
+	 * frame is read from its own frame log (the one behind the F3 frame chart) after each tick;
+	 * timing the ticks themselves could never resolve anything below 50 ms.
+	 */
+	private static void measure(ClientGameTestContext context, String scene, int ticks, IntConsumer step) {
+		context.runOnClient(client -> frameLog(client).clear());
+		List<Long> frames = new ArrayList<>();
+		for (int i = 0; i < ticks; i++) {
+			step.accept(i);
+			context.waitTick();
+			context.runOnClient(client -> {
+				MultiValueDebugSampleLog log = frameLog(client);
+				for (int f = 0; f < log.getLength(); f++) frames.add(log.get(f));
+				log.clear();
+			});
+		}
+		frames.sort(null);
+		long total = 0L;
+		for (long nanos : frames) total += nanos;
+		double ms = frames.isEmpty() ? 0.0 : total / 1.0e6 / frames.size();
+		double p99 = frames.isEmpty() ? 0.0 : frames.get(Math.min(frames.size() - 1, (int) (frames.size() * 0.99))) / 1.0e6;
+		int fps = ms > 0.0 ? (int) Math.round(1000.0 / ms) : 0;
+		System.out.printf(Locale.ROOT, "V1ZIR-BENCH %-26s %8.2f ms/frame  %4d fps  %8.2f ms p99  %5d frames%n", scene, ms, fps, p99, frames.size());
+	}
+
+	/** Durations of the frames since the last clear, oldest first, in nanoseconds. */
+	private static MultiValueDebugSampleLog frameLog(MinecraftClient client) {
+		return (MultiValueDebugSampleLog) field(client.getDebugHud(), DebugHud.class, "frameNanosLog");
 	}
 
 	/** Runs the body under a Java Flight Recorder recording saved as v1zir-<name>.jfr in the run directory. */
