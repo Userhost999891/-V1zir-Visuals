@@ -27,9 +27,10 @@ void main() {
 		float r = min(0.12, 0.35 * min(h.x, h.y));
 		vec2 e = abs(p) - h + r;
 		float d = length(max(e, 0.0)) + min(max(e.x, e.y), 0.0) - r;
-		// Distance from the border in pixels: a crisp line and a soft glow of constant screen size.
-		float px = max(-d, 0.0) / max(fwidth(d), 1e-6);
-		a = 1.0 - smoothstep(1.0, 2.4, px) + exp(-px * 0.16) * 0.5;
+		// Distance inside the border in pixels: a crisp line and a soft glow of constant screen size,
+		// antialiased outwards so the face corners stay round.
+		float px = -d / max(fwidth(d), 1e-6);
+		a = (1.0 - smoothstep(1.0, 2.4, px) + exp(-max(px, 0.0) * 0.16) * 0.5) * clamp(px + 1.0, 0.0, 1.0);
 	} else if (texCoord0.x > 2.0) {
 		a = 1.0;
 	} else if (texCoord0.y >= 1.5) {

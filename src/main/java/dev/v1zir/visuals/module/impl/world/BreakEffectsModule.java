@@ -110,12 +110,12 @@ public final class BreakEffectsModule extends Module implements WorldEffect {
 				now = bounds(pos, state, ownBox, 0);
 				ownPos = now ? pos : null;
 				ownState = state;
-				lastProgress = 0f;
 			}
 			progress = im.currentBreakingProgress;
+			// A new attempt starts from its own progress instead of sliding down from the last one.
+			if (!breaking) lastProgress = progress;
 		} else if (breaking) {
-			progress = lastProgress;
-			// Broken rather than given up: a copy of the box bursts outwards while the indicator is gone.
+			// Broken rather than given up: the frame bursts outwards while the indicator is gone.
 			if (mc.world.getBlockState(ownPos).isAir()) {
 				System.arraycopy(ownBox, 0, burstBox, 0, 6);
 				burst.snap(0f);
@@ -172,37 +172,51 @@ public final class BreakEffectsModule extends Module implements WorldEffect {
 	@Override
 	public void render3D(float tickDelta) {
 		float pop = burst.target(1f).get();
-		if (pop < 1f) draw(burstBox, 0, 1f, 1f - pop, 1f + 0.22f * pop);
+		if (pop < 1f) frame(burstBox, 0, color(1f), 1f - pop, 1f + 0.22f * pop);
 		float shown = ownShown.target(breaking ? 1f : 0f).get();
 		if (shown > 0.004f && ownPos != null) {
 			float p = Math.min(1f, lastProgress + (progress - lastProgress) * tickDelta);
-			draw(ownBox, 0, p, shown, 1f);
+			draw(ownBox, 0, p, shown);
 			if (percentage.on()) label(p, shown);
 		}
 		if (!others.on()) return;
 		for (int i = 0; i < OTHERS; i++) {
 			float a = otherShown[i].target(otherSeen[i] ? 1f : 0f).get();
 			if (a <= 0.004f || otherPos[i] == null) continue;
-			draw(otherBox, i * 6, otherProgress[i].get(), a * 0.85f, 1f);
+			draw(otherBox, i * 6, otherProgress[i].get(), a * 0.85f);
 		}
 	}
 
-	/** Draws the progress box for the block bounds at b[o..o+5]. */
-	private void draw(double[] b, int o, float p, float alpha, float scale) {
+	/** Colour at progress p, from the start to the end colour. */
+	private int color(float p) {
 		int start = themeColor.on() ? Theme.accent2() : startColor.argb();
 		int end = themeColor.on() ? Theme.accent() : endColor.argb();
-		int color = ColorUtil.lerp(start, end, p);
+		return ColorUtil.lerp(start, end, p);
+	}
+
+	/** Full-size glowing frame of the block bounds at b[o..o+5], scaled around their centre. */
+	private void frame(double[] b, int o, int color, float alpha, float scale) {
 		double cx = (b[o] + b[o + 3]) * 0.5;
 		double cy = (b[o + 1] + b[o + 4]) * 0.5;
 		double cz = (b[o + 2] + b[o + 5]) * 0.5;
 		double hx = (b[o + 3] - b[o]) * 0.5 * scale + INFLATE;
 		double hy = (b[o + 4] - b[o + 1]) * 0.5 * scale + INFLATE;
 		double hz = (b[o + 5] - b[o + 2]) * 0.5 * scale + INFLATE;
-		WorldEffectRenderer.Mesh glow = WorldEffectRenderer.glow();
-		// Faint full-size frame, so the progress always reads against the whole block.
-		int ghost = ColorUtil.withAlpha(color, Math.round(70 * alpha));
-		Draw3D.roundedBox(glow, cx - hx, cy - hy, cz - hz, cx + hx, cy + hy, cz + hz, ghost, ghost);
+		int c = ColorUtil.withAlpha(color, Math.round(255 * alpha));
+		Draw3D.roundedBox(WorldEffectRenderer.glow(), cx - hx, cy - hy, cz - hz, cx + hx, cy + hy, cz + hz, c, c);
+	}
 
+	/** Draws the progress box for the block bounds at b[o..o+5]. */
+	private void draw(double[] b, int o, float p, float alpha) {
+		int color = color(p);
+		// Faint full-size frame, so the progress always reads against the whole block.
+		frame(b, o, color, 0.27f * alpha, 1f);
+		double cx = (b[o] + b[o + 3]) * 0.5;
+		double cy = (b[o + 1] + b[o + 4]) * 0.5;
+		double cz = (b[o + 2] + b[o + 5]) * 0.5;
+		double hx = (b[o + 3] - b[o]) * 0.5 + INFLATE;
+		double hy = (b[o + 4] - b[o + 1]) * 0.5 + INFLATE;
+		double hz = (b[o + 5] - b[o + 2]) * 0.5 + INFLATE;
 		box[0] = cx - hx;
 		box[1] = cy - hy;
 		box[2] = cz - hz;
@@ -217,7 +231,7 @@ public final class BreakEffectsModule extends Module implements WorldEffect {
 		Draw3D.solidBox(WorldEffectRenderer.translucent(), box[0], box[1], box[2], box[3], box[4], box[5],
 			ColorUtil.withAlpha(color, Math.round(80 * alpha)), ColorUtil.withAlpha(color, Math.round(45 * alpha)));
 		int edge = ColorUtil.withAlpha(color, Math.round(235 * alpha));
-		Draw3D.roundedBox(glow, box[0], box[1], box[2], box[3], box[4], box[5], edge, edge);
+		Draw3D.roundedBox(WorldEffectRenderer.glow(), box[0], box[1], box[2], box[3], box[4], box[5], edge, edge);
 	}
 
 	private void scaleBox(float s, double cx, double cy, double cz, double hx, double hy, double hz) {
@@ -239,9 +253,7 @@ public final class BreakEffectsModule extends Module implements WorldEffect {
 		double x = cx + side.getOffsetX() * ((ownBox[3] - ownBox[0]) * 0.5 + 0.28);
 		double y = cy + side.getOffsetY() * ((ownBox[4] - ownBox[1]) * 0.5 + 0.28);
 		double z = cz + side.getOffsetZ() * ((ownBox[5] - ownBox[2]) * 0.5 + 0.28);
-		int start = themeColor.on() ? Theme.accent2() : startColor.argb();
-		int end = themeColor.on() ? Theme.accent() : endColor.argb();
-		text.color(0xFFFFFFFF).glow(ColorUtil.lerp(start, end, p), 0.55f).alpha(alpha);
+		text.color(0xFFFFFFFF).glow(color(p), 0.55f).alpha(alpha);
 		WorldText.draw(PERCENT[Math.round(p * 100f)], x, y, z, text);
 	}
 }
