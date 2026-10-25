@@ -51,9 +51,9 @@ public final class KeyComponent extends SettingComponent<KeySetting> {
 		float cw = Math.max(18f, chipWidth.width(font, label, Ui.SMALL) + 8f);
 		float cx = x + width - cw;
 		float cy = y + (HEIGHT - CHIP_HEIGHT) / 2f;
-		if (t > 0.01f) Render2D.shadow(ctx, cx, cy, cw, CHIP_HEIGHT, Ui.CELL_RADIUS, 5f, ColorUtil.withAlpha(Theme.accent(), Math.round(90 * t)));
-		Render2D.matte(ctx, cx, cy, cw, CHIP_HEIGHT, Ui.CELL_RADIUS, ColorUtil.lerp(ColorUtil.withAlpha(0xFFFFFF, Math.round(9 + 13 * h)), Theme.accent(), t), Ui.LIT);
-		Render2D.rim(ctx, cx, cy, cw, CHIP_HEIGHT, Ui.CELL_RADIUS, ColorUtil.withAlpha(0xFFFFFF, Math.round((14 + 20 * h) * (1f - t))), Ui.LIT);
+		int accent = Theme.accent();
+		Render2D.matte(ctx, cx, cy, cw, CHIP_HEIGHT, Ui.CELL_RADIUS, ColorUtil.lerp(ColorUtil.withAlpha(0xFFFFFF, Math.round(9 + 11 * h)), ColorUtil.withAlpha(accent, 50), t), Ui.LIT);
+		Render2D.rim(ctx, cx, cy, cw, CHIP_HEIGHT, Ui.CELL_RADIUS, ColorUtil.lerp(ColorUtil.withAlpha(0xFFFFFF, Math.round(16 + 18 * h)), ColorUtil.withAlpha(accent, 170), t), Ui.LIT);
 		Render2D.textCentered(ctx, font, label, cx + cw / 2f, Render2D.middle(font, cy + CHIP_HEIGHT / 2f, Ui.SMALL), Ui.SMALL,
 			ColorUtil.lerp(labelColor(h), 0xFFFFFFFF, t));
 		return HEIGHT;

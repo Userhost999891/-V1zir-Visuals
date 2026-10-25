@@ -10,7 +10,7 @@ import dev.v1zir.visuals.util.Theme;
 import net.minecraft.client.gui.DrawContext;
 import org.lwjgl.glfw.GLFW;
 
-/** Label and value over a slim recessed track filled with the accent; the knob carries an accent core. */
+/** Label and value over a slim track filled with the accent; the white knob grows a little while hovered or dragged. */
 public final class SliderComponent extends SettingComponent<NumberSetting> {
 	private static final float HEIGHT = 22f;
 	private static final float TRACK = 3f;
@@ -42,21 +42,18 @@ public final class SliderComponent extends SettingComponent<NumberSetting> {
 		SdfFont valueFont = Fonts.semibold();
 		float vw = valueWidth.width(valueFont, shownText, Ui.LABEL);
 		int accent = Theme.accent();
-		int accent2 = Theme.accent2();
-		Render2D.text(ctx, valueFont, shownText, x + width - vw, y + 1.5f, Ui.LABEL, ColorUtil.lerp(ColorUtil.lerp(accent, Theme.text(), 0.25f), accent, h));
+		Render2D.text(ctx, valueFont, shownText, x + width - vw, y + 1.5f, Ui.LABEL, ColorUtil.lerp(Theme.textDim(), Theme.text(), h));
 
 		float ty = y + 15f;
 		float f = fill.target((float) setting.fraction()).get();
 		float fw = Math.max(TRACK, width * f);
-		Render2D.matte(ctx, x, ty, width, TRACK, TRACK / 2f, ColorUtil.withAlpha(0xFFFFFF, Math.round(18 + 10 * h)), 0);
-		if (h > 0.01f) Render2D.glow(ctx, x, ty, fw, TRACK, TRACK / 2f, 5f, ColorUtil.withAlpha(accent, Math.round(80 * h)), ColorUtil.withAlpha(accent2, Math.round(80 * h)));
-		Render2D.gradientH(ctx, x, ty, fw, TRACK, TRACK / 2f, accent, accent2);
+		Render2D.round(ctx, x, ty, width, TRACK, TRACK / 2f, ColorUtil.withAlpha(0xFFFFFF, Math.round(26 + 12 * h)));
+		Render2D.round(ctx, x, ty, fw, TRACK, TRACK / 2f, accent);
 		float kx = x + width * f;
 		float ky = ty + TRACK / 2f;
-		float kr = 3.6f;
-		Render2D.shadow(ctx, kx - kr, ky - kr + 0.6f, kr * 2f, kr * 2f, kr, 3f, 0x60000000);
+		float kr = 3.5f + 0.5f * (dragging ? 1f : h);
+		Render2D.circle(ctx, kx, ky, kr + 0.5f, 0x40000000);
 		Render2D.circle(ctx, kx, ky, kr, 0xFFFFFFFF);
-		Render2D.circle(ctx, kx, ky, 1.5f, ColorUtil.lerp(accent, accent2, f));
 		return HEIGHT;
 	}
 

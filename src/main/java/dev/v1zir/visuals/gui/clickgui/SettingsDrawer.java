@@ -103,9 +103,9 @@ final class SettingsDrawer {
 		y = areaY;
 		float alpha = Render2D.alpha();
 		Render2D.setAlpha(alpha * Math.min(1f, t * 1.6f));
-		Render2D.shadow(ctx, x - 2f, y, w, h, 8f, 16f, 0x8C000000);
-		Render2D.matte(ctx, x, y, w, h, 8f, ColorUtil.withAlpha(ColorUtil.brighten(Theme.preset().base(), 0.07f), 246), Ui.LIT);
-		Render2D.rim(ctx, x, y, w, h, 8f, Theme.outline(), Ui.LIT);
+		Render2D.shadow(ctx, x - 2f, y, w, h, Ui.PANEL_RADIUS, 14f, 0x70000000);
+		Render2D.matte(ctx, x, y, w, h, Ui.PANEL_RADIUS, ColorUtil.withAlpha(ColorUtil.brighten(Theme.preset().base(), 0.07f), 246), Ui.LIT);
+		Render2D.rim(ctx, x, y, w, h, Ui.PANEL_RADIUS, Theme.outline(), Ui.LIT);
 		Render2D.setAlpha(alpha * Math.min(1f, t * 1.6f) * contentFade.get());
 		renderHeader(ctx, mx, my);
 		renderBody(ctx, mx, my);
@@ -116,8 +116,8 @@ final class SettingsDrawer {
 		Module m = module;
 		float cx = x + w - 10f - CLOSE;
 		float ch = closeHover.target(Ui.inside(mx, my, cx, y + 8f, CLOSE, CLOSE) ? 1f : 0f).get();
-		Render2D.matte(ctx, cx, y + 8f, CLOSE, CLOSE, 5f, ColorUtil.withAlpha(0xFFFFFF, Math.round(8 + 16 * ch)), Ui.LIT);
-		Render2D.icon(ctx, Icons.X, cx + CLOSE / 2f, y + 8f + CLOSE / 2f, 7.5f, ColorUtil.lerp(Theme.textDim(), Theme.text(), ch));
+		Render2D.matte(ctx, cx, y + 8f, CLOSE, CLOSE, Ui.CELL_RADIUS, ColorUtil.withAlpha(0xFFFFFF, Math.round(8 + 14 * ch)), Ui.LIT);
+		Render2D.icon(ctx, Icons.X, cx + CLOSE / 2f, y + 8f + CLOSE / 2f, 7f, ColorUtil.lerp(Theme.textDim(), Theme.text(), ch));
 		float right = cx - 8f;
 		if (m.canToggle()) {
 			float sx = right - Ui.SWITCH_W;
@@ -132,9 +132,7 @@ final class SettingsDrawer {
 			description = Fonts.regular().trim(m.description(), Ui.TINY, maxDesc);
 		}
 		Render2D.textMiddle(ctx, Fonts.regular(), description, x + 12f, y + 29f, Ui.TINY, Theme.textDim());
-		float ly = y + HEADER - 0.5f;
-		Render2D.gradientH(ctx, x + 10f, ly, (w - 20f) / 2f, 1f, 0.5f, ColorUtil.withAlpha(Theme.accent(), 0), ColorUtil.withAlpha(Theme.accent(), 110));
-		Render2D.gradientH(ctx, x + w / 2f, ly, (w - 20f) / 2f, 1f, 0.5f, ColorUtil.withAlpha(Theme.accent2(), 110), ColorUtil.withAlpha(Theme.accent2(), 0));
+		Render2D.rect(ctx, x + 12f, y + HEADER - 1f, w - 24f, 1f, Ui.HAIRLINE);
 	}
 
 	private void renderBody(DrawContext ctx, double mx, double my) {
@@ -177,15 +175,15 @@ final class SettingsDrawer {
 		}
 		float hv = bindHover.target(Ui.inside(mx, my, bx, by, bw, ROW) ? 1f : 0f).get();
 		float t = bindListen.target(binding ? 1f : 0f).get();
-		Render2D.icon(ctx, Icons.KEYBOARD, bx + 4f, by + ROW / 2f, 7.5f, ColorUtil.lerp(Theme.textDim(), Theme.accent(), Math.max(hv, t)));
+		Render2D.icon(ctx, Icons.KEYBOARD, bx + 4f, by + ROW / 2f, 7f, ColorUtil.lerp(ColorUtil.lerp(Theme.textDim(), Theme.text(), hv), Theme.accent(), t));
 		Render2D.textMiddle(ctx, Fonts.regular(), "Keybind", bx + 12f, by + ROW / 2f, Ui.LABEL, ColorUtil.lerp(Theme.textDim(), Theme.text(), Math.max(hv, t)));
 		String label = binding ? "..." : keyName;
 		float cw = Math.max(22f, bindWidth.width(Fonts.semibold(), label, Ui.SMALL) + 10f);
 		float cx = bx + bw - cw;
 		float cy = by + (ROW - 11f) / 2f;
-		if (t > 0.01f) Render2D.shadow(ctx, cx, cy, cw, 11f, Ui.CELL_RADIUS, 5f, ColorUtil.withAlpha(Theme.accent(), Math.round(90 * t)));
-		Render2D.matte(ctx, cx, cy, cw, 11f, Ui.CELL_RADIUS, ColorUtil.lerp(ColorUtil.withAlpha(0xFFFFFF, Math.round(10 + 12 * hv)), Theme.accent(), t), Ui.LIT);
-		Render2D.rim(ctx, cx, cy, cw, 11f, Ui.CELL_RADIUS, ColorUtil.withAlpha(0xFFFFFF, Math.round((16 + 20 * hv) * (1f - t))), Ui.LIT);
+		int accent = Theme.accent();
+		Render2D.matte(ctx, cx, cy, cw, 11f, Ui.CELL_RADIUS, ColorUtil.lerp(ColorUtil.withAlpha(0xFFFFFF, Math.round(10 + 10 * hv)), ColorUtil.withAlpha(accent, 50), t), Ui.LIT);
+		Render2D.rim(ctx, cx, cy, cw, 11f, Ui.CELL_RADIUS, ColorUtil.lerp(ColorUtil.withAlpha(0xFFFFFF, Math.round(18 + 16 * hv)), ColorUtil.withAlpha(accent, 170), t), Ui.LIT);
 		Render2D.textCentered(ctx, Fonts.semibold(), label, cx + cw / 2f, Render2D.middle(Fonts.semibold(), cy + 5.5f, Ui.SMALL), Ui.SMALL,
 			ColorUtil.lerp(Theme.textDim(), 0xFFFFFFFF, Math.max(t, hv)));
 	}

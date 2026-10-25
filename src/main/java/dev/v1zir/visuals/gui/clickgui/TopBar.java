@@ -22,20 +22,14 @@ final class TopBar {
 	private static final float SEARCH_H = 20f;
 	private static final String PLACEHOLDER = "Search modules";
 	private static final String SHORTCUT = "Ctrl F";
-	private static final Render2D.TextStyle BRAND = new Render2D.TextStyle().weight(0.03f);
+	private static final String BRAND = "V1zir Visuals";
 
 	private final String version = V1zir.version();
-
-	TopBar() {
-		Logo.refresh();
-	}
 	private final Anim searchFocus = new Anim(0f, 18f);
 	private final Anim searchHover = new Anim(0f, 20f);
 	private final Anim hudHover = new Anim(0f, 22f);
 	private final Anim hudPress = new Anim(0f, 30f);
 	private final Label brandWidth = new Label();
-	private final Label visualsWidth = new Label();
-	private final Label versionWidth = new Label();
 	private final Label caretWidth = new Label();
 	private final Label shortcutWidth = new Label();
 	private String shownSearch = "";
@@ -48,69 +42,51 @@ final class TopBar {
 	private float hudX;
 	private float hudY;
 
+	TopBar() {
+		Logo.refresh();
+	}
+
 	void render(DrawContext ctx, float x, float y, float w, double mx, double my, String search, boolean focused) {
 		float mid = y + Ui.BAR / 2f;
-		int accent = Theme.accent();
-		int accent2 = Theme.accent2();
-
 		float lx = x + 12f;
-		float ly = mid - LOGO_SIZE / 2f;
-		Logo.draw(ctx, lx, ly, LOGO_SIZE);
-
-		SdfFont brand = Fonts.title();
-		float size = 10f;
+		Logo.draw(ctx, lx, mid - LOGO_SIZE / 2f, LOGO_SIZE);
+		// Product name in the interface face, the version beside it as plain secondary text.
+		SdfFont brand = Fonts.semibold();
 		float tx = lx + LOGO_SIZE + 8f;
-		float ty = Render2D.middle(brand, mid, size);
-		BRAND.color = ColorUtil.lerp(accent, 0xFFFFFFFF, 0.15f);
-		BRAND.colorEnd = ColorUtil.lerp(accent2, 0xFFFFFFFF, 0.15f);
-		Render2D.text(ctx, brand, "V1zir", tx, ty, size, BRAND);
-		float vx = tx + brandWidth.width(brand, "V1zir", size) + 3.5f;
-		Render2D.text(ctx, brand, "Visuals", vx, ty, size, Theme.text());
-		SdfFont small = Fonts.semibold();
-		float tagX = vx + visualsWidth.width(brand, "Visuals", size) + 6f;
-		float tagW = versionWidth.width(small, version, 5.5f) + 8f;
-		Render2D.matte(ctx, tagX, mid - 5f, tagW, 10f, 5f, ColorUtil.withAlpha(accent, 34), 0);
-		Render2D.rim(ctx, tagX, mid - 5f, tagW, 10f, 5f, ColorUtil.withAlpha(accent, 80), 0);
-		Render2D.textMiddle(ctx, small, version, tagX + 4f, mid, 5.5f, ColorUtil.lerp(accent, 0xFFFFFFFF, 0.45f));
+		Render2D.textMiddle(ctx, brand, BRAND, tx, mid, 8.5f, Theme.text());
+		Render2D.textMiddle(ctx, Fonts.regular(), version, tx + brandWidth.width(brand, BRAND, 8.5f) + 8f, mid, Ui.TINY, Theme.textFaint());
 
-		searchW = Math.max(110f, Math.min(170f, w * 0.27f));
-		searchX = x + w - 10f - searchW;
+		searchW = Math.max(112f, Math.min(168f, w * 0.27f));
+		searchX = x + w - 12f - searchW;
 		searchY = mid - SEARCH_H / 2f;
 		renderSearch(ctx, mx, my, search, focused);
 
-		hudX = searchX - 6f - BUTTON;
+		hudX = searchX - 8f - BUTTON;
 		hudY = mid - BUTTON / 2f;
 		float hh = hudHover.target(Ui.inside(mx, my, hudX, hudY, BUTTON, BUTTON) ? 1f : 0f).get();
 		float hp = hudPress.target(hudPressed ? 1f : 0f).get();
-		Ui.iconButton(ctx, hudX, hudY, BUTTON, Icons.MOVE, hh, hp, false);
+		Ui.iconButton(ctx, hudX, hudY, BUTTON, Icons.MOVE, hh, hp);
 
-		// Separator: brightest in the middle, fading out towards both ends.
-		float sy = y + Ui.BAR - 0.5f;
-		float half = w / 2f - 12f;
-		Render2D.gradientH(ctx, x + 12f, sy, half, 1f, 0.5f, 0x00FFFFFF, 0x1EFFFFFF);
-		Render2D.gradientH(ctx, x + w / 2f, sy, half, 1f, 0.5f, 0x1EFFFFFF, 0x00FFFFFF);
+		Render2D.rect(ctx, x, y + Ui.BAR - 1f, w, 1f, Ui.HAIRLINE);
 	}
 
 	private void renderSearch(DrawContext ctx, double mx, double my, String search, boolean focused) {
 		SdfFont font = Fonts.medium();
 		float focus = searchFocus.target(focused ? 1f : 0f).get();
 		float hv = searchHover.target(Ui.inside(mx, my, searchX, searchY, searchW, SEARCH_H) ? 1f : 0f).get();
-		float r = SEARCH_H / 2f;
+		float r = Ui.CELL_RADIUS + 2f;
 		int accent = Theme.accent();
-		if (focus > 0.01f) Render2D.shadow(ctx, searchX, searchY, searchW, SEARCH_H, r, 8f, ColorUtil.withAlpha(accent, Math.round(50 * focus)));
-		Render2D.matte(ctx, searchX, searchY, searchW, SEARCH_H, r, ColorUtil.withAlpha(0x000000, Math.round(46 + 20 * focus)), Ui.LIT);
+		Render2D.matte(ctx, searchX, searchY, searchW, SEARCH_H, r, ColorUtil.withAlpha(0x000000, Math.round(40 + 16 * focus)), Ui.LIT);
 		Render2D.rim(ctx, searchX, searchY, searchW, SEARCH_H, r,
-			ColorUtil.lerp(ColorUtil.withAlpha(0xFFFFFF, Math.round(20 + 22 * hv)), ColorUtil.withAlpha(accent, 170), focus), Ui.LIT);
+			ColorUtil.lerp(ColorUtil.withAlpha(0xFFFFFF, Math.round(20 + 16 * hv)), ColorUtil.withAlpha(accent, 190), focus), Ui.LIT);
 		float mid = searchY + SEARCH_H / 2f;
-		Render2D.icon(ctx, Icons.SEARCH, searchX + 10f, mid, 7.5f, ColorUtil.lerp(Theme.textDim(), ColorUtil.lerp(accent, 0xFFFFFFFF, 0.2f), focus));
-		float tx = searchX + 18f;
+		Render2D.icon(ctx, Icons.SEARCH, searchX + 10f, mid, 7f, ColorUtil.lerp(Theme.textDim(), Theme.text(), focus));
+		float tx = searchX + 20f;
 		float size = 6.5f;
 		if (search.isEmpty() && !focused) {
 			Render2D.textMiddle(ctx, font, PLACEHOLDER, tx, mid, size, Theme.textFaint());
-			float sw = shortcutWidth.width(Fonts.semibold(), SHORTCUT, 5f) + 6f;
-			float sx = searchX + searchW - 6f - sw;
-			Render2D.round(ctx, sx, mid - 4.5f, sw, 9f, 3f, 0x12FFFFFF);
-			Render2D.textMiddle(ctx, Fonts.semibold(), SHORTCUT, sx + 3f, mid, 5f, ColorUtil.withAlpha(Theme.textDim(), 190));
+			float sw = shortcutWidth.width(Fonts.medium(), SHORTCUT, 5.5f);
+			Render2D.textMiddle(ctx, Fonts.medium(), SHORTCUT, searchX + searchW - 8f - sw, mid, 5.5f, Theme.textFaint());
 			return;
 		}
 		if (!search.equals(shownSearchFor)) {

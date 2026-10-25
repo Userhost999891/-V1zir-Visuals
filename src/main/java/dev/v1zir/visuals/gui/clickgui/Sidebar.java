@@ -23,11 +23,10 @@ import java.util.List;
  */
 final class Sidebar {
 	private static final Category[] TABS = Category.values();
-	private static final float TAB_H = 24f;
-	private static final float TAB_GAP = 3f;
-	private static final float TABS_TOP = 22f;
-	private static final float FOOTER = 34f;
-	private static final Render2D.TextStyle CAPTION = new Render2D.TextStyle().spacing(0.8f);
+	private static final float TAB_H = 28f;
+	private static final float TAB_GAP = 4f;
+	private static final float TABS_TOP = 8f;
+	private static final float FOOTER = 36f;
 
 	private final Anim pill;
 	private final Anim pillFade = new Anim(1f, 16f);
@@ -65,48 +64,42 @@ final class Sidebar {
 		this.y = y;
 		this.w = w;
 		int accent = Theme.accent();
-		Render2D.matte(ctx, x, y, w, h, 8f, Theme.raised(), Ui.LIT);
-		Render2D.rim(ctx, x, y, w, h, 8f, ColorUtil.withAlpha(0xFFFFFF, 16), Ui.LIT);
-		CAPTION.color = Theme.textFaint();
-		Render2D.text(ctx, Fonts.semibold(), "MENU", x + 12f, y + 9f, 5.5f, CAPTION);
+		Render2D.matte(ctx, x, y, w, h, Ui.PANEL_RADIUS, Theme.raised(), Ui.LIT);
+		Render2D.rim(ctx, x, y, w, h, Ui.PANEL_RADIUS, Ui.HAIRLINE, Ui.LIT);
 
-		float tx = x + 6f;
-		float tw = w - 12f;
+		float tx = x + 8f;
+		float tw = w - 16f;
 		float slide = pill.target(selected).get();
 		float fade = pillFade.target(searching ? 0.35f : 1f).get();
 		float py = y + TABS_TOP + slide * (TAB_H + TAB_GAP);
+		// The selection: a neutral plate with a short accent bar on its left edge, gliding between tabs.
 		float alpha = Render2D.alpha();
 		Render2D.setAlpha(alpha * fade);
-		Render2D.shadow(ctx, tx, py, tw, TAB_H, 7f, 9f, ColorUtil.withAlpha(accent, 40));
-		Render2D.matte(ctx, tx, py, tw, TAB_H, 7f, ColorUtil.withAlpha(ColorUtil.lerp(0xFFFFFF, accent, 0.5f), 30), Ui.LIT);
-		Render2D.rim(ctx, tx, py, tw, TAB_H, 7f, ColorUtil.withAlpha(ColorUtil.lerp(0xFFFFFF, accent, 0.5f), 70), Ui.LIT);
-		// An accent notch on the left edge of the pill, glowing softly.
-		Render2D.shadow(ctx, tx + 1f, py + 7f, 2.5f, TAB_H - 14f, 1.25f, 4f, ColorUtil.withAlpha(accent, 160));
-		Render2D.gradientV(ctx, tx + 1f, py + 7f, 2.5f, TAB_H - 14f, 1.25f, accent, Theme.accent2());
+		Render2D.matte(ctx, tx, py, tw, TAB_H, Ui.CELL_RADIUS + 2f, 0x17FFFFFF, Ui.LIT);
+		Render2D.rim(ctx, tx, py, tw, TAB_H, Ui.CELL_RADIUS + 2f, Ui.HAIRLINE, Ui.LIT);
+		Render2D.round(ctx, tx, py + 8f, 2f, TAB_H - 16f, 1f, accent);
 		Render2D.setAlpha(alpha);
 
-		SdfFont font = Fonts.semibold();
+		SdfFont font = Fonts.medium();
 		countEnabled();
 		for (int i = 0; i < TABS.length; i++) {
 			float ry = y + TABS_TOP + i * (TAB_H + TAB_GAP);
 			boolean active = i == selected && !searching;
-			// The pill's own light as it passes: a tab brightens while the pill glides over it.
+			// A tab brightens while the selection glides over it.
 			float near = Math.max(0f, 1f - Math.abs(slide - i)) * fade;
 			float hv = hover[i].target(!active && Ui.inside(mx, my, tx, ry, tw, TAB_H) ? 1f : 0f).get();
-			if (hv > 0.01f) Render2D.matte(ctx, tx, ry, tw, TAB_H, 7f, ColorUtil.withAlpha(0xFFFFFF, Math.round(12 * hv)), Ui.LIT);
+			if (hv > 0.01f) Render2D.matte(ctx, tx, ry, tw, TAB_H, Ui.CELL_RADIUS + 2f, ColorUtil.withAlpha(0xFFFFFF, Math.round(9 * hv)), Ui.LIT);
 			float light = Math.max(near, hv * 0.7f);
-			int iconColor = ColorUtil.lerp(Theme.textDim(), ColorUtil.lerp(accent, 0xFFFFFFFF, 0.25f), near);
-			int textColor = ColorUtil.lerp(Theme.textDim(), 0xFFFFFFFF, light);
-			Render2D.icon(ctx, TABS[i].icon(), tx + 13f, ry + TAB_H / 2f, 8.5f, ColorUtil.lerp(iconColor, Theme.text(), hv * (1f - near)));
-			Render2D.textMiddle(ctx, font, TABS[i].title(), tx + 24f, ry + TAB_H / 2f, 7.5f, textColor);
+			int iconColor = ColorUtil.lerp(ColorUtil.lerp(Theme.textDim(), Theme.text(), hv), accent, near);
+			Render2D.icon(ctx, TABS[i].icon(), tx + 14f, ry + TAB_H / 2f, Ui.ICON, iconColor);
+			Render2D.textMiddle(ctx, font, TABS[i].title(), tx + 26f, ry + TAB_H / 2f, 7.5f, ColorUtil.lerp(Theme.textDim(), Theme.text(), light));
 			if (enabled[i] > 0 && TABS[i] != Category.SETTINGS) {
 				if (enabled[i] != counts[i]) {
 					counts[i] = enabled[i];
 					countText[i] = Integer.toString(enabled[i]);
 				}
-				float cw = countWidth[i].width(Fonts.medium(), countText[i], 5.5f);
-				Render2D.textMiddle(ctx, Fonts.medium(), countText[i], tx + tw - 9f - cw, ry + TAB_H / 2f, 5.5f,
-					ColorUtil.withAlpha(ColorUtil.lerp(Theme.textFaint(), accent, near), Math.round(170 + 85 * light)));
+				float cw = countWidth[i].width(Fonts.medium(), countText[i], 6f);
+				Render2D.textMiddle(ctx, Fonts.medium(), countText[i], tx + tw - 8f - cw, ry + TAB_H / 2f, 6f, Theme.textFaint());
 			}
 		}
 		renderFooter(ctx, x, y + h - FOOTER, w);
@@ -130,27 +123,26 @@ final class Sidebar {
 		if (mc.player == null || mc.getNetworkHandler() == null) return;
 		PlayerListEntry entry = mc.getNetworkHandler().getPlayerListEntry(mc.player.getUuid());
 		if (entry == null) return;
-		Render2D.gradientH(ctx, fx + 10f, fy, fw - 20f, 1f, 0.5f, 0x00FFFFFF, 0x16FFFFFF);
+		Render2D.rect(ctx, fx + 8f, fy, fw - 16f, 1f, Ui.HAIRLINE);
 		float head = 16f;
-		float hx = fx + 11f;
-		float hy = fy + (FOOTER - head) / 2f + 0.5f;
-		Render2D.shadow(ctx, hx, hy, head, head, 4f, 6f, ColorUtil.withAlpha(Theme.accent(), 60));
+		float hx = fx + 12f;
+		float hy = fy + (FOOTER - head) / 2f;
 		PlayerSkinDrawer.draw(ctx, entry.getSkinTextures(), (int) hx, (int) hy, (int) head, ColorUtil.fade(0xFFFFFFFF, Render2D.alpha()));
 		String name = mc.getSession().getUsername();
-		float maxName = fw - 40f;
+		float maxName = fw - 44f;
 		if (!name.equals(shownName) || maxName != nameMax) {
 			shownName = name;
 			nameMax = maxName;
 			trimmedName = Fonts.semibold().trim(name, 7f, maxName);
 		}
-		Render2D.text(ctx, Fonts.semibold(), trimmedName, hx + head + 6f, hy + 0.5f, 7f, Theme.text());
-		Render2D.text(ctx, Fonts.regular(), "Default config", hx + head + 6f, hy + 9.5f, 5.5f, Theme.textFaint());
+		Render2D.textMiddle(ctx, Fonts.semibold(), trimmedName, hx + head + 8f, hy + 4f, 7f, Theme.text());
+		Render2D.textMiddle(ctx, Fonts.regular(), "Default config", hx + head + 8f, hy + 12f, 6f, Theme.textDim());
 	}
 
 	/** The tab under the mouse, or -1. */
 	int tabAt(double mx, double my) {
-		float tx = x + 6f;
-		float tw = w - 12f;
+		float tx = x + 8f;
+		float tw = w - 16f;
 		for (int i = 0; i < TABS.length; i++) {
 			if (Ui.inside(mx, my, tx, y + TABS_TOP + i * (TAB_H + TAB_GAP), tw, TAB_H)) return i;
 		}

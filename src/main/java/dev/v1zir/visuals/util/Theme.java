@@ -166,9 +166,9 @@ public final class Theme {
 		return ColorUtil.withAlpha(ColorUtil.brighten(preset().base(), 0.1f), 120);
 	}
 
-	/** A raised surface that is lit: hovered, or an enabled module (a little of the accent mixes in). */
+	/** A raised surface that is lit: hovered, or an enabled module (a trace of the accent mixes in). */
 	public static int raisedLit() {
-		return ColorUtil.withAlpha(ColorUtil.lerp(ColorUtil.brighten(preset().base(), 0.2f), accent(), 0.08f), 170);
+		return ColorUtil.withAlpha(ColorUtil.lerp(ColorUtil.brighten(preset().base(), 0.18f), accent(), 0.035f), 165);
 	}
 
 	/** Recessed well (tracks, fields) cut into a surface. */
@@ -182,15 +182,15 @@ public final class Theme {
 	}
 
 	public static int text() {
-		return 0xFFEDEFF5;
+		return 0xFFEDEDEF;
 	}
 
 	public static int textDim() {
-		return 0xFF8D93A3;
+		return 0xFF9A9BA1;
 	}
 
 	public static int textFaint() {
-		return 0xFF5C6170;
+		return 0xFF6C6D73;
 	}
 
 	public static int shadow() {

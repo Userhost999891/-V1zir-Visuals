@@ -69,9 +69,8 @@ public final class ColorComponent extends SettingComponent<ColorSetting> {
 		int opaque = ColorUtil.withAlpha(color, 255);
 		float sx = x + width - SWATCH_W;
 		float sy = y + (ROW - SWATCH_H) / 2f;
-		Render2D.shadow(ctx, sx, sy, SWATCH_W, SWATCH_H, SWATCH_H / 2f, 5f, ColorUtil.withAlpha(color, Math.round(80 + 50 * h)));
-		Render2D.round(ctx, sx, sy, SWATCH_W, SWATCH_H, SWATCH_H / 2f, opaque);
-		Render2D.outline(ctx, sx, sy, SWATCH_W, SWATCH_H, SWATCH_H / 2f, 1f, ColorUtil.withAlpha(0xFFFFFF, Math.round(50 + 60 * h)));
+		Render2D.round(ctx, sx, sy, SWATCH_W, SWATCH_H, Ui.CELL_RADIUS - 1f, opaque);
+		Render2D.outline(ctx, sx, sy, SWATCH_W, SWATCH_H, Ui.CELL_RADIUS - 1f, 1f, ColorUtil.withAlpha(0xFFFFFF, Math.round(36 + 40 * h)));
 		if (t <= 0.01f) return ROW;
 
 		// The picker unfolds: its area grows with t and is clipped to it, while the content slides down into
@@ -111,13 +110,13 @@ public final class ColorComponent extends SettingComponent<ColorSetting> {
 		float chipW = rainbowWidth.width(font, "Rainbow", Ui.SMALL) + 10f;
 		rainbowW = chipW;
 		if (rainbow) {
-			Render2D.shadow(ctx, x, next, chipW, CHIP, 4f, 5f, ColorUtil.withAlpha(Theme.accent(), 80));
-			Render2D.gradientH(ctx, x, next, chipW, CHIP, 4f, Theme.accent(), Theme.accent2());
+			Render2D.matte(ctx, x, next, chipW, CHIP, Ui.CELL_RADIUS, ColorUtil.withAlpha(Theme.accent(), 50), Ui.LIT);
+			Render2D.rim(ctx, x, next, chipW, CHIP, Ui.CELL_RADIUS, ColorUtil.withAlpha(Theme.accent(), 170), Ui.LIT);
 		} else {
 			Render2D.matte(ctx, x, next, chipW, CHIP, 4f, ColorUtil.withAlpha(0xFFFFFF, 10), Ui.LIT);
 			Render2D.rim(ctx, x, next, chipW, CHIP, 4f, ColorUtil.withAlpha(0xFFFFFF, 16), Ui.LIT);
 		}
-		Render2D.textMiddle(ctx, font, "Rainbow", x + 5f, next + CHIP / 2f, Ui.SMALL, rainbow ? 0xFFFFFFFF : Theme.textDim());
+		Render2D.textMiddle(ctx, font, "Rainbow", x + 5f, next + CHIP / 2f, Ui.SMALL, rainbow ? ColorUtil.lerp(Theme.accent(), 0xFFFFFFFF, 0.7f) : Theme.textDim());
 		int rgb = setting.get() & 0xFFFFFF;
 		if (hex == null || rgb != shownColor) {
 			shownColor = rgb;
