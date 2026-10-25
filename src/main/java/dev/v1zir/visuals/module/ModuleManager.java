@@ -23,6 +23,7 @@ import dev.v1zir.visuals.module.impl.hud.CoordinatesModule;
 import dev.v1zir.visuals.module.impl.hud.KeybindsModule;
 import dev.v1zir.visuals.module.impl.hud.NotificationsModule;
 import dev.v1zir.visuals.module.impl.hud.PotionsModule;
+import dev.v1zir.visuals.module.impl.hud.SpotifyLyricsModule;
 import dev.v1zir.visuals.module.impl.hud.SpotifyModule;
 import dev.v1zir.visuals.module.impl.hud.TargetHudModule;
 import dev.v1zir.visuals.module.impl.hud.WatermarkModule;
@@ -89,6 +90,7 @@ public final class ModuleManager {
 		register(new CoordinatesModule());
 		register(new NotificationsModule());
 		register(new SpotifyModule());
+		register(new SpotifyLyricsModule());
 		// Client
 		register(new ClickGuiModule());
 		register(new ThemeModule());
