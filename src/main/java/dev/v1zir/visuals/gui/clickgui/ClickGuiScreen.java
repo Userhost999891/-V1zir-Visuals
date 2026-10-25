@@ -61,6 +61,9 @@ public final class ClickGuiScreen extends Screen {
 	private final Label toolbarWidth = new Label();
 	private String search = "";
 	private boolean searchFocused;
+	private boolean initialized;
+	private int lastMouseX;
+	private int lastMouseY;
 	private boolean hudEditor;
 	@Nullable
 	private ModuleCard pressedCard;
@@ -175,15 +178,26 @@ public final class ClickGuiScreen extends Screen {
 	}
 
 	/** Window rectangle in screen GUI coordinates (x, y, w, h), for the transitions. */
-	public float[] windowRect() {
+	void windowRect(float[] out) {
 		layout();
 		float s = baseScale();
-		float ox = width / 2f - spaceW() / 2f * s;
-		float oy = height / 2f - spaceH() / 2f * s;
-		return new float[]{ox + winX * s, oy + winY * s, winW * s, winH * s};
+		out[0] = width / 2f + (winX - spaceW() / 2f) * s;
+		out[1] = height / 2f + (winY - spaceH() / 2f) * s;
+		out[2] = winW * s;
+		out[3] = winH * s;
 	}
 
 	// ------------------------------------------------------------------ rendering
+
+	@Override
+	protected void init() {
+		if (initialized) return;
+		// First showing: the 3D open draws the window through WindowTransition; anything else stops a close still playing.
+		initialized = true;
+		ClickGuiModule gui = ModuleManager.get(ClickGuiModule.class);
+		if (!hudEditor && gui != null && gui.animations.on() && gui.openAnimation.is(ClickGuiModule.OPEN_3D)) WindowTransition.open(gui.speed());
+		else WindowTransition.finish();
+	}
 
 	@Override
 	public void renderBackground(DrawContext context, int mouseX, int mouseY, float deltaTicks) {
@@ -198,19 +212,27 @@ public final class ClickGuiScreen extends Screen {
 		if (!animations) open.snap(1f);
 		float t = open.target(1f).get();
 		float edit = editor.target(hudEditor ? 1f : 0f).get();
+		lastMouseX = mouseX;
+		lastMouseY = mouseY;
 		if (edit < 0.999f) FrameUniforms.cursor(mouseX, mouseY);
 
 		// The blurred world behind the window, only lightly dimmed; the HUD editor shows the plain game.
 		if (gui == null || gui.dimBackground.on()) {
 			Render2D.setAlpha(t * (1f - edit));
 			boolean inWorld = client != null && client.world != null;
+			// The close animations (WindowTransition) redraw this backdrop while they fade it.
 			if (inWorld && BackdropBlur.available()) Render2D.glass(ctx, 0, 0, width, height, 0, 0x34000000);
 			else Render2D.rect(ctx, 0, 0, width, height, inWorld ? 0x80000000 : 0xB0000000);
 		}
 		if (edit < 0.999f) {
-			// Opening: the window grows from 94 % and rises into place while it fades in.
-			float k = (0.94f + 0.06f * t) * (1f - 0.05f * edit);
-			drawWindow(ctx, mouseX, mouseY, t * (1f - edit), k, (1f - t) * 10f);
+			DrawContext swing = edit < 0.001f ? WindowTransition.openTarget(mouseX, mouseY) : null;
+			if (swing != null) {
+				drawWindow(swing, mouseX, mouseY, 1f, 1f, 0f);
+			} else {
+				// Normal open: the window grows from 94 % and rises into place while it fades in.
+				float k = (0.94f + 0.06f * t) * (1f - 0.05f * edit);
+				drawWindow(ctx, mouseX, mouseY, t * (1f - edit), k, (1f - t) * 10f);
+			}
 		}
 		if (edit > 0.001f) {
 			Render2D.setAlpha(edit);
@@ -573,10 +595,19 @@ public final class ClickGuiScreen extends Screen {
 		searchGrid.search(text);
 	}
 
+	/** Closes at once (the game takes input again); the close animation plays from a snapshot of the window. */
 	@Override
 	public void close() {
 		remember();
 		ConfigManager.save();
+		ClickGuiModule gui = ModuleManager.get(ClickGuiModule.class);
+		if (gui != null && gui.animations.on() && !hudEditor) {
+			boolean inWorld = client != null && client.world != null;
+			boolean dim = gui.dimBackground.on();
+			boolean blur = dim && inWorld && BackdropBlur.available();
+			float dimAmount = !dim ? 0f : blur ? 0x34 / 255f : inWorld ? 0x80 / 255f : 0xB0 / 255f;
+			WindowTransition.close(this, gui.closeAnimation.get(), lastMouseX, lastMouseY, gui.speed(), dimAmount, blur);
+		}
 		super.close();
 	}
 

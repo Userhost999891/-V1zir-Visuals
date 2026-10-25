@@ -154,6 +154,35 @@ public final class V1zirPipelines {
 		.withCull(false)
 		.build();
 
+	/** Click GUI open and close animations: the captured window composited over the frame (render/GuiCapture). */
+	public static final RenderPipeline GUI_TRANSITION = RenderPipeline.builder()
+		.withLocation(V1zir.id("pipeline/gui_transition"))
+		.withVertexShader(V1zir.id("core/fullscreen"))
+		.withFragmentShader(V1zir.id("core/gui_transition"))
+		.withVertexFormat(VertexFormats.POSITION, VertexFormat.DrawMode.TRIANGLES)
+		.withSampler("Sampler0")
+		.withSampler("Sampler1")
+		.withUniform("TransitionParams", UniformType.UNIFORM_BUFFER)
+		.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+		.withDepthWrite(false)
+		.withBlend(PREMULTIPLIED)
+		.withCull(false)
+		.build();
+
+	/** Shards of the shattering click GUI (3D Frost close), textured with its captured window. */
+	public static final RenderPipeline GUI_SHARDS = RenderPipeline.builder()
+		.withLocation(V1zir.id("pipeline/gui_shards"))
+		.withVertexShader(V1zir.id("core/gui_shards"))
+		.withFragmentShader(V1zir.id("core/gui_shards"))
+		.withVertexFormat(VertexFormats.POSITION_TEXTURE_COLOR, VertexFormat.DrawMode.TRIANGLES)
+		.withSampler("Sampler0")
+		.withUniform("TransitionParams", UniformType.UNIFORM_BUFFER)
+		.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+		.withDepthWrite(false)
+		.withBlend(PREMULTIPLIED)
+		.withCull(false)
+		.build();
+
 	public static final RenderPipeline BLUR_DOWN = blurPipeline("blur_down");
 	public static final RenderPipeline BLUR_UP = blurPipeline("blur_up");
 
@@ -229,6 +258,8 @@ public final class V1zirPipelines {
 		RenderPipelines.register(SKY_PANORAMA);
 		RenderPipelines.register(SKY_CACHED);
 		RenderPipelines.register(COLOR_GRADE);
+		RenderPipelines.register(GUI_TRANSITION);
+		RenderPipelines.register(GUI_SHARDS);
 		RenderPipelines.register(BLUR_DOWN);
 		RenderPipelines.register(BLUR_UP);
 		RenderPipelines.register(WORLD_GLOW);

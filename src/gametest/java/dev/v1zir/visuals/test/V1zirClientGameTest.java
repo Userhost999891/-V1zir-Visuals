@@ -5,6 +5,7 @@ import dev.v1zir.visuals.gui.menu.V1zirMainMenu;
 import dev.v1zir.visuals.module.Category;
 import dev.v1zir.visuals.module.Module;
 import dev.v1zir.visuals.module.ModuleManager;
+import dev.v1zir.visuals.module.impl.client.ClickGuiModule;
 import dev.v1zir.visuals.module.impl.client.MainMenuModule;
 import dev.v1zir.visuals.module.impl.client.ThemeModule;
 import dev.v1zir.visuals.module.impl.effects.CrosshairModule;
@@ -430,6 +431,32 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 
 		context.runOnClient(client -> setStatic(ClickGuiScreen.class, "tab", Category.VISUALS.ordinal()));
 		context.setScreen(() -> null);
+		animations(context);
+	}
+
+	/** Frames in the middle of the open and close animations, played at half speed so a frame lands inside them. */
+	private static void animations(ClientGameTestContext context) {
+		context.runOnClient(client -> {
+			ClickGuiModule gui = ModuleManager.get(ClickGuiModule.class);
+			gui.openAnimation.set(ClickGuiModule.OPEN_3D);
+			gui.animationSpeed.set(0.5);
+		});
+		for (String close : new String[]{ClickGuiModule.CLOSE_SHATTER, ClickGuiModule.CLOSE_FROST}) {
+			context.runOnClient(client -> ModuleManager.get(ClickGuiModule.class).closeAnimation.set(close));
+			context.setScreen(ClickGuiScreen::new);
+			context.waitTicks(2);
+			if (close.equals(ClickGuiModule.CLOSE_SHATTER)) context.takeScreenshot("clickgui-open-3d");
+			context.waitTicks(30);
+			context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+			context.waitTicks(close.equals(ClickGuiModule.CLOSE_SHATTER) ? 6 : 8);
+			context.takeScreenshot(close.equals(ClickGuiModule.CLOSE_SHATTER) ? "clickgui-close-3d-frost" : "clickgui-close-frost");
+			context.waitTicks(50);
+		}
+		context.runOnClient(client -> {
+			ClickGuiModule gui = ModuleManager.get(ClickGuiModule.class);
+			gui.animationSpeed.set(1.0);
+			gui.closeAnimation.set(ClickGuiModule.CLOSE_SHATTER);
+		});
 	}
 
 	private static void look(TestSingleplayerContext singleplayer, float yaw, float pitch) {

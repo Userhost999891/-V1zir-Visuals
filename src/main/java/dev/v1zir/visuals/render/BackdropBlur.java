@@ -58,6 +58,11 @@ public final class BackdropBlur {
 		if (storage != null) storage.clear();
 	}
 
+	/** The blurred world of this frame (largest level), or null before the blur ever ran. */
+	public static GpuTextureView view() {
+		return views[0];
+	}
+
 	public static TextureSetup textureSetup() {
 		Framebuffer fb = V1zir.mc().getFramebuffer();
 		ensureTextures(fb.textureWidth, fb.textureHeight);
