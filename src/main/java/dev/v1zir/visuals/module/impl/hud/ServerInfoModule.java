@@ -51,7 +51,7 @@ public final class ServerInfoModule extends HudModule {
 	private SdfFont addressFont;
 
 	public ServerInfoModule() {
-		super("Server Info", "Server, ping and TPS", 0.008f, 0.62f);
+		super("Server Info", "Server, ping and TPS", 0.008f, 0.16f);
 		setSubCategory("Info");
 		width = W;
 		height = 18f + 3f * ROW + 3f;
