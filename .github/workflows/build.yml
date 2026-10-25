@@ -34,26 +34,14 @@ jobs:
           echo "mapped jar: $jar"
           sig() { javap -p -cp "$jar" "$@" 2>&1; }
           code() { javap -c -p -cp "$jar" "$1" 2>&1 | awk -v m="$2" 'index($0, " " m "(") && /\(/ {p=1} p {print} p && /^$/ {p=0}'; }
-          for c in net.minecraft.client.render.OverlayTexture net.minecraft.client.render.GameRenderer \
-                   net.minecraft.client.gui.hud.InGameOverlayRenderer net.minecraft.client.render.Camera \
-                   net.minecraft.client.render.entity.LivingEntityRenderer net.minecraft.client.render.entity.PlayerEntityRenderer \
-                   net.minecraft.client.render.entity.EndCrystalEntityRenderer net.minecraft.client.render.entity.model.EndCrystalEntityModel \
-                   net.minecraft.client.render.item.ItemRenderer net.minecraft.client.render.item.HeldItemRenderer \
-                   net.minecraft.client.render.command.OrderedRenderCommandQueue net.minecraft.client.render.command.RenderCommandQueue \
-                   net.minecraft.client.render.entity.model.PlayerEntityModel net.minecraft.sound.SoundEvents; do
+          for c in net.minecraft.client.render.entity.ItemEntityRenderer net.minecraft.client.render.TextureTransform \
+                   net.minecraft.client.render.WorldRenderer net.minecraft.client.texture.AbstractTexture; do
             echo "=== SIG $c"; sig "$c"
           done
-          echo "=== CODE OverlayTexture.<init>"; javap -c -p -cp "$jar" net.minecraft.client.render.OverlayTexture 2>&1 | awk '/OverlayTexture\(\);/{p=1} p{print} p&&/^$/{p=0}'
-          echo "=== CODE InGameOverlayRenderer.renderFloatingItem"; code net.minecraft.client.gui.hud.InGameOverlayRenderer renderFloatingItem
-          echo "=== CODE InGameOverlayRenderer.tickFloatingItemTimer"; code net.minecraft.client.gui.hud.InGameOverlayRenderer tickFloatingItemTimer
-          echo "=== CODE LivingEntityRenderer.render"; code net.minecraft.client.render.entity.LivingEntityRenderer render
-          echo "=== CODE EndCrystalEntityRenderer.render"; code net.minecraft.client.render.entity.EndCrystalEntityRenderer render
-          echo "=== CODE ItemRenderer.renderBakedItemQuads"; code net.minecraft.client.render.item.ItemRenderer renderBakedItemQuads
-          echo "=== CODE HeldItemRenderer.renderFirstPersonItem"; code net.minecraft.client.render.item.HeldItemRenderer renderFirstPersonItem
-          echo "=== CODE HeldItemRenderer.updateHeldItems"; code net.minecraft.client.render.item.HeldItemRenderer updateHeldItems
-          echo "=== CODE GameRenderer.updateCamera"; code net.minecraft.client.render.GameRenderer updateCamera
-          echo "=== CODE GameRenderer.getBasicProjectionMatrix"; code net.minecraft.client.render.GameRenderer getBasicProjectionMatrix
-          echo "=== CODE PlayerEntityRenderer.renderArm"; code net.minecraft.client.render.entity.PlayerEntityRenderer renderArm
+          echo "=== CODE ItemEntityRenderer.render"; code net.minecraft.client.render.entity.ItemEntityRenderer render
+          echo "=== CODE ItemEntityRenderer.renderStack"; code net.minecraft.client.render.entity.ItemEntityRenderer renderStack
+          echo "=== CODE TextureTransform.getGlintTransformation"; code net.minecraft.client.render.TextureTransform getGlintTransformation
+          echo "=== CODE WorldRenderer.render"; code net.minecraft.client.render.WorldRenderer render
 
   client:
     name: Dev client
