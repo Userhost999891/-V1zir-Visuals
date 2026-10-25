@@ -6,7 +6,8 @@ import dev.v1zir.visuals.module.impl.client.ThemeModule;
 /** Palette used by every UI element, derived from the Theme module. */
 public final class Theme {
 	public enum Preset {
-		V1ZIR("V1zir", 0xFF9B7BFF, 0xFF4FD1FF, 0xFF0D0E14),
+		/** The default: warm amber into a soft deep orange over a neutral matte dark. */
+		V1ZIR("V1zir", 0xFFF6A64B, 0xFFE8693F, 0xFF0F0F11),
 		MIDNIGHT("Midnight", 0xFF5B8CFF, 0xFF8F6BFF, 0xFF0B0E17),
 		NEVERLOSE("Neverlose", 0xFF00A6FF, 0xFF00E1FF, 0xFF070B12),
 		FATALITY("Fatality", 0xFFE5175F, 0xFF8A2BE2, 0xFF120A14),
@@ -165,9 +166,9 @@ public final class Theme {
 		return ColorUtil.withAlpha(ColorUtil.brighten(preset().base(), 0.1f), 120);
 	}
 
-	/** A raised surface that is lit: hovered, or an enabled module (a little of the accent mixes in). */
+	/** A raised surface that is lit: hovered, or an enabled module (a trace of the accent mixes in). */
 	public static int raisedLit() {
-		return ColorUtil.withAlpha(ColorUtil.lerp(ColorUtil.brighten(preset().base(), 0.2f), accent(), 0.08f), 170);
+		return ColorUtil.withAlpha(ColorUtil.lerp(ColorUtil.brighten(preset().base(), 0.18f), accent(), 0.035f), 165);
 	}
 
 	/** Recessed well (tracks, fields) cut into a surface. */
@@ -181,15 +182,15 @@ public final class Theme {
 	}
 
 	public static int text() {
-		return 0xFFEDEFF5;
+		return 0xFFEDEDEF;
 	}
 
 	public static int textDim() {
-		return 0xFF8D93A3;
+		return 0xFF9A9BA1;
 	}
 
 	public static int textFaint() {
-		return 0xFF5C6170;
+		return 0xFF6C6D73;
 	}
 
 	public static int shadow() {

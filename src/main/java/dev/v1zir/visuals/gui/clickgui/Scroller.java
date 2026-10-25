@@ -3,7 +3,6 @@ package dev.v1zir.visuals.gui.clickgui;
 import dev.v1zir.visuals.render.ui.Render2D;
 import dev.v1zir.visuals.util.Anim;
 import dev.v1zir.visuals.util.ColorUtil;
-import dev.v1zir.visuals.util.Theme;
 import net.minecraft.client.gui.DrawContext;
 
 /** Spring-smoothed vertical scrolling of one area, with a slim bar that shows while it moves or is hovered. */
@@ -38,6 +37,6 @@ final class Scroller {
 		float track = viewport - 8f;
 		float thumb = Math.max(16f, track * viewport / content);
 		float ty = y + 4f + (track - thumb) * (offset.value() / Math.max(1f, max));
-		Render2D.round(ctx, x, ty, 2f, thumb, 1f, ColorUtil.withAlpha(ColorUtil.lerp(Theme.accent(), 0xFFFFFFFF, 0.4f), Math.round(150 * show)));
+		Render2D.round(ctx, x, ty, 2f, thumb, 1f, ColorUtil.withAlpha(0xFFFFFF, Math.round(70 * show)));
 	}
 }

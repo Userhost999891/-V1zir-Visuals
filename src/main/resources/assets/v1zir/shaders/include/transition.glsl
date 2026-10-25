@@ -19,11 +19,3 @@ layout(std140) uniform TransitionParams {
 vec2 transitionUv(vec2 p) {
 	return vec2(p.x * Screen.z, 1.0 - p.y * Screen.w);
 }
-
-float transitionHash(vec2 p) {
-	uvec2 q = uvec2(ivec2(floor(p)) + 32768);
-	uint h = q.x * 1597334677u ^ q.y * 3812015801u;
-	h = (h ^ (h >> 16u)) * 2246822519u;
-	h ^= h >> 13u;
-	return float(h & 65535u) / 65535.0;
-}

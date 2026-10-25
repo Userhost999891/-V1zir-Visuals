@@ -172,7 +172,7 @@ public final class ClickGuiScreen extends Screen {
 		winX = Math.round((sw - winW) / 2f);
 		winY = Math.round((sh - winH) / 2f);
 		float side = Sidebar.width(winW);
-		contentX = winX + Ui.PAD + side + 10f;
+		contentX = winX + Ui.PAD + side + 12f;
 		contentY = winY + Ui.BAR + Ui.PAD;
 		contentW = winX + winW - 12f - contentX;
 		contentH = winH - Ui.BAR - Ui.PAD * 2f;
@@ -264,15 +264,15 @@ public final class ClickGuiScreen extends Screen {
 			my = -1000;
 		}
 
-		Render2D.panelShadow(ctx, winX, winY + 8f, winW, winH, Ui.RADIUS, 30f, 0x9C000000, winX, winY, winW, winH);
+		Render2D.panelShadow(ctx, winX, winY + 6f, winW, winH, Ui.RADIUS, 28f, 0x8C000000, winX, winY, winW, winH);
 		Render2D.panel(ctx, winX, winY, winW, winH, Ui.RADIUS, 0, Ui.LIT);
 		topBar.render(ctx, winX, winY, winW, mx, my, search, searchFocused);
 		sidebar.render(ctx, winX + Ui.PAD, contentY, Sidebar.width(winW), contentH, tab, searching(), mx, my);
 
 		boolean mouseFree = !drawer.over(mx, my);
 		renderHeader(ctx, mx, my, mouseFree);
-		float bodyY = contentY + HEADER + 4f;
-		float bodyH = contentH - HEADER - 4f;
+		float bodyY = contentY + HEADER + 8f;
+		float bodyH = contentH - HEADER - 8f;
 		Module drawerModule = drawer.module();
 		if (searching()) searchGrid.render(ctx, contentX, bodyY, contentW, bodyH, mx, my, drawerModule, mouseFree);
 		else if (category() == Category.SETTINGS) settingsPage.render(ctx, contentX, bodyY, contentW, bodyH, mx, my, drawerModule, mouseFree);
@@ -292,29 +292,27 @@ public final class ClickGuiScreen extends Screen {
 		float mid = contentY + HEADER / 2f;
 		SdfFont bold = Fonts.bold();
 		String title = searching() ? "Search" : category().title();
-		Render2D.textMiddle(ctx, bold, title, contentX + 2f, mid, 10f, Theme.text());
+		Render2D.textMiddle(ctx, bold, title, contentX, mid, 10f, Theme.text());
 		float right = contentX + contentW;
 		if (category() == Category.SETTINGS && !searching()) {
-			drawCount(ctx, contentX + 2f + titleWidth.width(bold, title, 10f) + 6f, mid, -1);
+			drawCount(ctx, contentX + titleWidth.width(bold, title, 10f) + 8f, mid, -1);
 			return;
 		}
 		ModuleGrid grid = searching() ? searchGrid : grids[tab];
-		drawCount(ctx, contentX + 2f + titleWidth.width(bold, title, 10f) + 6f, mid, grid.count());
+		drawCount(ctx, contentX + titleWidth.width(bold, title, 10f) + 8f, mid, grid.count());
 		if (searching()) return;
 		double hx = mouseFree ? mx : -1000;
 		double hy = mouseFree ? my : -1000;
 		if (category() == Category.HUD) {
 			// Edit layout: opens the HUD editor.
 			SdfFont font = Fonts.semibold();
-			editW = editWidth.width(font, "Edit layout", Ui.SMALL) + 24f;
+			editW = editWidth.width(font, "Edit layout", Ui.SMALL) + 28f;
 			editX = right - editW;
-			float hv = editButtonHover.target(Ui.inside(hx, hy, editX, mid - 9f, editW, 18f) ? 1f : 0f).get();
-			int accent = Theme.accent();
-			Render2D.shadow(ctx, editX, mid - 9f, editW, 18f, 6f, 8f, ColorUtil.withAlpha(accent, Math.round(30 + 40 * hv)));
-			Render2D.matte(ctx, editX, mid - 9f, editW, 18f, 6f, ColorUtil.withAlpha(accent, Math.round(46 + 30 * hv)), Ui.LIT);
-			Render2D.rim(ctx, editX, mid - 9f, editW, 18f, 6f, ColorUtil.withAlpha(ColorUtil.lerp(accent, 0xFFFFFFFF, 0.3f), 120), Ui.LIT);
-			Render2D.icon(ctx, Icons.MOVE, editX + 9f, mid, 7f, 0xFFFFFFFF);
-			Render2D.textMiddle(ctx, font, "Edit layout", editX + 16f, mid, Ui.SMALL, 0xFFFFFFFF);
+			float hv = editButtonHover.target(Ui.inside(hx, hy, editX, mid - 10f, editW, 20f) ? 1f : 0f).get();
+			Render2D.matte(ctx, editX, mid - 10f, editW, 20f, Ui.CELL_RADIUS + 2f, ColorUtil.withAlpha(0xFFFFFF, Math.round(12 + 10 * hv)), Ui.LIT);
+			Render2D.rim(ctx, editX, mid - 10f, editW, 20f, Ui.CELL_RADIUS + 2f, ColorUtil.withAlpha(0xFFFFFF, Math.round(22 + 16 * hv)), Ui.LIT);
+			Render2D.icon(ctx, Icons.MOVE, editX + 11f, mid, 7f, Theme.text());
+			Render2D.textMiddle(ctx, font, "Edit layout", editX + 20f, mid, Ui.SMALL, Theme.text());
 			right = editX - 8f;
 		}
 		grid.renderChips(ctx, right, mid, hx, hy);
@@ -338,7 +336,7 @@ public final class ClickGuiScreen extends Screen {
 			float x = hud.x(width);
 			float y = hud.y(height);
 			boolean hover = Ui.inside(mouseX, mouseY, x - 2, y - 2, hud.width() + 4, hud.height() + 4) || draggingHud == hud;
-			int color = hud.isEnabled() ? Theme.accent() : 0xFF6B7080;
+			int color = hud.isEnabled() ? Theme.accent() : 0xFF75767C;
 			Render2D.round(ctx, x - 2, y - 2, hud.width() + 4, hud.height() + 4, 5f, ColorUtil.withAlpha(color, hover ? 40 : 16));
 			Render2D.outline(ctx, x - 2, y - 2, hud.width() + 4, hud.height() + 4, 5f, 1f, ColorUtil.withAlpha(color, hover ? 220 : 110));
 			if (hover || !hud.isEnabled()) {
@@ -354,7 +352,7 @@ public final class ClickGuiScreen extends Screen {
 		renderToolbar(ctx, mouseX, mouseY);
 	}
 
-	/** Floating pill at the top: what the editor does, and a Done button back to the window. */
+	/** Floating bar low on the screen: what the editor does, and a Done button back to the window. */
 	private void renderToolbar(DrawContext ctx, int mouseX, int mouseY) {
 		SdfFont font = Fonts.semibold();
 		String hint = "Drag to move  ·  Right click to toggle";
@@ -366,16 +364,18 @@ public final class ClickGuiScreen extends Screen {
 		// Low in the screen, above the hotbar: the top centre usually holds the compass.
 		float y = height - 66f;
 		float mid = y + h / 2f;
-		Render2D.shadow(ctx, x, y + 3f, w, h, h / 2f, 14f, Theme.shadow());
-		Render2D.panel(ctx, x, y, w, h, h / 2f);
-		Render2D.icon(ctx, Icons.MOVE, x + 15f, mid, 8f, Theme.accent());
+		Render2D.panelShadow(ctx, x, y + 2f, w, h, Ui.PANEL_RADIUS, 12f, Theme.shadow(), x, y, w, h);
+		Render2D.panel(ctx, x, y, w, h, Ui.PANEL_RADIUS);
+		Render2D.icon(ctx, Icons.MOVE, x + 15f, mid, 7f, Theme.textDim());
 		float tx = Render2D.textMiddle(ctx, font, "HUD layout", x + 25f, mid, 7f, Theme.text()) + x + 25f + 10f;
 		Render2D.textMiddle(ctx, Fonts.regular(), hint, tx, mid, Ui.TINY, Theme.textDim());
 		doneX = x + w - 4f - doneW;
 		doneY = y + 3f;
+		// The one primary action here, so it carries the accent.
 		float hv = doneHover.target(Ui.inside(mouseX, mouseY, doneX, doneY, doneW, h - 6f) ? 1f : 0f).get();
-		Render2D.gradientH(ctx, doneX, doneY, doneW, h - 6f, (h - 6f) / 2f, ColorUtil.brighten(Theme.accent(), 0.1f * hv),
-			ColorUtil.brighten(Theme.accent2(), 0.1f * hv));
+		int accent = Theme.accent();
+		Render2D.round(ctx, doneX, doneY, doneW, h - 6f, Ui.CELL_RADIUS + 1f, ColorUtil.withAlpha(accent, Math.round(56 + 30 * hv)));
+		Render2D.outline(ctx, doneX, doneY, doneW, h - 6f, Ui.CELL_RADIUS + 1f, 1f, ColorUtil.withAlpha(accent, 170));
 		Render2D.textCentered(ctx, font, "Done", doneX + doneW / 2f, Render2D.middle(font, mid, 7f), 7f, 0xFFFFFFFF);
 	}
 
@@ -428,7 +428,7 @@ public final class ClickGuiScreen extends Screen {
 		}
 		float mid = contentY + HEADER / 2f;
 		if (!searching()) {
-			if (category() == Category.HUD && Ui.inside(mx, my, editX, mid - 9f, editW, 18f)) {
+			if (category() == Category.HUD && Ui.inside(mx, my, editX, mid - 10f, editW, 20f)) {
 				hudEditor = true;
 				return true;
 			}

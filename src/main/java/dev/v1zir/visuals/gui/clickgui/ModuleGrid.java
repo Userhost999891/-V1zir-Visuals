@@ -23,8 +23,8 @@ final class ModuleGrid {
 	static final String ALL = "All";
 	/** Delay between two cards starting to appear, in seconds. */
 	private static final float STAGGER = 0.018f;
-	private static final float CHIP_H = 14f;
-	private static final float CHIP_GAP = 2f;
+	private static final float CHIP_H = 16f;
+	private static final float CHIP_GAP = 0f;
 
 	private final List<ModuleCard> cards = new ArrayList<>();
 	private final List<ModuleCard> visible = new ArrayList<>();
@@ -129,7 +129,7 @@ final class ModuleGrid {
 		SdfFont font = Fonts.medium();
 		float total = -CHIP_GAP;
 		for (int i = 0; i < n; i++) {
-			chipW[i] = chipLabels[i].width(font, chips.get(i), Ui.SMALL) + 14f;
+			chipW[i] = chipLabels[i].width(font, chips.get(i), Ui.SMALL) + 16f;
 			total += chipW[i] + CHIP_GAP;
 		}
 		float cx = rightX - total;
@@ -139,9 +139,9 @@ final class ModuleGrid {
 		}
 		chipY = centerY - CHIP_H / 2f;
 		float rowX = rightX - total;
-		// A recessed track holds the chips; the selection pill glides along it.
-		Render2D.matte(ctx, rowX - 2f, chipY - 2f, total + 4f, CHIP_H + 4f, 7f, 0x22000000, 0);
-		Render2D.rim(ctx, rowX - 2f, chipY - 2f, total + 4f, CHIP_H + 4f, 7f, 0x12FFFFFF, Ui.LIT);
+		// A segmented control: a quiet track, and a plate that glides to the selected segment.
+		Render2D.matte(ctx, rowX - 2f, chipY - 2f, total + 4f, CHIP_H + 4f, Ui.CELL_RADIUS + 2f, 0x1A000000, 0);
+		Render2D.rim(ctx, rowX - 2f, chipY - 2f, total + 4f, CHIP_H + 4f, Ui.CELL_RADIUS + 2f, Ui.HAIRLINE, Ui.LIT);
 		if (!selPlaced) {
 			selX.snap(chipX[chip]);
 			selW.snap(chipW[chip]);
@@ -149,13 +149,12 @@ final class ModuleGrid {
 		}
 		float sx = selX.target(chipX[chip]).get();
 		float sw = selW.target(chipW[chip]).get();
-		int accent = Theme.accent();
-		Render2D.matte(ctx, sx, chipY, sw, CHIP_H, 5.5f, ColorUtil.withAlpha(ColorUtil.lerp(0xFFFFFF, accent, 0.35f), 34), Ui.LIT);
-		Render2D.rim(ctx, sx, chipY, sw, CHIP_H, 5.5f, ColorUtil.withAlpha(ColorUtil.lerp(0xFFFFFF, accent, 0.45f), 90), Ui.LIT);
+		Render2D.matte(ctx, sx, chipY, sw, CHIP_H, Ui.CELL_RADIUS, 0x1CFFFFFF, Ui.LIT);
+		Render2D.rim(ctx, sx, chipY, sw, CHIP_H, Ui.CELL_RADIUS, 0x1AFFFFFF, Ui.LIT);
 		for (int i = 0; i < n; i++) {
 			float hv = chipHover[i].target(i != chip && Ui.inside(mx, my, chipX[i], chipY, chipW[i], CHIP_H) ? 1f : 0f).get();
-			int color = i == chip ? 0xFFFFFFFF : ColorUtil.lerp(Theme.textDim(), Theme.text(), hv);
-			Render2D.textMiddle(ctx, font, chips.get(i), chipX[i] + 7f, centerY, Ui.SMALL, color);
+			int color = i == chip ? Theme.text() : ColorUtil.lerp(Theme.textDim(), Theme.text(), hv);
+			Render2D.textMiddle(ctx, font, chips.get(i), chipX[i] + 8f, centerY, Ui.SMALL, color);
 		}
 		return rowX - 2f;
 	}
@@ -184,7 +183,7 @@ final class ModuleGrid {
 		viewH = h;
 		int cols = columns(w);
 		float gap = Ui.CARD_GAP;
-		float cardW = (w - 4f - gap * (cols - 1)) / cols;
+		float cardW = (w - gap * (cols - 1)) / cols;
 		int rows = (visible.size() + cols - 1) / cols;
 		float content = rows * (Ui.CARD_HEIGHT + gap) - gap + 6f;
 		float scroll = scroller.update(content, h);
@@ -195,7 +194,7 @@ final class ModuleGrid {
 		if (visible.isEmpty()) {
 			SdfFont font = Fonts.medium();
 			String text = "No modules found";
-			Render2D.icon(ctx, Icons.SEARCH, x + w / 2f, y + h / 2f - 10f, 14f, Theme.textFaint());
+			Render2D.icon(ctx, Icons.SEARCH, x + w / 2f, y + h / 2f - 8f, 12f, Theme.textFaint());
 			Render2D.textMiddle(ctx, font, text, x + w / 2f - emptyWidth.width(font, text, Ui.TEXT) / 2f, y + h / 2f + 8f, Ui.TEXT, Theme.textDim());
 			return;
 		}
@@ -204,8 +203,8 @@ final class ModuleGrid {
 		float alpha = Render2D.alpha();
 		for (int i = 0; i < visible.size(); i++) {
 			ModuleCard card = visible.get(i);
-			float cx = x + 2f + (i % cols) * (cardW + gap);
-			float cy = y + 3f + (i / cols) * (Ui.CARD_HEIGHT + gap) - scroll;
+			float cx = x + (i % cols) * (cardW + gap);
+			float cy = y + 2f + (i / cols) * (Ui.CARD_HEIGHT + gap) - scroll;
 			if (since >= i * STAGGER) card.appear.target(1f);
 			float a = card.appear.get();
 			if (cy > y + h || cy + Ui.CARD_HEIGHT < y || a <= 0.005f) {
@@ -218,7 +217,7 @@ final class ModuleGrid {
 		}
 		Render2D.setAlpha(alpha);
 		ctx.disableScissor();
-		scroller.drawBar(ctx, x + w + 1f, y, h, content, inView);
+		scroller.drawBar(ctx, x + w + 4f, y, h, content, inView);
 	}
 
 	@Nullable

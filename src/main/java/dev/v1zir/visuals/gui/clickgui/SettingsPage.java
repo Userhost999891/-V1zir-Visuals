@@ -22,11 +22,11 @@ import java.util.List;
  * options, and the client modules (Main Menu, Custom UI) as cards. One softly scrolling page.
  */
 final class SettingsPage {
-	private static final float HEADING = 12f;
-	private static final float GROUP_PAD = 9f;
-	private static final float SECTION_GAP = 12f;
-	private static final float PRESET_H = 30f;
-	private static final float PRESET_GAP = 5f;
+	private static final float HEADING = 8f;
+	private static final float GROUP_PAD = 12f;
+	private static final float SECTION_GAP = 16f;
+	private static final float PRESET_H = 32f;
+	private static final float PRESET_GAP = 8f;
 	private static final Theme.Preset[] PRESETS = Theme.Preset.values();
 
 	private final List<SettingComponent<?>> theme = new ArrayList<>();
@@ -82,12 +82,12 @@ final class SettingsPage {
 		ctx.enableScissor((int) Math.floor(x - 6f), (int) Math.floor(y), (int) Math.ceil(x + w + 6f), (int) Math.ceil(y + h));
 		float top = y + 2f - scroll;
 		float cy = top;
-		float gw = w - 4f;
-		float gx = x + 2f;
+		float gw = w;
+		float gx = x;
 
 		cy = section(ctx, gx, cy, gw, y, h, Icons.PALETTE, "Theme");
 		cy = presets(ctx, gx, cy, gw, y, h, cmx, cmy);
-		cy = group(ctx, theme, gx, cy + 6f, gw, y, h, cmx, cmy) + SECTION_GAP;
+		cy = group(ctx, theme, gx, cy + 8f, gw, y, h, cmx, cmy) + SECTION_GAP;
 		cy = section(ctx, gx, cy, gw, y, h, Icons.SPARKLES, "Animations");
 		cy = group(ctx, animation, gx, cy, gw, y, h, cmx, cmy) + SECTION_GAP;
 		cy = section(ctx, gx, cy, gw, y, h, Icons.APP_WINDOW, "Interface");
@@ -110,7 +110,7 @@ final class SettingsPage {
 		}
 		contentHeight = cy - top + 4f;
 		ctx.disableScissor();
-		scroller.drawBar(ctx, x + w + 1f, y, h, contentHeight, inView);
+		scroller.drawBar(ctx, x + w + 4f, y, h, contentHeight, inView);
 	}
 
 	private static float section(DrawContext ctx, float x, float y, float w, float viewY, float viewH, int icon, String title) {
@@ -118,7 +118,7 @@ final class SettingsPage {
 		Render2D.setAlpha(alpha * Ui.edgeFade(y, y + HEADING, viewY, viewY + viewH));
 		Ui.heading(ctx, x, y, icon, title);
 		Render2D.setAlpha(alpha);
-		return y + HEADING + 5f;
+		return y + HEADING + 8f;
 	}
 
 	/** Preset swatches: the preset's base with its two accents; the selected one wears an accent rim and a check. */
@@ -139,12 +139,12 @@ final class SettingsPage {
 			int a1 = p == Theme.Preset.CUSTOM ? module.accent.argb() : p.accent();
 			int a2 = p == Theme.Preset.CUSTOM ? module.accent2.argb() : p.accent2();
 			Render2D.setAlpha(alpha * Ui.edgeFade(py, py + PRESET_H, viewY, viewY + viewH));
-			if (selected) Render2D.shadow(ctx, px, py, presetW, PRESET_H, 5f, 8f, ColorUtil.withAlpha(a1, 70));
-			Render2D.matte(ctx, px, py - hv, presetW, PRESET_H, 5f, ColorUtil.withAlpha(ColorUtil.brighten(p.base(), 0.05f + 0.04f * hv), 235), Ui.LIT);
-			Render2D.rim(ctx, px, py - hv, presetW, PRESET_H, 5f, selected ? a1 : ColorUtil.withAlpha(0xFFFFFF, Math.round(22 + 30 * hv)), Ui.LIT);
-			Render2D.textMiddle(ctx, Fonts.semibold(), p.title(), px + 6f, py - hv + 9.5f, 6.5f, selected ? 0xFFFFFFFF : 0xFFDDE0E8);
-			Render2D.gradientH(ctx, px + 6f, py - hv + PRESET_H - 9f, presetW - 12f, 3f, 1.5f, a1, a2);
-			if (selected) Render2D.icon(ctx, Icons.CHECK, px + presetW - 8f, py - hv + 9.5f, 6.5f, a1);
+			Render2D.matte(ctx, px, py - hv, presetW, PRESET_H, Ui.CARD_RADIUS, ColorUtil.withAlpha(ColorUtil.brighten(p.base(), 0.05f + 0.04f * hv), 235), Ui.LIT);
+			Render2D.rim(ctx, px, py - hv, presetW, PRESET_H, Ui.CARD_RADIUS, selected ? a1 : ColorUtil.withAlpha(0xFFFFFF, Math.round(20 + 24 * hv)), Ui.LIT);
+			Render2D.textMiddle(ctx, Fonts.medium(), p.title(), px + 8f, py - hv + 11f, 6.5f, selected ? Theme.text() : Theme.textDim());
+			// The preset's own two colours, as a preview.
+			Render2D.gradientH(ctx, px + 8f, py - hv + PRESET_H - 10f, presetW - 16f, 2f, 1f, a1, a2);
+			if (selected) Render2D.icon(ctx, Icons.CHECK, px + presetW - 10f, py - hv + 11f, 6.5f, a1);
 		}
 		Render2D.setAlpha(alpha);
 		int rows = (PRESETS.length + cols - 1) / cols;
@@ -154,24 +154,27 @@ final class SettingsPage {
 	/** A matte group box with the components flowing into two balanced columns; returns its bottom. */
 	private static float group(DrawContext ctx, List<SettingComponent<?>> components, float x, float y, float w, float viewY, float viewH,
 							   double mx, double my) {
+		// Components alternate between the columns, so one that unfolds (a colour picker) never moves the others across.
 		float colW = (w - GROUP_PAD * 3f) / 2f;
 		float left = 0f;
 		float right = 0f;
+		int index = 0;
 		for (SettingComponent<?> c : components) {
 			if (!c.visible()) continue;
-			if (left <= right) left += c.height() + 4f;
+			if (index++ % 2 == 0) left += c.height() + 4f;
 			else right += c.height() + 4f;
 		}
 		float h = Math.max(left, right) - 4f + GROUP_PAD * 2f;
 		float alpha = Render2D.alpha();
 		Render2D.setAlpha(alpha * Ui.edgeFade(y, y + Math.min(h, 30f), viewY, viewY + viewH) * Ui.edgeFade(y + h - 30f, y + h, viewY, viewY + viewH));
-		Render2D.matte(ctx, x, y, w, h, 7f, Theme.raised(), Ui.LIT);
-		Render2D.rim(ctx, x, y, w, h, 7f, ColorUtil.withAlpha(0xFFFFFF, 18), Ui.LIT);
+		Render2D.matte(ctx, x, y, w, h, Ui.PANEL_RADIUS, Theme.raised(), Ui.LIT);
+		Render2D.rim(ctx, x, y, w, h, Ui.PANEL_RADIUS, Ui.HAIRLINE, Ui.LIT);
 		float ly = y + GROUP_PAD;
 		float ry = y + GROUP_PAD;
+		index = 0;
 		for (SettingComponent<?> c : components) {
 			if (!c.visible()) continue;
-			boolean toLeft = ly - y <= ry - y;
+			boolean toLeft = index++ % 2 == 0;
 			float cy = toLeft ? ly : ry;
 			Render2D.setAlpha(alpha * Ui.edgeFade(cy, cy + Math.min(c.height(), 22f), viewY, viewY + viewH));
 			float used = c.render(ctx, toLeft ? x + GROUP_PAD : x + GROUP_PAD * 2f + colW, cy, colW, mx, my) + 4f;

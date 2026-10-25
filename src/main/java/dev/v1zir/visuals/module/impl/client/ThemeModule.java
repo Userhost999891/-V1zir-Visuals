@@ -12,8 +12,8 @@ import dev.v1zir.visuals.util.Theme;
 /** Colours, glass and font of the whole UI. Always enabled. */
 public final class ThemeModule extends Module {
 	public final ModeSetting preset = add(new ModeSetting("Preset", Theme.Preset.V1ZIR.title(), Theme.Preset.titles()));
-	public final ColorSetting accent = add(new ColorSetting("Accent", 0xFF9B7BFF, false).visibleIf(this::custom));
-	public final ColorSetting accent2 = add(new ColorSetting("Accent 2", 0xFF4FD1FF, false).visibleIf(this::custom));
+	public final ColorSetting accent = add(new ColorSetting("Accent", 0xFFF6A64B, false).visibleIf(this::custom));
+	public final ColorSetting accent2 = add(new ColorSetting("Accent 2", 0xFFE8693F, false).visibleIf(this::custom));
 	public final NumberSetting panelOpacity = add(new NumberSetting("Panel opacity", 0.72, 0.3, 1.0, 0.01));
 	/** Panel style: Normal (solid grey) or Blur (tinted blur). */
 	public final ModeSetting style = add(new ModeSetting("Style", Theme.Style.BLUR.title(), Theme.Style.titles()));
