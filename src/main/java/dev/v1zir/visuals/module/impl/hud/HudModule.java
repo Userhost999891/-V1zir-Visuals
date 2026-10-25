@@ -80,6 +80,11 @@ public abstract class HudModule extends Module {
 	/** Draws the element at (x, y) and updates width/height. */
 	protected abstract void render(DrawContext ctx, float tickDelta, float x, float y);
 
+	/** A click on the screen while the chat or the HUD editor is open (HUD coordinates); true if the element used it. */
+	public boolean mouseClicked(double mouseX, double mouseY, int button) {
+		return false;
+	}
+
 	/** Whether there is something to show right now (TargetHud hides without a target). */
 	public boolean hasContent() {
 		return true;

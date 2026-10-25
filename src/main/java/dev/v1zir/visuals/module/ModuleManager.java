@@ -23,6 +23,7 @@ import dev.v1zir.visuals.module.impl.hud.CoordinatesModule;
 import dev.v1zir.visuals.module.impl.hud.KeybindsModule;
 import dev.v1zir.visuals.module.impl.hud.NotificationsModule;
 import dev.v1zir.visuals.module.impl.hud.PotionsModule;
+import dev.v1zir.visuals.module.impl.hud.SpotifyModule;
 import dev.v1zir.visuals.module.impl.hud.TargetHudModule;
 import dev.v1zir.visuals.module.impl.hud.WatermarkModule;
 import dev.v1zir.visuals.module.impl.visuals.AmbienceModule;
@@ -87,6 +88,7 @@ public final class ModuleManager {
 		register(new TargetHudModule());
 		register(new CoordinatesModule());
 		register(new NotificationsModule());
+		register(new SpotifyModule());
 		// Client
 		register(new ClickGuiModule());
 		register(new ThemeModule());
@@ -144,6 +146,7 @@ public final class ModuleManager {
 				module.toggle();
 				handled = true;
 			}
+			if (module.isEnabled()) module.onKeyPressed(key);
 		}
 		return handled;
 	}
