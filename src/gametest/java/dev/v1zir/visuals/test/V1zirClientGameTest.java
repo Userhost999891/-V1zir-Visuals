@@ -464,24 +464,18 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.runOnClient(client -> {
 			ClickGuiModule gui = ModuleManager.get(ClickGuiModule.class);
 			gui.openAnimation.set(ClickGuiModule.OPEN_3D);
+			gui.closeAnimation.set(ClickGuiModule.CLOSE_SHATTER);
 			gui.animationSpeed.set(0.5);
 		});
-		for (String close : new String[]{ClickGuiModule.CLOSE_SHATTER, ClickGuiModule.CLOSE_FROST}) {
-			context.runOnClient(client -> ModuleManager.get(ClickGuiModule.class).closeAnimation.set(close));
-			context.setScreen(ClickGuiScreen::new);
-			context.waitTicks(2);
-			if (close.equals(ClickGuiModule.CLOSE_SHATTER)) context.takeScreenshot("clickgui-open-3d");
-			context.waitTicks(30);
-			context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
-			context.waitTicks(close.equals(ClickGuiModule.CLOSE_SHATTER) ? 6 : 8);
-			context.takeScreenshot(close.equals(ClickGuiModule.CLOSE_SHATTER) ? "clickgui-close-3d-frost" : "clickgui-close-frost");
-			context.waitTicks(50);
-		}
-		context.runOnClient(client -> {
-			ClickGuiModule gui = ModuleManager.get(ClickGuiModule.class);
-			gui.animationSpeed.set(1.0);
-			gui.closeAnimation.set(ClickGuiModule.CLOSE_SHATTER);
-		});
+		context.setScreen(ClickGuiScreen::new);
+		context.waitTicks(2);
+		context.takeScreenshot("clickgui-open-3d");
+		context.waitTicks(30);
+		context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+		context.waitTicks(6);
+		context.takeScreenshot("clickgui-close-3d-frost");
+		context.waitTicks(50);
+		context.runOnClient(client -> ModuleManager.get(ClickGuiModule.class).animationSpeed.set(1.0));
 	}
 
 	private static void look(TestSingleplayerContext singleplayer, float yaw, float pitch) {

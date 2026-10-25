@@ -30,21 +30,19 @@ import java.util.OptionalInt;
  * {@link GuiCapture} and composited after the frame's GUI (GuiRendererMixin calls {@link #afterGui}):
  * <ul>
  *   <li>3D open: the window swings in from a backward tilt and depth, settling on a spring.</li>
- *   <li>Fade out, Frost (ice grows over the window, then it fades) and 3D Frost (the glass cracks from the
- *   cursor, splits into shards that tumble and fall in perspective). These play after the screen has closed,
- *   from a snapshot of its last frame, so the game takes input again at once.</li>
+ *   <li>Fade out and 3D Frost (the glass cracks from the cursor, splits into shards that tumble and fall in
+ *   perspective). These play after the screen has closed, from a snapshot of its last frame, so the game
+ *   takes input again at once.</li>
  * </ul>
  * Nothing runs while no animation plays; a failure disables the animations for the session instead of the GUI.
  */
 public final class WindowTransition {
 	private static final int OPEN = 1;
 	private static final int FADE = 2;
-	private static final int FROST = 3;
-	private static final int SHATTER = 4;
+	private static final int SHATTER = 3;
 	private static final int MODE_WARP = 0;
 	private static final int MODE_FADE = 1;
-	private static final int MODE_FROST = 2;
-	private static final int MODE_BACKDROP = 3;
+	private static final int MODE_BACKDROP = 2;
 	/** Seconds the cracks take to run across the window before the shards let go. */
 	private static final float CRACK_TIME = 0.13f;
 	private static final float SHATTER_TIME = 1.6f;
@@ -105,11 +103,7 @@ public final class WindowTransition {
 	static void close(ClickGuiScreen screen, String animation, int mx, int my, float animationSpeed, float dim, boolean blur) {
 		if (broken) return;
 		finish();
-		kind = switch (animation) {
-			case ClickGuiModule.CLOSE_FROST -> FROST;
-			case ClickGuiModule.CLOSE_SHATTER -> SHATTER;
-			default -> FADE;
-		};
+		kind = ClickGuiModule.CLOSE_SHATTER.equals(animation) ? SHATTER : FADE;
 		closing = screen;
 		captured = false;
 		speed = animationSpeed;
@@ -118,7 +112,7 @@ public final class WindowTransition {
 		backdropDim = dim;
 		backdropBlur = blur;
 		startedAt = System.nanoTime();
-		progress = new Anim(0f, (kind == FADE ? 9f : 3.2f) * speed);
+		progress = new Anim(0f, 9f * speed);
 	}
 
 	/** Stops whatever plays (a new GUI opening, or the end of an animation). */
@@ -207,12 +201,6 @@ public final class WindowTransition {
 				PARAMS.anim(p, 1f - p, MODE_FADE, 1f - 0.035f * p);
 				PARAMS.backdrop(1f - p, backdropBlur, backdropDim);
 				done = p >= 0.98f;
-			}
-			case FROST -> {
-				float p = progress.target(1f).get();
-				PARAMS.anim(p, 1f - smoothstep(0.62f, 0.97f, p), MODE_FROST, 1f);
-				PARAMS.backdrop(1f - smoothstep(0.25f, 0.95f, p), backdropBlur, backdropDim);
-				done = p >= 0.985f;
 			}
 			default -> {
 				float t = (System.nanoTime() - startedAt) / 1.0e9f * speed;

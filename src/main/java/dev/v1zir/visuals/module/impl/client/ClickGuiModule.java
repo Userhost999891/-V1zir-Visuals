@@ -12,12 +12,12 @@ public final class ClickGuiModule extends Module {
 	public static final String OPEN_NORMAL = "Normal";
 	public static final String OPEN_3D = "3D";
 	public static final String CLOSE_FADE = "Fade out";
-	public static final String CLOSE_FROST = "Frost";
 	public static final String CLOSE_SHATTER = "3D Frost";
 
 	public final BoolSetting animations = add(new BoolSetting("Animations", true));
 	public final ModeSetting openAnimation = add(new ModeSetting("Open animation", OPEN_3D, OPEN_NORMAL, OPEN_3D).visibleIf(animations::on));
-	public final ModeSetting closeAnimation = add(new ModeSetting("Close animation", CLOSE_SHATTER, CLOSE_FADE, CLOSE_FROST, CLOSE_SHATTER)
+	/** A saved value that no longer exists (the former "Frost") is ignored, so it falls back to 3D Frost. */
+	public final ModeSetting closeAnimation = add(new ModeSetting("Close animation", CLOSE_SHATTER, CLOSE_FADE, CLOSE_SHATTER)
 		.visibleIf(animations::on));
 	public final NumberSetting animationSpeed = add(new NumberSetting("Animation speed", 1.0, 0.5, 2.0, 0.05).suffix("x").visibleIf(animations::on));
 	public final NumberSetting scale = add(new NumberSetting("Scale", 1.0, 0.7, 1.4, 0.05).suffix("x"));
