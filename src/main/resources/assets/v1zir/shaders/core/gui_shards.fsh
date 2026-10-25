@@ -28,13 +28,16 @@ void main() {
 	float b = texture(Sampler0, uv + bend * 0.4).b;
 	vec3 col = vec3(r, base.g, b) * shade;
 
-	// Cracks run out from the impact point before anything moves.
+	// Cracks run out from the impact point before anything moves; the window's own border is no crack.
 	float reach = max(Screen.x, Screen.y) * 1.2 * clamp(Anim.x / max(Origin.w, 1e-3), 0.0, 1.0);
 	float cracked = 1.0 - smoothstep(reach - 40.0, reach, length(origin - Origin.xy));
-	float rim = (1.0 - smoothstep(0.6, 1.8, rimDistance)) * 0.85 + near * 0.18;
+	vec2 border = min(origin - Rect.xy, Rect.xy + Rect.zw - origin);
+	cracked *= smoothstep(1.5, 4.0, min(border.x, border.y));
+	// A hairline of light on the crack and a faint refracted glow beside it.
+	float rim = (1.0 - smoothstep(0.2, 1.1, rimDistance)) * 0.55 + near * 0.08;
 	float cover = smoothstep(0.0, 0.5, base.a);
-	vec3 ice = vec3(0.88, 0.95, 1.0);
-	col += ice * (rim * cracked + glint * 0.45) * cover;
-	float alpha = max(base.a, rim * cracked * cover * 0.9);
+	vec3 ice = vec3(0.86, 0.94, 1.0);
+	col += ice * (rim * cracked + glint * 0.4) * cover;
+	float alpha = max(base.a, rim * cracked * cover * 0.8);
 	fragColor = vec4(col, alpha) * opacity;
 }

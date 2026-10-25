@@ -19,8 +19,8 @@ final class ShardMesh {
 	private static final int RINGS = 5;
 	/** Ring radii as fractions of the distance to the farthest window corner; the last ring lies safely outside. */
 	private static final float[] RING = {0.09f, 0.22f, 0.4f, 0.64f, 1.5f};
-	/** Enough for every cell clipped to at most eight corners. */
-	private static final int MAX_VERTICES = MAX_SPOKES * RINGS * 8 * 3;
+	/** Enough for every cell split in two, each clipped to at most eight corners. */
+	private static final int MAX_VERTICES = MAX_SPOKES * RINGS * 2 * 8 * 3;
 	/** GpuBuffer.USAGE_VERTEX */
 	private static final int USAGE_VERTEX = 32;
 
@@ -65,8 +65,8 @@ final class ShardMesh {
 			pointX[i] = ox;
 			pointY[i] = oy;
 			for (int j = 1; j <= RINGS; j++) {
-				float angle = spoke + (random.nextFloat() - 0.5f) * step * 0.3f;
-				float radius = reach * RING[j - 1] * (0.85f + random.nextFloat() * 0.3f);
+				float angle = spoke + (random.nextFloat() - 0.5f) * step * 0.45f;
+				float radius = reach * RING[j - 1] * (j == RINGS ? 1f : 0.75f + random.nextFloat() * 0.5f);
 				pointX[j * spokes + i] = ox + (float) Math.cos(angle) * radius;
 				pointY[j * spokes + i] = oy + (float) Math.sin(angle) * radius;
 			}
@@ -74,20 +74,41 @@ final class ShardMesh {
 		for (int j = 0; j < RINGS; j++) {
 			for (int i = 0; i < spokes; i++) {
 				int next = (i + 1) % spokes;
-				int n = 0;
-				n = put(polyA, n, j * spokes + i);
-				if (j > 0) n = put(polyA, n, j * spokes + next);
-				n = put(polyA, n, (j + 1) * spokes + next);
-				n = put(polyA, n, (j + 1) * spokes + i);
-				n = clip(polyA, n, polyB, 0, x);
-				n = clip(polyB, n, polyA, 1, x + w);
-				n = clip(polyA, n, polyB, 2, y);
-				n = clip(polyB, n, polyA, 3, y + h);
-				if (n >= 3) fan(polyA, n, random.nextInt());
+				int a = j * spokes + i;
+				int b = j * spokes + next;
+				int c = (j + 1) * spokes + next;
+				int d = (j + 1) * spokes + i;
+				if (j == 0) {
+					shard(a, c, d, -1, x, y, w, h, random.nextInt());
+				} else if (random.nextFloat() < 0.4f) {
+					// A diagonal crack splits some cells, so the shards are not all alike.
+					if (random.nextBoolean()) {
+						shard(a, b, c, -1, x, y, w, h, random.nextInt());
+						shard(a, c, d, -1, x, y, w, h, random.nextInt());
+					} else {
+						shard(a, b, d, -1, x, y, w, h, random.nextInt());
+						shard(b, c, d, -1, x, y, w, h, random.nextInt());
+					}
+				} else {
+					shard(a, b, c, d, x, y, w, h, random.nextInt());
+				}
 			}
 		}
 		data.flip();
 		if (vertices > 0) buffer = RenderSystem.getDevice().createBuffer(() -> "V1zir GUI shards", USAGE_VERTEX, data);
+	}
+
+	/** One shard from three or four crack points (d < 0 for a triangle), clipped to the window. */
+	private void shard(int a, int b, int c, int d, float x, float y, float w, float h, int randomBits) {
+		int n = put(polyA, 0, a);
+		n = put(polyA, n, b);
+		n = put(polyA, n, c);
+		if (d >= 0) n = put(polyA, n, d);
+		n = clip(polyA, n, polyB, 0, x);
+		n = clip(polyB, n, polyA, 1, x + w);
+		n = clip(polyA, n, polyB, 2, y);
+		n = clip(polyB, n, polyA, 3, y + h);
+		if (n >= 3) fan(polyA, n, randomBits);
 	}
 
 	private static int put(float[] poly, int n, int point) {

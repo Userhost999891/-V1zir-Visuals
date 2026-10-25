@@ -59,6 +59,7 @@ public final class ClickGuiScreen extends Screen {
 	private final Label titleWidth = new Label();
 	private final Label editWidth = new Label();
 	private final Label toolbarWidth = new Label();
+	private final Label toolbarTitleWidth = new Label();
 	private String search = "";
 	private boolean searchFocused;
 	private boolean initialized;
@@ -98,7 +99,7 @@ public final class ClickGuiScreen extends Screen {
 			ModuleCard card = new ModuleCard(module);
 			cards.add(card);
 			// Click GUI and Theme live on the Settings page itself; the other client modules show as cards.
-			if (module.category() == Category.SETTINGS && module.canToggle()) clientCards.add(card);
+			if (module.category() == Category.SETTINGS && !(module instanceof ClickGuiModule) && !(module instanceof ThemeModule)) clientCards.add(card);
 		}
 		for (Category category : TABS) {
 			if (category == Category.SETTINGS) continue;
@@ -360,7 +361,7 @@ public final class ClickGuiScreen extends Screen {
 		float hw = toolbarWidth.width(Fonts.regular(), hint, Ui.TINY);
 		float h = 22f;
 		doneW = 40f;
-		float w = 12f + 10f + 6f + font.width("HUD layout", 7f) + 10f + hw + 10f + doneW + 4f;
+		float w = 12f + 10f + 6f + toolbarTitleWidth.width(font, "HUD layout", 7f) + 10f + hw + 10f + doneW + 4f;
 		float x = width / 2f - w / 2f;
 		// Low in the screen, above the hotbar: the top centre usually holds the compass.
 		float y = height - 66f;

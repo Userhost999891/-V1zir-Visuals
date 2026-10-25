@@ -90,14 +90,17 @@ vec4 frost(vec2 p) {
 	float amount = smoothstep(freezeAt - 0.08, freezeAt, front);
 	float seam = exp(-pow((front - freezeAt) / 0.035, 2.0));
 
-	float radius = amount * unit * 0.22;
+	float radius = amount * unit * 0.35;
 	vec4 base = window(p);
 	for (int i = 0; i < 8; i++) base += window(p + DISC[i] * radius);
 	base /= 9.0;
 	vec3 ice = vec3(0.84, 0.92, 1.0);
-	float edges = 1.0 - smoothstep(0.0, 0.08, cell.y - cell.x);
-	vec3 col = mix(base.rgb, ice * base.a, 0.5 * amount);
-	col += ice * base.a * (((cell.z - 0.5) * 0.08 + edges * 0.22) * amount + seam * 0.35);
+	// Facet borders of two crystal sizes, broken up by noise so they read as frost, not tiles.
+	vec3 small = crystals(p / (unit * 0.38));
+	float edges = (1.0 - smoothstep(0.0, 0.05, cell.y - cell.x)) * fine * 0.12
+		+ (1.0 - smoothstep(0.0, 0.07, small.y - small.x)) * (1.0 - fine) * 0.1;
+	vec3 col = mix(base.rgb, ice * base.a, 0.36 * amount);
+	col += ice * base.a * (((cell.z - 0.5) * 0.05 + (small.z - 0.5) * 0.04 + edges) * amount + seam * 0.3);
 	float glint = step(0.9965, transitionHash(p * 0.5 + 3.7)) * amount * (0.5 + 0.5 * sin(Anim.x * 40.0 + cell.z * 30.0));
 	col += glint * 0.7 * base.a;
 	return vec4(col, base.a);
