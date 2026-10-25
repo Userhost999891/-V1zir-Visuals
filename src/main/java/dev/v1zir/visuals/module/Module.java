@@ -111,6 +111,10 @@ public abstract class Module {
 	public void onTick() {
 	}
 
+	/** A key was pressed in game (no screen open); enabled modules with action keys react here. */
+	public void onKeyPressed(int key) {
+	}
+
 	/** Short state shown next to the name in the module list (e.g. the selected preset). */
 	public String suffix() {
 		return null;

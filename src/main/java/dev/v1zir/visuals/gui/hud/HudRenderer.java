@@ -13,9 +13,12 @@ import dev.v1zir.visuals.module.impl.hud.HudModule;
 import dev.v1zir.visuals.module.impl.visuals.DamageTintModule;
 import dev.v1zir.visuals.render.ui.Render2D;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
+import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
+import net.fabricmc.fabric.api.client.screen.v1.ScreenMouseEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.gui.screen.ChatScreen;
 import net.minecraft.client.render.RenderTickCounter;
 import net.minecraft.entity.player.PlayerEntity;
 
@@ -31,6 +34,12 @@ public final class HudRenderer {
 			DamageTintModule tint = ModuleManager.get(DamageTintModule.class);
 			if (tint != null && tint.isEnabled() && !V1zir.mc().options.hudHidden) tint.render(ctx);
 		});
+		// With the chat open, HUD elements can be clicked (the Spotify buttons).
+		ScreenEvents.AFTER_INIT.register((client, screen, width, height) -> {
+			if (screen instanceof ChatScreen) {
+				ScreenMouseEvents.allowMouseClick(screen).register((s, click) -> !click(click.x(), click.y(), click.button()));
+			}
+		});
 		HudElementRegistry.replaceElement(VanillaHudElements.HOTBAR, vanilla -> (ctx, tickCounter) -> {
 			if (CustomUi.hotbar() && V1zir.mc().getCameraEntity() instanceof PlayerEntity player && !player.isSpectator()) {
 				CustomHotbar.render(ctx, tickCounter, player);
@@ -45,6 +54,14 @@ public final class HudRenderer {
 			HitMarkerModule marker = ModuleManager.get(HitMarkerModule.class);
 			if (marker != null && marker.isEnabled()) marker.render(ctx);
 		});
+	}
+
+	/** Offers a click to the visible HUD elements; true if one used it. */
+	public static boolean click(double x, double y, int button) {
+		for (Module module : ModuleManager.all()) {
+			if (module instanceof HudModule hud && hud.isEnabled() && hud.hasContent() && hud.mouseClicked(x, y, button)) return true;
+		}
+		return false;
 	}
 
 	public static void tick(MinecraftClient client) {

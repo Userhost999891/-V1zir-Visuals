@@ -32,6 +32,8 @@ import dev.v1zir.visuals.module.impl.hud.PerformanceModule;
 import dev.v1zir.visuals.module.impl.hud.PotionsModule;
 import dev.v1zir.visuals.module.impl.hud.ServerInfoModule;
 import dev.v1zir.visuals.module.impl.hud.SpeedModule;
+import dev.v1zir.visuals.module.impl.hud.SpotifyLyricsModule;
+import dev.v1zir.visuals.module.impl.hud.SpotifyModule;
 import dev.v1zir.visuals.module.impl.hud.TargetHudModule;
 import dev.v1zir.visuals.module.impl.hud.WatermarkModule;
 import dev.v1zir.visuals.module.impl.visuals.AmbienceModule;
@@ -127,6 +129,8 @@ public final class ModuleManager {
 		register(new ArmorModule());
 		register(new ItemCounterModule());
 		register(new NotificationsModule());
+		register(new SpotifyModule());
+		register(new SpotifyLyricsModule());
 		// Client
 		register(new ClickGuiModule());
 		register(new ThemeModule());
@@ -184,6 +188,7 @@ public final class ModuleManager {
 				module.toggle();
 				handled = true;
 			}
+			if (module.isEnabled()) module.onKeyPressed(key);
 		}
 		return handled;
 	}

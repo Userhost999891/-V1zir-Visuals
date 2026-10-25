@@ -416,6 +416,8 @@ public final class ClickGuiScreen extends Screen {
 				float x = hud.x(width);
 				float y = hud.y(height);
 				if (Ui.inside(mx, my, x - 2, y - 2, hud.width() + 4, hud.height() + 4)) {
+					// Buttons inside an element (Spotify controls) work here too; the HUD itself is drawn unscaled.
+					if (hud.isEnabled() && hud.mouseClicked(click.x(), click.y(), button)) return true;
 					if (button == GLFW.GLFW_MOUSE_BUTTON_RIGHT) hud.toggle();
 					else {
 						draggingHud = hud;

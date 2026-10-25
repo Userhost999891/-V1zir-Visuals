@@ -138,6 +138,12 @@ public final class Icons {
 	public static final int BED = 0xe2c1;
 	public static final int BATTERY_CHARGING = 0xe054;
 	public static final int THERMOMETER = 0xe186;
+	public static final int PLAY = 0xe13c;
+	public static final int PAUSE = 0xe12e;
+	public static final int SKIP_FORWARD = 0xe160;
+	public static final int SKIP_BACK = 0xe15f;
+	public static final int MIC_VOCAL = 0xe349;
+	public static final int DISC_3 = 0xe494;
 
 	private Icons() {
 	}
