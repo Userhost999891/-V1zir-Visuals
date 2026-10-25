@@ -23,6 +23,7 @@
 		"LivingEntityMixin",
 		"LivingEntityRendererInvoker",
 		"MinecraftClientMixin",
+		"MouseClickMixin",
 		"MouseMixin",
 		"PlayerEntityRendererMixin",
 		"PressableWidgetMixin",
