@@ -34,16 +34,14 @@ jobs:
           echo "mapped jar: $jar"
           sig() { javap -p -cp "$jar" "$@" 2>&1; }
           code() { javap -c -p -cp "$jar" "$1" 2>&1 | awk -v m="$2" 'index($0, " " m "(") && /\(/ {p=1} p {print} p && /^$/ {p=0}'; }
-          for c in com.mojang.blaze3d.systems.CommandEncoder net.minecraft.client.gui.hud.InGameHud \
-                   net.minecraft.client.render.WeatherRendering net.minecraft.client.particle.ParticleManager \
-                   net.minecraft.client.render.entity.EntityRenderManager net.minecraft.client.render.entity.PlayerEntityRenderer \
-                   net.minecraft.client.render.entity.state.EntityRenderState net.minecraft.entity.Entity; do
+          for c in net.minecraft.client.gui.render.GuiRenderer net.minecraft.client.gui.DrawContext \
+                   net.minecraft.client.gl.SimpleFramebuffer net.minecraft.client.gl.Framebuffer \
+                   net.minecraft.client.gui.PlayerSkinDrawer com.mojang.blaze3d.systems.CommandEncoder; do
             echo "=== SIG $c"; sig "$c"
           done
-          echo "=== CODE InGameHud.renderMiscOverlays"; code net.minecraft.client.gui.hud.InGameHud renderMiscOverlays
-          echo "=== CODE ParticleManager.addParticle"; code net.minecraft.client.particle.ParticleManager addParticle
-          echo "=== CODE EntityRenderManager.getAndUpdateRenderState"; code net.minecraft.client.render.entity.EntityRenderManager getAndUpdateRenderState
-          echo "=== CODE WorldRenderer.renderEntities"; code net.minecraft.client.render.WorldRenderer renderEntities
+          echo "=== CODE GuiRenderer.render"; code net.minecraft.client.gui.render.GuiRenderer render
+          echo "=== CODE GuiRenderer.renderPreparedDraws"; code net.minecraft.client.gui.render.GuiRenderer renderPreparedDraws
+          echo "=== CODE GameRenderer.render"; code net.minecraft.client.render.GameRenderer render
 
   client:
     name: Dev client
