@@ -129,6 +129,20 @@ public final class V1zirPipelines {
 		.withCull(false)
 		.build();
 
+	/** Colour grading of the world, from a copy of the frame back onto it (render/ColorGrade). */
+	public static final RenderPipeline COLOR_GRADE = RenderPipeline.builder()
+		.withLocation(V1zir.id("pipeline/color_grade"))
+		.withVertexShader(V1zir.id("core/fullscreen"))
+		.withFragmentShader(V1zir.id("core/color_grade"))
+		.withVertexFormat(VertexFormats.POSITION, VertexFormat.DrawMode.TRIANGLES)
+		.withSampler("Sampler0")
+		.withUniform("GradeParams", UniformType.UNIFORM_BUFFER)
+		.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+		.withDepthWrite(false)
+		.withoutBlend()
+		.withCull(false)
+		.build();
+
 	public static final RenderPipeline BLUR_DOWN = blurPipeline("blur_down");
 	public static final RenderPipeline BLUR_UP = blurPipeline("blur_up");
 
@@ -202,6 +216,7 @@ public final class V1zirPipelines {
 		RenderPipelines.register(SKY_UPSAMPLE);
 		RenderPipelines.register(SKY_PANORAMA);
 		RenderPipelines.register(SKY_CACHED);
+		RenderPipelines.register(COLOR_GRADE);
 		RenderPipelines.register(BLUR_DOWN);
 		RenderPipelines.register(BLUR_UP);
 		RenderPipelines.register(WORLD_GLOW);

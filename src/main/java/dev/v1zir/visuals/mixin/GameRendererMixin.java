@@ -6,6 +6,7 @@ import com.llamalad7.mixinextras.sugar.Local;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.visuals.AspectRatioModule;
 import dev.v1zir.visuals.module.impl.visuals.CameraTweaksModule;
+import dev.v1zir.visuals.module.impl.visuals.ColorGradingModule;
 import dev.v1zir.visuals.module.impl.visuals.NoRenderModule;
 import dev.v1zir.visuals.module.impl.visuals.ZoomModule;
 import net.minecraft.client.render.GameRenderer;
@@ -23,7 +24,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * renderWorld builds three projections: the one the world is drawn with (getBasicProjectionMatrix),
  * a plain one for frustum culling (getProjectionMatrix) and the hand's (ProjectionMatrix3.set). They
  * are changed at those call sites only, so nothing else that asks for a projection is affected.
- * No Render takes the nausea and portal wobble out of the world projection.
+ * No Render takes the nausea and portal wobble out of the world projection; Color Grading runs
+ * once the world and the hand are drawn, before any GUI.
  */
 @Mixin(GameRenderer.class)
 public abstract class GameRendererMixin {
@@ -88,5 +90,10 @@ public abstract class GameRendererMixin {
 		ZoomModule zoom = ModuleManager.get(ZoomModule.class);
 		CameraTweaksModule tweaks = ModuleManager.get(CameraTweaksModule.class);
 		if (zoom != null && zoom.isEnabled() && zoom.handHidden() || tweaks != null && tweaks.isEnabled() && tweaks.hidesHand()) ci.cancel();
+	}
+
+	@Inject(method = RENDER_WORLD, at = @At("RETURN"))
+	private void v1zir$colorGrade(CallbackInfo ci) {
+		ColorGradingModule.renderIfEnabled();
 	}
 }
