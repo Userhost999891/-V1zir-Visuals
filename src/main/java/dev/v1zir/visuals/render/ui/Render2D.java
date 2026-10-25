@@ -194,6 +194,11 @@ public final class Render2D {
 			rimTop, rimTop, rimBottom, rimBottom);
 	}
 
+	/** A texture (album art) filling a rounded rectangle; color tints it and carries its opacity (white = unchanged). */
+	public static void image(DrawContext ctx, TextureSetup texture, float x, float y, float w, float h, float radius, int color) {
+		shape(ctx, V1zirPipelines.IMAGE, texture, x, y, w, h, radius, 0, 0, ShapeElement.FILL, 0, color, color, color, color);
+	}
+
 	/** Animated shader background (sky presets in "menu" mode) covering the given area. */
 	public static void menuBackground(DrawContext ctx, float width, float height, int color) {
 		Matrix3x2f pose = pose(ctx);
@@ -212,6 +217,14 @@ public final class Render2D {
 		public float letterSpacing = 0f;
 		public boolean shadow;
 		public int shadowColor = 0x90000000;
+		/** Colour the glyphs take left of sweepX, blending over sweepSoftness pixels (karaoke fill); 0 turns it off. */
+		public int sweepColor;
+		public float sweepX;
+		public float sweepSoftness = 6f;
+		/** Glyphs fade out over fadeWidth pixels towards fadeLeft and fadeRight (marquee edges); 0 turns it off. */
+		public float fadeLeft;
+		public float fadeRight;
+		public float fadeWidth;
 
 		public static TextStyle of(int color) {
 			TextStyle style = new TextStyle();
@@ -249,6 +262,20 @@ public final class Render2D {
 			this.shadowColor = color;
 			return this;
 		}
+
+		public TextStyle sweep(int color, float x, float softness) {
+			this.sweepColor = color;
+			this.sweepX = x;
+			this.sweepSoftness = Math.max(0.5f, softness);
+			return this;
+		}
+
+		public TextStyle fadeEdges(float left, float right, float width) {
+			this.fadeLeft = left;
+			this.fadeRight = right;
+			this.fadeWidth = width;
+			return this;
+		}
 	}
 
 	/** Draws text with its top-left at (x, y). Returns the text width. */
@@ -264,6 +291,7 @@ public final class Render2D {
 			SHADOW.weight = style.weight + 0.04f;
 			SHADOW.softness = 0.12f + style.softness;
 			SHADOW.letterSpacing = style.letterSpacing;
+			SHADOW.fadeEdges(style.fadeLeft, style.fadeRight, style.fadeWidth);
 			float off = Math.max(0.5f, size * 0.06f);
 			emitText(ctx, font, text, x + off * 0.4f, y + off, size, SHADOW);
 		}
@@ -341,6 +369,10 @@ public final class Render2D {
 					left = ColorUtil.lerp(style.color, style.colorEnd, (x0 - x) / totalWidth);
 					right = ColorUtil.lerp(style.color, style.colorEnd, (x1 - x) / totalWidth);
 				}
+				if (style.sweepColor != 0 || style.fadeWidth > 0f) {
+					left = shade(style, left, x0);
+					right = shade(style, right, x1);
+				}
 				if (current == null || current.page != g.page()) {
 					current = null;
 					for (Run run : runs) if (run.page == g.page()) current = run;
@@ -365,6 +397,17 @@ public final class Render2D {
 				run.quads, run.colors, run.count, weight, softness));
 		}
 		return penX - x;
+	}
+
+	/** Applies the style's sweep and edge fade to a glyph edge colour at x. */
+	private static int shade(TextStyle style, int color, float x) {
+		if (style.sweepColor != 0) {
+			color = ColorUtil.lerp(color, style.sweepColor, Math.max(0f, Math.min(1f, (style.sweepX - x) / style.sweepSoftness + 0.5f)));
+		}
+		if (style.fadeWidth > 0f) {
+			color = ColorUtil.fade(color, Math.min(x - style.fadeLeft, style.fadeRight - x) / style.fadeWidth);
+		}
+		return color;
 	}
 
 	private static final class Run {
