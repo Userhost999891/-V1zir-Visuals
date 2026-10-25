@@ -30,6 +30,7 @@ import dev.v1zir.visuals.module.impl.visuals.AspectRatioModule;
 import dev.v1zir.visuals.module.impl.visuals.CameraTweaksModule;
 import dev.v1zir.visuals.module.impl.visuals.FreeLookModule;
 import dev.v1zir.visuals.module.impl.visuals.FullBrightModule;
+import dev.v1zir.visuals.module.impl.visuals.GlintColorModule;
 import dev.v1zir.visuals.module.impl.visuals.HandChamsModule;
 import dev.v1zir.visuals.module.impl.visuals.ShaderSkyModule;
 import dev.v1zir.visuals.module.impl.visuals.SwingAnimationsModule;
@@ -63,6 +64,7 @@ public final class ModuleManager {
 		register(new ViewModelModule());
 		register(new SwingAnimationsModule());
 		register(new HandChamsModule());
+		register(new GlintColorModule());
 		register(new ZoomModule());
 		register(new FreeLookModule());
 		register(new CameraTweaksModule());

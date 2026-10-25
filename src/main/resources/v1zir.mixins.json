@@ -34,6 +34,7 @@
 		"SkyRenderingMixin",
 		"SliderWidgetMixin",
 		"TextFieldWidgetMixin",
+		"TextureTransformMixin",
 		"TooltipBackgroundRendererMixin",
 		"WorldRendererMixin"
 	],
