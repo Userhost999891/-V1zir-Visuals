@@ -246,7 +246,7 @@ public final class ClickGuiScreen extends Screen {
 	 * Draws the window in its own transform: scale around the screen centre and a vertical offset.
 	 * Mouse coordinates are screen coordinates.
 	 */
-	public void drawWindow(DrawContext ctx, int mouseX, int mouseY, float alpha, float scale, float rise) {
+	void drawWindow(DrawContext ctx, int mouseX, int mouseY, float alpha, float scale, float rise) {
 		layout();
 		float s = baseScale();
 		float sw = spaceW();
@@ -506,7 +506,7 @@ public final class ClickGuiScreen extends Screen {
 			ModuleCard card = pressedCard;
 			pressedCard = null;
 			if (card.release(mx, my)) {
-				if (card.module.canToggle()) card.module.toggle();
+				if (card.module.canToggle() && !card.overChevron(mx, my)) card.module.toggle();
 				else drawer.show(card.module);
 			}
 		}

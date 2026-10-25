@@ -136,6 +136,11 @@ final class ModuleCard {
 		return Ui.inside(mx, my, x, y - 1f, w, Ui.CARD_HEIGHT + 1f);
 	}
 
+	/** The settings chevron at the end of the description line (a left click there opens the settings). */
+	boolean overChevron(double mx, double my) {
+		return hasSettings && Ui.inside(mx, my, x + w - 24f, y + 17f, 24f, Ui.CARD_HEIGHT - 17f);
+	}
+
 	void press() {
 		pressed = true;
 	}

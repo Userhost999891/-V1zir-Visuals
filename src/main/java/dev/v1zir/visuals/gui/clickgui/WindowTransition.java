@@ -88,8 +88,14 @@ public final class WindowTransition {
 	@Nullable
 	static DrawContext openTarget(int mx, int my) {
 		if (kind != OPEN || broken) return null;
-		drawnThisFrame = true;
-		return GuiCapture.begin(mx, my);
+		try {
+			DrawContext ctx = GuiCapture.begin(mx, my);
+			drawnThisFrame = true;
+			return ctx;
+		} catch (RuntimeException | LinkageError e) {
+			fail(e);
+			return null;
+		}
 	}
 
 	/**
@@ -135,10 +141,14 @@ public final class WindowTransition {
 			if (kind == OPEN) afterOpen(fog);
 			else afterClose(fog);
 		} catch (RuntimeException | LinkageError e) {
-			V1zir.LOGGER.error("Click GUI animation failed, animations are off until restart", e);
-			broken = true;
-			finish();
+			fail(e);
 		}
+	}
+
+	private static void fail(Throwable e) {
+		V1zir.LOGGER.error("Click GUI animation failed, animations are off until restart", e);
+		broken = true;
+		finish();
 	}
 
 	private static void afterOpen(GpuBufferSlice fog) {
