@@ -45,6 +45,8 @@ public final class PerformanceModule extends HudModule {
 	public PerformanceModule() {
 		super("Performance", "FPS with a frame time graph", 0.008f, 0.78f);
 		setSubCategory("Info");
+		width = W;
+		height = 48f;
 	}
 
 	@Override

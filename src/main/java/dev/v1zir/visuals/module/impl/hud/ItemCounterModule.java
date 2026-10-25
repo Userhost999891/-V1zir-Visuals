@@ -33,13 +33,21 @@ public final class ItemCounterModule extends HudModule {
 	};
 
 	public ItemCounterModule() {
-		super("Item Counter", "Counts totems, pearls, gapples and more", 0.53f, 0.66f);
+		super("Item Counter", "Counts totems, pearls, gapples and more", 0.5f, 0.72f);
 		setSubCategory("Widgets");
+		width = 120f;
+		height = 22f;
 	}
 
 	@Override
 	public boolean showInList() {
 		return false;
+	}
+
+	/** The row grows to both sides as counters come and go, so it stays centred over the hotbar. */
+	@Override
+	protected boolean centered() {
+		return true;
 	}
 
 	@Override
@@ -91,10 +99,18 @@ public final class ItemCounterModule extends HudModule {
 	private void horizontal(DrawContext ctx, SdfFont bold, float x, float y) {
 		float h = 22f;
 		float w = 3f;
-		for (Entry e : entries) w += slot(e, bold) * e.shown.get();
+		float visible = 0f;
+		for (Entry e : entries) {
+			float s = e.shown.get();
+			w += slot(e, bold) * s;
+			visible = Math.max(visible, s);
+		}
 		width = Math.max(h, w);
 		height = h;
+		// The pill fades with its last counter instead of lingering empty for a moment.
+		Render2D.setAlpha(visible);
 		panel(ctx, x, y, width, h, 7f);
+		Render2D.setAlpha(1f);
 		float cx = x + 1.5f;
 		for (Entry e : entries) {
 			float s = e.shown.get();
@@ -107,10 +123,17 @@ public final class ItemCounterModule extends HudModule {
 
 	private void vertical(DrawContext ctx, SdfFont bold, float x, float y) {
 		float h = 6f;
-		for (Entry e : entries) h += ROW * e.shown.get();
+		float visible = 0f;
+		for (Entry e : entries) {
+			float s = e.shown.get();
+			h += ROW * s;
+			visible = Math.max(visible, s);
+		}
 		width = LIST_W;
 		height = h;
+		Render2D.setAlpha(visible);
 		panel(ctx, x, y, LIST_W, h, 7f);
+		Render2D.setAlpha(1f);
 		SdfFont font = Fonts.medium();
 		float cy = y + 3f;
 		for (Entry e : entries) {

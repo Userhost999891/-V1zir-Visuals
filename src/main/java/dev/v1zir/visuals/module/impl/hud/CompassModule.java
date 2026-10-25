@@ -42,6 +42,8 @@ public final class CompassModule extends HudModule {
 	public CompassModule() {
 		super("Compass", "Compass ribbon at the top of the screen", 0.5f, 0.012f);
 		setSubCategory("Info");
+		width = size.f();
+		height = RIBBON_H + 14f;
 	}
 
 	@Override
@@ -79,10 +81,22 @@ public final class CompassModule extends HudModule {
 		float w = size.f();
 		width = w;
 		height = RIBBON_H + (readout.on() ? 14f : 0f);
+		float cx = x + w / 2f;
+		int bearing = Math.floorMod(Math.round(yaw), 360);
+		int direction = Math.floorMod(Math.round(bearing / 45f), 8);
+		float dw = 0f;
+		float pw = 0f;
+		float py = y + RIBBON_H + 2f;
+		if (readout.on()) {
+			degrees.set(bearing);
+			dw = degrees.width(bold, 7f);
+			pw = dw + 3f + directionWidths[direction] + 12f;
+			// The heading pill hangs just below the ribbon: its shadow goes first so it does not shade the ribbon.
+			shadow(ctx, cx - pw / 2f, py, pw, 12f, 6f);
+		}
 		panel(ctx, x, y, w, RIBBON_H, RIBBON_H / 2f);
 
 		int accent = Theme.accent();
-		float cx = x + w / 2f;
 		float half = w / 2f - 9f;
 		float mid = y + RIBBON_H / 2f - 0.5f;
 		float range = half / PIXELS_PER_DEGREE;
@@ -111,16 +125,10 @@ public final class CompassModule extends HudModule {
 		Render2D.round(ctx, cx - 4f, y + RIBBON_H - 2.5f, 8f, 1.5f, 0.75f, accent);
 
 		if (readout.on()) {
-			int angle = Math.floorMod(Math.round(yaw), 360);
-			degrees.set(angle);
-			int direction = Math.floorMod(Math.round(angle / 45f), 8);
-			float dw = degrees.width(bold, 7f);
-			float lw = directionWidths[direction];
-			float pw = dw + 3f + lw + 12f;
-			float py = y + RIBBON_H + 2f;
-			panel(ctx, cx - pw / 2f, py, pw, 12f, 6f);
-			Render2D.textMiddle(ctx, bold, degrees.text(), cx - pw / 2f + 6f, py + 6f, 7f, Theme.text());
-			Render2D.textMiddle(ctx, font, DIRECTIONS[direction], cx - pw / 2f + 6f + dw + 3f, py + 6f, 6.5f, accent);
+			float px = cx - pw / 2f;
+			Render2D.panel(ctx, px, py, pw, 12f, 6f);
+			Render2D.textMiddle(ctx, bold, degrees.text(), px + 6f, py + 6f, 7f, Theme.text());
+			Render2D.textMiddle(ctx, font, DIRECTIONS[direction], px + 6f + dw + 3f, py + 6f, 6.5f, accent);
 		}
 	}
 

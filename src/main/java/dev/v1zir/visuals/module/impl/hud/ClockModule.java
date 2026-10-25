@@ -8,6 +8,7 @@ import dev.v1zir.visuals.render.font.SdfFont;
 import dev.v1zir.visuals.render.ui.Render2D;
 import dev.v1zir.visuals.util.ColorUtil;
 import dev.v1zir.visuals.util.Theme;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.gui.DrawContext;
 
 import java.util.TimeZone;
@@ -26,26 +27,21 @@ public final class ClockModule extends HudModule {
 	private long shownSession = -1L;
 	private String time = "";
 	private String sessionText = "";
-	private Object connection;
 	private long joined = System.currentTimeMillis();
 
 	public ClockModule() {
 		super("Clock", "Real time and session time", 0.008f, 0.09f);
 		setSubCategory("Info");
+		width = 88f;
+		height = 18f;
+		// Heard even while the clock is off, so turning it on mid-game still counts from the join.
+		// A new connection starts a new session; changing dimension keeps it.
+		ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> joined = System.currentTimeMillis());
 	}
 
 	@Override
 	public boolean showInList() {
 		return false;
-	}
-
-	@Override
-	public void onTick() {
-		// The session is the connection: changing dimension keeps it, joining another server starts anew.
-		if (mc.getNetworkHandler() != connection) {
-			connection = mc.getNetworkHandler();
-			joined = System.currentTimeMillis();
-		}
 	}
 
 	@Override

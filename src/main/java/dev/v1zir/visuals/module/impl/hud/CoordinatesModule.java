@@ -76,6 +76,9 @@ public final class CoordinatesModule extends HudModule {
 
 		boolean right = anchoredRight();
 		float rx = right ? x + width - w : x;
+		float ox = right ? x + width - w2 : x;
+		float oy = y + h + 3f;
+		if (showOther) shadow(ctx, ox, oy, w2, h2, h2 / 2f);
 		panel(ctx, rx, y, w, h, h / 2f);
 		Render2D.icon(ctx, Icons.NAVIGATION, rx + 10f, y + h / 2f, 8f, Theme.accent());
 		float cx = rx + 19f;
@@ -90,10 +93,8 @@ public final class CoordinatesModule extends HudModule {
 		}
 
 		if (showOther) {
-			float oy = y + h + 3f;
-			float ox = right ? x + width - w2 : x;
 			int tint = inNether ? OVERWORLD : NETHER;
-			panel(ctx, ox, oy, w2, h2, h2 / 2f);
+			Render2D.panel(ctx, ox, oy, w2, h2, h2 / 2f);
 			Render2D.icon(ctx, inNether ? Icons.EARTH : Icons.FLAME, ox + 9f, oy + h2 / 2f, 7.5f, tint);
 			cx = ox + 17f;
 			cx += Render2D.textMiddle(ctx, bold, LABELS[0], cx, oy + h2 / 2f, SMALL, tint) + 3f;

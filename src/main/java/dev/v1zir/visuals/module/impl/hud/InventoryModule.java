@@ -26,6 +26,8 @@ public final class InventoryModule extends HudModule {
 	private static final float GAP = 2f;
 	private static final float PAD = 6f;
 	private static final float W = PAD * 2f + CELL * 9f + GAP * 8f;
+	/** Header strip, three rows of cells, bottom padding. */
+	private static final float H = 18f + CELL * 3f + GAP * 2f + PAD - 1f;
 	private static final Render2D.TextStyle COUNT = Render2D.TextStyle.of(0xFFFFFFFF).shadow();
 
 	private final Item[] items = new Item[SLOTS];
@@ -39,6 +41,8 @@ public final class InventoryModule extends HudModule {
 	public InventoryModule() {
 		super("Inventory", "Your inventory at a glance", 0.995f, 0.66f);
 		setSubCategory("Widgets");
+		width = W;
+		height = H;
 		for (int i = 0; i < SLOTS; i++) flash[i] = new Anim(0f, 5f);
 	}
 
@@ -82,11 +86,7 @@ public final class InventoryModule extends HudModule {
 	@Override
 	protected void render(DrawContext ctx, float tickDelta, float x, float y) {
 		if (mc.player == null) return;
-		float gridH = CELL * 3f + GAP * 2f;
-		float h = 18f + gridH + PAD - 1f;
-		width = W;
-		height = h;
-		float top = headerPanel(ctx, x, y, W, h, Icons.BOX, "Inventory");
+		float top = headerPanel(ctx, x, y, W, H, Icons.BOX, "Inventory");
 		float left = x + PAD;
 
 		for (int i = 0; i < SLOTS; i++) CustomUi.well(ctx, cellX(left, i), cellY(top, i), CELL, CELL, 4f);

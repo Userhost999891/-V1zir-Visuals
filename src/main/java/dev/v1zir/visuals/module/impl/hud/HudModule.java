@@ -118,8 +118,13 @@ public abstract class HudModule extends Module {
 	}
 
 	protected static void panel(DrawContext ctx, float x, float y, float w, float h, float radius) {
-		Render2D.shadow(ctx, x, y + 1f, w, h, radius, 8f, 0x55000000);
+		shadow(ctx, x, y, w, h, radius);
 		Render2D.panel(ctx, x, y, w, h, radius);
+	}
+
+	/** A panel's soft drop shadow, drawn first on its own where stacked panels must not shade each other. */
+	protected static void shadow(DrawContext ctx, float x, float y, float w, float h, float radius) {
+		Render2D.shadow(ctx, x, y + 1f, w, h, radius, 8f, 0x55000000);
 	}
 
 	/** Panel with a header strip carrying an icon and a title. Returns the y where content starts. */

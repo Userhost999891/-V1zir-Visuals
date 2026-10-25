@@ -37,6 +37,12 @@ public final class KeystrokesModule extends HudModule {
 	public final BoolSetting space = add(new BoolSetting("Space", true));
 
 	private final Anim[] press = new Anim[JUMP + 1];
+	// This frame's key rectangles and press amounts, shared by the halo pass and the key pass.
+	private final float[] pressed = new float[JUMP + 1];
+	private final float[] keyX = new float[JUMP + 1];
+	private final float[] keyY = new float[JUMP + 1];
+	private final float[] keyW = new float[JUMP + 1];
+	private final float[] keyH = new float[JUMP + 1];
 	private final String[] labels = {"W", "A", "S", "D", "LMB", "RMB", ""};
 	private final String[] boundKeys = new String[4];
 	private final Label[] labelWidths = new Label[JUMP];
@@ -47,6 +53,8 @@ public final class KeystrokesModule extends HudModule {
 	public KeystrokesModule() {
 		super("Keystrokes", "Movement keys and clicks per second", 0.995f, 0.985f);
 		setSubCategory("Widgets");
+		width = W;
+		height = KEY * 3f + GAP * 3f + SPACE_H;
 		for (int i = 0; i < press.length; i++) press[i] = new Anim(0f, 16f);
 		for (int i = 0; i < labelWidths.length; i++) labelWidths[i] = new Label();
 		for (long[] times : clicks) Arrays.fill(times, Long.MIN_VALUE);
@@ -98,35 +106,54 @@ public final class KeystrokesModule extends HudModule {
 		float h = KEY * 2f + GAP + (mouse.on() ? GAP + KEY : 0f) + (space.on() ? GAP + SPACE_H : 0f);
 		width = W;
 		height = h;
-		SdfFont font = Fonts.semibold();
-		key(ctx, font, FORWARD, x + KEY + GAP, y, KEY, KEY);
+		place(FORWARD, x + KEY + GAP, y, KEY, KEY);
 		float row = y + KEY + GAP;
-		key(ctx, font, LEFT, x, row, KEY, KEY);
-		key(ctx, font, BACK, x + KEY + GAP, row, KEY, KEY);
-		key(ctx, font, RIGHT, x + (KEY + GAP) * 2f, row, KEY, KEY);
+		place(LEFT, x, row, KEY, KEY);
+		place(BACK, x + KEY + GAP, row, KEY, KEY);
+		place(RIGHT, x + (KEY + GAP) * 2f, row, KEY, KEY);
 		row += KEY + GAP;
-		if (mouse.on()) {
-			float mw = (W - GAP) / 2f;
-			key(ctx, font, ATTACK, x, row, mw, KEY);
-			key(ctx, font, USE, x + mw + GAP, row, mw, KEY);
-			row += KEY + GAP;
+		float mw = (W - GAP) / 2f;
+		place(ATTACK, x, row, mouse.on() ? mw : 0f, KEY);
+		place(USE, x + mw + GAP, row, mouse.on() ? mw : 0f, KEY);
+		if (mouse.on()) row += KEY + GAP;
+		place(JUMP, x, row, space.on() ? W : 0f, SPACE_H);
+
+		// Shadows and the glow of held keys go first, so no key shades or lights up its neighbours.
+		for (int i = 0; i <= JUMP; i++) {
+			if (keyW[i] <= 0f) continue;
+			shadow(ctx, keyX[i], keyY[i], keyW[i], keyH[i], 5f);
+			float p = pressed[i];
+			if (p > 0.01f) {
+				Render2D.glow(ctx, keyX[i], keyY[i], keyW[i], keyH[i], 5f, 7f, ColorUtil.withAlpha(Theme.accent(), Math.round(100 * p)),
+					ColorUtil.withAlpha(Theme.accent2(), Math.round(100 * p)));
+			}
 		}
-		if (space.on()) key(ctx, font, JUMP, x, row, W, SPACE_H);
+		SdfFont font = Fonts.semibold();
+		for (int i = 0; i <= JUMP; i++) if (keyW[i] > 0f) key(ctx, font, i);
 	}
 
-	private void key(DrawContext ctx, SdfFont font, int index, float x, float y, float w, float h) {
+	/** Lays out a key (a width of 0 hides it); a held key sinks in a little. */
+	private void place(int index, float x, float y, float w, float h) {
 		float p = press[index].get();
-		// A held key sinks in a little and fills with the accent.
 		float inset = p * 0.8f;
-		x += inset;
-		y += inset;
-		w -= inset * 2f;
-		h -= inset * 2f;
+		pressed[index] = p;
+		keyX[index] = x + inset;
+		keyY[index] = y + inset;
+		keyW[index] = w > 0f ? w - inset * 2f : 0f;
+		keyH[index] = h - inset * 2f;
+	}
+
+	private void key(DrawContext ctx, SdfFont font, int index) {
+		float p = pressed[index];
+		float x = keyX[index];
+		float y = keyY[index];
+		float w = keyW[index];
+		float h = keyH[index];
 		Render2D.panel(ctx, x, y, w, h, 5f);
 		if (p > 0.01f) {
+			// A held key fills with the accent.
 			int accent = Theme.accent();
 			int accent2 = Theme.accent2();
-			Render2D.glow(ctx, x, y, w, h, 5f, 7f, ColorUtil.withAlpha(accent, Math.round(100 * p)), ColorUtil.withAlpha(accent2, Math.round(100 * p)));
 			Render2D.round(ctx, x, y, w, h, 5f, ColorUtil.withAlpha(accent, Math.round(190 * p)), ColorUtil.withAlpha(accent2, Math.round(170 * p)),
 				ColorUtil.withAlpha(accent2, Math.round(140 * p)), ColorUtil.withAlpha(accent, Math.round(160 * p)));
 		}

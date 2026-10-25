@@ -1,5 +1,6 @@
 package dev.v1zir.visuals.module.impl.hud;
 
+import dev.v1zir.visuals.gui.clickgui.Label;
 import dev.v1zir.visuals.module.setting.BoolSetting;
 import dev.v1zir.visuals.render.font.Fonts;
 import dev.v1zir.visuals.render.font.Icons;
@@ -12,30 +13,37 @@ import net.minecraft.client.network.ClientPlayNetworkHandler;
 import net.minecraft.client.network.PlayerListEntry;
 import net.minecraft.client.network.ServerInfo;
 
+import java.util.Arrays;
+
 /**
  * Server address, ping and the server's tick rate. The tick rate is estimated from how far world
- * time advances between the time packets a server sends every second.
+ * time advances between the time packets a server sends (vanilla: every second).
  */
 public final class ServerInfoModule extends HudModule {
 	private static final float W = 124f;
 	private static final float ROW = 12f;
+	/** Measuring windows averaged into the estimate, about a second each. */
 	private static final int SAMPLES = 6;
+	private static final long WINDOW = 900_000_000L;
+	private static final long SILENCE = 30_000_000_000L;
 
 	public final BoolSetting address = add(new BoolSetting("Address", true));
 	public final BoolSetting ping = add(new BoolSetting("Ping", true));
 	public final BoolSetting tps = add(new BoolSetting("TPS", true));
 
 	// Written by the network thread (see onWorldTime), read while rendering.
-	private final float[] samples = new float[SAMPLES];
-	private int sampleCount;
+	private final long[] sampleTicks = new long[SAMPLES];
+	private final long[] sampleNanos = new long[SAMPLES];
 	private int sampleNext;
 	private Object lastPacket;
-	private long lastWorldTime;
+	private long windowStart;
+	private long windowTime;
 	private volatile long lastNanos;
 	private volatile float tickRate = -1f;
 
 	private final NumberText pingText = new NumberText(0, " ms");
 	private final NumberText tpsText = new NumberText(1, "");
+	private final Label dashWidth = new Label();
 	private Object connection;
 	private int latency;
 	private String addressSource;
@@ -45,6 +53,8 @@ public final class ServerInfoModule extends HudModule {
 	public ServerInfoModule() {
 		super("Server Info", "Server, ping and TPS", 0.008f, 0.62f);
 		setSubCategory("Info");
+		width = W;
+		height = 18f + 3f * ROW + 3f;
 	}
 
 	@Override
@@ -62,26 +72,36 @@ public final class ServerInfoModule extends HudModule {
 		if (packet == lastPacket) return;
 		lastPacket = packet;
 		long now = System.nanoTime();
-		float seconds = (now - lastNanos) / 1.0e9f;
-		long ticks = worldTime - lastWorldTime;
-		boolean first = lastNanos == 0L;
-		lastWorldTime = worldTime;
 		lastNanos = now;
-		// Time going back or a long silence is a new world rather than lag; bursts measure nothing.
-		if (first || ticks < 0 || seconds < 0.5f || seconds > 30f) return;
-		samples[sampleNext] = Math.min(20f, ticks / seconds);
+		// Time going back or a long silence is a new world rather than lag: start measuring anew.
+		if (windowStart == 0L || worldTime < windowTime || now - windowStart > SILENCE) {
+			windowStart = now;
+			windowTime = worldTime;
+			return;
+		}
+		// Packets closer together than a window (bursts, servers that send every tick) are measured as one.
+		if (now - windowStart < WINDOW) return;
+		sampleTicks[sampleNext] = worldTime - windowTime;
+		sampleNanos[sampleNext] = now - windowStart;
 		sampleNext = (sampleNext + 1) % SAMPLES;
-		sampleCount = Math.min(sampleCount + 1, SAMPLES);
-		float sum = 0f;
-		for (int i = 0; i < sampleCount; i++) sum += samples[i];
-		tickRate = sum / sampleCount;
+		windowStart = now;
+		windowTime = worldTime;
+		// Ticks over time of all windows together, so a late packet and the early one after it cancel out.
+		long ticks = 0L;
+		long nanos = 0L;
+		for (int i = 0; i < SAMPLES; i++) {
+			ticks += sampleTicks[i];
+			nanos += sampleNanos[i];
+		}
+		tickRate = Math.min(20f, ticks / (nanos / 1.0e9f));
 	}
 
 	private synchronized void resetTickRate() {
 		lastPacket = null;
 		lastNanos = 0L;
-		sampleCount = 0;
-		sampleNext = 0;
+		windowStart = 0L;
+		Arrays.fill(sampleTicks, 0L);
+		Arrays.fill(sampleNanos, 0L);
 		tickRate = -1f;
 	}
 
@@ -138,12 +158,15 @@ public final class ServerInfoModule extends HudModule {
 		}
 		if (tps.on()) {
 			float rate = tickRate;
-			// A server that stops sending time has stalled: let the estimate fall while it is silent.
+			// A server that stops sending time has stalled: past a second of grace for a late packet,
+			// the estimate falls steadily while it stays silent.
 			float silent = lastNanos == 0L ? 0f : (System.nanoTime() - lastNanos) / 1.0e9f;
-			if (rate >= 0f && silent > 2f) rate = Math.min(rate, 20f / silent);
+			if (rate >= 0f && silent > 2f) rate = Math.min(rate, 20f / (silent - 1f));
+			// No estimate yet (the first seconds on a server): the editor previews a healthy server.
+			if (rate < 0f && editing()) rate = 20f;
 			label(ctx, font, Icons.CPU, "TPS", x, cy, 0.3f);
 			String text = rate < 0f ? "-" : tpsText.set(rate);
-			float tw = rate < 0f ? 4f : tpsText.width(bold, 7f);
+			float tw = rate < 0f ? dashWidth.width(bold, text, 7f) : tpsText.width(bold, 7f);
 			Render2D.textMiddle(ctx, bold, text, x + W - 7f - tw, cy + ROW / 2f, 7f,
 				rate < 0f ? Theme.textFaint() : quality((20f - rate) / 10f));
 		}

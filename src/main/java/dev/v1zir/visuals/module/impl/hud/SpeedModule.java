@@ -36,6 +36,8 @@ public final class SpeedModule extends HudModule {
 	public SpeedModule() {
 		super("Speed", "Movement speed with a small graph", 0.008f, 0.9f);
 		setSubCategory("Info");
+		width = 90f;
+		height = 18f;
 	}
 
 	@Override

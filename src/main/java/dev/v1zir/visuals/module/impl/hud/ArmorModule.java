@@ -48,8 +48,10 @@ public final class ArmorModule extends HudModule {
 	private final Label[] textWidths = new Label[SLOTS.length];
 
 	public ArmorModule() {
-		super("Armor", "Armour and held items with durability", 0.53f, 0.8f);
+		super("Armor", "Armour and held items with durability", 0.5f, 0.82f);
 		setSubCategory("Widgets");
+		width = 4f + SLOTS.length * CELL;
+		height = 35f;
 		for (int i = 0; i < SLOTS.length; i++) {
 			durability[i] = new Anim(1f, 6f);
 			textWidths[i] = new Label();
@@ -59,6 +61,12 @@ public final class ArmorModule extends HudModule {
 	@Override
 	public boolean showInList() {
 		return false;
+	}
+
+	/** Sits centred over the hotbar by default and stays centred when the held items are hidden. */
+	@Override
+	protected boolean centered() {
+		return true;
 	}
 
 	@Override
