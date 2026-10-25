@@ -6,6 +6,7 @@ import com.llamalad7.mixinextras.sugar.Local;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.visuals.AspectRatioModule;
 import dev.v1zir.visuals.module.impl.visuals.CameraTweaksModule;
+import dev.v1zir.visuals.module.impl.visuals.NoRenderModule;
 import dev.v1zir.visuals.module.impl.visuals.ZoomModule;
 import net.minecraft.client.render.GameRenderer;
 import net.minecraft.client.util.math.MatrixStack;
@@ -22,6 +23,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * renderWorld builds three projections: the one the world is drawn with (getBasicProjectionMatrix),
  * a plain one for frustum culling (getProjectionMatrix) and the hand's (ProjectionMatrix3.set). They
  * are changed at those call sites only, so nothing else that asks for a projection is affected.
+ * No Render takes the nausea and portal wobble out of the world projection.
  */
 @Mixin(GameRenderer.class)
 public abstract class GameRendererMixin {
@@ -65,6 +67,13 @@ public abstract class GameRendererMixin {
 	private int v1zir$stretchHand(int width) {
 		AspectRatioModule module = ModuleManager.get(AspectRatioModule.class);
 		return module != null && module.active() ? module.handWidth(width) : width;
+	}
+
+	/** The wobble strength is the larger of the portal and the nausea effect; the first Math.max of renderWorld picks it. */
+	@ModifyExpressionValue(method = RENDER_WORLD, at = @At(value = "INVOKE", target = "Ljava/lang/Math;max(FF)F", ordinal = 0))
+	private float v1zir$noWobble(float strength) {
+		NoRenderModule noRender = NoRenderModule.active();
+		return noRender != null && noRender.nausea.on() ? 0f : strength;
 	}
 
 	@Inject(method = "tiltViewWhenHurt", at = @At("HEAD"), cancellable = true)
