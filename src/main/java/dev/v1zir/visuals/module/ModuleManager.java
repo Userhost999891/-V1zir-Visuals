@@ -40,6 +40,7 @@ import dev.v1zir.visuals.module.impl.visuals.ZoomModule;
 import dev.v1zir.visuals.module.impl.world.BlockHighlightModule;
 import dev.v1zir.visuals.module.impl.world.BreakEffectsModule;
 import dev.v1zir.visuals.module.impl.world.ItemPhysicsModule;
+import dev.v1zir.visuals.module.impl.world.SkyLanternsModule;
 import dev.v1zir.visuals.module.impl.world.TrajectoriesModule;
 
 import java.util.ArrayList;
@@ -89,6 +90,7 @@ public final class ModuleManager {
 		register(new BreakEffectsModule());
 		register(new TrajectoriesModule());
 		register(new ItemPhysicsModule());
+		register(new SkyLanternsModule());
 		// HUD
 		register(new WatermarkModule());
 		register(new ArrayListModule());
