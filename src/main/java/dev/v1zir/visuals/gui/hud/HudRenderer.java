@@ -10,6 +10,7 @@ import dev.v1zir.visuals.module.impl.client.ThemeModule;
 import dev.v1zir.visuals.module.impl.effects.CrosshairModule;
 import dev.v1zir.visuals.module.impl.effects.HitMarkerModule;
 import dev.v1zir.visuals.module.impl.hud.HudModule;
+import dev.v1zir.visuals.module.impl.visuals.DamageTintModule;
 import dev.v1zir.visuals.render.ui.Render2D;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
@@ -25,6 +26,11 @@ public final class HudRenderer {
 
 	public static void register() {
 		HudElementRegistry.attachElementBefore(VanillaHudElements.CHAT, V1zir.id("hud"), HudRenderer::render);
+		// Screen tints belong with vanilla's vignette and overlays, under the hotbar and the rest of the HUD.
+		HudElementRegistry.attachElementAfter(VanillaHudElements.MISC_OVERLAYS, V1zir.id("damage_tint"), (ctx, tickCounter) -> {
+			DamageTintModule tint = ModuleManager.get(DamageTintModule.class);
+			if (tint != null && tint.isEnabled() && !V1zir.mc().options.hudHidden) tint.render(ctx);
+		});
 		HudElementRegistry.replaceElement(VanillaHudElements.HOTBAR, vanilla -> (ctx, tickCounter) -> {
 			if (CustomUi.hotbar() && V1zir.mc().getCameraEntity() instanceof PlayerEntity player && !player.isSpectator()) {
 				CustomHotbar.render(ctx, tickCounter, player);

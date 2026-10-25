@@ -6,6 +6,8 @@ import com.llamalad7.mixinextras.sugar.Local;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.visuals.AspectRatioModule;
 import dev.v1zir.visuals.module.impl.visuals.CameraTweaksModule;
+import dev.v1zir.visuals.module.impl.visuals.ColorGradingModule;
+import dev.v1zir.visuals.module.impl.visuals.NoRenderModule;
 import dev.v1zir.visuals.module.impl.visuals.ZoomModule;
 import net.minecraft.client.render.GameRenderer;
 import net.minecraft.client.util.math.MatrixStack;
@@ -22,6 +24,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * renderWorld builds three projections: the one the world is drawn with (getBasicProjectionMatrix),
  * a plain one for frustum culling (getProjectionMatrix) and the hand's (ProjectionMatrix3.set). They
  * are changed at those call sites only, so nothing else that asks for a projection is affected.
+ * No Render takes the nausea and portal wobble out of the world projection; Color Grading runs
+ * once the world and the hand are drawn, before any GUI.
  */
 @Mixin(GameRenderer.class)
 public abstract class GameRendererMixin {
@@ -67,6 +71,13 @@ public abstract class GameRendererMixin {
 		return module != null && module.active() ? module.handWidth(width) : width;
 	}
 
+	/** The wobble strength is the larger of the portal and the nausea effect; the first Math.max of renderWorld picks it. */
+	@ModifyExpressionValue(method = RENDER_WORLD, at = @At(value = "INVOKE", target = "Ljava/lang/Math;max(FF)F", ordinal = 0))
+	private float v1zir$noWobble(float strength) {
+		NoRenderModule noRender = NoRenderModule.active();
+		return noRender != null && noRender.nausea.on() ? 0f : strength;
+	}
+
 	@Inject(method = "tiltViewWhenHurt", at = @At("HEAD"), cancellable = true)
 	private void v1zir$noHurtShake(MatrixStack matrices, float tickProgress, CallbackInfo ci) {
 		CameraTweaksModule tweaks = ModuleManager.get(CameraTweaksModule.class);
@@ -79,5 +90,10 @@ public abstract class GameRendererMixin {
 		ZoomModule zoom = ModuleManager.get(ZoomModule.class);
 		CameraTweaksModule tweaks = ModuleManager.get(CameraTweaksModule.class);
 		if (zoom != null && zoom.isEnabled() && zoom.handHidden() || tweaks != null && tweaks.isEnabled() && tweaks.hidesHand()) ci.cancel();
+	}
+
+	@Inject(method = RENDER_WORLD, at = @At("RETURN"))
+	private void v1zir$colorGrade(CallbackInfo ci) {
+		ColorGradingModule.renderIfEnabled();
 	}
 }

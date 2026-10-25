@@ -6,18 +6,27 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.visuals.HandChamsModule;
+import dev.v1zir.visuals.module.impl.visuals.NametagsModule;
 import net.minecraft.client.model.ModelPart;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.RenderLayers;
 import net.minecraft.client.render.command.OrderedRenderCommandQueue;
 import net.minecraft.client.render.entity.PlayerEntityRenderer;
+import net.minecraft.client.render.entity.state.PlayerEntityRenderState;
+import net.minecraft.client.render.state.CameraRenderState;
 import net.minecraft.client.texture.Sprite;
 import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.entity.EntityType;
 import net.minecraft.util.Identifier;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** Hand Chams on the first-person arm: it is submitted through the overload that carries a tint colour. */
+/**
+ * Hand Chams on the first-person arm: it is submitted through the overload that carries a tint colour.
+ * Nametags replaces the vanilla label (name and below-name score) of real players; mannequins keep theirs.
+ */
 @Mixin(PlayerEntityRenderer.class)
 public abstract class PlayerEntityRendererMixin {
 	/** Glow: the same skin on the emissive variant of the arm's layer, so it is drawn unshaded. */
@@ -36,5 +45,11 @@ public abstract class PlayerEntityRendererMixin {
 			return;
 		}
 		queue.submitModelPart(part, matrices, layer, chams.handLight(light), overlay, sprite, chams.argb(), null);
+	}
+
+	@Inject(method = "renderLabelIfPresent(Lnet/minecraft/client/render/entity/state/PlayerEntityRenderState;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;Lnet/minecraft/client/render/state/CameraRenderState;)V",
+		at = @At("HEAD"), cancellable = true)
+	private void v1zir$hideLabel(PlayerEntityRenderState state, MatrixStack matrices, OrderedRenderCommandQueue queue, CameraRenderState cameraState, CallbackInfo ci) {
+		if (state.entityType == EntityType.PLAYER && ModuleManager.isEnabled(NametagsModule.class)) ci.cancel();
 	}
 }

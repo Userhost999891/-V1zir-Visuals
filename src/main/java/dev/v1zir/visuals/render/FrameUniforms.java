@@ -33,6 +33,7 @@ public final class FrameUniforms {
 		MenuSky.flip();
 		SkyCache.flip();
 		BackdropBlur.flip();
+		ColorGrade.flip();
 		WorldEffectRenderer.flip();
 	}
 
