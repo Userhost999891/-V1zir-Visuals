@@ -30,8 +30,8 @@ public final class HitColorModule extends Module {
 	private int appliedColor;
 
 	public HitColorModule() {
-		super("Hit Color", "Custom colour of the hurt flash", Category.EFFECTS);
-		setSubCategory("Combat");
+		super("Hit Color", "Custom colour of the hurt flash", Category.COMBAT);
+		setSubCategory("Hits");
 	}
 
 	@Override

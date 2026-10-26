@@ -28,8 +28,8 @@ public final class HitParticlesModule extends Module implements WorldEffect {
 	private long lastFrame = System.nanoTime();
 
 	public HitParticlesModule() {
-		super("Hit Particles", "Sparks on every hit", Category.EFFECTS);
-		setSubCategory("Combat");
+		super("Hit Particles", "Sparks on every hit", Category.COMBAT);
+		setSubCategory("Hits");
 	}
 
 	@Override

@@ -4,6 +4,8 @@ import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.Std140Builder;
 import com.mojang.blaze3d.buffers.Std140SizeCalculator;
 import dev.v1zir.visuals.V1zir;
+import dev.v1zir.visuals.gui.clickgui.WindowTransition;
+import dev.v1zir.visuals.optimize.Optimizations;
 import dev.v1zir.visuals.render.sky.MenuSky;
 import dev.v1zir.visuals.render.sky.SkyCache;
 import dev.v1zir.visuals.render.sky.SkyUniforms;
@@ -22,6 +24,9 @@ public final class FrameUniforms {
 
 	private static DynamicUniformStorage<GuiData> guiStorage;
 	private static GpuBufferSlice guiSlice;
+	/** Cursor in framebuffer pixels (bottom-left origin) for lit GUI shapes; negative while no screen sets it. */
+	private static float cursorX = -1f;
+	private static float cursorY = -1f;
 
 	private FrameUniforms() {
 	}
@@ -29,28 +34,42 @@ public final class FrameUniforms {
 	public static void flip() {
 		if (guiStorage != null) guiStorage.clear();
 		guiSlice = null;
+		cursorX = -1f;
+		cursorY = -1f;
 		SkyUniforms.flip();
 		MenuSky.flip();
 		SkyCache.flip();
 		BackdropBlur.flip();
+		ColorGrade.flip();
+		WindowTransition.flip();
 		WorldEffectRenderer.flip();
+		GuiCapture.flip();
+		Optimizations.endFrame();
+	}
+
+	/** Lights LIT shapes around this point (GUI coordinates) for the current frame. */
+	public static void cursor(double guiX, double guiY) {
+		Window window = V1zir.mc().getWindow();
+		float scale = (float) window.getScaleFactor();
+		cursorX = (float) guiX * scale;
+		cursorY = window.getFramebufferHeight() - (float) guiY * scale;
 	}
 
 	public static GpuBufferSlice gui() {
 		if (guiSlice == null) {
 			if (guiStorage == null) guiStorage = new DynamicUniformStorage<>("V1zir GUI UBO", GUI_SIZE, 4);
 			Window window = V1zir.mc().getWindow();
-			guiSlice = guiStorage.write(new GuiData(V1zir.time(), window.getScaleFactor(),
+			guiSlice = guiStorage.write(new GuiData(V1zir.time(), window.getScaleFactor(), cursorX, cursorY,
 				Math.max(window.getFramebufferWidth(), 1), Math.max(window.getFramebufferHeight(), 1)));
 		}
 		return guiSlice;
 	}
 
-	private record GuiData(float time, float scale, int width, int height) implements DynamicUniformStorage.Uploadable {
+	private record GuiData(float time, float scale, float cursorX, float cursorY, int width, int height) implements DynamicUniformStorage.Uploadable {
 		@Override
 		public void write(ByteBuffer buffer) {
 			Std140Builder.intoBuffer(buffer)
-				.putVec4(time, scale, 0.0f, 0.0f)
+				.putVec4(time, scale, cursorX, cursorY)
 				.putVec4(width, height, 1.0f / width, 1.0f / height);
 		}
 

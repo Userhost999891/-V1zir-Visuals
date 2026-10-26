@@ -26,8 +26,8 @@ public final class ChinaHatModule extends Module implements WorldEffect {
 	private final Draw3D.Wave wave = new Draw3D.Wave();
 
 	public ChinaHatModule() {
-		super("China Hat", "A glowing cone hat", Category.EFFECTS);
-		setSubCategory("Cosmetic");
+		super("China Hat", "A glowing cone hat", Category.VISUALS);
+		setSubCategory("Render");
 	}
 
 	@Override

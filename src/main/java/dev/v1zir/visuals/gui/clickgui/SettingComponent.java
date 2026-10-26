@@ -19,6 +19,8 @@ public abstract class SettingComponent<S extends Setting<?>> {
 	protected float x;
 	protected float y;
 	protected float width;
+	/** Height returned by the last draw, or -1 before the first one. */
+	private float drawn = -1f;
 
 	protected SettingComponent(S setting) {
 		this.setting = setting;
@@ -40,12 +42,18 @@ public abstract class SettingComponent<S extends Setting<?>> {
 	/** Height before the component has been laid out, so the first expansion animates to the right size. */
 	public abstract float estimateHeight();
 
+	/** Height for layout: the last drawn height, or the estimate before the component was drawn. */
+	public float height() {
+		return drawn >= 0f ? drawn : estimateHeight();
+	}
+
 	/** Lays out and draws the component; returns its height. */
 	public float render(DrawContext ctx, float x, float y, float width, double mouseX, double mouseY) {
 		this.x = x;
 		this.y = y;
 		this.width = width;
-		return draw(ctx, mouseX, mouseY);
+		drawn = draw(ctx, mouseX, mouseY);
+		return drawn;
 	}
 
 	protected abstract float draw(DrawContext ctx, double mouseX, double mouseY);

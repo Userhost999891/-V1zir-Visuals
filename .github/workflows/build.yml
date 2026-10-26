@@ -34,26 +34,24 @@ jobs:
           echo "mapped jar: $jar"
           sig() { javap -p -cp "$jar" "$@" 2>&1; }
           code() { javap -c -p -cp "$jar" "$1" 2>&1 | awk -v m="$2" 'index($0, " " m "(") && /\(/ {p=1} p {print} p && /^$/ {p=0}'; }
-          for c in net.minecraft.client.render.OverlayTexture net.minecraft.client.render.GameRenderer \
-                   net.minecraft.client.gui.hud.InGameOverlayRenderer net.minecraft.client.render.Camera \
-                   net.minecraft.client.render.entity.LivingEntityRenderer net.minecraft.client.render.entity.PlayerEntityRenderer \
-                   net.minecraft.client.render.entity.EndCrystalEntityRenderer net.minecraft.client.render.entity.model.EndCrystalEntityModel \
-                   net.minecraft.client.render.item.ItemRenderer net.minecraft.client.render.item.HeldItemRenderer \
-                   net.minecraft.client.render.command.OrderedRenderCommandQueue net.minecraft.client.render.command.RenderCommandQueue \
-                   net.minecraft.client.render.entity.model.PlayerEntityModel net.minecraft.sound.SoundEvents; do
+          for c in net.minecraft.client.render.chunk.ChunkBuilder net.minecraft.client.render.block.entity.BannerBlockEntityRenderer \
+                   net.minecraft.client.render.block.entity.AbstractSignBlockEntityRenderer net.minecraft.client.render.entity.ItemFrameEntityRenderer \
+                   net.minecraft.client.render.entity.state.ItemFrameEntityRenderState net.minecraft.client.render.item.ItemRenderState \
+                   net.minecraft.entity.Leashable net.minecraft.client.gl.DynamicUniformStorage net.minecraft.client.gui.hud.DebugHud \
+                   net.minecraft.util.profiler.MultiValueDebugSampleLogImpl net.minecraft.client.option.InactivityFpsLimiter\$LimitReason; do
             echo "=== SIG $c"; sig "$c"
           done
-          echo "=== CODE OverlayTexture.<init>"; javap -c -p -cp "$jar" net.minecraft.client.render.OverlayTexture 2>&1 | awk '/OverlayTexture\(\);/{p=1} p{print} p&&/^$/{p=0}'
-          echo "=== CODE InGameOverlayRenderer.renderFloatingItem"; code net.minecraft.client.gui.hud.InGameOverlayRenderer renderFloatingItem
-          echo "=== CODE InGameOverlayRenderer.tickFloatingItemTimer"; code net.minecraft.client.gui.hud.InGameOverlayRenderer tickFloatingItemTimer
-          echo "=== CODE LivingEntityRenderer.render"; code net.minecraft.client.render.entity.LivingEntityRenderer render
-          echo "=== CODE EndCrystalEntityRenderer.render"; code net.minecraft.client.render.entity.EndCrystalEntityRenderer render
-          echo "=== CODE ItemRenderer.renderBakedItemQuads"; code net.minecraft.client.render.item.ItemRenderer renderBakedItemQuads
-          echo "=== CODE HeldItemRenderer.renderFirstPersonItem"; code net.minecraft.client.render.item.HeldItemRenderer renderFirstPersonItem
-          echo "=== CODE HeldItemRenderer.updateHeldItems"; code net.minecraft.client.render.item.HeldItemRenderer updateHeldItems
-          echo "=== CODE GameRenderer.updateCamera"; code net.minecraft.client.render.GameRenderer updateCamera
-          echo "=== CODE GameRenderer.getBasicProjectionMatrix"; code net.minecraft.client.render.GameRenderer getBasicProjectionMatrix
-          echo "=== CODE PlayerEntityRenderer.renderArm"; code net.minecraft.client.render.entity.PlayerEntityRenderer renderArm
+          echo "=== CODE ChunkBuilder.upload"; code net.minecraft.client.render.chunk.ChunkBuilder upload
+          echo "=== CODE BlockEntityRenderManager.render"; code net.minecraft.client.render.block.entity.BlockEntityRenderManager render
+          echo "=== CODE BlockEntityRenderManager.getRenderState"; code net.minecraft.client.render.block.entity.BlockEntityRenderManager getRenderState
+          echo "=== CODE AbstractSignBlockEntityRenderer.render"; code net.minecraft.client.render.block.entity.AbstractSignBlockEntityRenderer render
+          echo "=== CODE BannerBlockEntityRenderer.renderCanvas"; code net.minecraft.client.render.block.entity.BannerBlockEntityRenderer renderCanvas
+          echo "=== CODE ItemFrameEntityRenderer.render"; code net.minecraft.client.render.entity.ItemFrameEntityRenderer render
+          echo "=== CODE ParticleManager.tick"; code net.minecraft.client.particle.ParticleManager tick
+          echo "=== CODE DynamicUniformStorage.write"; code net.minecraft.client.gl.DynamicUniformStorage write
+          echo "=== CODE GuiRenderer.enableScissor"; code net.minecraft.client.gui.render.GuiRenderer enableScissor
+          echo "=== CODE World.getBlockState"; code net.minecraft.world.World getBlockState
+          echo "=== CODE MultiValueDebugSampleLogImpl.get"; code net.minecraft.util.profiler.MultiValueDebugSampleLogImpl get
 
   client:
     name: Dev client

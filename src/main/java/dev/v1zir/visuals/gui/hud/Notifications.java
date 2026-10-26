@@ -13,7 +13,6 @@ import dev.v1zir.visuals.util.Theme;
 import net.minecraft.client.gui.DrawContext;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 
 /** Toasts in the bottom right corner (module toggles and other messages). */
@@ -44,16 +43,11 @@ public final class Notifications {
 		SdfFont titleFont = Fonts.semibold();
 		SdfFont textFont = Fonts.regular();
 		float y = screenHeight - 8f;
-		Iterator<Toast> it = TOASTS.iterator();
-		List<Toast> alive = new ArrayList<>();
-		while (it.hasNext()) {
-			Toast toast = it.next();
-			float age = (now - toast.created) / 1.0e9f;
-			if (age > DURATION + 0.4f) it.remove();
-			else alive.add(toast);
+		for (int i = TOASTS.size() - 1; i >= 0; i--) {
+			if ((now - TOASTS.get(i).created) / 1.0e9f > DURATION + 0.4f) TOASTS.remove(i);
 		}
-		for (int i = alive.size() - 1; i >= 0; i--) {
-			Toast toast = alive.get(i);
+		for (int i = TOASTS.size() - 1; i >= 0; i--) {
+			Toast toast = TOASTS.get(i);
 			float age = (now - toast.created) / 1.0e9f;
 			float in = Anim.easeOutBack(Anim.progress(age, 0f, 0.35f));
 			float out = 1f - Anim.easeInOutCubic(Anim.progress(age, DURATION, 0.35f));
@@ -64,7 +58,7 @@ public final class Notifications {
 			float x = screenWidth - 8f - w + (1f - in) * (w + 12f);
 			Render2D.setAlpha(Math.min(1f, out * 1.2f));
 			int accent = toast.positive ? Theme.accent() : 0xFFFF5C6C;
-			Render2D.shadow(ctx, x, y + 1f, w, h, 6f, 10f, 0x66000000);
+			Render2D.panelShadow(ctx, x, y + 1f, w, h, 6f, 10f, 0x66000000, x, y, w, h);
 			Render2D.panel(ctx, x, y, w, h, 6f);
 			Render2D.circle(ctx, x + 12f, y + h / 2f, 7f, ColorUtil.withAlpha(accent, 50));
 			Render2D.icon(ctx, toast.icon, x + 12f, y + h / 2f, 8f, accent);

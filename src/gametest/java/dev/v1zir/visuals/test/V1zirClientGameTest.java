@@ -5,15 +5,25 @@ import dev.v1zir.visuals.gui.menu.V1zirMainMenu;
 import dev.v1zir.visuals.module.Category;
 import dev.v1zir.visuals.module.Module;
 import dev.v1zir.visuals.module.ModuleManager;
+import dev.v1zir.visuals.module.impl.client.ClickGuiModule;
 import dev.v1zir.visuals.module.impl.client.MainMenuModule;
 import dev.v1zir.visuals.module.impl.client.ThemeModule;
 import dev.v1zir.visuals.module.impl.effects.CrosshairModule;
 import dev.v1zir.visuals.module.impl.effects.JumpCirclesModule;
+import dev.v1zir.visuals.module.impl.hud.ArmorModule;
 import dev.v1zir.visuals.module.impl.hud.ArrayListModule;
+import dev.v1zir.visuals.module.impl.hud.ClockModule;
+import dev.v1zir.visuals.module.impl.hud.CompassModule;
 import dev.v1zir.visuals.module.impl.hud.CoordinatesModule;
+import dev.v1zir.visuals.module.impl.hud.InventoryModule;
+import dev.v1zir.visuals.module.impl.hud.ItemCounterModule;
 import dev.v1zir.visuals.module.impl.hud.KeybindsModule;
+import dev.v1zir.visuals.module.impl.hud.KeystrokesModule;
 import dev.v1zir.visuals.module.impl.hud.NotificationsModule;
+import dev.v1zir.visuals.module.impl.hud.PerformanceModule;
 import dev.v1zir.visuals.module.impl.hud.PotionsModule;
+import dev.v1zir.visuals.module.impl.hud.ServerInfoModule;
+import dev.v1zir.visuals.module.impl.hud.SpeedModule;
 import dev.v1zir.visuals.module.impl.hud.WatermarkModule;
 import dev.v1zir.visuals.module.impl.visuals.ShaderSkyModule;
 import dev.v1zir.visuals.module.impl.visuals.WorldParticlesModule;
@@ -23,12 +33,14 @@ import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.hud.DebugHud;
 import net.minecraft.client.gui.screen.AccessibilityOnboardingScreen;
 import net.minecraft.client.gui.screen.TitleScreen;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.client.gui.screen.option.OptionsScreen;
 import net.minecraft.client.option.GameOptions;
 import net.minecraft.client.option.KeyBinding;
+import net.minecraft.util.profiler.log.MultiValueDebugSampleLog;
 import org.lwjgl.glfw.GLFW;
 
 import jdk.jfr.Recording;
@@ -44,6 +56,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.function.IntConsumer;
 
 /**
  * Starts the real client and walks through everything the mod draws: the main menu, every sky
@@ -71,6 +84,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			sky(context, singleplayer);
 			walk(context, singleplayer);
 			hud(context, singleplayer);
+			hudElements(context, singleplayer);
 			clickGui(context);
 
 			// The test runner expects to end on the vanilla title screen.
@@ -176,14 +190,11 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		bench(context, name);
 	}
 
-	/** Average wall time per client tick (one frame each in the game test), for the CI benchmark table. */
+	/** Frame time of a scene the test does not touch, for the CI benchmark table. */
 	private static void bench(ClientGameTestContext context, String scene) {
 		context.waitTicks(5);
-		long start = System.nanoTime();
-		context.waitTicks(BENCH_TICKS);
-		double ms = (System.nanoTime() - start) / 1.0e6 / BENCH_TICKS;
-		int fps = context.computeOnClient(client -> client.getCurrentFps());
-		System.out.printf(Locale.ROOT, "V1ZIR-BENCH %-26s %8.2f ms/frame  %4d fps%n", scene, ms, fps);
+		measure(context, scene, BENCH_TICKS, tick -> {
+		});
 	}
 
 	/**
@@ -224,7 +235,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		List<Module> modules = context.computeOnClient(client -> {
 			List<Module> list = new ArrayList<>();
 			for (Module module : ModuleManager.all()) {
-				if (module.canToggle() && module.category() != Category.CLIENT) list.add(module);
+				if (module.canToggle() && module.category() != Category.SETTINGS) list.add(module);
 			}
 			return list;
 		});
@@ -275,16 +286,41 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		Function<GameOptions, KeyBinding> key = forward ? options -> options.forwardKey : options -> options.backKey;
 		context.getInput().holdKey(key);
 		context.getInput().holdKey(options -> options.sprintKey);
-		long start = System.nanoTime();
-		for (int i = 0; i < ticks; i++) {
-			context.getInput().moveCursor(6.0, i % 40 < 20 ? 1.5 : -1.5);
-			context.waitTick();
-		}
-		double ms = (System.nanoTime() - start) / 1.0e6 / ticks;
+		measure(context, scene, ticks, tick -> context.getInput().moveCursor(6.0, tick % 40 < 20 ? 1.5 : -1.5));
 		context.getInput().releaseKey(key);
 		context.getInput().releaseKey(options -> options.sprintKey);
-		int fps = context.computeOnClient(client -> client.getCurrentFps());
-		System.out.printf(Locale.ROOT, "V1ZIR-BENCH %-26s %8.2f ms/frame  %4d fps%n", scene, ms, fps);
+	}
+
+	/**
+	 * Runs the given number of client ticks and prints the mean frame time, the matching FPS and
+	 * the 99th percentile frame time. The client renders freely between game test ticks, so every
+	 * frame is read from its own frame log (the one behind the F3 frame chart) after each tick;
+	 * timing the ticks themselves could never resolve anything below 50 ms.
+	 */
+	private static void measure(ClientGameTestContext context, String scene, int ticks, IntConsumer step) {
+		context.runOnClient(client -> frameLog(client).clear());
+		List<Long> frames = new ArrayList<>();
+		for (int i = 0; i < ticks; i++) {
+			step.accept(i);
+			context.waitTick();
+			context.runOnClient(client -> {
+				MultiValueDebugSampleLog log = frameLog(client);
+				for (int f = 0; f < log.getLength(); f++) frames.add(log.get(f));
+				log.clear();
+			});
+		}
+		frames.sort(null);
+		long total = 0L;
+		for (long nanos : frames) total += nanos;
+		double ms = frames.isEmpty() ? 0.0 : total / 1.0e6 / frames.size();
+		double p99 = frames.isEmpty() ? 0.0 : frames.get(Math.min(frames.size() - 1, (int) (frames.size() * 0.99))) / 1.0e6;
+		int fps = ms > 0.0 ? (int) Math.round(1000.0 / ms) : 0;
+		System.out.printf(Locale.ROOT, "V1ZIR-BENCH %-26s %8.2f ms/frame  %4d fps  %8.2f ms p99  %5d frames%n", scene, ms, fps, p99, frames.size());
+	}
+
+	/** Durations of the frames since the last clear, oldest first, in nanoseconds. */
+	private static MultiValueDebugSampleLog frameLog(MinecraftClient client) {
+		return (MultiValueDebugSampleLog) field(client.getDebugHud(), DebugHud.class, "frameNanosLog");
 	}
 
 	/** Runs the body under a Java Flight Recorder recording saved as v1zir-<name>.jfr in the run directory. */
@@ -330,7 +366,46 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.setScreen(() -> null);
 	}
 
+	/** The info and widget HUD elements with live data (items, armour, walking), then their HUD editor previews. */
+	private static void hudElements(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
+		// The sword first, so it takes the selected hotbar slot; the rest spills into the main inventory.
+		for (String command : List.of(
+			"item replace entity @a weapon.mainhand with minecraft:netherite_sword[damage=600]",
+			"item replace entity @a weapon.offhand with minecraft:shield",
+			"item replace entity @a armor.head with minecraft:diamond_helmet",
+			"item replace entity @a armor.chest with minecraft:diamond_chestplate[damage=420]",
+			"item replace entity @a armor.legs with minecraft:diamond_leggings[damage=150]",
+			"item replace entity @a armor.feet with minecraft:diamond_boots[damage=410]",
+			"give @a minecraft:totem_of_undying 3", "give @a minecraft:ender_pearl 16", "give @a minecraft:golden_apple 12",
+			"give @a minecraft:end_crystal 48", "give @a minecraft:arrow 64", "give @a minecraft:experience_bottle 20",
+			"give @a minecraft:cobblestone 320", "give @a minecraft:oak_log 100", "give @a minecraft:torch 40")) {
+			singleplayer.getServer().runCommand(command);
+		}
+		List<Class<? extends Module>> elements = List.of(CompassModule.class, ClockModule.class, SpeedModule.class,
+			ServerInfoModule.class, PerformanceModule.class, KeystrokesModule.class, InventoryModule.class, ArmorModule.class,
+			ItemCounterModule.class);
+		context.runOnClient(client -> {
+			for (Class<? extends Module> type : elements) ModuleManager.get(type).setEnabled(true, false);
+		});
+		look(singleplayer, 0, 20);
+		context.getInput().holdKey(options -> options.forwardKey);
+		context.waitTicks(40);
+		context.takeScreenshot("hud-elements");
+		context.getInput().releaseKey(options -> options.forwardKey);
+		bench(context, "world-hud-elements");
+
+		context.setScreen(ClickGuiScreen::hudEditor);
+		context.waitTicks(30);
+		context.takeScreenshot("hud-elements-editor");
+		context.runOnClient(client -> {
+			for (Class<? extends Module> type : elements) ModuleManager.get(type).setEnabled(false, false);
+		});
+		context.setScreen(() -> null);
+		singleplayer.getServer().runCommand("clear @a");
+	}
+
 	private static void clickGui(ClientGameTestContext context) {
+		context.runOnClient(client -> setStatic(ClickGuiScreen.class, "tab", Category.VISUALS.ordinal()));
 		context.getInput().pressKey(GLFW.GLFW_KEY_RIGHT_SHIFT);
 		context.waitTicks(5);
 		boolean opened = context.computeOnClient(client -> client.currentScreen instanceof ClickGuiScreen);
@@ -345,6 +420,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.getInput().typeChars("sky");
 		context.waitTicks(10);
 		context.takeScreenshot("clickgui-search");
+		context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
 
 		// Every panel style of the Theme module.
 		for (Theme.Style style : new Theme.Style[]{Theme.Style.NORMAL, Theme.Style.BLUR}) {
@@ -353,16 +429,53 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			if (style != Theme.Style.BLUR) context.takeScreenshot("clickgui-style-" + style.name().toLowerCase());
 		}
 
-		for (int tab : new int[]{2, 1}) {
+		// One screenshot per tab; Settings holds the theme editor.
+		for (Category category : new Category[]{Category.COMBAT, Category.SHADERS, Category.HUD, Category.SETTINGS}) {
 			context.setScreen(() -> null);
-			context.runOnClient(client -> setStatic(ClickGuiScreen.class, "tab", tab));
+			context.runOnClient(client -> setStatic(ClickGuiScreen.class, "tab", category.ordinal()));
 			context.setScreen(ClickGuiScreen::new);
 			context.waitTicks(30);
-			context.takeScreenshot(tab == 2 ? "clickgui-themes" : "clickgui-hud-editor");
+			context.takeScreenshot(category == Category.SETTINGS ? "clickgui-themes" : "clickgui-tab-" + category.name().toLowerCase(Locale.ROOT));
 		}
 
-		context.runOnClient(client -> setStatic(ClickGuiScreen.class, "tab", 0));
+		// A module's settings column, on the Shaders tab.
 		context.setScreen(() -> null);
+		context.runOnClient(client -> setStatic(ClickGuiScreen.class, "tab", Category.SHADERS.ordinal()));
+		context.setScreen(ClickGuiScreen::new);
+		context.waitTicks(10);
+		context.runOnClient(client -> {
+			if (client.currentScreen instanceof ClickGuiScreen screen) screen.openSettings(ModuleManager.get(ShaderSkyModule.class));
+		});
+		context.waitTicks(20);
+		context.takeScreenshot("clickgui-module-settings");
+
+		context.setScreen(() -> null);
+		context.setScreen(ClickGuiScreen::hudEditor);
+		context.waitTicks(30);
+		context.takeScreenshot("clickgui-hud-editor");
+
+		context.runOnClient(client -> setStatic(ClickGuiScreen.class, "tab", Category.VISUALS.ordinal()));
+		context.setScreen(() -> null);
+		animations(context);
+	}
+
+	/** Frames in the middle of the open and close animations, played at half speed so a frame lands inside them. */
+	private static void animations(ClientGameTestContext context) {
+		context.runOnClient(client -> {
+			ClickGuiModule gui = ModuleManager.get(ClickGuiModule.class);
+			gui.openAnimation.set(ClickGuiModule.OPEN_3D);
+			gui.closeAnimation.set(ClickGuiModule.CLOSE_SHATTER);
+			gui.animationSpeed.set(0.5);
+		});
+		context.setScreen(ClickGuiScreen::new);
+		context.waitTicks(2);
+		context.takeScreenshot("clickgui-open-3d");
+		context.waitTicks(30);
+		context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+		context.waitTicks(6);
+		context.takeScreenshot("clickgui-close-3d-frost");
+		context.waitTicks(50);
+		context.runOnClient(client -> ModuleManager.get(ClickGuiModule.class).animationSpeed.set(1.0));
 	}
 
 	private static void look(TestSingleplayerContext singleplayer, float yaw, float pitch) {

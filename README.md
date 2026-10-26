@@ -49,6 +49,16 @@ zainstalowane, Opcje, Wyjście, Język).
 Watermark (logo, nick, serwer, FPS, ping, godzina), Array List, Keybinds, Potions, Target HUD
 (głowa, pasek zdrowia z animacją obrażeń), Coordinates, powiadomienia o przełączeniu modułów.
 
+### Spotify
+Bez konfiguracji: Windows 10/11 (systemowe sterowanie multimediami), macOS (aplikacja Spotify)
+i Linux (`playerctl`). **Spotify** (HUD) – okładka, tytuł i wykonawca (przewijane, gdy są za
+długie), pasek postępu z czasem, przyciski poprzedni / pauza / następny działające przy otwartym
+czacie i w edytorze HUD, klawisze do sterowania, style Card i Compact, akcent z koloru okładki.
+**Spotify Lyrics** – zsynchronizowane teksty z LRCLIB (zapisywane w `config/v1zir/lyrics`)
+w trzech presetach: **Window** (karta jak widok tekstu w Spotify, podświetlanie słowo po słowie),
+**3D** (trójwymiarowe litery pojawiające się wokół gracza) i **Karaoke** (napisy z wypełnieniem
+nad paskiem szybkiego wyboru).
+
 ### Efekty
 Target ESP (Ghosts / Ring / Marker), Jump Circles, China Hat, Trails, Hit Particles,
 World Particles (świetliki, śnieg, gwiazdy, żar), własny celownik, Ambience (czas i pogoda

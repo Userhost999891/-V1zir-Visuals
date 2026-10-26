@@ -23,25 +23,37 @@ public final class JumpCirclesModule extends Module implements WorldEffect {
 
 	private final List<Circle> circles = new ArrayList<>();
 	private final Draw3D.Wave wave = new Draw3D.Wave();
-	private boolean wasOnGround = true;
+	/** In the air after a real jump, so the landing ring only follows jumps, not walking off an edge. */
+	private boolean jumping;
 
 	public JumpCirclesModule() {
-		super("Jump Circles", "Rings when you jump and land", Category.EFFECTS);
-		setSubCategory("Cosmetic");
+		super("Jump Circles", "Rings when you jump and land", Category.VISUALS);
+		setSubCategory("World");
 	}
 
 	@Override
 	protected void onDisable() {
 		circles.clear();
+		jumping = false;
+	}
+
+	/** Called by LivingEntityMixin when the local player really jumps. */
+	public void onJump() {
+		spawn();
+		jumping = true;
 	}
 
 	@Override
 	public void onTick() {
-		if (mc.player == null) return;
-		boolean onGround = mc.player.isOnGround();
-		if (wasOnGround && !onGround && mc.player.getVelocity().y > 0.2) spawn();
-		else if (!wasOnGround && onGround && onLanding.on()) spawn();
-		wasOnGround = onGround;
+		if (mc.player == null) {
+			jumping = false;
+			return;
+		}
+		if (!jumping || !mc.player.isOnGround()) return;
+		// Ignore the first tick: the player is still on the ground in the tick of the jump itself.
+		if (mc.player.getVelocity().y > 0) return;
+		jumping = false;
+		if (onLanding.on() && !mc.player.isTouchingWater()) spawn();
 	}
 
 	private void spawn() {

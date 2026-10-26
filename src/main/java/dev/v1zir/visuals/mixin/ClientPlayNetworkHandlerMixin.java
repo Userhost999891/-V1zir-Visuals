@@ -1,6 +1,7 @@
 package dev.v1zir.visuals.mixin;
 
 import dev.v1zir.visuals.module.ModuleManager;
+import dev.v1zir.visuals.module.impl.hud.ServerInfoModule;
 import dev.v1zir.visuals.module.impl.visuals.AmbienceModule;
 import dev.v1zir.visuals.render.world.Effects;
 import net.minecraft.client.MinecraftClient;
@@ -14,11 +15,17 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** Ambience keeps its custom time; the combat effects hear about totem pops and deaths. Client side only. */
+/**
+ * Server packets, client side only: Server Info measures the tick rate from world time updates,
+ * Ambience keeps its custom time, and the combat effects hear about totem pops and deaths.
+ */
 @Mixin(ClientPlayNetworkHandler.class)
 public abstract class ClientPlayNetworkHandlerMixin {
 	@Inject(method = "onWorldTimeUpdate", at = @At("HEAD"), cancellable = true)
 	private void v1zir$onWorldTimeUpdate(WorldTimeUpdateS2CPacket packet, CallbackInfo ci) {
+		// Before Ambience may cancel the packet, so the tick rate is measured either way.
+		ServerInfoModule info = ModuleManager.get(ServerInfoModule.class);
+		if (info != null && info.isEnabled()) info.onWorldTime(packet, packet.time());
 		AmbienceModule ambience = ModuleManager.get(AmbienceModule.class);
 		if (ambience != null && ambience.isEnabled() && ambience.onServerTime(packet.timeOfDay())) ci.cancel();
 	}

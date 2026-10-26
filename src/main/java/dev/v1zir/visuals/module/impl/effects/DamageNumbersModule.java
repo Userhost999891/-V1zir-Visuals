@@ -51,8 +51,8 @@ public final class DamageNumbersModule extends Module implements WorldEffect {
 	private long lastFrame = System.nanoTime();
 
 	public DamageNumbersModule() {
-		super("Damage Numbers", "Floating damage numbers", Category.EFFECTS);
-		setSubCategory("Combat");
+		super("Damage Numbers", "Floating damage numbers", Category.COMBAT);
+		setSubCategory("Info");
 		health.defaultReturnValue(-1f);
 		seen.defaultReturnValue(-1f);
 	}

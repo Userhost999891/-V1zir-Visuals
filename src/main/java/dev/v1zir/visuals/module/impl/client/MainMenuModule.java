@@ -22,7 +22,7 @@ public final class MainMenuModule extends Module {
 	public final NumberSetting particleCount = add(new NumberSetting("Particle count", 70, 10, 200, 1).visibleIf(particles::on));
 
 	public MainMenuModule() {
-		super("Main Menu", "Custom animated title screen", Category.CLIENT);
+		super("Main Menu", "Custom animated title screen", Category.SETTINGS);
 		setEnabled(true, false);
 	}
 

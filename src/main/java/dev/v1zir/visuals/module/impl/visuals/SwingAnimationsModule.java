@@ -45,7 +45,7 @@ public final class SwingAnimationsModule extends Module {
 
 	public SwingAnimationsModule() {
 		super("Swing Animations", "Custom first-person swings", Category.VISUALS);
-		setSubCategory("Camera");
+		setSubCategory("Render");
 	}
 
 	@Override

@@ -11,6 +11,7 @@ import dev.v1zir.visuals.module.Module;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.hud.HudModule;
 import dev.v1zir.visuals.module.setting.Setting;
+import dev.v1zir.visuals.optimize.Optimizations;
 import net.fabricmc.loader.api.FabricLoader;
 
 import java.io.IOException;
@@ -55,6 +56,7 @@ public final class ConfigManager {
 				if (obj.has("enabled")) module.setEnabled(obj.get("enabled").getAsBoolean(), false);
 			}
 			if (root.has("gui")) ClickGuiScreen.loadLayout(root.getAsJsonObject("gui"));
+			if (root.has("optimizations")) Optimizations.fromJson(root.getAsJsonObject("optimizations"));
 		} catch (IOException | RuntimeException e) {
 			V1zir.LOGGER.error("Could not read {}, using defaults", path, e);
 			applyDefaults();
@@ -92,6 +94,7 @@ public final class ConfigManager {
 		}
 		root.add("modules", modules);
 		root.add("gui", ClickGuiScreen.saveLayout());
+		root.add("optimizations", Optimizations.toJson());
 		Path path = file();
 		try {
 			Files.createDirectories(path.getParent());

@@ -1,6 +1,5 @@
 package dev.v1zir.visuals.module.impl.hud;
 
-import dev.v1zir.visuals.gui.clickgui.ClickGuiScreen;
 import dev.v1zir.visuals.render.font.Fonts;
 import dev.v1zir.visuals.render.font.Icons;
 import dev.v1zir.visuals.render.font.SdfFont;
@@ -15,14 +14,20 @@ import net.minecraft.client.network.PlayerListEntry;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
 
-import java.util.Locale;
-
 /** Panel with the head, name, health and distance of the current target. */
 public final class TargetHudModule extends HudModule {
 	private final Anim health = new Anim(1f, 8f);
 	private final Anim healthLag = new Anim(1f, 2.5f);
 	private final Anim appear = new Anim(0f, 10f);
 	private LivingEntity last;
+	/** Texts rebuilt only when their value changes, not every frame. */
+	private final NumberText info = new NumberText(1, " HP");
+	private final NumberText distance = new NumberText(1, "m");
+	private LivingEntity nameOf;
+	private int nameSecond;
+	private SdfFont nameFont;
+	private float nameMax;
+	private String name = "";
 
 	public TargetHudModule() {
 		super("Target Hud", "Information about your opponent", 0.56f, 0.6f);
@@ -39,10 +44,6 @@ public final class TargetHudModule extends HudModule {
 		LivingEntity target = Effects.target();
 		appear.target(target != null || editing() ? 1f : 0f);
 		return appear.get() > 0.01f;
-	}
-
-	private boolean editing() {
-		return mc.currentScreen instanceof ClickGuiScreen screen && screen.isHudTab();
 	}
 
 	@Override
@@ -100,12 +101,19 @@ public final class TargetHudModule extends HudModule {
 
 		float tx = ax + avatar + 6f;
 		float tw = x + w - 6f - tx;
-		String name = bold.trim(e.getName().getString(), 8f, tw);
+		// Checked again every second, so a renamed entity still updates.
+		if (e != nameOf || e.age / 20 != nameSecond || bold != nameFont || tw != nameMax) {
+			nameOf = e;
+			nameSecond = e.age / 20;
+			nameFont = bold;
+			nameMax = tw;
+			name = bold.trim(e.getName().getString(), 8f, tw);
+		}
 		Render2D.text(ctx, bold, name, tx, y + 5f, 8f, Theme.text());
-		String info = String.format(Locale.ROOT, "%.1f HP", hp + absorption);
-		String dist = mc.player != null ? String.format(Locale.ROOT, "%.1fm", e.distanceTo(mc.player)) : "";
+		String info = this.info.set(hp + absorption);
+		String dist = mc.player != null ? distance.set(e.distanceTo(mc.player)) : "";
 		Render2D.text(ctx, font, info, tx, y + 15.5f, 6.5f, Theme.textDim());
-		float dw = font.width(dist, 6.5f);
+		float dw = mc.player != null ? distance.width(font, 6.5f) : 0f;
 		Render2D.text(ctx, font, dist, x + w - 6f - dw, y + 15.5f, 6.5f, Theme.textFaint());
 
 		// Health bar: trailing "damage" part, then the animated gradient fill.

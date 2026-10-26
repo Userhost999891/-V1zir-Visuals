@@ -7,6 +7,7 @@ import dev.v1zir.visuals.gui.menu.V1zirMainMenu;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.client.ClickGuiModule;
 import dev.v1zir.visuals.module.impl.client.MainMenuModule;
+import dev.v1zir.visuals.optimize.Optimizations;
 import dev.v1zir.visuals.render.V1zirPipelines;
 import dev.v1zir.visuals.render.world.Effects;
 import net.fabricmc.api.ClientModInitializer;
@@ -22,6 +23,7 @@ public final class V1zirClient implements ClientModInitializer {
 		V1zirPipelines.register();
 		ModuleManager.init();
 		ConfigManager.load();
+		Optimizations.logCompatibility();
 		HudRenderer.register();
 
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {

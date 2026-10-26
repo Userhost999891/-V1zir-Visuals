@@ -51,8 +51,8 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 	private final IntUnaryOperator ringColorAt = i -> ringColor;
 
 	public KillEffectsModule() {
-		super("Kill Effects", "Lightning, souls or a burst on kills", Category.EFFECTS);
-		setSubCategory("Combat");
+		super("Kill Effects", "Lightning, souls or a burst on kills", Category.COMBAT);
+		setSubCategory("Hits");
 	}
 
 	@Override

@@ -27,10 +27,14 @@ float v1zirShapeDistance(vec2 p, vec4 shape, float mask) {
 	return v1zirRoundBox(p, halfSize, v1zirCornerRadius(p, rad));
 }
 
-// Coverage for the given mode: 0 fill, 1 outline, 2 soft shadow / glow, 3 ring arc (thickness = width)
+// Mode flags on top of the shape kind in the low 3 bits (see ShapeElement).
+const int V1ZIR_MATTE = 8;
+const int V1ZIR_LIT = 16;
+
+// Coverage for the given mode: 0 fill, 1 outline, 2 soft shadow / glow
 float v1zirShapeCoverage(float d, vec4 shape, vec3 style) {
 	float fw = max(fwidth(d), 1e-4);
-	int mode = int(style.y);
+	int mode = int(style.y) & 7;
 	if (mode == 1) {
 		float t = max(style.x, 0.0);
 		float o = abs(d + t * 0.5) - t * 0.5;
@@ -42,4 +46,14 @@ float v1zirShapeCoverage(float d, vec4 shape, vec3 style) {
 		return a * a * (3.0 - 2.0 * a);
 	}
 	return clamp(0.5 - d / fw, 0.0, 1.0);
+}
+
+// Static grain of one framebuffer pixel in [-0.5, 0.5]: an integer hash, so it never crawls or bands
+// and stays one device pixel fine at every GUI scale. It gives flat surfaces their matte feel.
+float v1zirGrain(vec2 fragCoord) {
+	uvec2 p = uvec2(fragCoord);
+	uint h = p.x * 1597334677u ^ p.y * 3812015801u;
+	h = (h ^ (h >> 16u)) * 2246822519u;
+	h ^= h >> 13u;
+	return float(h & 65535u) / 65535.0 - 0.5;
 }

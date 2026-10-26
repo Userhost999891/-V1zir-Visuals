@@ -17,7 +17,7 @@ public final class ViewModelModule extends Module {
 
 	public ViewModelModule() {
 		super("View Model", "Customise held item position", Category.VISUALS);
-		setSubCategory("Camera");
+		setSubCategory("Render");
 	}
 
 	public void apply(MatrixStack matrices, Arm arm) {

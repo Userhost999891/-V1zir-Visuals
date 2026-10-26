@@ -1,5 +1,7 @@
 package dev.v1zir.visuals.render.font;
 
+import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+
 /**
  * Codepoints of the bundled Lucide icon font (ISC licensed, subset to the icons used here).
  * Icons are rendered through the SDF text renderer, so they stay sharp at any size.
@@ -138,11 +140,22 @@ public final class Icons {
 	public static final int BED = 0xe2c1;
 	public static final int BATTERY_CHARGING = 0xe054;
 	public static final int THERMOMETER = 0xe186;
+	public static final int PLAY = 0xe13c;
+	public static final int PAUSE = 0xe12e;
+	public static final int SKIP_FORWARD = 0xe160;
+	public static final int SKIP_BACK = 0xe15f;
+	public static final int MIC_VOCAL = 0xe349;
+	public static final int DISC_3 = 0xe494;
+
+	private static final Int2ObjectOpenHashMap<String> STRINGS = new Int2ObjectOpenHashMap<>();
 
 	private Icons() {
 	}
 
+	/** The icon as a one-glyph string, built once per codepoint (icons are drawn every frame). */
 	public static String str(int codepoint) {
-		return new String(Character.toChars(codepoint));
+		String s = STRINGS.get(codepoint);
+		if (s == null) STRINGS.put(codepoint, s = new String(Character.toChars(codepoint)));
+		return s;
 	}
 }

@@ -34,8 +34,8 @@ public final class CrystalChamsModule extends Module {
 	private RenderLayer solid;
 
 	public CrystalChamsModule() {
-		super("Crystal Chams", "Colour, size and motion of end crystals", Category.EFFECTS);
-		setSubCategory("Combat");
+		super("Crystal Chams", "Colour, size and motion of end crystals", Category.COMBAT);
+		setSubCategory("Target");
 	}
 
 	/** The module while it is on, else null. */

@@ -12,17 +12,18 @@ import dev.v1zir.visuals.util.Theme;
 /** Colours, glass and font of the whole UI. Always enabled. */
 public final class ThemeModule extends Module {
 	public final ModeSetting preset = add(new ModeSetting("Preset", Theme.Preset.V1ZIR.title(), Theme.Preset.titles()));
-	public final ColorSetting accent = add(new ColorSetting("Accent", 0xFF9B7BFF, false).visibleIf(this::custom));
-	public final ColorSetting accent2 = add(new ColorSetting("Accent 2", 0xFF4FD1FF, false).visibleIf(this::custom));
+	public final ColorSetting accent = add(new ColorSetting("Accent", 0xFFF6A64B, false).visibleIf(this::custom));
+	public final ColorSetting accent2 = add(new ColorSetting("Accent 2", 0xFFE8693F, false).visibleIf(this::custom));
 	public final NumberSetting panelOpacity = add(new NumberSetting("Panel opacity", 0.72, 0.3, 1.0, 0.01));
 	/** Panel style: Normal (solid grey) or Blur (tinted blur). */
 	public final ModeSetting style = add(new ModeSetting("Style", Theme.Style.BLUR.title(), Theme.Style.titles()));
 	public final NumberSetting blurStrength = add(new NumberSetting("Blur strength", 0.6, 0.0, 1.0, 0.05).visibleIf(() -> !style.is(Theme.Style.NORMAL.title())));
 	public final ModeSetting font = add(new ModeSetting("Font", "Inter", "Inter", "Montserrat", "Rubik", "Nunito", "Comfortaa"));
 	public final BoolSetting textShadow = add(new BoolSetting("Text shadow", true));
+	private String appliedFont;
 
 	public ThemeModule() {
-		super("Theme", "Colours, glass and font of the interface", Category.CLIENT);
+		super("Theme", "Colours, glass and font of the interface", Category.SETTINGS);
 		setEnabled(true, false);
 	}
 
@@ -40,8 +41,11 @@ public final class ThemeModule extends Module {
 		return false;
 	}
 
-	/** Applies settings that need side effects (the font family). Called every frame by the GUI. */
+	/** Applies settings that need side effects (the font family). Called every frame by the GUI, so it only resolves a change. */
 	public void apply() {
-		Fonts.setFamily(Fonts.Family.byTitle(font.get()));
+		String family = font.get();
+		if (family == appliedFont) return;
+		appliedFont = family;
+		Fonts.setFamily(Fonts.Family.byTitle(family));
 	}
 }

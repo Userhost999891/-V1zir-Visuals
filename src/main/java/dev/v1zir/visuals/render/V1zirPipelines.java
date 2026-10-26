@@ -17,11 +17,11 @@ import net.minecraft.client.render.VertexFormats;
  * GUI pipelines go through vanilla's GuiRenderer (so they sort and layer like vanilla
  * elements); per-element parameters travel in vertex attributes:
  * <pre>
- *   SHAPE / GLASS (entity vertex format)
+ *   SHAPE / GLASS / IMAGE (entity vertex format)
  *     UV0    float2  position relative to the shape centre (GUI px)
  *     UV1    short2  half size * 8
  *     UV2    short2  corner radius * 8, softness * 8
- *     Normal byte3   outline thickness / 16, mode, corner mask
+ *     Normal byte3   outline thickness / 16, mode (kind | MATTE | LIT flags), corner mask
  *   TEXT (particle vertex format)
  *     UV0    float2  SDF atlas coordinates
  *     UV2    short2  weight shift * 256, extra softness * 256
@@ -38,6 +38,7 @@ public final class V1zirPipelines {
 		.withVertexShader(V1zir.id("core/gui_shape"))
 		.withFragmentShader(V1zir.id("core/gui_shape"))
 		.withVertexFormat(VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL, VertexFormat.DrawMode.QUADS)
+		.withUniform("V1zirGui", UniformType.UNIFORM_BUFFER)
 		.withCull(false)
 		.build();
 
@@ -48,6 +49,16 @@ public final class V1zirPipelines {
 		.withVertexFormat(VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL, VertexFormat.DrawMode.QUADS)
 		.withSampler("Sampler0")
 		.withUniform("V1zirGui", UniformType.UNIFORM_BUFFER)
+		.withCull(false)
+		.build();
+
+	/** A texture (album art) in a rounded rectangle, tinted by the vertex colour. */
+	public static final RenderPipeline IMAGE = RenderPipeline.builder(RenderPipelines.GUI_SNIPPET)
+		.withLocation(V1zir.id("pipeline/gui_image"))
+		.withVertexShader(V1zir.id("core/gui_shape"))
+		.withFragmentShader(V1zir.id("core/gui_image"))
+		.withVertexFormat(VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL, VertexFormat.DrawMode.QUADS)
+		.withSampler("Sampler0")
 		.withCull(false)
 		.build();
 
@@ -129,6 +140,49 @@ public final class V1zirPipelines {
 		.withCull(false)
 		.build();
 
+	/** Colour grading of the world, from a copy of the frame back onto it (render/ColorGrade). */
+	public static final RenderPipeline COLOR_GRADE = RenderPipeline.builder()
+		.withLocation(V1zir.id("pipeline/color_grade"))
+		.withVertexShader(V1zir.id("core/fullscreen"))
+		.withFragmentShader(V1zir.id("core/color_grade"))
+		.withVertexFormat(VertexFormats.POSITION, VertexFormat.DrawMode.TRIANGLES)
+		.withSampler("Sampler0")
+		.withUniform("GradeParams", UniformType.UNIFORM_BUFFER)
+		.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+		.withDepthWrite(false)
+		.withoutBlend()
+		.withCull(false)
+		.build();
+
+	/** Click GUI open and close animations: the captured window composited over the frame (render/GuiCapture). */
+	public static final RenderPipeline GUI_TRANSITION = RenderPipeline.builder()
+		.withLocation(V1zir.id("pipeline/gui_transition"))
+		.withVertexShader(V1zir.id("core/fullscreen"))
+		.withFragmentShader(V1zir.id("core/gui_transition"))
+		.withVertexFormat(VertexFormats.POSITION, VertexFormat.DrawMode.TRIANGLES)
+		.withSampler("Sampler0")
+		.withSampler("Sampler1")
+		.withUniform("TransitionParams", UniformType.UNIFORM_BUFFER)
+		.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+		.withDepthWrite(false)
+		.withBlend(PREMULTIPLIED)
+		.withCull(false)
+		.build();
+
+	/** Shards of the shattering click GUI (3D Frost close), textured with its captured window. */
+	public static final RenderPipeline GUI_SHARDS = RenderPipeline.builder()
+		.withLocation(V1zir.id("pipeline/gui_shards"))
+		.withVertexShader(V1zir.id("core/gui_shards"))
+		.withFragmentShader(V1zir.id("core/gui_shards"))
+		.withVertexFormat(VertexFormats.POSITION_TEXTURE_COLOR, VertexFormat.DrawMode.TRIANGLES)
+		.withSampler("Sampler0")
+		.withUniform("TransitionParams", UniformType.UNIFORM_BUFFER)
+		.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+		.withDepthWrite(false)
+		.withBlend(PREMULTIPLIED)
+		.withCull(false)
+		.build();
+
 	public static final RenderPipeline BLUR_DOWN = blurPipeline("blur_down");
 	public static final RenderPipeline BLUR_UP = blurPipeline("blur_up");
 
@@ -196,12 +250,16 @@ public final class V1zirPipelines {
 		registered = true;
 		RenderPipelines.register(SHAPE);
 		RenderPipelines.register(GLASS);
+		RenderPipelines.register(IMAGE);
 		RenderPipelines.register(TEXT);
 		RenderPipelines.register(MENU_BACKGROUND);
 		RenderPipelines.register(SKY);
 		RenderPipelines.register(SKY_UPSAMPLE);
 		RenderPipelines.register(SKY_PANORAMA);
 		RenderPipelines.register(SKY_CACHED);
+		RenderPipelines.register(COLOR_GRADE);
+		RenderPipelines.register(GUI_TRANSITION);
+		RenderPipelines.register(GUI_SHARDS);
 		RenderPipelines.register(BLUR_DOWN);
 		RenderPipelines.register(BLUR_UP);
 		RenderPipelines.register(WORLD_GLOW);

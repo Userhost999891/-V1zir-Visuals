@@ -45,7 +45,6 @@ public final class ModeComponent extends SettingComponent<ModeSetting> {
 		float h = hover.target(Ui.inside(mouseX, mouseY, x, y, width, height) ? 1f : 0f).get();
 		Render2D.text(ctx, Fonts.regular(), setting.name(), x, y + 1.5f, Ui.LABEL, labelColor(h));
 		int accent = Theme.accent();
-		int accent2 = Theme.accent2();
 		List<String> modes = setting.modes();
 		float cx = x;
 		float cy = y + 12f;
@@ -59,13 +58,14 @@ public final class ModeComponent extends SettingComponent<ModeSetting> {
 			boolean selected = setting.is(mode);
 			float ch = chipHover[i].target(Ui.inside(mouseX, mouseY, cx, cy, w, CHIP_HEIGHT) ? 1f : 0f).get();
 			if (selected) {
-				Render2D.shadow(ctx, cx, cy, w, CHIP_HEIGHT, 4f, 5f, ColorUtil.withAlpha(accent, Math.round(70 + 40 * ch)));
-				Render2D.gradientH(ctx, cx, cy, w, CHIP_HEIGHT, 4f, accent, accent2);
+				// Selected: an accent tint with an accent rim; the label stays light on every preset.
+				Render2D.matte(ctx, cx, cy, w, CHIP_HEIGHT, Ui.CELL_RADIUS, ColorUtil.withAlpha(accent, Math.round(46 + 14 * ch)), Ui.LIT);
+				Render2D.rim(ctx, cx, cy, w, CHIP_HEIGHT, Ui.CELL_RADIUS, ColorUtil.withAlpha(accent, 170), Ui.LIT);
 			} else {
-				Render2D.round(ctx, cx, cy, w, CHIP_HEIGHT, 4f, ColorUtil.withAlpha(0xFFFFFF, Math.round(9 + 13 * ch)));
-				Render2D.outline(ctx, cx, cy, w, CHIP_HEIGHT, 4f, 1f, ColorUtil.withAlpha(0xFFFFFF, Math.round(12 + 18 * ch)));
+				Render2D.matte(ctx, cx, cy, w, CHIP_HEIGHT, 4f, ColorUtil.withAlpha(0xFFFFFF, Math.round(9 + 13 * ch)), Ui.LIT);
+				Render2D.rim(ctx, cx, cy, w, CHIP_HEIGHT, 4f, ColorUtil.withAlpha(0xFFFFFF, Math.round(14 + 20 * ch)), Ui.LIT);
 			}
-			int color = selected ? 0xFFFFFFFF : ColorUtil.lerp(Theme.textDim(), Theme.text(), ch);
+			int color = selected ? ColorUtil.lerp(accent, 0xFFFFFFFF, 0.7f) : ColorUtil.lerp(Theme.textDim(), Theme.text(), ch);
 			Render2D.textMiddle(ctx, font, mode, cx + 5f, cy + CHIP_HEIGHT / 2f, Ui.SMALL, color);
 			chips[i * 3] = cx;
 			chips[i * 3 + 1] = cy;
