@@ -24,8 +24,9 @@ void main() {
 		dir = normalize(dir + jitter * (s.roughness * 0.12));
 		if (dot(dir, s.normal) < 0.0) dir = reflect(dir, s.normal);
 	}
-	// Under a roof a ray that finds nothing sees the dim room, not the sky.
-	vec3 miss = mix(texelFetch(Sampler0, p, 0).rgb * 0.25, rSky(dir), s.exposure);
+	// Under a roof a ray that finds nothing sees the dim room rather than the sky; sideways rays
+	// still catch some of the horizon (under trees, at the edge of an overhang).
+	vec3 miss = mix(texelFetch(Sampler0, p, 0).rgb * 0.3, rSky(dir), max(s.exposure, 0.4 - 0.4 * abs(dir.y)));
 	vec3 hit = rMarch(s.pos + s.normal * (0.02 + length(s.pos) * 0.002), dir, noise);
 	// Rays turning back towards the camera mostly meet what is behind it.
 	float confidence = hit.z * smoothstep(-0.9, -0.4, dot(dir, Forward.xyz));

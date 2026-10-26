@@ -282,12 +282,12 @@ bool rSurface(ivec2 p, out SurfaceInfo s) {
 		}
 		// Standing water mirrors more than the thin film on a wet surface.
 		float cosW = dot(-view, s.normal);
-		float f = mix(rSchlick(0.04, cosW) * 0.5 * wet, rSchlick(0.1, cosW), puddle);
+		float f = mix(rSchlick(0.04, cosW) * 0.4 * wet, rSchlick(0.1, cosW), puddle);
 		s.tint = max(s.tint, vec3(f));
 		s.diffuse = min(s.diffuse, 1.0 - f);
 		s.wet = max(wet, puddle);
 		s.puddle = puddle;
-		s.roughness = mix(metal || glossy ? s.roughness : 0.3, 0.0, puddle);
+		s.roughness = mix(metal || glossy ? s.roughness : 0.4, 0.0, puddle);
 		s.glint = max(s.glint, open * max(0.25 * wet, puddle));
 	}
 	return max(s.tint.r, max(s.tint.g, s.tint.b)) > 0.002 || s.wet > 0.002;
