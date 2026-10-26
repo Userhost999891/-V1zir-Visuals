@@ -6,6 +6,7 @@ in vec2 texCoord0;
 in vec4 vertexColor;
 in vec3 glyphStyle;
 in vec4 plateShape;
+in vec2 shine;
 
 out vec4 fragColor;
 
@@ -48,5 +49,12 @@ void main() {
 	}
 	float alpha = vertexColor.a * a;
 	if (alpha <= 0.003) discard;
-	fragColor = vec4(vertexColor.rgb * alpha, alpha * (1.0 - glyphStyle.z));
+	vec3 rgb = vertexColor.rgb;
+	if (shine.y > 0.0) {
+		// A glint: a soft band with a thin hot core whitens the face and flares the glow.
+		float s = clamp(1.0 - abs(shine.x), 0.0, 1.0);
+		float band = shine.y * (0.6 * s * s * (3.0 - 2.0 * s) + 0.4 * pow(s, 6.0));
+		rgb = mix(rgb, vec3(1.0), band) * (1.0 + band * glyphStyle.z * 2.0);
+	}
+	fragColor = vec4(rgb * alpha, alpha * (1.0 - glyphStyle.z));
 }

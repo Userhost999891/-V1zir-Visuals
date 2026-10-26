@@ -54,6 +54,8 @@ public final class WorldText {
 	private static final int ADDITIVE = 16384;
 	/** UV2.y flag of plate quads: UV0 is then the position in half heights from the plate's centre. */
 	private static final int PLATE = 8192;
+	/** Lean of the shine band: it moves this many blocks right per block up. */
+	private static final float SLANT = 0.35f;
 	/** Plates have no atlas page and fit into any batch of their depth mode. */
 	private static final int ANY_PAGE = -1;
 	private static final IntComparator BACK_TO_FRONT = WorldText::backToFront;
@@ -93,6 +95,9 @@ public final class WorldText {
 	private static float ax, ay, az;
 	private static float rx, ry, rz, ux, uy, uz, nx, ny, nz;
 	private static float fwdX, fwdY, fwdZ;
+	// Shine band of the string being emitted: strength in 1/31 steps (0 off), centre and 1 / half width.
+	private static int band;
+	private static float bandCenter, bandScale;
 	private static SdfFont defaultFont;
 
 	private WorldText() {
@@ -141,6 +146,9 @@ public final class WorldText {
 		private int extrudeColor;
 		private float extrude;
 		private int layers;
+		private float shine;
+		private float shineCenter;
+		private float shineWidth = 1f;
 
 		/** Font; null (the default) follows the client font family at semibold weight. */
 		public Style font(SdfFont font) {
@@ -257,6 +265,18 @@ public final class WorldText {
 		/** Colour of the extruded sides next to the front face (darkened further back); 0 uses the text colour. */
 		public Style extrudeColor(int argb) {
 			this.extrudeColor = argb;
+			return this;
+		}
+
+		/**
+		 * A glint: a slanted band of light that whitens the face and flares the glow. center is its
+		 * place along the text's x axis in blocks from the anchor (after alignment), width how far
+		 * it fades out to each side; strength (0 to 1) 0 turns it off.
+		 */
+		public Style shine(float center, float width, float strength) {
+			this.shineCenter = center;
+			this.shineWidth = Math.max(width, 1e-4f);
+			this.shine = strength;
 			return this;
 		}
 	}
@@ -474,14 +494,17 @@ public final class WorldText {
 		int faceEnd = style.colorEnd != 0 ? ColorUtil.fade(style.colorEnd, fade) : face;
 		boolean extruded = style.layers > 0 && style.extrude > 0f;
 		float back = extruded ? -style.extrude * size : 0f;
+		band = Math.round(Math.max(0f, Math.min(1f, style.shine)) * 31f);
+		bandCenter = style.shineCenter;
+		bandScale = 1f / style.shineWidth;
 
 		if (style.glow > 0f) {
 			int glow = ColorUtil.fade(style.glowColor != 0 ? style.glowColor : style.color, Math.min(1f, style.glow) * fade);
-			layer(page, 0f, 0f, back, weight + 0.2f, 0.25f, true, glow, glow);
+			layer(page, 0f, 0f, back, weight + 0.2f, 0.25f, true, glow, glow, true);
 		}
 		if (style.shadowColor != 0) {
 			int shadow = ColorUtil.fade(style.shadowColor, fade);
-			layer(page, size * 0.035f, -size * 0.055f, back, weight + 0.05f, 0.12f, false, shadow, shadow);
+			layer(page, size * 0.035f, -size * 0.055f, back, weight + 0.05f, 0.12f, false, shadow, shadow, false);
 		}
 		if (extruded) {
 			int side = style.extrudeColor != 0 ? ColorUtil.fade(style.extrudeColor, fade) : face;
@@ -491,25 +514,30 @@ public final class WorldText {
 				float t = style.layers == 1 ? 1f : i / (float) (style.layers - 1);
 				float dark = 0.7f - 0.42f * t;
 				float offset = back * (style.layers - i) / style.layers;
-				layer(page, 0f, 0f, offset, weight, 0f, false, ColorUtil.darken(side, dark), ColorUtil.darken(sideEnd, dark));
+				layer(page, 0f, 0f, offset, weight, 0f, false, ColorUtil.darken(side, dark), ColorUtil.darken(sideEnd, dark), false);
 			}
 		}
 		if (style.outline > 0f && style.outlineColor != 0) {
 			// Thickness is a fraction of the size: convert it to the font's atlas pixels, then to distance units.
 			float shift = weight + style.outline / font.k(1f) * SD_PER_PIXEL;
 			int outline = ColorUtil.fade(style.outlineColor, fade);
-			layer(page, 0f, 0f, 0f, shift, 0.035f, false, outline, outline);
+			layer(page, 0f, 0f, 0f, shift, 0.035f, false, outline, outline, false);
 		}
-		layer(page, 0f, 0f, 0f, weight, 0f, false, face, faceEnd);
+		layer(page, 0f, 0f, 0f, weight, 0f, false, face, faceEnd, true);
 	}
 
-	/** One copy of the glyphs on a page, moved by (dx, dy) in the text plane and dz along the normal. */
-	private static void layer(GlyphAtlas page, float dx, float dy, float dz, float shift, float soft, boolean additive, int left, int right) {
+	/**
+	 * One copy of the glyphs on a page, moved by (dx, dy) in the text plane and dz along the normal;
+	 * shine lets the string's shine band light it.
+	 */
+	private static void layer(GlyphAtlas page, float dx, float dy, float dz, float shift, float soft, boolean additive, int left, int right,
+							  boolean shine) {
 		float ox = ax + rx * dx + ux * dy + nx * dz;
 		float oy = ay + ry * dx + uy * dy + ny * dz;
 		float oz = az + rz * dx + uz * dy + nz * dz;
-		short shiftBits = (short) Math.round(Math.max(-MAX_SHIFT, Math.min(MAX_SHIFT, shift)) * 256f);
-		short softBits = (short) (Math.round(Math.min(soft, 0.5f) * 256f) + (additive ? ADDITIVE : 0));
+		int shiftByte = Math.round(Math.max(-MAX_SHIFT, Math.min(MAX_SHIFT, shift)) * 256f) + 128;
+		boolean lit = shine && band > 0;
+		short softBits = (short) (Math.round(Math.min(soft, 0.5f) * 256f) + (lit ? band << 8 : 0) + (additive ? ADDITIVE : 0));
 		boolean gradient = left != right;
 		ensureStaging(quads + glyphs);
 		long base = MemoryUtil.memAddress(staging);
@@ -527,12 +555,23 @@ public final class WorldText {
 				c1 = ColorUtil.lerp(left, right, (x1 - lineLeft) / lineWidth);
 			}
 			long p = base + (long) quads * QUAD;
-			vertex(p, ox, oy, oz, x0, y0, layout[g + 4], layout[g + 5], c0, shiftBits, softBits);
-			vertex(p + STRIDE, ox, oy, oz, x0, y1, layout[g + 4], layout[g + 7], c0, shiftBits, softBits);
-			vertex(p + STRIDE * 2, ox, oy, oz, x1, y1, layout[g + 6], layout[g + 7], c1, shiftBits, softBits);
-			vertex(p + STRIDE * 3, ox, oy, oz, x1, y0, layout[g + 6], layout[g + 5], c1, shiftBits, softBits);
+			vertex(p, ox, oy, oz, x0, y0, layout[g + 4], layout[g + 5], c0, shiftBits(shiftByte, lit, x0, y0), softBits);
+			vertex(p + STRIDE, ox, oy, oz, x0, y1, layout[g + 4], layout[g + 7], c0, shiftBits(shiftByte, lit, x0, y1), softBits);
+			vertex(p + STRIDE * 2, ox, oy, oz, x1, y1, layout[g + 6], layout[g + 7], c1, shiftBits(shiftByte, lit, x1, y1), softBits);
+			vertex(p + STRIDE * 3, ox, oy, oz, x1, y0, layout[g + 6], layout[g + 5], c1, shiftBits(shiftByte, lit, x1, y0), softBits);
 			quads++;
 		}
+	}
+
+	/**
+	 * UV2.x of a glyph vertex: the edge shift (+128) in the low byte and, on lit layers, the vertex's
+	 * place across the shine band in 1/16 half widths above it. It is linear in the plane, so the
+	 * GPU interpolates it exactly; clamping only touches corners far outside the band.
+	 */
+	private static short shiftBits(int shiftByte, boolean lit, float px, float py) {
+		if (!lit) return (short) shiftByte;
+		int k = Math.round((px - SLANT * py - bandCenter) * bandScale * 16f);
+		return (short) (Math.max(-127, Math.min(127, k)) << 8 | shiftByte);
 	}
 
 	/** One POSITION_TEXTURE_COLOR_LIGHT vertex at plane position (px, py) relative to the origin (ox, oy, oz). */
