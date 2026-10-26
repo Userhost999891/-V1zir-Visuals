@@ -4,7 +4,6 @@ import dev.v1zir.visuals.V1zir;
 import dev.v1zir.visuals.gui.clickgui.ClickGuiScreen;
 import dev.v1zir.visuals.gui.custom.CustomHotbar;
 import dev.v1zir.visuals.gui.custom.CustomUi;
-import dev.v1zir.visuals.module.Module;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.client.ThemeModule;
 import dev.v1zir.visuals.module.impl.effects.CrosshairModule;
