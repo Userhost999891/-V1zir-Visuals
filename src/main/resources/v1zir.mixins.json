@@ -41,7 +41,15 @@
 		"TextureTransformMixin",
 		"TooltipBackgroundRendererMixin",
 		"WeatherRenderingMixin",
-		"WorldRendererMixin"
+		"WorldRendererMixin",
+		"optimize.BackgroundFpsMixin",
+		"optimize.BannerPatternsMixin",
+		"optimize.BlockEntityCullingMixin",
+		"optimize.ChunkUploadMixin",
+		"optimize.EntityCullingMixin",
+		"optimize.MinimizedMixin",
+		"optimize.ParticleLimitMixin",
+		"optimize.SignTextMixin"
 	],
 	"injectors": {
 		"defaultRequire": 0

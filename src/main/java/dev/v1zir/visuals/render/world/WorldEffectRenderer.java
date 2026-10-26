@@ -46,6 +46,7 @@ public final class WorldEffectRenderer {
 	public static final Vector3f RIGHT = new Vector3f();
 	public static final Vector3f UP = new Vector3f();
 	private static final WorldData DATA = new WorldData();
+	private static final float DEFAULT_TAN = (float) Math.tan(Math.toRadians(35.0));
 
 	private WorldEffectRenderer() {
 	}
@@ -57,6 +58,11 @@ public final class WorldEffectRenderer {
 	public static void captureMatrices(Matrix4f view, Matrix4f projection) {
 		VIEW.set(view);
 		PROJECTION.set(projection);
+	}
+
+	/** How much narrower than the default 70 degrees this frame's field of view is (1 when wider). */
+	public static float zoom() {
+		return Math.max(1f, PROJECTION.m11() * DEFAULT_TAN);
 	}
 
 	public static Mesh glow() {

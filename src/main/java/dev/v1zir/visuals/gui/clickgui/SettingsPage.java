@@ -5,6 +5,7 @@ import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.client.ClickGuiModule;
 import dev.v1zir.visuals.module.impl.client.ThemeModule;
 import dev.v1zir.visuals.module.setting.Setting;
+import dev.v1zir.visuals.optimize.Optimizations;
 import dev.v1zir.visuals.render.font.Fonts;
 import dev.v1zir.visuals.render.font.Icons;
 import dev.v1zir.visuals.render.ui.Render2D;
@@ -32,6 +33,7 @@ final class SettingsPage {
 	private final List<SettingComponent<?>> theme = new ArrayList<>();
 	private final List<SettingComponent<?>> animation = new ArrayList<>();
 	private final List<SettingComponent<?>> ui = new ArrayList<>();
+	private final List<SettingComponent<?>> performance = new ArrayList<>();
 	private final List<SettingComponent<?>> all = new ArrayList<>();
 	private final List<ModuleCard> cards;
 	private final Anim[] presetHover = new Anim[PRESETS.length];
@@ -61,9 +63,11 @@ final class SettingsPage {
 			ui.add(SettingComponent.of(gui.scale));
 			ui.add(SettingComponent.of(gui.dimBackground));
 		}
+		for (Setting<?> setting : Optimizations.settings()) performance.add(SettingComponent.of(setting));
 		all.addAll(theme);
 		all.addAll(animation);
 		all.addAll(ui);
+		all.addAll(performance);
 	}
 
 	void reset() {
@@ -92,6 +96,9 @@ final class SettingsPage {
 		cy = group(ctx, animation, gx, cy, gw, y, h, cmx, cmy) + SECTION_GAP;
 		cy = section(ctx, gx, cy, gw, y, h, Icons.APP_WINDOW, "Interface");
 		cy = group(ctx, ui, gx, cy, gw, y, h, cmx, cmy) + SECTION_GAP;
+		// Always-on vanilla optimisations; each can be ruled out here if something looks wrong.
+		cy = section(ctx, gx, cy, gw, y, h, Icons.GAUGE, "Performance");
+		cy = group(ctx, performance, gx, cy, gw, y, h, cmx, cmy) + SECTION_GAP;
 		if (!cards.isEmpty()) {
 			cy = section(ctx, gx, cy, gw, y, h, Icons.MONITOR, "Client");
 			int cols = Math.max(2, ModuleGrid.columns(gw));

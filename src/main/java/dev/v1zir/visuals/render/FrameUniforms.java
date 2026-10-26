@@ -5,6 +5,7 @@ import com.mojang.blaze3d.buffers.Std140Builder;
 import com.mojang.blaze3d.buffers.Std140SizeCalculator;
 import dev.v1zir.visuals.V1zir;
 import dev.v1zir.visuals.gui.clickgui.WindowTransition;
+import dev.v1zir.visuals.optimize.Optimizations;
 import dev.v1zir.visuals.render.sky.MenuSky;
 import dev.v1zir.visuals.render.sky.SkyCache;
 import dev.v1zir.visuals.render.sky.SkyUniforms;
@@ -43,6 +44,7 @@ public final class FrameUniforms {
 		WindowTransition.flip();
 		WorldEffectRenderer.flip();
 		GuiCapture.flip();
+		Optimizations.endFrame();
 	}
 
 	/** Lights LIT shapes around this point (GUI coordinates) for the current frame. */
