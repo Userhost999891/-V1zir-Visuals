@@ -1130,8 +1130,9 @@ float vAuroraLine(float x, float k, float t) {
 }
 
 // Light of curtain k where the view ray crosses it at p (horizontal position) and altitude h;
-// dist = distance along the ray, which fades the finest rays out far away.
-vec3 vAuroraSheet(vec2 p, float h, vec3 rd, float k, float dist, float t, vec3 low, vec3 high) {
+// dist = distance along the ray, which fades the finest rays out far away; path = length of
+// the line of sight through the sheet (long where it runs along a fold).
+vec3 vAuroraSheet(vec2 p, float h, float k, float dist, float path, float t, vec3 low, vec3 high) {
 	// Lower edge near 100 km, a little higher in places.
 	float hb = 1.0 + (vNoise2(vec2(p.x * 1.3 + k * 5.0, t * 0.01)) - 0.5) * 0.14;
 	float above = h - hb;
@@ -1139,11 +1140,6 @@ vec3 vAuroraSheet(vec2 p, float h, vec3 rd, float k, float dist, float t, vec3 l
 	// Bright and quiet stretches along the curtain, changing slowly.
 	float act = smoothstep(0.15, 0.6, vNoise2(vec2(p.x * 0.11 + k * 3.7, t * 0.004 + k * 1.3)));
 	if (act <= 0.0) return vec3(0.0);
-	// Path through the sheet: long where the line of sight runs along it (the bright folds).
-	float e = 0.02;
-	float slope = (vAuroraLine(p.x + e, k, t) - vAuroraLine(p.x - e, k, t)) / (2.0 * e);
-	vec2 n = normalize(vec2(-slope, 1.0));
-	float path = 1.0 / max(abs(n.x * rd.x + n.y * rd.z), 0.12);
 	// Rays: fine vertical striations along the curtain that shimmer slowly sideways; the finest
 	// fade out with distance, where a texel would cover several of them.
 	float fine = 1.0 - smoothstep(2.5, 7.0, dist);
@@ -1169,7 +1165,7 @@ vec3 vAuroraSheet(vec2 p, float h, vec3 rd, float k, float dist, float t, vec3 l
 
 vec3 vAurora(vec3 rd, float t, vec3 low, vec3 high, int quality) {
 	if (rd.y < -0.02) return vec3(0.0);
-	int steps = quality == 0 ? 16 : (quality == 1 ? 24 : 32);
+	int steps = quality == 0 ? 14 : (quality == 1 ? 20 : 28);
 	float r0 = V_AURORA_R;
 	float mu = rd.y;
 	vec3 col = vec3(0.0);
@@ -1191,7 +1187,11 @@ vec3 vAurora(vec3 rd, float t, vec3 low, vec3 high, int quality) {
 			if (i > 0) {
 				if (d * fPrev[k] <= 0.0) {
 					float a = fPrev[k] / (fPrev[k] - d + 1e-6);
-					col += vAuroraSheet(mix(pPrev, p, a), mix(hPrev, h, a), rd, float(k), mix(sPrev, s, a), t, low, high);
+					// Path through the sheet from how fast the ray's distance to it changes (a
+					// slow change means the line of sight runs along the sheet: the bright folds).
+					float rate = abs(d - fPrev[k]) / max(length(p - pPrev), 1e-5);
+					float path = 1.0 / max(rate * length(rd.xz), 0.12);
+					col += vAuroraSheet(mix(pPrev, p, a), mix(hPrev, h, a), float(k), mix(sPrev, s, a), path, t, low, high);
 				}
 				// A faint diffuse glow around each curtain, lowest altitudes brightest.
 				float g = exp(-d * d * 6.0) * exp(-(h - 1.0) * 2.5) * smoothstep(1.0, 1.1, h) * (h - hPrev);
