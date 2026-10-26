@@ -130,10 +130,10 @@ public final class SurfaceMap {
 
 	/**
 	 * Sends the rows refreshed since the last frame to the GPU (render thread, once per frame).
-	 * Returns false while nothing has been ticked yet.
+	 * Returns false until the map has been ticked since it was last idle.
 	 */
 	public static boolean upload() {
-		if (columns == null) return false;
+		if (!live) return false;
 		if (columnTexture == null) {
 			columnTexture = RenderSystem.getDevice().createTexture("V1zir surface columns", 15, TextureFormat.RGBA8, COLUMNS, COLUMNS, 1, 1);
 			columnView = RenderSystem.getDevice().createTextureView(columnTexture);
