@@ -42,7 +42,21 @@ public final class SkyCache {
 	 * sub-texel directions, so blending them supersamples the sky and averages raymarch noise away.
 	 */
 	private static final float ACCUMULATE = 0.35f;
-	/** A sun or moon jump larger than this (a /time set) rebuilds the cache at once. */
+	/**
+	 * Presets with volumetric clouds cost several times more per texel than the others: they build
+	 * this fraction of the texels per frame (a slower refresh, about a second, instead of slower
+	 * frames; the clouds drift slowly and the crossfade hides it).
+	 */
+	private static final float CLOUD_WEIGHT = 0.25f;
+	private static final float AURORA_WEIGHT = 0.85f;
+	/**
+	 * A rebuild after a settings change or time jump runs this many times faster than a refresh,
+	 * but only while frames are fast (under RUSH_DT): a slow machine has no headroom for it and
+	 * rebuilds at the normal rate instead.
+	 */
+	private static final float RUSH = 4f;
+	private static final float RUSH_DT = 1f / 45f;
+	/** A sun or moon jump larger than this (a /time set) rebuilds the cache from scratch. */
 	private static final float JUMP_COS = (float) Math.cos(Math.toRadians(2.0));
 
 	private static final Panorama[] upper = new Panorama[3];
@@ -60,6 +74,7 @@ public final class SkyCache {
 	private static float jitterX;
 	private static float jitterY;
 	private static float buildWeight = 1f;
+	private static boolean rush;
 	private static long lastNanos;
 	private static DynamicUniformStorage<CacheData> storage;
 
@@ -85,9 +100,20 @@ public final class SkyCache {
 		lastNanos = now;
 
 		sign(data, signature);
-		if (!valid || !Arrays.equals(signature, built) || jumped(data)) {
-			// Settings changed, time skipped or nothing is cached yet: build the current panorama
-			// in full right now and start the next one from here.
+		if (valid && (!Arrays.equals(signature, built) || jumped(data))) {
+			// Settings changed or time skipped: start a fresh build (no history) that runs a few
+			// times faster than a refresh, spread over frames instead of one long hitch, while the
+			// old sky stays on screen; it then crossfades in like any other build.
+			// The crossfade restarts too, so hold the newest complete build instead of jumping back.
+			System.arraycopy(signature, 0, built, 0, built.length);
+			startBuild(data);
+			buildWeight = 1f;
+			rush = true;
+			previousValid = false;
+		}
+		if (!valid) {
+			// Nothing is cached yet: build the current panorama in full right now and start the
+			// next one from here.
 			GpuBufferSlice snapshot = SkyUniforms.write(data);
 			jitterX = 0f;
 			jitterY = 0f;
@@ -99,7 +125,10 @@ public final class SkyCache {
 			startBuild(data);
 		} else {
 			float from = progress;
-			progress = Math.min(1f, progress + Math.min(dt / Math.max(period, 0.05f), MAX_STEP));
+			boolean hurry = rush && dt < RUSH_DT;
+			float maxStep = MAX_STEP * costWeight(data) * (hurry ? RUSH : 1f);
+			float step = rush ? maxStep : Math.min(dt / Math.max(period, 0.05f), maxStep);
+			progress = Math.min(1f, progress + step);
 			if (progress > from) buildRows(next, current, SkyUniforms.write(building), from, progress);
 			if (progress >= 1f) {
 				int oldPrevious = previous;
@@ -107,10 +136,22 @@ public final class SkyCache {
 				current = next;
 				next = oldPrevious;
 				previousValid = true;
+				rush = false;
 				startBuild(data);
 			}
 		}
 		composite(target, params, previousValid ? progress : 1f);
+	}
+
+	/** Share of the per-frame texel budget for this preset (see CLOUD_WEIGHT); High quality costs more. */
+	private static float costWeight(SkyUniforms.Data d) {
+		int preset = Math.round(d.camera.w);
+		boolean clouds = d.extra.y > 0.5f && (preset == SkyPreset.REALISTIC.index() || preset == SkyPreset.SUNSET.index()
+			|| preset == SkyPreset.BLOOD_MOON.index() || preset == SkyPreset.CUSTOM.index());
+		float weight = clouds ? CLOUD_WEIGHT : (preset == SkyPreset.AURORA.index() ? AURORA_WEIGHT : 1f);
+		int quality = Math.round(d.settings.w);
+		float scale = quality <= 0 ? 1.5f : (quality >= 2 ? 0.7f : 1f);
+		return Math.min(1f, weight * scale);
 	}
 
 	/**
