@@ -316,6 +316,8 @@ vec3 vStars(vec3 rd, float t, float density) {
 // direction (gStarWeight, stored in alpha): the screen pass draws the stars themselves, crisp at full
 // resolution (vCrispStars). Presets add stars with vStarsW and lay clouds over them with vOver.
 float gStarWeight = 0.0;
+// How much denser the stars are here (0..1): the Nebula preset's young clusters.
+float gStarCluster = 0.0;
 
 vec3 vStarsW(vec3 rd, float t, float density, float weight) {
 #ifdef V1ZIR_SKY_CACHE
@@ -324,6 +326,13 @@ vec3 vStarsW(vec3 rd, float t, float density, float weight) {
 #else
 	return vStars(rd, t, density) * weight;
 #endif
+}
+
+// What a panorama texel stores in alpha: the star visibility, and for the Nebula preset also its
+// cluster density, as visibility * (0.5 + 0.5 * cluster) (sky_cached.fsh decodes it).
+float vStarAlpha() {
+	float w = clamp(gStarWeight, 0.0, 1.0);
+	return int(Camera.w + 0.5) == PRESET_NEBULA ? w * (0.5 + 0.5 * clamp(gStarCluster, 0.0, 1.0)) : w;
 }
 
 vec3 vOver(vec3 under, vec4 over) {
@@ -1213,31 +1222,74 @@ vec3 vSkyAurora(vec3 rd, float t, int quality, vec2 fragCoord) {
 	return vToDisplay(vAces(col * 1.6));
 }
 
-vec3 vSkyNebula(vec3 rd, float t, int quality, vec2 fragCoord) {
-	vec3 col = vec3(0.004, 0.003, 0.010);
-	int steps = quality == 0 ? 10 : (quality == 1 ? 16 : 26);
-	float dither = vHash13(floor(rd * 700.0) + 3.1);
-	vec3 acc = vec3(0.0);
-	float trans = 1.0;
-	vec3 drift = vec3(t * 0.004, 0.0, t * 0.002);
-	vec3 cA = mix(vec3(0.95, 0.25, 0.65), ColorA.rgb, ColorA.a);
-	vec3 cB = mix(vec3(0.20, 0.55, 1.00), ColorB.rgb, ColorA.a);
-	for (int i = 0; i < 26; i++) {
-		if (i >= steps) break;
-		float s = (float(i) + dither) / float(steps);
-		vec3 p = rd * (1.2 + s * 2.4) + drift;
-		vec3 w = vec3(vFbm3(p * 0.9, 3), vFbm3(p * 0.9 + 4.7, 3), vFbm3(p * 0.9 + 9.1, 3));
-		float d = vFbm3(p * 1.5 + w * 1.6, 5);
-		float mask = smoothstep(0.35, 0.65, vFbm3(p * 0.45 + 2.0, 3));
-		d = smoothstep(0.5, 0.86, d) * mask;
-		vec3 c = mix(cA, cB, smoothstep(0.3, 0.7, w.x));
-		c = mix(c, vec3(1.0, 0.65, 0.35), smoothstep(0.62, 0.8, w.y) * 0.6);
-		acc += trans * c * d * 0.15;
-		trans *= exp(-d * 0.55);
+// Ridged 3D fbm: sharp creases, the bright filaments of the nebula's gas.
+float vRidged3(vec3 p, int octaves) {
+	float sum = 0.0;
+	float amp = 0.5;
+	float norm = 0.0;
+	float prev = 1.0;
+	for (int i = 0; i < 8; i++) {
+		if (i >= octaves) break;
+		float n = 1.0 - abs(vNoise3(p) * 2.0 - 1.0);
+		n *= n;
+		sum += n * amp * prev;
+		norm += amp;
+		prev = n;
+		p = V_ROT3 * p * 2.05 + vec3(4.1, 2.3, 7.7);
+		amp *= 0.5;
 	}
-	col += acc;
-	col += vStarsW(rd, t, Settings.z * 1.6, (0.4 + 0.6 * trans) * Timing.w);
-	col += vMilkyWay(rd, 0.5);
+	return sum / norm;
+}
+
+// Deep space: a great emission nebula sprawls over part of the sky above faint distant gas.
+// Glowing hydrogen (pink-red) wraps hollows of hotter, oxygen-lit gas (teal), bright filaments
+// trace its shock fronts, dark dust lanes with lit rims cut across it and hide the stars behind,
+// and young clusters of crisp stars sit in its bright cores. It is all a function of the
+// direction (warped 3D noise on the unit sphere), so it stays sharp at any field of view.
+vec3 vSkyNebula(vec3 rd, float t, int quality, vec2 fragCoord) {
+	vec3 cA = mix(vec3(1.0, 0.2, 0.42), ColorA.rgb, ColorA.a);
+	vec3 cB = mix(vec3(0.12, 0.62, 1.0), ColorB.rgb, ColorA.a);
+	// The sky turns very slowly.
+	float ang = t * 0.0015;
+	float ca = cos(ang);
+	float sa = sin(ang);
+	vec3 p = vec3(rd.x * ca - rd.z * sa, rd.y, rd.x * sa + rd.z * ca);
+	// Where the nebula lies: a broad complex over part of the sky, faint wisps elsewhere.
+	float region = smoothstep(0.42, 0.7, vFbm3(p * 1.1 + vec3(2.0, 5.0, 1.0), 3));
+	// A domain warp gives the gas its swirling, flowing shapes.
+	vec3 q = p * 2.4;
+	vec3 w = vec3(vFbm3(q + 1.7, 4), vFbm3(q + vec3(9.2, 3.1, 5.4), 4), vFbm3(q + vec3(4.4, 7.7, 2.2), 4)) - 0.5;
+	vec3 pw = q + w * 1.25;
+	float gas = vFbm3(pw * 1.25, 6);
+	// The gas is translucent: a soft body and a wide, faint glow around it.
+	float body = smoothstep(0.38, 0.85, gas) * (0.06 + 0.94 * region);
+	float halo = smoothstep(0.25, 0.75, gas) * region;
+	// Filaments: thin bright creases along the denser gas.
+	float fil = vRidged3(pw * 2.2 + 11.0, 5);
+	fil = fil * fil * fil * smoothstep(0.36, 0.62, gas) * (0.2 + 0.8 * region);
+	// Hot hollows glow teal, the dense gas around them pink; a little white where both are bright.
+	float hot = smoothstep(0.42, 0.72, vFbm3(pw * 0.7 + 21.0, 3));
+	vec3 gasCol = mix(cA, cB, hot * (1.0 - smoothstep(0.55, 0.85, gas) * 0.6));
+	// Bright cores where the gas is densest, with a soft white-hot centre.
+	float core = smoothstep(0.62, 0.86, gas) * region;
+	// Dust: dark lanes and globules with sharp edges, their rims lit by the gas behind them.
+	float dn = vFbm3(pw * 1.7 + w * 1.4 + 31.0, 5);
+	float dust = smoothstep(0.5, 0.6, dn) * (0.35 + 0.65 * region);
+	float rim = smoothstep(0.44, 0.5, dn) * (1.0 - smoothstep(0.5, 0.56, dn)) * region;
+
+	vec3 col = vec3(0.003, 0.0025, 0.008);
+	// Faint distant gas over the whole sky, so no part of it is empty.
+	col += mix(cB, cA, smoothstep(0.3, 0.7, w.x + 0.5)) * smoothstep(0.35, 0.8, gas) * 0.012;
+	vec3 neb = gasCol * (body * 0.24 + halo * 0.05 + fil * 0.9) + mix(gasCol, vec3(1.0, 0.92, 0.85), 0.6) * core * core * 0.45;
+	neb += gasCol * rim * body * 0.6;
+	col += neb * (1.0 - 0.94 * dust);
+	col += vMilkyWay(rd, 0.3) * (1.0 - dust);
+
+	// Young star clusters in the bright cores: a glow of unresolved stars and many crisp ones.
+	float cluster = smoothstep(0.55, 0.8, gas) * smoothstep(0.55, 0.75, vNoise3(p * 7.0 + 3.0)) * region * (1.0 - dust);
+	col += vec3(0.75, 0.85, 1.0) * cluster * 0.05;
+	gStarCluster = cluster;
+	col += vStarsW(rd, t, Settings.z * 2.0 * (1.0 + 2.5 * cluster), (1.0 - 0.9 * dust) * Timing.w);
 	col *= Settings.x;
 	return vToDisplay(vAces(col * 1.05));
 }
@@ -1383,6 +1435,7 @@ vec3 vSkyCustom(vec3 rd, float t) {
 vec3 v1zirSky(vec3 rd, vec2 fragCoord) {
 	rd = normalize(rd);
 	gStarWeight = 0.0;
+	gStarCluster = 0.0;
 	gRdDx = dFdx(rd);
 	gRdDy = dFdy(rd);
 	float t = Timing.x;

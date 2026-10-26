@@ -20,7 +20,7 @@ out vec4 fragColor;
 void main() {
 	vec2 texel = vec2(dFdx(texCoord.x), dFdy(texCoord.y));
 	vec3 dir = vHemiOctDecode(texCoord + CacheParams.zw * texel, CacheParams.y);
-	vec4 current = vec4(v1zirSky(dir, gl_FragCoord.xy), clamp(gStarWeight, 0.0, 1.0));
+	vec4 current = vec4(v1zirSky(dir, gl_FragCoord.xy), vStarAlpha());
 	vec4 history = textureLod(Sampler0, texCoord, 0.0);
 	fragColor = mix(history, current, CacheParams.x);
 }
