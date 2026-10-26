@@ -24,7 +24,8 @@ import net.minecraft.client.gui.DrawContext;
  * <ul>
  *   <li>Window: a card like Spotify's lyrics view; the current line big and bright, the others
  *   smaller and dimmer, spring scrolling between lines, a per-word or per-line fill and faded edges.</li>
- *   <li>3D: extruded letters appearing around the player in the world ({@link Lyrics3D}).</li>
+ *   <li>3D: the line floating in the world in front of the player ({@link Lyrics3D}): shiny words
+ *   coming in one by one in time with the song, or extruded letters around the player.</li>
  *   <li>Karaoke: centred subtitles above the hotbar with a fill sweeping across in time and the
  *   next line faintly below.</li>
  * </ul>
@@ -47,9 +48,10 @@ public final class SpotifyLyricsModule extends HudModule implements WorldEffect 
 	public final ModeSetting highlight = add(new ModeSetting("Highlight", "Word", "Word", "Line", "Off").visibleIf(() -> preset.is("Window")));
 	public final NumberSetting lines = add(new NumberSetting("Lines", 5, 3, 9, 1).visibleIf(() -> preset.is("Window")));
 	public final NumberSetting windowWidth = add(new NumberSetting("Width", 210, 160, 300, 5).visibleIf(() -> preset.is("Window")));
+	public final ModeSetting style = add(new ModeSetting("Style", "Shine", "Shine", "Extruded").visibleIf(() -> preset.is("3D")));
 	public final NumberSetting size = add(new NumberSetting("Size", 1.0, 0.5, 2.0, 0.05).suffix("x").visibleIf(() -> preset.is("3D")));
 	public final NumberSetting distance = add(new NumberSetting("Distance", 3.4, 2.0, 6.0, 0.1).suffix(" m").visibleIf(() -> preset.is("3D")));
-	public final BoolSetting depth = add(new BoolSetting("Depth", true).visibleIf(() -> preset.is("3D")));
+	public final BoolSetting depth = add(new BoolSetting("Depth", true).visibleIf(() -> preset.is("3D") && style.is("Extruded")));
 	public final BoolSetting glow = add(new BoolSetting("Glow", true).visibleIf(() -> preset.is("3D")));
 	public final BoolSetting albumColors = add(new BoolSetting("Album colors", true));
 	public final NumberSetting offset = add(new NumberSetting("Sync offset", 0, -2000, 2000, 50).suffix(" ms"));
@@ -426,13 +428,17 @@ public final class SpotifyLyricsModule extends HudModule implements WorldEffect 
 		}
 		update();
 		float letter = 0.26f * size.f();
+		float clock = 0f;
 		if (synced() && index >= 0) {
+			long duration = track.durationMs();
+			long start = lyrics.time(index, duration);
+			clock = (position - start) / 1000f;
 			if (index != shown3D || lyrics != shown3DLyrics) {
 				shown3D = index;
 				shown3DLyrics = lyrics;
 				left3D = false;
-				world.show(lyrics.line(index), letter, distance.f());
-			} else if (!left3D && position >= lyrics.end(index, track.durationMs())) {
+				world.show(lyrics.line(index), letter, distance.f(), style.is("Shine"), (lyrics.end(index, duration) - start) / 1000f);
+			} else if (!left3D && position >= lyrics.end(index, duration)) {
 				left3D = true;
 				world.leaveAll();
 			}
@@ -442,8 +448,6 @@ public final class SpotifyLyricsModule extends HudModule implements WorldEffect 
 			world.leaveAll();
 		}
 		if (world.isEmpty()) return;
-		int accent = accent();
-		int face = ColorUtil.lerp(0xFFFFFFFF, accent, 0.12f);
-		world.render(letter, face, depth.on() ? ColorUtil.darken(accent, 0.1f) : 0, glow.on() ? accent : 0);
+		world.render(letter, distance.f(), clock, accent(), depth.on(), glow.on());
 	}
 }
