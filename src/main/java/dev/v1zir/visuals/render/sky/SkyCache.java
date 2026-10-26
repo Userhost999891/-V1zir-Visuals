@@ -44,10 +44,10 @@ public final class SkyCache {
 	private static final float ACCUMULATE = 0.35f;
 	/**
 	 * Presets with volumetric clouds cost several times more per texel than the others: they build
-	 * this fraction of the texels per frame (a slower refresh, about a second, instead of slower
+	 * this fraction of the texels per frame (a slower refresh, about two seconds, instead of slower
 	 * frames; the clouds drift slowly and the crossfade hides it).
 	 */
-	private static final float CLOUD_WEIGHT = 0.25f;
+	private static final float CLOUD_WEIGHT = 0.18f;
 	private static final float AURORA_WEIGHT = 0.85f;
 	/**
 	 * A rebuild after a settings change or time jump runs this many times faster than a refresh,
