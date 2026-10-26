@@ -207,9 +207,15 @@ vec3 vStarTint(float k) {
 //  Shared sky elements
 // ---------------------------------------------------------------------------
 
-// Size of one screen pixel in radians (keeps stars 1-2 px wide at every resolution).
+// Screen derivatives of the view direction, taken once in uniform control flow (v1zirSky): inside
+// a branch or after an early return (the sun and moon disks) derivatives are undefined, and some
+// GPUs return zero there, which left the moon's outline jagged in the sky cache.
+vec3 gRdDx = vec3(0.0);
+vec3 gRdDy = vec3(0.0);
+
+// Size of one screen pixel (or panorama texel) in radians, around the direction of v1zirSky.
 float vPixelAngle(vec3 rd) {
-	return max(length(fwidth(rd)), 1e-5);
+	return max(length(abs(gRdDx) + abs(gRdDy)), 1e-5);
 }
 
 // Glowing points on a jittered grid, sized in screen pixels: the Magma preset's embers.
@@ -250,11 +256,6 @@ const vec3 V_GALAXY_POLE = vec3(0.2757, 0.6105, -0.7188);
 // Cells per radian of the star grid, and the chance that a cell holds a star at density 1.
 const float V_STAR_SCALE = 40.0;
 const float V_STAR_CHANCE = 0.27;
-
-// Screen derivatives of the view direction, taken once in uniform control flow (v1zirSky), for
-// presets that draw stars directly instead of through the sky cache.
-vec3 gRdDx = vec3(0.0);
-vec3 gRdDy = vec3(0.0);
 
 // Linear star light in direction rd; dx, dy = the change of the view direction over one pixel.
 vec3 vCrispStars(vec3 rd, vec3 dx, vec3 dy, float t, float density) {
@@ -555,12 +556,12 @@ vec3 vSunDisk(vec3 rd, vec3 sunDir, vec3 sunColor, float size) {
 
 // A dark mare: an ellipse (centre c, radii r) with a soft shore.
 float vMare(vec2 p, vec2 c, vec2 r) {
-	return 1.0 - smoothstep(0.7, 1.05, length((p - c) / r));
+	return 1.0 - smoothstep(0.55, 1.1, length((p - c) / (r * 1.12)));
 }
 
 // The maria of the near side, so the moon shows its familiar face (uv: disk coordinates, y up).
 float vMoonMaria(vec2 uv) {
-	vec2 w = uv + (vec2(vFbm2(uv * 3.1 + 1.7, 3), vFbm2(uv * 3.1 + 8.3, 3)) - 0.5) * 0.2;
+	vec2 w = uv + (vec2(vFbm2(uv * 3.1 + 1.7, 4), vFbm2(uv * 3.1 + 8.3, 4)) - 0.5) * 0.26;
 	float m = vMare(w, vec2(-0.28, 0.45), vec2(0.27, 0.22));  // Imbrium
 	m = max(m, vMare(w, vec2(-0.62, 0.08), vec2(0.25, 0.44)));  // Oceanus Procellarum
 	m = max(m, vMare(w, vec2(0.20, 0.42), vec2(0.16, 0.15)));   // Serenitatis
@@ -623,17 +624,22 @@ vec3 vMoon(vec3 rd, vec3 moonDir, float phase, vec3 tint, float size, out float 
 	float edge = max(vPixelAngle(rd), radius * 0.02) / sin(radius);
 	float mask = 1.0 - smoothstep(1.0 - edge, 1.0 + edge, r);
 	coverage = mask;
-	vec2 suv = uv / max(r, 1.0);
+	// The surface is shaded no further out than just inside the limb, so the antialiased edge
+	// fades the lit limb out instead of showing a thin dark ring (which the panorama aliased).
+	vec2 suv = uv * min(1.0, 0.985 / max(r, 1e-4));
 	vec3 sphere = vec3(suv, sqrt(max(1.0 - dot(suv, suv), 0.0)));
 
-	// Albedo: bright highlands, dark maria, mottling, craters and Tycho's bright ray system.
+	// Albedo: bright highlands, dark maria of varying tone, a fine mottling, craters (bright rims
+	// and ejecta, darker floors; faint on the bright full moon, as in reality) and the bright ray
+	// systems of Tycho and Copernicus.
 	float maria = vMoonMaria(suv);
-	float mottle = vFbm2(suv * 7.0 + 2.3, 4);
+	float mottle = vFbm2(suv * 6.0 + 2.3, 5);
+	float tone = vFbm2(suv * 2.3 + 5.1, 3);
 	vec3 cr = vCraterLayer(suv * 4.5, 0.55, 0.0) + vCraterLayer(suv * 9.0, 0.5, 13.0) * 0.6 + vCraterLayer(suv * 17.0, 0.45, 27.0) * 0.35;
 	vec2 tycho = suv - vec2(-0.13, -0.70);
 	float tl = length(tycho);
 	float rays = pow(vNoise2(vec2(atan(tycho.y, tycho.x) * 7.0, 3.0)), 4.0) * exp(-tl * 2.2) * smoothstep(0.03, 0.08, tl);
-	float albedo = mix(0.80, 0.42, maria) * (0.86 + 0.28 * mottle) + cr.x * (1.0 - maria * 0.5) + rays * 0.35;
+	float albedo = mix(0.80, 0.30 + 0.18 * tone, maria) * (0.84 + 0.32 * mottle) + cr.x * (0.5 - maria * 0.4) + rays * 0.3;
 	albedo += exp(-tl * tl * 900.0) * 0.4;
 	vec2 cop = suv - vec2(-0.30, 0.15);
 	albedo += exp(-dot(cop, cop) * 700.0) * 0.25 + pow(vNoise2(vec2(atan(cop.y, cop.x) * 5.0, 9.0)), 4.0) * exp(-length(cop) * 9.0) * 0.12;
@@ -642,11 +648,13 @@ vec3 vMoon(vec3 rd, vec3 moonDir, float phase, vec3 tint, float size, out float 
 	vec3 n = normalize(sphere - vec3(cr.yz, 0.0) * 0.035 * sphere.z);
 	float a = phase * V_TAU;
 	vec3 sunL = normalize(vec3(-sin(a), 0.0, cos(a)));
-	// A rough surface scatters light back to the sun (the full moon looks flat, not like a ball).
-	float ndl = dot(n, sunL);
-	float lambert = smoothstep(-0.04, 0.12, ndl) * mix(max(ndl, 0.0), 1.0, 0.55);
-	float earthshine = 0.03 * (1.0 - lit * 0.7);
-	vec3 surface = tint * albedo * (lambert * 1.4 + earthshine * vec3(0.8, 0.9, 1.1));
+	// Lommel-Seeliger: the dust scatters light back towards the sun, so the full moon is evenly
+	// bright to its limb instead of shaded like a ball, and the light fades softly into the
+	// terminator, where the crater relief shows.
+	float mu0 = max(dot(n, sunL), 0.0);
+	float ls = min(2.0 * mu0 / max(mu0 + max(n.z, 0.0), 1e-3), 1.35);
+	float earthshine = 0.022 * (1.0 - lit * 0.8);
+	vec3 surface = tint * albedo * (ls * 1.3 + earthshine * vec3(0.8, 0.9, 1.1));
 	return glow * (1.0 - mask) + surface * mask;
 }
 
@@ -979,7 +987,9 @@ vec3 vSkyRealistic(vec3 rd, float t, int quality) {
 		float horizonCut = smoothstep(-0.004, 0.004, rd.y) * (1.0 - storm * 0.92);
 		vec3 sunCol = V_SUN_I * vLightTransmittance(V_OBSERVER, sunDir.y) * ex;
 		float cover;
-		vec3 moonTint = vec3(1.0, 0.97, 0.92) * normalize(vLightTransmittance(V_OBSERVER, max(moonDir.y, 0.0)) + 0.05) * 1.7;
+		// Moonlight: a cool white high up, warmer and dimmer (but not as red as the sun) when low.
+		vec3 moonT = vLightTransmittance(V_OBSERVER, max(moonDir.y, 0.0));
+		vec3 moonTint = vec3(0.97, 0.98, 1.0) * mix(vec3(1.0), moonT / max(moonT.r, 1e-4), 0.4) * (0.75 + 0.25 * moonT.r);
 		vec3 moon = vMoon(rd, moonDir, phase, moonTint, 1.5, cover);
 		float moonVis = smoothstep(-0.04, 0.02, moonDir.y) * horizonCut;
 		// The moon hides the stars behind it; the air in front of it still glows over it.
