@@ -36,10 +36,16 @@ void main() {
 
 	if (sky.a > 0.003) {
 		int preset = int(Camera.w + 0.5);
-		float density = Settings.z * (preset == PRESET_NEBULA ? 1.6 : (preset == PRESET_SUNSET ? 0.5 : (preset == PRESET_AURORA ? 0.6 : 1.0)));
-		float exposure = preset == PRESET_AURORA ? 1.1 : (preset == PRESET_BLOOD_MOON ? 1.3 : (preset == PRESET_SUNSET ? 1.1 : 1.0));
+		float density = Settings.z * (preset == PRESET_NEBULA ? 2.0 : (preset == PRESET_SUNSET ? 0.5 : (preset == PRESET_AURORA ? 0.6 : 1.0)));
+		float exposure = preset == PRESET_AURORA ? 1.1 : (preset == PRESET_BLOOD_MOON ? 1.3 : (preset == PRESET_SUNSET ? 1.1 : (preset == PRESET_NEBULA ? 1.3 : 1.0)));
 		vec3 tint = preset == PRESET_BLOOD_MOON ? vec3(1.0, 0.55, 0.5) : vec3(1.0);
-		vec3 stars = vCrispStars(d, dx, dy, Timing.x, density) * tint * (sky.a * exposure * Settings.x);
+		float weight = sky.a;
+		if (preset == PRESET_NEBULA) {
+			// Alpha holds visibility * (0.5 + 0.5 * cluster): denser stars in the clusters.
+			weight = min(sky.a * 2.0, 1.0);
+			density *= 1.0 + 2.5 * max(sky.a * 2.0 - 1.0, 0.0);
+		}
+		vec3 stars = vCrispStars(d, dx, dy, Timing.x, density) * tint * (weight * exposure * Settings.x);
 		col += vToDisplay(vAces(stars));
 	}
 	fragColor = vec4(clamp(col + vUpsampleDither(gl_FragCoord.xy), 0.0, 1.0), 1.0);
