@@ -456,7 +456,9 @@ vec3 vAtmosphere(vec3 rd, vec3 sunDir, float sunI, vec3 moonDir, float moonI, in
 	// Below the horizon the sky is mirrored (the presets darken it towards the ground): terrain hides
 	// it in game, and where it shows, at the edge of the world or from high up, a hazy reflection
 	// that is brightest at the horizon looks better than the line where a real ground would start.
-	vec3 dir = normalize(vec3(rd.x, abs(rd.y), rd.z));
+	// A smooth minimum instead of abs() keeps the brightest haze at the horizon from folding
+	// into a hard bright line.
+	vec3 dir = normalize(vec3(rd.x, sqrt(rd.y * rd.y + 0.0003), rd.z));
 	float tMax = vRaySphere(ro, dir, V_RT).y;
 	bool sunOn = sunI > 0.0 && sunDir.y > -0.35;
 	bool moonOn = moonI > 0.0 && moonDir.y > -0.35;
@@ -544,8 +546,10 @@ vec3 vSunDisk(vec3 rd, vec3 sunDir, vec3 sunColor, float size) {
 	vec3 limb = pow(vec3(max(mu, 0.02)), vec3(0.32, 0.45, 0.65));
 	float peak = max(max(sunColor.r, sunColor.g), max(sunColor.b, 1e-6));
 	vec3 hue = sunColor / peak;
-	vec3 col = hue * limb * disk * 7.0;
-	col += sunColor * (exp(-angle * 75.0 / size) * 0.35 + exp(-angle * 14.0) * 0.04);
+	// Bright enough to read as the sun, not so bright that the tone curve bleaches the limb
+	// darkening and the colour out of it.
+	vec3 col = hue * limb * disk * 5.0;
+	col += sunColor * (exp(-angle * 90.0 / size) * 0.12 + exp(-angle * 14.0) * 0.04);
 	return col;
 }
 
@@ -914,7 +918,7 @@ const float V_SUN_I = 14.0;
 // Exposure of the daylight skies for a sun at height y (the sine of its elevation): the eye
 // adapts, so the sky darkens through the twilight without going black at once.
 float vDayExposure(float y) {
-	return exp(0.13 - 0.3 * smoothstep(0.17, 0.9, y) + 0.5 * smoothstep(0.17, 0.0, y) + 2.2 * smoothstep(0.0, -0.14, y));
+	return exp(0.13 - 0.3 * smoothstep(0.17, 0.9, y) + 0.4 * smoothstep(0.03, -0.04, y) + 2.0 * smoothstep(-0.02, -0.16, y));
 }
 
 // Light for the clouds of a physically lit sky: sunlight (or moonlight at night) where the clouds
@@ -937,6 +941,13 @@ VCloudLight vSkyCloudLight(vec3 sunDir, vec3 moonDir, float moonI, float ex, vec
 	return L;
 }
 
+// Below the horizon the mirrored haze darkens and greys into a dim distant ground (seen in the
+// menu and from high up), with the haze still bright right at the horizon.
+vec3 vBelowHorizon(vec3 col, vec3 rd) {
+	float below = smoothstep(-0.005, -0.12, rd.y);
+	return mix(col, vec3(dot(col, vec3(0.2126, 0.7152, 0.0722))), below * 0.45) * (1.0 - 0.75 * below);
+}
+
 vec3 vSkyRealistic(vec3 rd, float t, int quality) {
 	vec3 sunDir = normalize(SunDir.xyz);
 	vec3 moonDir = normalize(MoonDir.xyz);
@@ -948,7 +959,7 @@ vec3 vSkyRealistic(vec3 rd, float t, int quality) {
 	float ex = vDayExposure(sunDir.y);
 	// The moon lights the night sky a little: a deep blue around it, more at full moon.
 	float moonI = 0.045 * (0.1 + 0.9 * moonLit);
-	vec3 air = vAtmosphere(rd, sunDir, V_SUN_I, moonDir, moonI, steps, 0.8) * ex;
+	vec3 air = vAtmosphere(rd, sunDir, V_SUN_I, moonDir, moonI, steps, 0.7) * ex;
 	// Night: airglow and starlight keep the darkest sky a deep blue, lighter at the horizon.
 	float night = smoothstep(0.05, -0.2, sunDir.y);
 	float e = abs(rd.y);
@@ -985,9 +996,7 @@ vec3 vSkyRealistic(vec3 rd, float t, int quality) {
 		col = vOver(col, vClouds(rd, L, coverage, t, Camera.xyz, quality));
 	}
 
-	// Below the horizon: the mirrored haze darkens and greys towards the ground.
-	float below = smoothstep(0.0, -0.15, rd.y);
-	col = mix(col, vec3(dot(col, vec3(0.2126, 0.7152, 0.0722))), below * 0.5) * (1.0 - 0.65 * below);
+	col = vBelowHorizon(col, rd);
 	// Rain and thunder: a grey, darker sky.
 	float grey = dot(col, vec3(0.2126, 0.7152, 0.0722));
 	col = mix(col, vec3(grey) * 0.75, storm * 0.6);
@@ -1154,13 +1163,30 @@ vec3 vSkyNebula(vec3 rd, float t, int quality, vec2 fragCoord) {
 	return vToDisplay(vAces(col * 1.05));
 }
 
+// A sunset that never ends: the sun hangs just above the horizon (in the real sun's direction),
+// a deep orange disk in a glowing horizon under a purple-blue sky, and the clouds catch its
+// last light, gold and pink on top over cool violet bases.
 vec3 vSkySunset(vec3 rd, float t, int quality) {
-	vec3 s = SunDir.xyz;
-	vec2 az = normalize(s.xz + vec2(1e-3, 0.0));
-	vec3 sunDir = normalize(vec3(az.x, 0.055, az.y));
-	vec3 col = vAtmosphere(rd, sunDir, 26.0, sunDir, 0.0, 12, 0.76);
+	vec2 az = normalize(SunDir.xz + vec2(1e-3, 0.0));
+	vec3 sunDir = normalize(vec3(az.x, 0.028, az.y));
+	int steps = quality == 0 ? 10 : (quality == 1 ? 14 : 18);
+	float ex = 1.55;
+	vec3 col = vAtmosphere(rd, sunDir, V_SUN_I, sunDir, 0.0, steps, 0.8) * ex;
+	// Richer colour: the zenith leans to violet, the glow keeps its orange.
+	float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
+	col = max(mix(vec3(l), col, 1.12), 0.0);
+	col *= mix(vec3(1.0), vec3(1.06, 0.92, 1.12), smoothstep(0.05, 0.6, rd.y));
+	if (rd.y > -0.02) {
+		vec3 sunCol = V_SUN_I * vLightTransmittance(V_OBSERVER, sunDir.y) * ex;
+		col += vSunDisk(rd, sunDir, sunCol, 2.0) * smoothstep(-0.004, 0.004, rd.y);
+		if (Extra.y > 0.5) {
+			VCloudLight L = vSkyCloudLight(sunDir, -sunDir, 0.0, ex, vec3(0.0));
+			col = vOver(col, vClouds(rd, L, Settings.y * 0.85, t, Camera.xyz, quality));
+		}
+	}
+	col = vBelowHorizon(col, rd);
 	col *= Settings.x;
-	return vToDisplay(vTonemap(col * 1.1));
+	return vToDisplay(vTonemap(col));
 }
 
 vec3 vSkyInk(vec3 rd, float t) {
