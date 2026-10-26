@@ -32,17 +32,17 @@ jobs:
         run: |
           jar=$(find .gradle ~/.gradle -path '*minecraftMaven*' -name 'minecraft-*.jar' ! -name '*sources*' 2>/dev/null | head -1)
           echo "mapped jar: $jar"
-          sig() { javap -p -cp "$jar" "$@" 2>&1; }
+          sig() { javap -p -cp "$jar" "$@" 2>&1 || true; }
           code() { javap -c -p -cp "$jar" "$1" 2>&1 | awk -v m="$2" 'index($0, " " m "(") && /\(/ {p=1} p {print} p && /^$/ {p=0}'; }
-          for c in com.mojang.blaze3d.opengl.GlCommandEncoder net.minecraft.client.gl.Framebuffer net.minecraft.world.World \
+          for c in net.minecraft.client.gl.GlCommandEncoder net.minecraft.client.gl.Framebuffer net.minecraft.world.World \
                    net.minecraft.world.WorldView net.minecraft.world.HeightLimitView net.minecraft.world.chunk.Chunk \
                    net.minecraft.world.chunk.WorldChunk net.minecraft.world.chunk.ChunkSection net.minecraft.world.biome.Biome \
                    net.minecraft.world.biome.Biome\$Precipitation net.minecraft.block.AbstractBlock\$AbstractBlockState \
                    com.mojang.blaze3d.pipeline.RenderPipeline\$Builder; do
             echo "=== SIG $c"; sig "$c"
           done
-          echo "=== CODE GlCommandEncoder.writeToTexture"; code com.mojang.blaze3d.opengl.GlCommandEncoder writeToTexture
-          echo "=== CODE GlCommandEncoder.createRenderPass"; code com.mojang.blaze3d.opengl.GlCommandEncoder createRenderPass
+          echo "=== CODE GlCommandEncoder.writeToTexture"; code net.minecraft.client.gl.GlCommandEncoder writeToTexture
+          echo "=== CODE GlCommandEncoder.createRenderPass"; code net.minecraft.client.gl.GlCommandEncoder createRenderPass
           echo "=== CODE Framebuffer.initFbo"; code net.minecraft.client.gl.Framebuffer initFbo
           echo "=== CODE World.getTopY"; code net.minecraft.world.World getTopY
           echo "=== CODE World.getChunk"; code net.minecraft.world.World getChunk
