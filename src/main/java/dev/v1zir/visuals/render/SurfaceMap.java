@@ -68,6 +68,8 @@ public final class SurfaceMap {
 	private static GpuTexture gridTexture;
 	private static GpuTextureView gridView;
 	private static ClientWorld world;
+	/** False after a tick without refresh: what is kept may be outdated by then. */
+	private static boolean live;
 	private static int lastX;
 	private static int lastY;
 	private static int lastZ;
@@ -91,7 +93,8 @@ public final class SurfaceMap {
 			columns = MemoryUtil.memCalloc(COLUMNS * COLUMNS * 4);
 			grid = MemoryUtil.memCalloc(GRID * GRID * LAYERS);
 		}
-		if (w != world || Math.abs(x - lastX) > JUMP || Math.abs(y - lastY) > JUMP || Math.abs(z - lastZ) > JUMP) {
+		if (!live || w != world || Math.abs(x - lastX) > JUMP || Math.abs(y - lastY) > JUMP || Math.abs(z - lastZ) > JUMP) {
+			live = true;
 			world = w;
 			MemoryUtil.memSet(columns, 0);
 			MemoryUtil.memSet(grid, 0);
@@ -105,6 +108,12 @@ public final class SurfaceMap {
 		refreshColumns(x, z);
 		if (materials) refreshLayers(x, y, z);
 		else freshLayers = 0;
+	}
+
+	/** A tick in which nothing needs the map: it starts from scratch when it is needed again. */
+	public static void idle() {
+		live = false;
+		world = null;
 	}
 
 	public static boolean gridReady() {

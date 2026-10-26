@@ -34,24 +34,19 @@ jobs:
           echo "mapped jar: $jar"
           sig() { javap -p -cp "$jar" "$@" 2>&1; }
           code() { javap -c -p -cp "$jar" "$1" 2>&1 | awk -v m="$2" 'index($0, " " m "(") && /\(/ {p=1} p {print} p && /^$/ {p=0}'; }
-          for c in net.minecraft.client.render.chunk.ChunkBuilder net.minecraft.client.render.block.entity.BannerBlockEntityRenderer \
-                   net.minecraft.client.render.block.entity.AbstractSignBlockEntityRenderer net.minecraft.client.render.entity.ItemFrameEntityRenderer \
-                   net.minecraft.client.render.entity.state.ItemFrameEntityRenderState net.minecraft.client.render.item.ItemRenderState \
-                   net.minecraft.entity.Leashable net.minecraft.client.gl.DynamicUniformStorage net.minecraft.client.gui.hud.DebugHud \
-                   net.minecraft.util.profiler.MultiValueDebugSampleLogImpl net.minecraft.client.option.InactivityFpsLimiter\$LimitReason; do
+          for c in com.mojang.blaze3d.opengl.GlCommandEncoder net.minecraft.client.gl.Framebuffer net.minecraft.world.World \
+                   net.minecraft.world.WorldView net.minecraft.world.HeightLimitView net.minecraft.world.chunk.Chunk \
+                   net.minecraft.world.chunk.WorldChunk net.minecraft.world.chunk.ChunkSection net.minecraft.world.biome.Biome \
+                   net.minecraft.world.biome.Biome\$Precipitation net.minecraft.block.AbstractBlock\$AbstractBlockState \
+                   com.mojang.blaze3d.pipeline.RenderPipeline\$Builder; do
             echo "=== SIG $c"; sig "$c"
           done
-          echo "=== CODE ChunkBuilder.upload"; code net.minecraft.client.render.chunk.ChunkBuilder upload
-          echo "=== CODE BlockEntityRenderManager.render"; code net.minecraft.client.render.block.entity.BlockEntityRenderManager render
-          echo "=== CODE BlockEntityRenderManager.getRenderState"; code net.minecraft.client.render.block.entity.BlockEntityRenderManager getRenderState
-          echo "=== CODE AbstractSignBlockEntityRenderer.render"; code net.minecraft.client.render.block.entity.AbstractSignBlockEntityRenderer render
-          echo "=== CODE BannerBlockEntityRenderer.renderCanvas"; code net.minecraft.client.render.block.entity.BannerBlockEntityRenderer renderCanvas
-          echo "=== CODE ItemFrameEntityRenderer.render"; code net.minecraft.client.render.entity.ItemFrameEntityRenderer render
-          echo "=== CODE ParticleManager.tick"; code net.minecraft.client.particle.ParticleManager tick
-          echo "=== CODE DynamicUniformStorage.write"; code net.minecraft.client.gl.DynamicUniformStorage write
-          echo "=== CODE GuiRenderer.enableScissor"; code net.minecraft.client.gui.render.GuiRenderer enableScissor
-          echo "=== CODE World.getBlockState"; code net.minecraft.world.World getBlockState
-          echo "=== CODE MultiValueDebugSampleLogImpl.get"; code net.minecraft.util.profiler.MultiValueDebugSampleLogImpl get
+          echo "=== CODE GlCommandEncoder.writeToTexture"; code com.mojang.blaze3d.opengl.GlCommandEncoder writeToTexture
+          echo "=== CODE GlCommandEncoder.createRenderPass"; code com.mojang.blaze3d.opengl.GlCommandEncoder createRenderPass
+          echo "=== CODE Framebuffer.initFbo"; code net.minecraft.client.gl.Framebuffer initFbo
+          echo "=== CODE World.getTopY"; code net.minecraft.world.World getTopY
+          echo "=== CODE World.getChunk"; code net.minecraft.world.World getChunk
+          echo "=== CODE RenderPipeline\$Builder.withSampler"; code com.mojang.blaze3d.pipeline.RenderPipeline\$Builder withSampler
 
   client:
     name: Dev client

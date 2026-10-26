@@ -25,6 +25,8 @@ import dev.v1zir.visuals.module.impl.hud.PotionsModule;
 import dev.v1zir.visuals.module.impl.hud.ServerInfoModule;
 import dev.v1zir.visuals.module.impl.hud.SpeedModule;
 import dev.v1zir.visuals.module.impl.hud.WatermarkModule;
+import dev.v1zir.visuals.module.impl.visuals.BlockReflectionModule;
+import dev.v1zir.visuals.module.impl.visuals.RainEffectsModule;
 import dev.v1zir.visuals.module.impl.visuals.ShaderSkyModule;
 import dev.v1zir.visuals.module.impl.visuals.WorldParticlesModule;
 import dev.v1zir.visuals.render.sky.SkyPreset;
@@ -85,6 +87,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			walk(context, singleplayer);
 			hud(context, singleplayer);
 			hudElements(context, singleplayer);
+			reflections(context, singleplayer);
 			clickGui(context);
 
 			// The test runner expects to end on the vanilla title screen.
@@ -404,6 +407,74 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		singleplayer.getServer().runCommand("clear @a");
 	}
 
+	/**
+	 * Block Reflection in both modes over a pool with pillars of quartz, iron, gold, glass and a brick
+	 * wall built in front of the player, then Rain Effects with soaked ground and grown puddles.
+	 */
+	private static void reflections(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
+		singleplayer.getServer().runCommand("time set 3500");
+		for (String command : List.of(
+			"execute as @a at @s run fill ~-5 ~-1 ~4 ~5 ~-1 ~13 minecraft:water",
+			"execute as @a at @s run fill ~-7 ~ ~15 ~-4 ~3 ~15 minecraft:quartz_block",
+			"execute as @a at @s run fill ~4 ~ ~15 ~7 ~2 ~15 minecraft:iron_block",
+			"execute as @a at @s run fill ~-1 ~ ~16 ~1 ~ ~16 minecraft:gold_block",
+			"execute as @a at @s run fill ~-2 ~1 ~17 ~2 ~2 ~17 minecraft:glass",
+			"execute as @a at @s run fill ~-12 ~ ~21 ~12 ~5 ~21 minecraft:bricks")) {
+			singleplayer.getServer().runCommand(command);
+		}
+		look(singleplayer, 0, 22);
+		context.waitTicks(20);
+		bench(context, "reflection-off");
+		// The block textures around the camera are complete after 16 ticks.
+		context.runOnClient(client -> {
+			BlockReflectionModule reflection = ModuleManager.get(BlockReflectionModule.class);
+			reflection.mode.set(BlockReflectionModule.NORMAL);
+			reflection.setEnabled(true, false);
+		});
+		context.waitTicks(30);
+		context.takeScreenshot("reflection-normal");
+		bench(context, "reflection-normal");
+		context.runOnClient(client -> ModuleManager.get(BlockReflectionModule.class).mode.set(BlockReflectionModule.METAL));
+		context.waitTicks(5);
+		context.takeScreenshot("reflection-metal");
+		bench(context, "reflection-metal");
+
+		// Rain: the server ramps the rain up over 100 ticks, then the ground is soaked at once
+		// instead of over the minute it takes in play.
+		boolean rainWasOn = context.computeOnClient(client -> {
+			ModuleManager.get(BlockReflectionModule.class).setEnabled(false, false);
+			RainEffectsModule rain = ModuleManager.get(RainEffectsModule.class);
+			boolean on = rain.isEnabled();
+			rain.setEnabled(true, false);
+			return on;
+		});
+		singleplayer.getServer().runCommand("weather rain");
+		context.waitTicks(110);
+		context.runOnClient(client -> {
+			RainEffectsModule rain = ModuleManager.get(RainEffectsModule.class);
+			for (String name : List.of("wet", "lastWet", "filled", "lastFilled")) setFloat(rain, RainEffectsModule.class, name, 1f);
+		});
+		look(singleplayer, 0, 35);
+		context.waitTicks(10);
+		context.takeScreenshot("rain-puddles");
+		bench(context, "rain-puddles");
+		context.runOnClient(client -> ModuleManager.get(BlockReflectionModule.class).setEnabled(true, false));
+		look(singleplayer, 0, 22);
+		context.waitTicks(10);
+		context.takeScreenshot("rain-reflection-normal");
+		bench(context, "rain-reflection-normal");
+
+		// Dry again before the next steps: the module is off while the rain fades out.
+		context.runOnClient(client -> {
+			ModuleManager.get(BlockReflectionModule.class).setEnabled(false, false);
+			ModuleManager.get(RainEffectsModule.class).setEnabled(false, false);
+		});
+		singleplayer.getServer().runCommand("weather clear");
+		context.waitTicks(110);
+		context.runOnClient(client -> ModuleManager.get(RainEffectsModule.class).setEnabled(rainWasOn, false));
+		singleplayer.getServer().runCommand("time set 6000");
+	}
+
 	private static void clickGui(ClientGameTestContext context) {
 		context.runOnClient(client -> setStatic(ClickGuiScreen.class, "tab", Category.VISUALS.ordinal()));
 		context.getInput().pressKey(GLFW.GLFW_KEY_RIGHT_SHIFT);
@@ -489,6 +560,16 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			return field.get(target);
 		} catch (ReflectiveOperationException e) {
 			throw new AssertionError("Cannot read " + owner.getSimpleName() + "." + name, e);
+		}
+	}
+
+	private static void setFloat(Object target, Class<?> owner, String name, float value) {
+		try {
+			Field field = owner.getDeclaredField(name);
+			field.setAccessible(true);
+			field.setFloat(target, value);
+		} catch (ReflectiveOperationException e) {
+			throw new AssertionError("Cannot write " + owner.getSimpleName() + "." + name, e);
 		}
 	}
 

@@ -76,10 +76,12 @@ public final class Reflections {
 
 	/** End of every client tick: keeps the block textures fresh while either effect may need them. */
 	public static void tick(MinecraftClient client) {
-		if (client.world == null) return;
 		boolean reflections = ModuleManager.isEnabled(BlockReflectionModule.class);
 		RainEffectsModule rain = ModuleManager.get(RainEffectsModule.class);
-		if (!reflections && (rain == null || !rain.isEnabled() || !rain.active())) return;
+		if (client.world == null || !reflections && (rain == null || !rain.isEnabled() || !rain.active())) {
+			SurfaceMap.idle();
+			return;
+		}
 		Vec3d cam = client.gameRenderer.getCamera().getCameraPos();
 		SurfaceMap.tick(client.world, (int) Math.floor(cam.x), (int) Math.floor(cam.y), (int) Math.floor(cam.z), reflections);
 	}

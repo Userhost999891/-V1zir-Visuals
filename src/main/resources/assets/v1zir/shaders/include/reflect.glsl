@@ -207,6 +207,25 @@ bool rSurface(ivec2 p, out SurfaceInfo s) {
 	int material = rMaterial(pos + view * 0.04);
 	if (material == AIR || material == LAVA) return false;
 	int mode = int(Shading.x + 0.5);
+	// Fabulous graphics keep water out of the depth buffer: under the water of a column the surface
+	// is where the view ray crosses the water plane.
+	bool plane = false;
+	if (mode != 0 && material != WATER && dist < 56.0 && view.y < 0.0) {
+		float eye = CameraPos.w + CameraFrac.y;
+		// Just in front of the hit, so the side walls of a pool count as under its water.
+		vec2 column = rColumn(ivec2(floor(CameraFrac.xz + pos.xz - view.xz * 0.05)));
+		float surface = column.x - 0.111;
+		if (int(column.y) == WATER && eye > surface && eye + pos.y < surface - 0.05) {
+			vec3 crossing = view * ((surface - eye) / view.y);
+			vec2 above = rColumn(ivec2(floor(CameraFrac.xz + crossing.xz)));
+			if (int(above.y) == WATER && abs(above.x - column.x) < 0.5) {
+				pos = crossing;
+				dist = length(pos);
+				material = WATER;
+				plane = true;
+			}
+		}
+	}
 	bool water = mode != 0 && material == WATER;
 	bool metal = mode == 2 && material != WATER && dist < SHINE_DISTANCE;
 	bool glossy = mode == 1 && (material == GLOSSY || material == METAL) && dist < SHINE_DISTANCE;
@@ -217,7 +236,7 @@ bool rSurface(ivec2 p, out SurfaceInfo s) {
 	float open = exposure * (1.0 - smoothstep(RAIN_DISTANCE - 12.0, RAIN_DISTANCE, dist));
 	if (!water && !metal && !glossy && open < 0.01) return false;
 
-	vec3 n = rNormal(p, pos);
+	vec3 n = plane ? vec3(0.0, 1.0, 0.0) : rNormal(p, pos);
 	vec2 xz = CameraPos.xz + pos.xz;
 	float strength = Shading.y;
 	s.pos = pos;
