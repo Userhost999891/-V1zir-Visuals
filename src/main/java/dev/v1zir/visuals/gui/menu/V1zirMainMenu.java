@@ -4,12 +4,14 @@ import dev.v1zir.visuals.V1zir;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.client.MainMenuModule;
 import dev.v1zir.visuals.module.impl.client.ThemeModule;
+import dev.v1zir.visuals.render.BackdropBlur;
 import dev.v1zir.visuals.render.font.Fonts;
 import dev.v1zir.visuals.render.font.Icons;
 import dev.v1zir.visuals.render.font.SdfFont;
 import dev.v1zir.visuals.render.sky.MenuSky;
 import dev.v1zir.visuals.render.sky.SkyPreset;
 import dev.v1zir.visuals.render.ui.Render2D;
+import dev.v1zir.visuals.render.ui.ShapeElement;
 import dev.v1zir.visuals.util.Anim;
 import dev.v1zir.visuals.util.ColorUtil;
 import dev.v1zir.visuals.util.Theme;
@@ -21,8 +23,11 @@ import net.minecraft.client.gui.screen.multiplayer.MultiplayerScreen;
 import net.minecraft.client.gui.screen.option.LanguageOptionsScreen;
 import net.minecraft.client.gui.screen.option.OptionsScreen;
 import net.minecraft.client.gui.screen.world.SelectWorldScreen;
+import net.minecraft.client.input.KeyInput;
 import net.minecraft.client.realms.gui.screen.RealmsMainScreen;
 import net.minecraft.text.Text;
+import org.jetbrains.annotations.Nullable;
+import org.joml.Matrix3x2fStack;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
@@ -30,18 +35,18 @@ import java.util.List;
 import java.util.Random;
 
 /**
- * Replacement title screen: animated shader background, the V1zir Visuals logo and a row of
- * round icon buttons. Buttons have no tooltips and no hover animation - they simply light up.
+ * Replacement title screen: animated shader background, the time with a greeting and a row of round frosted
+ * icon buttons. It opens on the {@link LockScreen}; once that slides away the menu comes up from below.
  */
 public final class V1zirMainMenu extends Screen {
 	private static final int DANGER = 0xFFFF4D5E;
-	/** Title text styles, refilled every frame instead of allocated. */
-	private static final Render2D.TextStyle GLOW_STYLE = new Render2D.TextStyle();
-	private static final Render2D.TextStyle TITLE_STYLE = new Render2D.TextStyle();
-	private static final Render2D.TextStyle SUBTITLE_STYLE = Render2D.TextStyle.of(0xC8FFFFFF);
+	/** Header clock style, refilled every frame instead of allocated. */
+	private static final Render2D.TextStyle TIME_STYLE = new Render2D.TextStyle().weight(0f);
 	private static boolean playedIntro;
 
 	private final List<RoundButton> buttons = new ArrayList<>();
+	private final LockScreen lock = new LockScreen();
+	private final MenuClock clock = new MenuClock();
 	private final Anim parallaxX = new Anim(0f, 3.5f);
 	private final Anim parallaxY = new Anim(0f, 3.5f);
 	/** 1 for the first intro of the session, shorter when coming back to the menu later. */
@@ -49,6 +54,11 @@ public final class V1zirMainMenu extends Screen {
 	private long introStart = -1L;
 	private Particle[] particles = new Particle[0];
 	private long lastFrame = System.nanoTime();
+	/** The button the left mouse button went down on; it fires when released over it. */
+	@Nullable
+	private RoundButton pressed;
+	/** Button selected with the keyboard (Tab or the arrow keys), or -1. */
+	private int focused = -1;
 
 	public V1zirMainMenu() {
 		super(Text.literal(V1zir.NAME));
@@ -59,6 +69,7 @@ public final class V1zirMainMenu extends Screen {
 	@Override
 	protected void init() {
 		buttons.clear();
+		pressed = null;
 		float size = Math.max(26f, Math.min(42f, height * 0.072f));
 		float gap = size * 0.42f;
 		List<RoundButton> row = new ArrayList<>();
@@ -86,6 +97,7 @@ public final class V1zirMainMenu extends Screen {
 		language.cx = width - 12f - language.radius;
 		language.cy = height - 12f - language.radius;
 		buttons.add(language);
+		if (focused >= buttons.size()) focused = -1;
 
 		MainMenuModule module = ModuleManager.get(MainMenuModule.class);
 		int count = module != null && module.particles.on() ? module.particleCount.i() : 0;
@@ -144,69 +156,73 @@ public final class V1zirMainMenu extends Screen {
 		Render2D.setAlpha(1f);
 		Render2D.menuBackground(ctx, width, height, 0xFFD2D2D2);
 		renderParticles(ctx, dt, px, py);
-		// Soft dark scrim behind the logo and the buttons keeps them readable on bright presets.
+
+		clock.update(client, module);
+		float open = lock.update(module == null || module.lockScreen.on());
+		if (!overlay) lock.drag(mouseY, height);
+		boolean interactive = !overlay && !lock.locked();
+		float shown = Anim.clamp01(open);
+		if (shown > 0.001f) renderMenu(ctx, interactive ? mouseX : -10000, interactive ? mouseY : -10000, t, px, py, shown);
+
+		// Intro: the background rises out of black under the lock screen's clock, or under the menu's header and
+		// buttons as they fade in.
+		boolean locked = lock.visible();
+		if (locked) lock.renderSheet(ctx, width, height);
+		float fade = Anim.easeInOutSine(Anim.progress(t, 0f, 1.1f));
+		if (fade < 1f) Render2D.rect(ctx, 0, 0, width, height, ColorUtil.withAlpha(0x000000, Math.round((1f - fade) * 255)));
+		if (locked) lock.renderContent(ctx, width, height, t, time, clock);
+		Render2D.setAlpha(1f);
+	}
+
+	/**
+	 * Header, buttons and footer. While the lock screen slides away (shown below 1) the menu comes up from below
+	 * and settles from a slightly smaller scale, like a phone's home screen.
+	 */
+	private void renderMenu(DrawContext ctx, int mouseX, int mouseY, float t, float px, float py, float shown) {
+		Matrix3x2fStack matrices = ctx.getMatrices();
+		boolean moving = shown < 1f;
+		if (moving) {
+			float scale = 0.92f + 0.08f * shown;
+			matrices.pushMatrix();
+			matrices.translate(width / 2f, height / 2f + (1f - shown) * height * 0.08f);
+			matrices.scale(scale, scale);
+			matrices.translate(-width / 2f, -height / 2f);
+		}
+		// Soft dark scrim behind the header and the buttons keeps them readable on bright presets.
+		Render2D.setAlpha(shown);
 		float scrimW = Math.min(width * 0.62f, 560f);
 		float scrimH = height * 0.5f;
 		Render2D.shadow(ctx, width / 2f - scrimW / 2f, height * 0.24f, scrimW, scrimH, scrimH / 2f, scrimH * 0.45f, 0x8C000000);
 
-		// Intro: the background rises out of black, the logo slides up and comes into focus,
-		// the underline grows from the centre and the buttons fade in (they never move).
-		float fade = Anim.easeInOutSine(Anim.progress(t, 0f, 1.1f));
-		if (fade < 1f) Render2D.rect(ctx, 0, 0, width, height, ColorUtil.withAlpha(0x000000, Math.round((1f - fade) * 255)));
+		renderHeader(ctx, Anim.easeOutQuart(Anim.progress(t, 0.25f, 0.9f)) * shown, px, py);
 
-		float titleT = Anim.easeOutQuart(Anim.progress(t, 0.25f, 0.9f));
-		float subT = Anim.easeOutCubic(Anim.progress(t, 0.55f, 0.6f));
-		float lineT = Anim.easeInOutCubic(Anim.progress(t, 0.6f, 0.75f));
-		renderTitle(ctx, titleT, subT, lineT, time, px, py);
-
-		float buttonsAlpha = Anim.easeOutCubic(Anim.progress(t, 0.8f, 0.55f));
-		Render2D.setAlpha(buttonsAlpha);
-		int hoverX = overlay ? -10000 : mouseX;
-		int hoverY = overlay ? -10000 : mouseY;
-		for (RoundButton button : buttons) button.render(ctx, hoverX, hoverY);
+		Render2D.setAlpha(Anim.easeOutCubic(Anim.progress(t, 0.8f, 0.55f)) * shown);
+		for (int i = 0; i < buttons.size(); i++) {
+			RoundButton button = buttons.get(i);
+			button.render(ctx, mouseX, mouseY, i == focused, button == pressed);
+		}
 		renderFooter(ctx);
 		Render2D.setAlpha(1f);
+		if (moving) matrices.popMatrix();
 	}
 
-	private void renderTitle(DrawContext ctx, float titleT, float subT, float lineT, float time, float px, float py) {
-		if (titleT <= 0f) return;
-		SdfFont font = Fonts.title();
-		String title = V1zir.NAME;
-		float size = Math.max(24f, Math.min(52f, height * 0.095f));
-		// Letters start slightly spread out and blurred, then settle into place.
-		float spacing = size * (0.035f + 0.09f * (1f - titleT));
+	/** The time with the greeting (or the date) under it, where the big title used to be. */
+	private void renderHeader(DrawContext ctx, float appear, float px, float py) {
+		if (appear <= 0.004f) return;
+		Render2D.setAlpha(appear);
+		float size = Math.max(24f, Math.min(52f, height * 0.12f));
 		float cx = width / 2f - px * 3f;
-		float baseY = height * 0.33f - size * 0.75f + py * 2f;
-		float y = baseY + (1f - titleT) * 12f;
-		int accent = Theme.accent();
-		int accent2 = Theme.accent2();
-		// The glow breathes slowly once the logo is in place.
-		int glowAlpha = Math.round(150f * (0.82f + 0.18f * (float) Math.sin(time * 1.3f)));
-
-		Render2D.setAlpha(titleT);
-		GLOW_STYLE.color = ColorUtil.withAlpha(accent, glowAlpha);
-		Render2D.textCentered(ctx, font, title, cx, y, size,
-			GLOW_STYLE.gradient(ColorUtil.withAlpha(accent2, glowAlpha)).soft(0.3f + 0.3f * (1f - titleT)).weight(0.16f).spacing(spacing));
-		Render2D.textCentered(ctx, font, title, cx, y, size,
-			TITLE_STYLE.gradient(ColorUtil.lerp(0xFFFFFFFF, accent2, 0.45f)).weight(0.03f).soft(0.45f * (1f - titleT)).spacing(spacing).shadow(0x70000000));
-
-		SdfFont small = Fonts.medium();
-		float subSize = Math.max(6f, size * 0.17f);
-		float subY = baseY + font.lineHeight(size) * 0.98f;
-		if (subT > 0f) {
-			Render2D.setAlpha(subT);
-			Render2D.textCentered(ctx, small, "VISUALS  ·  MINECRAFT 1.21.11", cx, subY + (1f - subT) * 5f, subSize,
-				SUBTITLE_STYLE.spacing(subSize * 0.38f));
+		float baseline = height * 0.3f + MenuClock.digitHeight(size) / 2f + py * 2f + (1f - appear) * 8f;
+		TIME_STYLE.color = 0xF2FFFFFF;
+		clock.drawTime(ctx, cx, baseline, size, TIME_STYLE);
+		float sub = Math.max(7f, Math.min(10f, height * 0.026f));
+		float subY = baseline + size * 0.14f + sub;
+		if (!clock.greeting.isEmpty()) {
+			clock.drawGreeting(ctx, cx, subY, sub, 0xCCFFFFFF);
+		} else {
+			SdfFont font = Fonts.medium();
+			Render2D.textCentered(ctx, font, clock.date, cx, Render2D.middle(font, subY, sub), sub, 0xCCFFFFFF);
 		}
-		if (lineT > 0f) {
-			float lineW = size * 2.2f * lineT;
-			float lineY = subY + small.lineHeight(subSize) + 6f;
-			Render2D.setAlpha(Math.min(1f, lineT * 1.6f));
-			Render2D.glow(ctx, cx - lineW / 4f, lineY, lineW / 2f, 1.2f, 0.6f, 6f, ColorUtil.withAlpha(accent, 80), ColorUtil.withAlpha(accent2, 80));
-			Render2D.gradientH(ctx, cx - lineW / 2f, lineY, lineW / 2f, 1.2f, 0.6f, ColorUtil.withAlpha(accent, 0), accent);
-			Render2D.gradientH(ctx, cx, lineY, lineW / 2f, 1.2f, 0.6f, accent2, ColorUtil.withAlpha(accent2, 0));
-		}
-		Render2D.setAlpha(1f);
 	}
 
 	private void renderFooter(DrawContext ctx) {
@@ -247,15 +263,76 @@ public final class V1zirMainMenu extends Screen {
 
 	@Override
 	public boolean mouseClicked(Click click, boolean doubled) {
+		if (client.getOverlay() != null) return true;
+		if (lock.locked()) {
+			if (click.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) lock.press(click.y(), height);
+			return true;
+		}
 		if (click.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
 			for (RoundButton button : buttons) {
 				if (button.hovered(click.x(), click.y())) {
-					button.action.run();
+					pressed = button;
+					focused = -1;
 					return true;
 				}
 			}
 		}
 		return super.mouseClicked(click, doubled);
+	}
+
+	@Override
+	public boolean mouseDragged(Click click, double offsetX, double offsetY) {
+		if (lock.locked()) {
+			lock.drag(click.y(), height);
+			return true;
+		}
+		return super.mouseDragged(click, offsetX, offsetY);
+	}
+
+	@Override
+	public boolean mouseReleased(Click click) {
+		if (click.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+			lock.release(click.y(), height);
+			RoundButton button = pressed;
+			pressed = null;
+			// It fires when let go over it, so the press can be seen (and taken back by moving away).
+			if (button != null && button.hovered(click.x(), click.y())) {
+				button.action.run();
+				return true;
+			}
+		}
+		return super.mouseReleased(click);
+	}
+
+	@Override
+	public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+		if (lock.locked()) {
+			if (verticalAmount != 0) lock.unlock();
+			return true;
+		}
+		return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
+	}
+
+	@Override
+	public boolean keyPressed(KeyInput input) {
+		if (lock.locked()) {
+			// Any key opens it, once the loading overlay is gone and the lock screen can be seen.
+			if (client.getOverlay() == null) lock.unlock();
+			return true;
+		}
+		int key = input.key();
+		boolean back = key == GLFW.GLFW_KEY_LEFT || key == GLFW.GLFW_KEY_UP
+			|| key == GLFW.GLFW_KEY_TAB && (input.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0;
+		if (back || key == GLFW.GLFW_KEY_RIGHT || key == GLFW.GLFW_KEY_DOWN || key == GLFW.GLFW_KEY_TAB) {
+			int n = buttons.size();
+			focused = focused < 0 ? (back ? n - 1 : 0) : Math.floorMod(focused + (back ? -1 : 1), n);
+			return true;
+		}
+		if (focused >= 0 && (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER || key == GLFW.GLFW_KEY_SPACE)) {
+			buttons.get(focused).action.run();
+			return true;
+		}
+		return super.keyPressed(input);
 	}
 
 	@Override
@@ -268,6 +345,11 @@ public final class V1zirMainMenu extends Screen {
 		return false;
 	}
 
+	/**
+	 * Round icon button filled with frost: the blurred background tinted like the Click GUI's surfaces. Hovered, the
+	 * fill brightens and lifts a little with a soft inner light that leans towards the cursor; pressed, it sinks and
+	 * darkens. There is no outline ring.
+	 */
 	private static final class RoundButton {
 		final int icon;
 		final Runnable action;
@@ -275,6 +357,11 @@ public final class V1zirMainMenu extends Screen {
 		float cx;
 		float cy;
 		float radius;
+		/** About 150 ms to light up. */
+		private final Anim hover = new Anim(0f, 20f);
+		private final Anim press = new Anim(0f, 24f);
+		private final Anim lightX = new Anim(0f, 9f);
+		private final Anim lightY = new Anim(0f, 9f);
 
 		RoundButton(int icon, Runnable action, boolean danger) {
 			this.icon = icon;
@@ -288,23 +375,36 @@ public final class V1zirMainMenu extends Screen {
 			return dx * dx + dy * dy <= radius * radius;
 		}
 
-		void render(DrawContext ctx, int mouseX, int mouseY) {
-			boolean hover = hovered(mouseX, mouseY);
-			int accent = danger ? DANGER : Theme.accent();
-			float d = radius * 2f;
-			float x = cx - radius;
-			float y = cy - radius;
-			if (hover) {
-				Render2D.shadow(ctx, x, y, d, d, radius, radius * 0.9f, ColorUtil.withAlpha(accent, 120));
-				Render2D.circle(ctx, cx, cy, radius, ColorUtil.withAlpha(ColorUtil.darken(accent, 0.55f), 175));
-				Render2D.ring(ctx, cx, cy, radius, 1.3f, accent);
-				Render2D.icon(ctx, icon, cx, cy, radius * 0.92f, 0xFFFFFFFF);
+		void render(DrawContext ctx, int mouseX, int mouseY, boolean focused, boolean held) {
+			boolean over = hovered(mouseX, mouseY);
+			float h = hover.target(over || focused ? 1f : 0f).get();
+			float p = press.target(held && over ? 1f : 0f).get();
+			float reach = radius * 0.22f;
+			float lx = lightX.target(over ? Math.max(-1f, Math.min(1f, (mouseX - cx) / radius)) * reach : 0f).get();
+			float ly = lightY.target(over ? Math.max(-1f, Math.min(1f, (mouseY - cy) / radius)) * reach : 0f).get();
+
+			float r = radius * (1f + 0.04f * h - 0.08f * p);
+			float d = r * 2f;
+			float x = cx - r;
+			float y = cy - r;
+			Render2D.shadow(ctx, x, y + 1.5f + h, d, d, r, r * (0.7f + 0.25f * h), ColorUtil.withAlpha(0x000000, Math.round(70 + 25 * h)));
+			int base = Theme.preset().base();
+			if (BackdropBlur.available()) {
+				int fill = ColorUtil.lerp(ColorUtil.withAlpha(base, 110), ColorUtil.withAlpha(ColorUtil.lerp(base, 0xFFFFFF, 0.3f), 118), h);
+				Render2D.glass(ctx, x, y, d, d, r, 0, ShapeElement.MATTE, ColorUtil.lerp(fill, ColorUtil.withAlpha(base, 170), p * 0.7f));
 			} else {
-				Render2D.shadow(ctx, x, y + 1.5f, d, d, radius, radius * 0.7f, 0x55000000);
-				Render2D.circle(ctx, cx, cy, radius, 0x66000000);
-				Render2D.ring(ctx, cx, cy, radius, 1f, 0x33FFFFFF);
-				Render2D.icon(ctx, icon, cx, cy, radius * 0.92f, 0xC8FFFFFF);
+				int fill = ColorUtil.lerp(ColorUtil.withAlpha(ColorUtil.brighten(base, 0.06f), 150),
+					ColorUtil.withAlpha(ColorUtil.lerp(base, 0xFFFFFF, 0.26f), 175), h);
+				Render2D.matte(ctx, x, y, d, d, r, ColorUtil.lerp(fill, ColorUtil.withAlpha(base, 200), p * 0.7f), 0);
 			}
+			if (h > 0.01f) {
+				// The light stays inside the button: its core plus its soft edge never reach past the rim.
+				int tint = ColorUtil.lerp(0xFFFFFFFF, danger ? DANGER : Theme.accent(), 0.45f);
+				float core = r * 0.2f;
+				Render2D.shadow(ctx, cx + lx - core, cy + ly - core, core * 2f, core * 2f, core, r * 0.55f,
+					ColorUtil.withAlpha(tint, Math.round(115 * h * (1f - 0.5f * p))));
+			}
+			Render2D.icon(ctx, icon, cx, cy, r * 0.92f, ColorUtil.lerp(0xC8FFFFFF, 0xFFFFFFFF, h));
 		}
 	}
 

@@ -56,6 +56,18 @@ public final class Anim {
 		last = System.nanoTime();
 	}
 
+	/**
+	 * Sets the value moving at velocity (units per second), as when something dragged is let go. Speed towards
+	 * the target is capped at what the spring can still stop without overshooting.
+	 */
+	public Anim fling(float velocity) {
+		float toward = target - value;
+		if (velocity * toward > 0f && Math.abs(velocity) > omega * Math.abs(toward)) velocity = omega * toward;
+		this.velocity = velocity;
+		last = System.nanoTime();
+		return this;
+	}
+
 	private void step(float dt) {
 		// Exact solution of a critically damped spring, stable for any time step.
 		float delta = value - target;

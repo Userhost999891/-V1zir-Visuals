@@ -106,16 +106,31 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 
 	private static void mainMenu(ClientGameTestContext context) {
 		context.waitForScreen(V1zirMainMenu.class);
-		// Intro: fade in, logo, then the buttons.
+		// The menu opens on the lock screen. Drag it part of the way up and hold it there, let go below the
+		// threshold so it springs back, then open it with a key.
+		context.waitTicks(40);
+		context.takeScreenshot("lock-screen");
+		context.getInput().setCursorPos(640, 600);
+		context.getInput().holdMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+		for (int step = 0; step < 4; step++) {
+			context.getInput().moveCursor(0, -30);
+			context.waitTick();
+		}
+		context.takeScreenshot("lock-screen-drag");
+		context.getInput().releaseMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+		context.waitTicks(20);
+		context.getInput().pressKey(GLFW.GLFW_KEY_SPACE);
+
+		// Intro: the lock screen slides away and the menu comes up from below.
 		for (int frame = 0; frame < 4; frame++) {
-			context.waitTicks(frame == 0 ? 2 : 6);
+			context.waitTicks(frame == 0 ? 1 : 3);
 			context.takeScreenshot("main-menu-intro-" + frame);
 		}
 		context.waitTicks(40);
 		context.takeScreenshot("main-menu");
 		bench(context, "main-menu");
 
-		// Hover the first round button: it only highlights.
+		// Hover the first round button: its frosted fill lights up.
 		double[] cursor = context.computeOnClient(client -> {
 			List<?> buttons = (List<?>) field(client.currentScreen, V1zirMainMenu.class, "buttons");
 			Object first = buttons.getFirst();
