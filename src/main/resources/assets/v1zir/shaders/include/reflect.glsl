@@ -41,6 +41,7 @@ struct SurfaceInfo {
 	vec3 tint;       // reflection weight per channel: Fresnel, metal tint and strength
 	float diffuse;   // how much of the surface's own colour stays
 	float wet;       // darkening by a water film
+	float puddle;    // standing water
 	float roughness;
 	float glint;     // weight of the sun or moon highlight
 	float exposure;  // 1 under the open sky, 0 under a roof
@@ -185,6 +186,14 @@ float rSchlick(float f0, float cosTheta) {
 	return f0 + (1.0 - f0) * m2 * m2 * m;
 }
 
+// Metal reflects in its own colour: Schlick with the block's colour as F0, brightened so dark
+// blocks still shine, its texture kept.
+vec3 rMetal(vec3 albedo, float cosTheta) {
+	vec3 f0 = sqrt(albedo) * 0.95;
+	float m = 1.0 - clamp(cosTheta, 0.0, 1.0);
+	return f0 + (1.0 - f0) * (m * m * m * m * m);
+}
+
 // Everything the passes need about the surface under a full-resolution pixel; false where nothing
 // changes (sky, too far, air, entities, nothing shiny and dry).
 bool rSurface(ivec2 p, out SurfaceInfo s) {
@@ -216,6 +225,7 @@ bool rSurface(ivec2 p, out SurfaceInfo s) {
 	s.tint = vec3(0.0);
 	s.diffuse = 1.0;
 	s.wet = 0.0;
+	s.puddle = 0.0;
 	s.roughness = 0.0;
 	s.glint = 0.0;
 	s.exposure = exposure;
@@ -232,20 +242,15 @@ bool rSurface(ivec2 p, out SurfaceInfo s) {
 	}
 	float cosV = dot(-view, n);
 	if (metal) {
-		// Metal reflects in its own colour: the block's hue at full brightness, duller for dark blocks.
-		vec3 albedo = texelFetch(Sampler0, p, 0).rgb;
-		float peak = max(albedo.r, max(albedo.g, albedo.b));
-		vec3 f0 = albedo / max(peak, 0.04) * mix(0.45, 0.95, smoothstep(0.05, 0.7, peak));
-		if (material == FOLIAGE) f0 *= 0.5;
-		float m = 1.0 - clamp(cosV, 0.0, 1.0);
-		s.tint = min((f0 + (1.0 - f0) * (m * m * m * m * m)) * strength, vec3(1.0));
+		s.tint = min(rMetal(texelFetch(Sampler0, p, 0).rgb, cosV) * (material == FOLIAGE ? 0.5 * strength : strength), vec3(1.0));
 		s.diffuse = mix(1.0, 0.3, min(strength, 1.0)) * (1.0 - dot(s.tint, vec3(0.3333)));
 		s.roughness = 0.03 + 0.6 * Shading.z;
-		s.glint = exposure * (0.4 + 0.6 * dot(f0, vec3(0.3333)));
+		s.glint = exposure * (0.4 + 0.6 * dot(s.tint, vec3(0.3333)));
 	} else if (glossy) {
-		float f = material == METAL ? rSchlick(0.4, cosV) * 0.8 : rSchlick(0.04, cosV) * 0.5;
-		s.tint = vec3(min(f * strength, 1.0));
-		s.diffuse = 1.0 - 0.5 * s.tint.x;
+		// Metal blocks keep their colour in the reflection; glass, ice and polished stone a faint sheen.
+		s.tint = min(material == METAL ? rMetal(texelFetch(Sampler0, p, 0).rgb, cosV) * 0.55 : vec3(rSchlick(0.04, cosV) * 0.5), 1.0) * strength;
+		s.tint = min(s.tint, vec3(1.0));
+		s.diffuse = 1.0 - 0.6 * dot(s.tint, vec3(0.3333));
 		s.roughness = 0.08 + 0.4 * Shading.z;
 		s.glint = exposure * 0.5;
 	}
@@ -256,10 +261,13 @@ bool rSurface(ivec2 p, out SurfaceInfo s) {
 			vec2 slope = rRipples(xz);
 			s.normal = normalize(mix(s.normal, normalize(vec3(-slope.x, 1.0, -slope.y)), puddle));
 		}
-		float f = rSchlick(0.03, dot(-view, s.normal)) * mix(0.5 * wet, 1.0, puddle);
+		// Standing water mirrors more than the thin film on a wet surface.
+		float cosW = dot(-view, s.normal);
+		float f = mix(rSchlick(0.04, cosW) * 0.5 * wet, rSchlick(0.1, cosW), puddle);
 		s.tint = max(s.tint, vec3(f));
 		s.diffuse = min(s.diffuse, 1.0 - f);
 		s.wet = max(wet, puddle);
+		s.puddle = puddle;
 		s.roughness = mix(metal || glossy ? s.roughness : 0.3, 0.0, puddle);
 		s.glint = max(s.glint, open * max(0.25 * wet, puddle));
 	}
@@ -278,7 +286,8 @@ vec3 rSky(vec3 dir) {
 	}
 	vec3 horizon = FogColor.rgb;
 	vec3 zenith = horizon * vec3(0.62, 0.78, 1.0);
-	return dir.y >= 0.0 ? mix(horizon, zenith, sqrt(dir.y)) : horizon * (1.0 + 0.6 * dir.y);
+	// Below the horizon: the ground, darker than the sky.
+	return dir.y >= 0.0 ? mix(horizon, zenith, sqrt(dir.y)) : horizon * mix(0.7, 0.3, sqrt(-dir.y));
 }
 
 // Marches a camera-relative ray through the depth buffer in screen space: even steps over the part
@@ -321,8 +330,12 @@ vec3 rMarch(vec3 origin, vec3 dir, float jitter) {
 				else a = m;
 			}
 			vec2 hit = s0 + delta * b;
-			vec2 edge = min(hit, 1.0 - hit);
-			return vec3(hit, smoothstep(0.0, 0.06, min(edge.x, edge.y)));
+			// Still far behind the surface found: the ray passed behind an object, keep marching.
+			float hitW = 1.0 / mix(k0, k1, b);
+			if (hitW - rSceneW(hit) < 0.35 + hitW * 0.01) {
+				vec2 edge = min(hit, 1.0 - hit);
+				return vec3(hit, smoothstep(0.0, 0.06, min(edge.x, edge.y)));
+			}
 		}
 		last = t;
 		lastW = rayW;

@@ -19,8 +19,9 @@ void main() {
 	float noise = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
 	vec3 dir = reflect(view, s.normal);
 	if (s.roughness > 0.0) {
-		vec3 jitter = vec3(noise, fract(noise * 7.13 + 0.31), fract(noise * 3.71 + 0.67)) * 2.0 - 1.0;
-		dir = normalize(dir + jitter * (s.roughness * 0.3));
+		vec2 q = gl_FragCoord.xy;
+		vec3 jitter = vec3(rHash(q), rHash(q + 17.3), rHash(q + 41.9)) * 2.0 - 1.0;
+		dir = normalize(dir + jitter * (s.roughness * 0.12));
 		if (dot(dir, s.normal) < 0.0) dir = reflect(dir, s.normal);
 	}
 	// Under a roof a ray that finds nothing sees the dim room, not the sky.

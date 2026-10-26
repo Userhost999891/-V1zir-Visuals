@@ -16,13 +16,13 @@ void main() {
 	vec4 scene = texelFetch(Sampler0, p, 0);
 	// Four taps spread by roughness, weighted by the trace alpha so pixels that do not reflect never bleed in.
 	vec2 uv = gl_FragCoord.xy / Screen.xy;
-	vec2 r = (0.5 + s.roughness * 6.0) / Screen.zw;
+	vec2 r = (0.5 + s.roughness * 8.0) / Screen.zw;
 	vec4 sum = texture(Sampler4, uv + vec2(-r.x, -0.5 * r.y)) + texture(Sampler4, uv + vec2(0.5 * r.x, -r.y))
 		+ texture(Sampler4, uv + vec2(r.x, 0.5 * r.y)) + texture(Sampler4, uv + vec2(-0.5 * r.x, r.y));
 	vec3 reflection = sum.rgb / max(sum.a, 0.001);
 	float coverage = clamp(sum.a * 0.5, 0.0, 1.0);
-	// A water film darkens and saturates what is under it.
-	vec3 base = mix(scene.rgb, pow(scene.rgb, vec3(1.5)) * 0.85, s.wet);
+	// A water film darkens and saturates what is under it, standing water the most.
+	vec3 base = mix(scene.rgb, pow(scene.rgb, vec3(1.3)) * 0.9, s.wet) * (1.0 - 0.3 * s.puddle);
 	vec3 color = base * mix(1.0, s.diffuse, coverage) + reflection * s.tint * coverage;
 	if (s.glint > 0.0 && LightDir.w > 0.0) {
 		vec3 bounce = reflect(normalize(s.pos), s.normal);
