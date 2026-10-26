@@ -42,6 +42,7 @@ public final class Fonts {
 	private static final Map<Family, EnumMap<Weight, SdfFont>> CACHE = new EnumMap<>(Family.class);
 	private static SdfFont fallback;
 	private static SdfFont title;
+	private static SdfFont clock;
 	private static SdfFont icons;
 	private static Family family = Family.INTER;
 
@@ -80,6 +81,15 @@ public final class Fonts {
 	public static SdfFont title() {
 		if (title == null) title = SdfFont.load("montserrat_extrabold", path("montserrat_extrabold"), 72).withFallback(fallback());
 		return title;
+	}
+
+	/**
+	 * Inter Display Light for big clocks: digits, colon and space only, with the tabular digits and the raised
+	 * colon as the default glyphs so the time never jitters. Rasterised large because it is shown large.
+	 */
+	public static SdfFont clock() {
+		if (clock == null) clock = SdfFont.load("inter_display_light", path("inter_display_light"), 96).withFallback(fallback());
+		return clock;
 	}
 
 	public static SdfFont icons() {
