@@ -1099,47 +1099,116 @@ vec3 vSkyMagma(vec3 rd, float t) {
 	return col / (1.0 + col * 0.3);
 }
 
-float vAuroraField(vec2 p, float t) {
-	float warp = vFbm2(p * 0.12 + vec2(t * 0.015, -t * 0.01), 4);
-	float x = p.y * 0.32 + warp * 4.2 + sin(p.x * 0.09 + t * 0.12) * 0.9;
-	float band = abs(fract(x * 0.22) - 0.5) * 2.0;
-	float sheet = exp(-band * band * 26.0);
-	float rays = 0.55 + 0.45 * vNoise2(vec2(p.x * 2.4 + t * 0.35, x * 1.3));
-	float patches = smoothstep(0.30, 0.72, vFbm2(p * 0.05 - vec2(t * 0.012, 0.0), 3));
-	return sheet * rays * patches;
+// ---------------------------------------------------------------------------
+//  Aurora: curtains of light, thin vertical sheets that hang from about 100 km up along
+//  meandering, folding lines across the sky (units of 100 km, on a curved Earth). Every view ray
+//  finds where it crosses each sheet (a sign change of its distance to the sheet's line between
+//  two altitudes, refined by interpolation), so the curtains stay crisp at any distance instead
+//  of smearing: a sharp, bright lower edge, fine vertical rays that run up the sheet and fade
+//  with height, green low and violet to red high, and where a fold turns edge-on the line of
+//  sight runs along the sheet and it glows brightest. Near curtains rise high into the sky, far
+//  ones sit low over the horizon, and overhead the rays converge on the zenith like a corona.
+// ---------------------------------------------------------------------------
+
+const float V_AURORA_R = 63.7;
+
+// Centre line of curtain k: its z (north) as a function of x (east), folding slowly over time.
+float vAuroraLine(float x, float k, float t) {
+	float base = -4.2 + k * 2.6 + (vHash12(vec2(k, 3.1)) - 0.5) * 1.2;
+	float meander = (vNoise2(vec2(x * 0.16 + t * 0.003, k * 7.13)) - 0.5) * 3.2;
+	float fold = (vNoise2(vec2(x * 0.75 - t * 0.007, k * 3.37 + 1.7)) - 0.5) * 0.9;
+	return base + meander + fold;
+}
+
+// Light of curtain k where the view ray crosses it at p (horizontal position) and altitude h;
+// dist = distance along the ray, which fades the finest rays out far away.
+vec3 vAuroraSheet(vec2 p, float h, vec3 rd, float k, float dist, float t, vec3 low, vec3 high) {
+	// Lower edge near 100 km, a little higher in places.
+	float hb = 1.0 + (vNoise2(vec2(p.x * 1.3 + k * 5.0, t * 0.01)) - 0.5) * 0.14;
+	float above = h - hb;
+	if (above < -0.02) return vec3(0.0);
+	// Bright and quiet stretches along the curtain, changing slowly.
+	float act = smoothstep(0.15, 0.6, vNoise2(vec2(p.x * 0.11 + k * 3.7, t * 0.004 + k * 1.3)));
+	if (act <= 0.0) return vec3(0.0);
+	// Path through the sheet: long where the line of sight runs along it (the bright folds).
+	float e = 0.02;
+	float slope = (vAuroraLine(p.x + e, k, t) - vAuroraLine(p.x - e, k, t)) / (2.0 * e);
+	vec2 n = normalize(vec2(-slope, 1.0));
+	float path = 1.0 / max(abs(n.x * rd.x + n.y * rd.z), 0.12);
+	// Rays: fine vertical striations along the curtain that shimmer slowly sideways; the finest
+	// fade out with distance, where a texel would cover several of them.
+	float fine = 1.0 - smoothstep(2.5, 7.0, dist);
+	float r1 = vNoise2(vec2(p.x * 36.0 + t * 0.05, k * 11.0));
+	float r2 = vNoise2(vec2(p.x * 93.0 - t * 0.09, k * 17.0));
+	float rays = mix(r1, r1 * 0.6 + r2 * 0.4, fine);
+	// Clusters of brighter rays.
+	rays *= 0.5 + vNoise2(vec2(p.x * 7.0 - t * 0.02, k * 23.0));
+	rays *= rays;
+	// A sharp lower edge with a bright band just above it, then rays that stream upwards and
+	// fade, the bright ones reaching much higher.
+	float edge = smoothstep(-0.02, 0.004, above);
+	float a0 = max(above, 0.0);
+	float band = exp(-a0 / 0.07) * (0.6 + 0.8 * rays);
+	float streak = exp(-a0 / mix(0.15, 0.8, min(rays, 1.0))) * (0.15 + 1.4 * rays);
+	float glow = edge * (band + streak) * act;
+	// Oxygen green low, violet and a deep red high, a hint of pink right at the edge.
+	vec3 c = mix(low, high, smoothstep(0.12, 0.9, above));
+	c = mix(c, vec3(1.0, 0.22, 0.42), smoothstep(0.7, 1.6, above) * 0.55);
+	c = mix(c, vec3(1.0, 0.35, 0.7), (1.0 - smoothstep(-0.01, 0.02, above)) * 0.35);
+	return c * glow * path;
+}
+
+vec3 vAurora(vec3 rd, float t, vec3 low, vec3 high, int quality) {
+	if (rd.y < -0.02) return vec3(0.0);
+	int steps = quality == 0 ? 16 : (quality == 1 ? 24 : 32);
+	float r0 = V_AURORA_R;
+	float mu = rd.y;
+	vec3 col = vec3(0.0);
+	vec3 haze = vec3(0.0);
+	float fPrev[4];
+	vec2 pPrev = vec2(0.0);
+	float hPrev = 0.0;
+	float sPrev = 0.0;
+	for (int i = 0; i <= 32; i++) {
+		if (i > steps) break;
+		// Altitudes from below the lowest edge up to 320 km, denser low where the edges are.
+		float f = float(i) / float(steps);
+		float h = 0.9 + 2.3 * f * f;
+		float r = r0 + h;
+		float s = -r0 * mu + sqrt(max(r0 * r0 * (mu * mu - 1.0) + r * r, 0.0));
+		vec2 p = rd.xz * s;
+		for (int k = 0; k < 4; k++) {
+			float d = p.y - vAuroraLine(p.x, float(k), t);
+			if (i > 0) {
+				if (d * fPrev[k] <= 0.0) {
+					float a = fPrev[k] / (fPrev[k] - d + 1e-6);
+					col += vAuroraSheet(mix(pPrev, p, a), mix(hPrev, h, a), rd, float(k), mix(sPrev, s, a), t, low, high);
+				}
+				// A faint diffuse glow around each curtain, lowest altitudes brightest.
+				float g = exp(-d * d * 6.0) * exp(-(h - 1.0) * 2.5) * smoothstep(1.0, 1.1, h) * (h - hPrev);
+				haze += mix(low, high, smoothstep(1.1, 2.0, h)) * g;
+			}
+			fPrev[k] = d;
+		}
+		pPrev = p;
+		hPrev = h;
+		sPrev = s;
+	}
+	return col * 0.06 + haze * 0.05;
 }
 
 vec3 vSkyAurora(vec3 rd, float t, int quality, vec2 fragCoord) {
-	vec3 low = mix(vec3(0.15, 1.0, 0.55), ColorA.rgb, ColorA.a);
-	vec3 high = mix(vec3(0.55, 0.22, 1.0), ColorB.rgb, ColorA.a);
+	vec3 low = mix(vec3(0.12, 1.0, 0.45), ColorA.rgb, ColorA.a);
+	vec3 high = mix(vec3(0.55, 0.2, 1.0), ColorB.rgb, ColorA.a);
 	float up = max(rd.y, 0.0);
-	vec3 col = mix(vec3(0.020, 0.040, 0.070), vec3(0.003, 0.006, 0.018), pow(up, 0.6));
-	col += vec3(0.02, 0.05, 0.06) * exp(-abs(rd.y) * 9.0);
-	col *= mix(1.0, 0.25, (1.0 - smoothstep(-0.3, 0.0, rd.y)));
+	// A deep blue night, a little lighter towards the horizon, darker below it.
+	vec3 col = mix(vec3(0.011, 0.02, 0.042), vec3(0.003, 0.006, 0.018), pow(up, 0.5));
+	col *= mix(1.0, 0.25, 1.0 - smoothstep(-0.3, 0.0, rd.y));
 	col += vStarsW(rd, t, Settings.z, smoothstep(-0.05, 0.2, rd.y) * Timing.w);
 	col += vMilkyWay(rd, 0.6) * smoothstep(0.0, 0.3, rd.y);
-
-	if (rd.y > 0.0) {
-		int steps = quality == 0 ? 18 : (quality == 1 ? 28 : 42);
-		// Jitter locked to the sky direction: locked to screen pixels it stays put while the
-		// curtains slide past during a turn, so they boil.
-		float dither = vHash13(floor(rd * 700.0) + 7.3);
-		vec3 acc = vec3(0.0);
-		for (int i = 0; i < 42; i++) {
-			if (i >= steps) break;
-			float fi = (float(i) + dither) / float(steps);
-			float h = mix(1.0, 4.4, fi);
-			vec2 p = rd.xz * (h / (rd.y + 0.05)) * 3.2 + vec2(0.0, 6.0);
-			float a = vAuroraField(p, t);
-			vec3 c = mix(low, high, smoothstep(0.15, 0.95, fi));
-			c = mix(c, vec3(1.0, 0.25, 0.45), smoothstep(0.82, 1.0, fi) * 0.35);
-			acc += c * a * exp(-fi * 2.2);
-		}
-		acc *= 5.0 / float(steps);
-		acc *= smoothstep(0.0, 0.12, rd.y);
-		col += acc;
-		col += low * 0.04 * exp(-rd.y * 7.0) * smoothstep(0.0, 0.05, rd.y);
-	}
+	col += vAurora(rd, t, low, high, quality) * smoothstep(-0.02, 0.03, rd.y);
+	// Faint green airglow along the horizon.
+	col += low * 0.02 * exp(-abs(rd.y) * 18.0) * smoothstep(-0.08, 0.0, rd.y);
 	col *= Settings.x;
 	return vToDisplay(vAces(col * 1.6));
 }
