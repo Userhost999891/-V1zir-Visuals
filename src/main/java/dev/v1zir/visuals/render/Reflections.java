@@ -161,7 +161,7 @@ public final class Reflections {
 		p.screen.set(width, height, tracedWidth, tracedHeight);
 		p.trace.set(settings.steps(), settings.refinements(), RAY_LENGTH, SurfaceMap.gridReady() && reflections ? 1f : 0f);
 		p.surface.set(reflections ? settings.metal() ? 2f : 1f : 0f, settings.strength.f(), settings.roughness.f(), 0f);
-		if (rain != null) p.weather.set(rain.wetness(tickDelta), rain.puddles(tickDelta), rain.ripples(tickDelta), 0f);
+		if (rain != null) p.weather.set(rain.wetness(tickDelta), rain.rain(tickDelta), 0f, 0f);
 		else p.weather.set(0f, 0f, 0f, 0f);
 		light(p, world, tickDelta);
 		p.fog.set(FOG.x, FOG.y, FOG.z, 1f);

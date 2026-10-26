@@ -409,7 +409,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 
 	/**
 	 * Block Reflection in both modes over a pool with pillars of quartz, iron, gold, glass and a brick
-	 * wall built in front of the player, then Rain Effects with soaked ground and grown puddles.
+	 * wall built in front of the player, then Rain Effects with soaked ground.
 	 */
 	private static void reflections(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
 		singleplayer.getServer().runCommand("time set 3500");
@@ -452,13 +452,17 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.waitTicks(110);
 		context.runOnClient(client -> {
 			RainEffectsModule rain = ModuleManager.get(RainEffectsModule.class);
-			for (String name : List.of("wet", "lastWet", "filled", "lastFilled")) setFloat(rain, RainEffectsModule.class, name, 1f);
+			for (String name : List.of("wet", "lastWet")) setFloat(rain, RainEffectsModule.class, name, 1f);
 		});
 		look(singleplayer, 0, 35);
 		context.waitTicks(10);
-		context.takeScreenshot("rain-puddles");
-		bench(context, "rain-puddles");
-		context.runOnClient(client -> ModuleManager.get(BlockReflectionModule.class).setEnabled(true, false));
+		context.takeScreenshot("rain-wet");
+		bench(context, "rain-wet");
+		context.runOnClient(client -> {
+			BlockReflectionModule reflection = ModuleManager.get(BlockReflectionModule.class);
+			reflection.mode.set(BlockReflectionModule.NORMAL);
+			reflection.setEnabled(true, false);
+		});
 		look(singleplayer, 0, 22);
 		context.waitTicks(10);
 		context.takeScreenshot("rain-reflection-normal");

@@ -21,8 +21,10 @@ void main() {
 		+ texture(Sampler4, uv + vec2(r.x, 0.5 * r.y)) + texture(Sampler4, uv + vec2(-0.5 * r.x, r.y));
 	vec3 reflection = sum.rgb / max(sum.a, 0.001);
 	float coverage = clamp(sum.a * 0.5, 0.0, 1.0);
-	// A water film darkens and saturates what is under it, standing water the most.
-	vec3 base = mix(scene.rgb, pow(scene.rgb, vec3(1.3)) * 0.9, s.wet) * (1.0 - 0.3 * s.puddle);
+	// Metal tints what it reflects with its own colour, so the sky's hue must not take over.
+	reflection = mix(reflection, vec3(dot(reflection, vec3(0.2126, 0.7152, 0.0722))), 0.55 * s.metallic);
+	// A water film darkens what is under it and deepens its colour.
+	vec3 base = mix(scene.rgb, pow(scene.rgb, vec3(1.25)) * 0.88, s.wet);
 	vec3 color = base * mix(1.0, s.diffuse, coverage) + reflection * s.tint * coverage;
 	if (s.glint > 0.0 && LightDir.w > 0.0) {
 		vec3 bounce = reflect(normalize(s.pos), s.normal);

@@ -10,7 +10,7 @@ layout(std140) uniform ReflectParams {
 	vec4 Screen;      // xy = screen size, zw = trace texture size
 	vec4 Trace;       // x = march steps, y = refinement steps, z = ray length, w = material grid ready
 	vec4 Shading;     // x = mode (0 rain only, 1 normal, 2 metal), y = strength, z = roughness
-	vec4 Weather;     // x = wetness, y = puddle spread, z = raindrop ripples
+	vec4 Weather;     // x = wetness, y = raindrop rings on water
 	vec4 LightDir;    // xyz = towards the sun or moon, w = its strength
 	vec4 LightColor;
 	vec4 FogColor;    // horizon colour of the frame
@@ -41,7 +41,7 @@ struct SurfaceInfo {
 	vec3 tint;       // reflection weight per channel: Fresnel, metal tint and strength
 	float diffuse;   // how much of the surface's own colour stays
 	float wet;       // darkening by a water film
-	float puddle;    // standing water
+	float metallic;  // 1 where the reflection takes the surface's colour (metal)
 	float roughness;
 	float glint;     // weight of the sun or moon highlight
 	float exposure;  // 1 under the open sky, 0 under a roof
@@ -139,20 +139,6 @@ float rHash(vec2 p) {
 	return fract((p3.x + p3.y) * p3.z);
 }
 
-float rNoise(vec2 p) {
-	vec2 i = floor(p);
-	vec2 f = p - i;
-	f = f * f * (3.0 - 2.0 * f);
-	return mix(mix(rHash(i), rHash(i + vec2(1.0, 0.0)), f.x), mix(rHash(i + vec2(0.0, 1.0)), rHash(i + 1.0), f.x), f.y);
-}
-
-// Puddle shapes, fixed in the world; they spread as Weather.y grows.
-float rPuddle(vec2 xz) {
-	float n = rNoise(xz * 0.21) * 0.7 + rNoise(xz * 0.63 + 19.1) * 0.3;
-	float threshold = 0.8 - 0.4 * Weather.y;
-	return smoothstep(threshold, threshold + 0.06, n) * smoothstep(0.0, 0.15, Weather.y);
-}
-
 // Gentle wind waves on water: the slope of four travelling sines.
 vec2 rWaves(vec2 xz) {
 	float t = CameraFrac.w;
@@ -177,7 +163,7 @@ vec2 rRipples(vec2 xz) {
 		float fade = (1.0 - phase) * (1.0 - phase);
 		slope += d / max(dist, 0.001) * (cos(e * 45.0) * exp(-e * e * 350.0) * fade);
 	}
-	return slope * 0.4 * Weather.z;
+	return slope * 0.4 * Weather.y;
 }
 
 float rSchlick(float f0, float cosTheta) {
@@ -186,12 +172,15 @@ float rSchlick(float f0, float cosTheta) {
 	return f0 + (1.0 - f0) * m2 * m2 * m;
 }
 
-// Metal reflects in its own colour: Schlick with the block's colour as F0, brightened so dark
-// blocks still shine, its texture kept.
-vec3 rMetal(vec3 albedo, float cosTheta) {
-	vec3 f0 = sqrt(albedo) * 0.95;
+// Metal reflects in its own colour: Schlick with F0 from the block's hue (saturated, so grass stays
+// green under a blue sky) and some of its texture. Rough metal keeps little of the bright grazing
+// sky, so the ground towards the horizon does not wash out.
+vec3 rMetal(vec3 albedo, float cosTheta, float roughness) {
+	float peak = max(albedo.r, max(albedo.g, albedo.b));
+	vec3 hue = albedo / max(peak, 0.04) * mix(0.35, 0.9, smoothstep(0.03, 0.6, peak));
+	vec3 f0 = mix(hue, sqrt(albedo) * 0.9, 0.35);
 	float m = 1.0 - clamp(cosTheta, 0.0, 1.0);
-	return f0 + (1.0 - f0) * (m * m * m * m * m);
+	return f0 + max(vec3(0.75 - 1.5 * roughness) - f0, 0.0) * (m * m * m * m * m);
 }
 
 // Everything the passes need about the surface under a full-resolution pixel; false where nothing
@@ -229,7 +218,7 @@ bool rSurface(ivec2 p, out SurfaceInfo s) {
 	bool water = mode != 0 && material == WATER;
 	bool metal = mode == 2 && material != WATER && dist < SHINE_DISTANCE;
 	bool glossy = mode == 1 && (material == GLOSSY || material == METAL) && dist < SHINE_DISTANCE;
-	bool rain = Weather.x + Weather.y > 0.001 && material != WATER && dist < RAIN_DISTANCE;
+	bool rain = Weather.x > 0.001 && material != WATER && dist < RAIN_DISTANCE;
 	if (!water && !metal && !glossy && !rain) return false;
 	// Measured in the air just in front of the surface.
 	float exposure = rExposure(pos - view * 0.3);
@@ -244,7 +233,7 @@ bool rSurface(ivec2 p, out SurfaceInfo s) {
 	s.tint = vec3(0.0);
 	s.diffuse = 1.0;
 	s.wet = 0.0;
-	s.puddle = 0.0;
+	s.metallic = 0.0;
 	s.roughness = 0.0;
 	s.glint = 0.0;
 	s.exposure = exposure;
@@ -261,34 +250,32 @@ bool rSurface(ivec2 p, out SurfaceInfo s) {
 	}
 	float cosV = dot(-view, n);
 	if (metal) {
-		s.tint = min(rMetal(texelFetch(Sampler0, p, 0).rgb, cosV) * (material == FOLIAGE ? 0.5 * strength : strength), vec3(1.0));
-		s.diffuse = mix(1.0, 0.3, min(strength, 1.0)) * (1.0 - dot(s.tint, vec3(0.3333)));
 		s.roughness = 0.03 + 0.6 * Shading.z;
+		s.tint = min(rMetal(texelFetch(Sampler0, p, 0).rgb, cosV, s.roughness) * (material == FOLIAGE ? 0.5 * strength : strength), vec3(1.0));
+		s.diffuse = mix(1.0, 0.45, min(strength, 1.0)) * (1.0 - 0.5 * dot(s.tint, vec3(0.3333)));
+		s.metallic = 1.0;
 		s.glint = exposure * (0.4 + 0.6 * dot(s.tint, vec3(0.3333)));
 	} else if (glossy) {
 		// Metal blocks keep their colour in the reflection; glass, ice and polished stone a faint sheen.
-		s.tint = min(material == METAL ? rMetal(texelFetch(Sampler0, p, 0).rgb, cosV) * 0.55 : vec3(rSchlick(0.04, cosV) * 0.5), 1.0) * strength;
+		s.roughness = 0.08 + 0.4 * Shading.z;
+		s.tint = min(material == METAL ? rMetal(texelFetch(Sampler0, p, 0).rgb, cosV, s.roughness) * 0.55 : vec3(rSchlick(0.04, cosV) * 0.5), 1.0) * strength;
 		s.tint = min(s.tint, vec3(1.0));
 		s.diffuse = 1.0 - 0.6 * dot(s.tint, vec3(0.3333));
-		s.roughness = 0.08 + 0.4 * Shading.z;
+		s.metallic = material == METAL ? 1.0 : 0.0;
 		s.glint = exposure * 0.5;
 	}
 	if (rain) {
+		// A thin film of water: darker, a little more saturated, a soft sheen and weak blurred
+		// reflections; tops soak through, walls only get damp.
 		float wet = clamp(Weather.x * open * (n.y > 0.5 ? 1.0 : 0.45), 0.0, 1.0) * (material == FOLIAGE ? 0.5 : 1.0);
-		float puddle = n.y > 0.9 && material != FOLIAGE ? rPuddle(xz) * open : 0.0;
-		if (puddle > 0.0) {
-			vec2 slope = rRipples(xz);
-			s.normal = normalize(mix(s.normal, normalize(vec3(-slope.x, 1.0, -slope.y)), puddle));
+		float f = rSchlick(0.04, cosV) * 0.45 * wet;
+		if (f > max(s.tint.r, max(s.tint.g, s.tint.b))) {
+			s.tint = vec3(f);
+			s.roughness = metal || glossy ? min(s.roughness, 0.3) : 0.3;
 		}
-		// Standing water mirrors more than the thin film on a wet surface.
-		float cosW = dot(-view, s.normal);
-		float f = mix(rSchlick(0.04, cosW) * 0.4 * wet, rSchlick(0.1, cosW), puddle);
-		s.tint = max(s.tint, vec3(f));
 		s.diffuse = min(s.diffuse, 1.0 - f);
-		s.wet = max(wet, puddle);
-		s.puddle = puddle;
-		s.roughness = mix(metal || glossy ? s.roughness : 0.4, 0.0, puddle);
-		s.glint = max(s.glint, open * max(0.25 * wet, puddle));
+		s.wet = wet;
+		s.glint = max(s.glint, open * 0.3 * wet);
 	}
 	return max(s.tint.r, max(s.tint.g, s.tint.b)) > 0.002 || s.wet > 0.002;
 }
