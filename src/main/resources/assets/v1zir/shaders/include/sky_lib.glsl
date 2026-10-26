@@ -1383,49 +1383,75 @@ vec3 vSkySynthwave(vec3 rd, float t) {
 	return col / (1.0 + col * 0.2);
 }
 
-vec3 vSkyBloodMoon(vec3 rd, float t) {
+// Blood Moon: a huge eclipsed moon, deep red with a brighter copper rim, hangs in a dark crimson
+// sky; ragged clouds drift past it with their edges set alight by its glow, and a red haze lies
+// along the horizon.
+vec3 vSkyBloodMoon(vec3 rd, float t, int quality) {
 	vec3 moonDir = normalize(MoonDir.xyz);
 	if (moonDir.y < 0.25) moonDir = normalize(vec3(moonDir.x, 0.25, moonDir.z) + vec3(0.0, 0.0, 1e-3));
 	float up = rd.y;
-	vec3 col = mix(vec3(0.07, 0.006, 0.01), vec3(0.012, 0.0015, 0.004), smoothstep(-0.05, 0.6, up));
-	col *= mix(1.0, 0.3, (1.0 - smoothstep(-0.3, 0.0, up)));
+	vec3 col = mix(vec3(0.05, 0.004, 0.008), vec3(0.008, 0.001, 0.003), smoothstep(-0.02, 0.55, up));
+	col += vec3(0.025, 0.0025, 0.004) * exp(-abs(up) * 14.0);
 	col += vStarsW(rd, t, Settings.z, smoothstep(0.1, 0.6, up) * 0.6 * Timing.w) * vec3(1.0, 0.55, 0.5);
+	float size = 4.2;
+	float ang = vAngle(rd, moonDir);
 	float cover;
-	vec3 moon = vMoon(rd, moonDir, 0.0, vec3(1.0, 0.28, 0.18), 4.2, cover);
-	col = col * (1.0 - cover) + moon * 1.6;
-	col += vec3(0.9, 0.12, 0.08) * exp(-acos(clamp(dot(rd, moonDir), -1.0, 1.0)) * 3.0) * 0.18;
-	if (Extra.y > 0.5) {
+	vec3 moon = vMoon(rd, moonDir, 0.0, vec3(1.0, 0.19, 0.08), size, cover);
+	// The Earth's shadow is darker in the middle: the light that reaches the moon through the
+	// Earth's atmosphere brightens its rim to copper.
+	float rr = ang / (0.024 * size);
+	moon *= mix(vec3(1.0), mix(vec3(0.8), vec3(1.5, 1.25, 1.0), smoothstep(0.5, 1.0, rr)), cover);
+	col = col * (1.0 - cover) + moon * 1.1;
+	col += vec3(0.85, 0.07, 0.035) * (exp(-ang * 3.0) * 0.1 + exp(-max(ang - 0.024 * size, 0.0) * 25.0) * 0.12);
+	if (Extra.y > 0.5 && rd.y > -0.02) {
 		VCloudLight L;
 		L.dir = moonDir;
-		L.color = vec3(0.2, 0.018, 0.012);
-		L.top = vec3(0.012, 0.0015, 0.003);
-		L.bottom = L.top * 0.5;
-		vec4 clouds = vClouds(rd, L, Settings.y * 0.8 + 0.15, t, Camera.xyz, 1);
-		col = vOver(col, vec4(clouds.rgb, clouds.a * 0.9));
+		L.color = vec3(0.4, 0.036, 0.016);
+		L.top = vec3(0.012, 0.0014, 0.0025);
+		L.bottom = vec3(0.012, 0.0012, 0.002);
+		vec4 clouds = vClouds(rd, L, Settings.y * 0.8 + 0.15, t, Camera.xyz, quality);
+		col = vOver(col, vec4(clouds.rgb, clouds.a * 0.92));
 	}
+	col = vBelowHorizon(col, rd);
 	col *= Settings.x;
-	return vToDisplay(vAces(col * 1.3));
+	return vToDisplay(vTonemap(col * 1.3));
 }
 
-vec3 vSkyCustom(vec3 rd, float t) {
+// A tone curve that leaves colours up to 0.8 exactly as they are and rolls brighter light off
+// towards white with its hue intact, so a custom gradient shows the picked colours.
+vec3 vSoftClip(vec3 c) {
+	float m = max(max(c.r, c.g), c.b);
+	if (m <= 0.8) return c;
+	return c * ((0.8 + 0.2 * (1.0 - exp(-(m - 0.8) * 5.0))) / m);
+}
+
+// Custom: a clean gradient from the horizon colour (B) up to the zenith colour (A) with a soft
+// bright band along the horizon, and the volumetric clouds lit by white sunlight (moonlight at
+// night) and by the two colours as skylight, so they belong to the palette.
+vec3 vSkyCustom(vec3 rd, float t, int quality) {
 	float up = rd.y;
-	vec3 zenith = ColorA.rgb;
-	vec3 horizon = ColorB.rgb;
-	vec3 col = mix(horizon, zenith, smoothstep(-0.05, 0.6, up));
-	vec3 lin = col;
-	lin += vStarsW(rd, t, Settings.z, smoothstep(0.0, 0.3, up) * Timing.w * (1.0 - dot(lin, vec3(0.33))));
-	if (Extra.y > 0.5) {
+	// The colours are picked on screen: work in linear light so they come out as picked.
+	vec3 zenith = pow(ColorA.rgb, vec3(2.2));
+	vec3 horizon = pow(ColorB.rgb, vec3(2.2));
+	float k = smoothstep(-0.02, 0.8, up);
+	vec3 col = mix(horizon, zenith, k * k * (3.0 - 2.0 * k));
+	col += horizon * 0.12 * exp(-abs(up) * 22.0);
+	float lum = dot(col, vec3(0.2126, 0.7152, 0.0722));
+	col += vStarsW(rd, t, Settings.z, smoothstep(0.0, 0.3, up) * Timing.w * (1.0 - smoothstep(0.02, 0.3, lum)));
+	if (Extra.y > 0.5 && rd.y > -0.02) {
 		vec3 sunDir = normalize(SunDir.xyz);
+		bool day = sunDir.y > -0.05;
+		float skyLum = dot(zenith + horizon, vec3(0.1063, 0.3576, 0.0361));
 		VCloudLight L;
-		L.dir = sunDir;
-		L.color = vec3(0.9);
-		L.top = lin * 0.7 + 0.05;
-		L.bottom = L.top * 0.6;
-		vec4 clouds = vClouds(rd, L, Settings.y, t, Camera.xyz, 1);
-		lin = vOver(lin, clouds);
+		L.dir = day ? sunDir : normalize(MoonDir.xyz);
+		L.color = vec3(day ? 4.5 : 1.2) * clamp(skyLum * 1.5 + 0.1, 0.15, 1.0);
+		L.top = zenith * 0.4;
+		L.bottom = horizon * 0.2;
+		col = vOver(col, vClouds(rd, L, Settings.y, t, Camera.xyz, quality));
 	}
-	lin *= Settings.x;
-	return vToDisplay(lin / (1.0 + lin * 0.15));
+	col = vBelowHorizon(col, rd);
+	col *= Settings.x;
+	return vToDisplay(vSoftClip(col));
 }
 
 // ---------------------------------------------------------------------------
@@ -1448,8 +1474,8 @@ vec3 v1zirSky(vec3 rd, vec2 fragCoord) {
 	else if (preset == PRESET_SUNSET) col = vSkySunset(rd, t, quality);
 	else if (preset == PRESET_INK) col = vSkyInk(rd, t);
 	else if (preset == PRESET_SYNTHWAVE) col = vSkySynthwave(rd, t);
-	else if (preset == PRESET_BLOOD_MOON) col = vSkyBloodMoon(rd, t);
-	else if (preset == PRESET_CUSTOM) col = vSkyCustom(rd, t);
+	else if (preset == PRESET_BLOOD_MOON) col = vSkyBloodMoon(rd, t, quality);
+	else if (preset == PRESET_CUSTOM) col = vSkyCustom(rd, t, quality);
 	else col = vSkyRealistic(rd, t, quality);
 
 #ifndef V1ZIR_SKY_CACHE
