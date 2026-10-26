@@ -3,6 +3,7 @@ package dev.v1zir.visuals.mixin;
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.effects.JumpCirclesModule;
+import dev.v1zir.visuals.module.impl.visuals.RainEffectsModule;
 import dev.v1zir.visuals.module.impl.visuals.SwingAnimationsModule;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.LivingEntity;
@@ -14,7 +15,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /**
  * Swing Animations speed (the swing duration only drives the arm animation; the swing packet and
  * the attack cooldown do not depend on it, so this is purely visual) and real jumps of the local
- * player for Jump Circles.
+ * player for Jump Circles and the Rain Effects splashes.
  */
 @Mixin(LivingEntity.class)
 public abstract class LivingEntityMixin {
@@ -31,5 +32,7 @@ public abstract class LivingEntityMixin {
 		if ((Object) this != MinecraftClient.getInstance().player) return;
 		JumpCirclesModule circles = ModuleManager.get(JumpCirclesModule.class);
 		if (circles != null && circles.isEnabled()) circles.onJump();
+		RainEffectsModule rain = ModuleManager.get(RainEffectsModule.class);
+		if (rain != null && rain.isEnabled()) rain.onJump();
 	}
 }
