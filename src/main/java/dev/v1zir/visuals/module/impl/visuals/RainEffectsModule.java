@@ -23,19 +23,25 @@ import net.minecraft.world.biome.Biome;
  * weak reflections, and raindrops ring on water (render/Reflections). The wetness builds up over the
  * rain and dries slowly after; nothing is drawn while everything is dry.
  * <p>
- * Jumping or landing on wet ground in the open (or in shallow water) splashes: a ripple ring with
- * a bright rim spreads on the ground and droplets fly up and out, bigger after a fall.
+ * Jumping or landing on wet ground in the open (or in shallow water) splashes as if into a puddle:
+ * a dark glossy patch of water appears underfoot for a moment, ripple rings spread from it and
+ * droplets fly up and out, bigger after a fall.
  */
 public final class RainEffectsModule extends Module implements WorldEffect {
 	private static final float TICK = 0.05f;
 	private static final float SOAK_SECONDS = 20f;
 	private static final float DRY_SECONDS = 60f;
 	private static final float RING_SECONDS = 0.6f;
-	private static final float SPLASH_SECONDS = 0.75f;
-	private static final float GRAVITY = 14f;
+	/** The puddle patch holds, then fades out by the end of the splash. */
+	private static final float PATCH_HOLD = 0.45f;
+	private static final float SPLASH_SECONDS = 1.0f;
+	private static final float GRAVITY = 12f;
 	private static final int SEGMENTS = 40;
+	private static final int PATCH_SEGMENTS = 28;
+	private static final int PUDDLE_COLOR = 0x0E1A22;
+	private static final int SHEEN_COLOR = 0xB4D2E6;
 	private static final int WATER_COLOR = 0xFFA8CCE0;
-	private static final int DROP_COLOR = 0xFFE4F2FA;
+	private static final int DROP_COLOR = 0xFFE8F4FC;
 
 	public final NumberSetting wetness = add(new NumberSetting("Wetness", 1.0, 0.1, 1.5, 0.05));
 	public final BoolSetting splashes = add(new BoolSetting("Splashes", true));
@@ -71,7 +77,7 @@ public final class RainEffectsModule extends Module implements WorldEffect {
 		// Landings: the higher the fall since leaving the ground, the bigger the splash.
 		boolean onGround = player.isOnGround();
 		if (!onGround) airTop = wasOnGround ? player.getY() : Math.max(airTop, player.getY());
-		else if (!wasOnGround) splash(0.6f + (float) Math.min(airTop - player.getY(), 6.0) * 0.15f);
+		else if (!wasOnGround) splash(0.75f + (float) Math.min(airTop - player.getY(), 6.0) * 0.15f);
 		wasOnGround = onGround;
 	}
 
@@ -83,7 +89,7 @@ public final class RainEffectsModule extends Module implements WorldEffect {
 
 	/** A real jump of the local player (LivingEntityMixin): a small take-off splash. */
 	public void onJump() {
-		splash(0.45f);
+		splash(0.6f);
 	}
 
 	private void splash(float size) {
@@ -97,7 +103,8 @@ public final class RainEffectsModule extends Module implements WorldEffect {
 		// Wet ground in the open while it rains: nothing above the block the player stands on.
 		if (!water && (rain < 0.2f || wet < 0.25f || world.getTopY(Heightmap.Type.MOTION_BLOCKING, (int) Math.floor(x), (int) Math.floor(z)) > y + 0.51)) return;
 		if (water) {
-			// On the water surface rather than the bottom of a shallow pool.
+			// Shallow water only, and on its surface rather than the bottom.
+			if (!world.getFluidState(pos.set(x, y + 1.0, z)).isEmpty()) return;
 			pos.set(x, y, z);
 			FluidState fluid = world.getFluidState(pos);
 			if (!fluid.isEmpty()) y = pos.getY() + fluid.getHeight(world, pos);
@@ -105,7 +112,7 @@ public final class RainEffectsModule extends Module implements WorldEffect {
 		size *= splashSize.f();
 		Splash s = splashList[nextSplash];
 		nextSplash = (nextSplash + 1) % splashList.length;
-		s.set(x, y + 0.02, z, size, System.nanoTime());
+		s.set(x, y + 0.015, z, size, System.nanoTime(), water);
 		if (splashSound.on()) {
 			world.playSoundClient(x, y, z, SoundEvents.ENTITY_PLAYER_SPLASH, SoundCategory.PLAYERS, 0.05f + 0.05f * size, 1.35f + hash(s.seed, 0, 0) * 0.3f, false);
 		}
@@ -123,10 +130,53 @@ public final class RainEffectsModule extends Module implements WorldEffect {
 				s.live = false;
 				continue;
 			}
+			if (!s.inWater) patch(water, glow, s, age);
 			ring(water, glow, s, age, 1f);
-			ring(water, glow, s, age - 0.12f, 0.6f);
-			drops(water, s, age);
+			ring(water, glow, s, age - 0.12f, 0.65f);
+			ring(water, glow, s, age - 0.24f, 0.4f);
+			drops(water, glow, s, age);
 		}
+	}
+
+	/**
+	 * The puddle the feet land in: a dark patch of water with a slightly irregular edge, a glossy
+	 * sheen towards its rim, spreading fast and drying away after the ripples.
+	 */
+	private static void patch(WorldEffectRenderer.Mesh water, WorldEffectRenderer.Mesh glow, Splash s, float age) {
+		float fade = age < PATCH_HOLD ? 1f : 1f - Anim.easeInOutCubic((age - PATCH_HOLD) / (SPLASH_SECONDS - PATCH_HOLD));
+		double radius = (0.3 + 0.25 * Anim.easeOutCubic(Math.min(age / 0.15f, 1f))) * s.size;
+		float phase = hash(s.seed, 0, 4) * 6.283f;
+		int dark = ColorUtil.withAlpha(PUDDLE_COLOR, Math.round(150f * fade));
+		int sheenIn = ColorUtil.withAlpha(SHEEN_COLOR, Math.round(12f * fade));
+		int sheenRim = ColorUtil.withAlpha(SHEEN_COLOR, Math.round(70f * fade));
+		for (int i = 0; i < PATCH_SEGMENTS; i++) {
+			double a0 = Math.PI * 2 * i / PATCH_SEGMENTS;
+			double a1 = Math.PI * 2 * (i + 1) / PATCH_SEGMENTS;
+			double r0 = radius * (1.0 + 0.14 * Math.sin(3 * a0 + phase) + 0.07 * Math.sin(5 * a0 - phase));
+			double r1 = radius * (1.0 + 0.14 * Math.sin(3 * a1 + phase) + 0.07 * Math.sin(5 * a1 - phase));
+			double c0 = Math.cos(a0), s0 = Math.sin(a0), c1 = Math.cos(a1), s1 = Math.sin(a1);
+			wedge(water, s, c0, s0, c1, s1, r0, r1, dark, dark);
+			wedge(glow, s, c0, s0, c1, s1, r0, r1, sheenIn, sheenRim);
+		}
+	}
+
+	/**
+	 * One slice of a flat disc: solid inside 80% of its radius, fading out to the edge. U = 3 selects
+	 * plain quads in world_effect.fsh, so the vertex alpha alone draws the soft edge.
+	 */
+	private static void wedge(WorldEffectRenderer.Mesh mesh, Splash s, double c0, double s0, double c1, double s1,
+							  double r0, double r1, int center, int rim) {
+		double i0 = r0 * 0.8;
+		double i1 = r1 * 0.8;
+		int clear = rim & 0xFFFFFF;
+		mesh.vertex(s.x, s.y, s.z, 3f, 0f, center);
+		mesh.vertex(s.x + c0 * i0, s.y, s.z + s0 * i0, 3f, 0f, rim);
+		mesh.vertex(s.x + c1 * i1, s.y, s.z + s1 * i1, 3f, 0f, rim);
+		mesh.vertex(s.x, s.y, s.z, 3f, 0f, center);
+		mesh.vertex(s.x + c0 * i0, s.y, s.z + s0 * i0, 3f, 0f, rim);
+		mesh.vertex(s.x + c0 * r0, s.y, s.z + s0 * r0, 3f, 0f, clear);
+		mesh.vertex(s.x + c1 * r1, s.y, s.z + s1 * r1, 3f, 0f, clear);
+		mesh.vertex(s.x + c1 * i1, s.y, s.z + s1 * i1, 3f, 0f, rim);
 	}
 
 	/** A ripple spreading on the ground: a water-coloured band with a bright, thin rim. */
@@ -134,21 +184,22 @@ public final class RainEffectsModule extends Module implements WorldEffect {
 		if (age <= 0f || age >= RING_SECONDS) return;
 		float p = age / RING_SECONDS;
 		float fade = (1f - p) * (1f - p);
-		double r = (0.2 + Anim.easeOutCubic(p) * 0.9) * s.size * scale;
-		Draw3D.flatRing(water, s.x, s.y, s.z, r, 0.1 * s.size * scale, SEGMENTS, ringColor.set(WATER_COLOR, WATER_COLOR, 0f, 0.5f * fade, SEGMENTS));
-		Draw3D.flatRing(glow, s.x, s.y + 0.005, s.z, r + 0.03 * s.size, 0.025, SEGMENTS, rimColor.set(DROP_COLOR, DROP_COLOR, 0f, 0.55f * fade, SEGMENTS));
+		double r = (0.25 + Anim.easeOutCubic(p) * 1.0) * s.size * scale;
+		Draw3D.flatRing(water, s.x, s.y + 0.005, s.z, r, 0.09 * s.size * scale, SEGMENTS, ringColor.set(WATER_COLOR, WATER_COLOR, 0f, 0.55f * fade, SEGMENTS));
+		Draw3D.flatRing(glow, s.x, s.y + 0.01, s.z, r + 0.03 * s.size, 0.03, SEGMENTS, rimColor.set(DROP_COLOR, DROP_COLOR, 0f, 0.8f * fade, SEGMENTS));
 	}
 
-	/** Droplets thrown up and out, each a short streak along its flight, gone once back on the ground. */
-	private static void drops(WorldEffectRenderer.Mesh mesh, Splash s, float age) {
-		int count = 6 + Math.round(6f * s.size);
-		int alpha = Math.round(217f * (1f - age / SPLASH_SECONDS));
+	/** Droplets thrown up and out, each a streak along its flight with a glint at its head, gone once back down. */
+	private static void drops(WorldEffectRenderer.Mesh mesh, WorldEffectRenderer.Mesh glow, Splash s, float age) {
+		int count = 10 + Math.round(10f * s.size);
+		int alpha = Math.round(235f * (1f - age / SPLASH_SECONDS));
 		int head = ColorUtil.withAlpha(DROP_COLOR, alpha);
 		int tail = ColorUtil.withAlpha(DROP_COLOR, alpha / 5);
+		int glint = ColorUtil.withAlpha(DROP_COLOR, alpha / 2);
 		for (int i = 0; i < count; i++) {
 			double angle = (i + hash(s.seed, i, 1) * 0.7) / count * Math.PI * 2.0;
 			double out = (0.8 + 1.4 * hash(s.seed, i, 2)) * s.size;
-			double up = (1.4 + 1.6 * hash(s.seed, i, 3)) * Math.sqrt(s.size);
+			double up = (1.8 + 2.0 * hash(s.seed, i, 3)) * Math.sqrt(s.size);
 			double height = up * age - 0.5 * GRAVITY * age * age;
 			if (height < 0.0) continue;
 			double vx = Math.cos(angle) * out;
@@ -157,7 +208,8 @@ public final class RainEffectsModule extends Module implements WorldEffect {
 			double x = s.x + vx * age;
 			double y = s.y + height;
 			double z = s.z + vz * age;
-			Draw3D.line(mesh, x, y, z, x - vx * 0.035, y - vy * 0.035, z - vz * 0.035, 0.016f * (float) Math.sqrt(s.size), head, tail);
+			Draw3D.line(mesh, x, y, z, x - vx * 0.05, y - vy * 0.05, z - vz * 0.05, 0.024f * (float) Math.sqrt(s.size), head, tail);
+			glow.orb(x, y, z, 0.035f, glint);
 		}
 	}
 
@@ -201,15 +253,17 @@ public final class RainEffectsModule extends Module implements WorldEffect {
 		float size;
 		long born;
 		int seed;
+		boolean inWater;
 		boolean live;
 
-		void set(double x, double y, double z, float size, long born) {
+		void set(double x, double y, double z, float size, long born, boolean inWater) {
 			this.x = x;
 			this.y = y;
 			this.z = z;
 			this.size = size;
 			this.born = born;
 			this.seed = (int) (born ^ born >>> 32);
+			this.inWater = inWater;
 			this.live = true;
 		}
 	}

@@ -41,7 +41,8 @@ struct SurfaceInfo {
 	vec3 tint;       // reflection weight per channel: Fresnel, metal tint and strength
 	float diffuse;   // how much of the surface's own colour stays
 	float wet;       // darkening by a water film
-	float metallic;  // 1 where the reflection takes the surface's colour (metal)
+	float metallic;  // 1 where the reflection takes the surface's colour (metal blocks)
+	float satin;     // how much the surface turns into polished satin metal (Metal mode)
 	float roughness;
 	float glint;     // weight of the sun or moon highlight
 	float exposure;  // 1 under the open sky, 0 under a roof
@@ -139,6 +140,13 @@ float rHash(vec2 p) {
 	return fract((p3.x + p3.y) * p3.z);
 }
 
+float rNoise(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = p - i;
+	f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(rHash(i), rHash(i + vec2(1.0, 0.0)), f.x), mix(rHash(i + vec2(0.0, 1.0)), rHash(i + 1.0), f.x), f.y);
+}
+
 // Gentle wind waves on water: the slope of four travelling sines.
 vec2 rWaves(vec2 xz) {
 	float t = CameraFrac.w;
@@ -181,6 +189,38 @@ vec3 rMetal(vec3 albedo, float cosTheta, float roughness) {
 	vec3 f0 = mix(hue, sqrt(albedo) * 0.9, 0.35);
 	float m = 1.0 - clamp(cosTheta, 0.0, 1.0);
 	return f0 + max(vec3(0.75 - 1.5 * roughness) - f0, 0.0) * (m * m * m * m * m);
+}
+
+// Polished satin metal (Metal mode): the block's texture smoothed away by averaging the frame over
+// half a block of the surface around the point (taps on its plane, so other surfaces never leak in),
+// then turned into a bright pale base under the same light that only hints at the block's hue and
+// takes a little of the sky's colour, as polished metal under an open sky does.
+vec3 rSatin(ivec2 p, SurfaceInfo s) {
+	vec3 n = s.normal;
+	vec3 t1 = normalize(cross(n, abs(n.y) > 0.9 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0)));
+	vec3 t2 = cross(n, t1);
+	vec3 here = texelFetch(Sampler0, p, 0).rgb;
+	vec3 sum = here;
+	float count = 1.0;
+	for (int i = 0; i < 8; i++) {
+		float a = float(i) * 2.39996;
+		vec3 q = s.pos + (t1 * cos(a) + t2 * sin(a)) * (0.12 + 0.05 * float(i));
+		vec4 c = ViewProj * vec4(q, 1.0);
+		if (c.w <= 0.1) continue;
+		ivec2 t = ivec2((c.xy / c.w * 0.5 + 0.5) * Screen.xy);
+		if (any(lessThan(t, ivec2(0))) || any(greaterThanEqual(t, ivec2(Screen.xy)))) continue;
+		if (abs(dot(rPosition(t) - s.pos, n)) > 0.06) continue;
+		sum += texelFetch(Sampler0, t, 0).rgb;
+		count += 1.0;
+	}
+	vec3 average = sum / count;
+	const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
+	float light = dot(average, LUMA);
+	vec3 hint = mix(vec3(1.0), average / max(light, 0.001), 0.12);
+	hint *= mix(vec3(1.0), FogColor.rgb / max(dot(FogColor.rgb, LUMA), 0.05), 0.2 * s.exposure);
+	// A faint trace of the texture stays.
+	float detail = mix(1.0, dot(here, LUMA) / max(light, 0.001), 0.12);
+	return clamp(hint * (0.9 * pow(light / 0.45, 0.6) * detail), 0.0, 1.0);
 }
 
 // Everything the passes need about the surface under a full-resolution pixel; false where nothing
@@ -234,6 +274,7 @@ bool rSurface(ivec2 p, out SurfaceInfo s) {
 	s.diffuse = 1.0;
 	s.wet = 0.0;
 	s.metallic = 0.0;
+	s.satin = 0.0;
 	s.roughness = 0.0;
 	s.glint = 0.0;
 	s.exposure = exposure;
@@ -250,11 +291,15 @@ bool rSurface(ivec2 p, out SurfaceInfo s) {
 	}
 	float cosV = dot(-view, n);
 	if (metal) {
-		s.roughness = 0.03 + 0.6 * Shading.z;
-		s.tint = min(rMetal(texelFetch(Sampler0, p, 0).rgb, cosV, s.roughness) * (material == FOLIAGE ? 0.5 * strength : strength), vec3(1.0));
-		s.diffuse = mix(1.0, 0.45, min(strength, 1.0)) * (1.0 - 0.5 * dot(s.tint, vec3(0.3333)));
-		s.metallic = 1.0;
-		s.glint = exposure * (0.4 + 0.6 * dot(s.tint, vec3(0.3333)));
+		// Polished satin metal: a smooth pale base (rSatin) under soft reflections that take their
+		// colour from the sky and the scene, with a gentle Fresnel.
+		float m = 1.0 - clamp(cosV, 0.0, 1.0);
+		float f = min((0.28 + 0.5 * m * m * m) * strength, 1.0);
+		s.tint = vec3(material == FOLIAGE ? 0.5 * f : f);
+		s.diffuse = 1.0 - s.tint.x;
+		s.satin = (material == FOLIAGE ? 0.5 : 1.0) * min(strength, 1.0);
+		s.roughness = 0.3 + 0.5 * Shading.z;
+		s.glint = exposure * 0.6;
 	} else if (glossy) {
 		// Metal blocks keep their colour in the reflection; glass, ice and polished stone a faint sheen.
 		s.roughness = 0.08 + 0.4 * Shading.z;
@@ -265,13 +310,15 @@ bool rSurface(ivec2 p, out SurfaceInfo s) {
 		s.glint = exposure * 0.5;
 	}
 	if (rain) {
-		// A thin film of water: darker, a little more saturated, a soft sheen and weak blurred
-		// reflections; tops soak through, walls only get damp.
+		// A thin film of water: darker, more saturated, glossy with fairly sharp reflections like a
+		// wet road; tops soak through, walls only get damp, and the gloss varies a little over the
+		// ground in large soft patches (never pools).
 		float wet = clamp(Weather.x * open * (n.y > 0.5 ? 1.0 : 0.45), 0.0, 1.0) * (material == FOLIAGE ? 0.5 : 1.0);
-		float f = rSchlick(0.04, cosV) * 0.45 * wet;
+		float gloss = 0.55 + 0.45 * rNoise(xz * 0.3);
+		float f = rSchlick(0.04, cosV) * 0.65 * wet * gloss;
 		if (f > max(s.tint.r, max(s.tint.g, s.tint.b))) {
 			s.tint = vec3(f);
-			s.roughness = metal || glossy ? min(s.roughness, 0.3) : 0.3;
+			s.roughness = metal || glossy ? min(s.roughness, 0.15) : 0.15;
 		}
 		s.diffuse = min(s.diffuse, 1.0 - f);
 		s.wet = wet;
