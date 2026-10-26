@@ -3,11 +3,13 @@ package dev.v1zir.visuals.mixin;
 import com.llamalad7.mixinextras.sugar.Local;
 import dev.v1zir.visuals.module.impl.world.BlockHighlightModule;
 import dev.v1zir.visuals.module.impl.world.BreakEffectsModule;
+import dev.v1zir.visuals.render.Reflections;
 import dev.v1zir.visuals.render.sky.SkyRenderer;
 import dev.v1zir.visuals.render.world.WorldEffectRenderer;
 import net.minecraft.client.render.RenderTickCounter;
 import net.minecraft.client.render.WorldRenderer;
 import org.joml.Matrix4f;
+import org.joml.Vector4f;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -29,10 +31,21 @@ public abstract class WorldRendererMixin {
 		WorldEffectRenderer.captureMatrices(positionMatrix, projectionMatrix);
 	}
 
-	/** The world is fully rendered: draw the 3D effects on top, depth tested. */
+	/** Reflections reconstruct positions with the same matrices and fall back to the fog colour (the Vector4f argument). */
+	@Inject(method = "render", at = @At("HEAD"))
+	private void v1zir$captureReflections(CallbackInfo ci,
+										  @Local(argsOnly = true, ordinal = 0) Matrix4f positionMatrix,
+										  @Local(argsOnly = true, ordinal = 1) Matrix4f projectionMatrix,
+										  @Local(argsOnly = true) Vector4f fogColor) {
+		Reflections.captureFrame(positionMatrix, projectionMatrix, fogColor);
+	}
+
+	/** The world is fully rendered: reflections and wetness first, then the 3D effects on top, depth tested. */
 	@Inject(method = "render", at = @At("TAIL"))
 	private void v1zir$renderEffects(CallbackInfo ci, @Local(argsOnly = true) RenderTickCounter tickCounter) {
-		WorldEffectRenderer.render(tickCounter.getTickProgress(false));
+		float tickDelta = tickCounter.getTickProgress(false);
+		Reflections.render(tickDelta);
+		WorldEffectRenderer.render(tickDelta);
 	}
 
 	@Inject(method = "renderClouds", at = @At("HEAD"), cancellable = true)

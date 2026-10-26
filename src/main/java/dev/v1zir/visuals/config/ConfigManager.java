@@ -65,7 +65,7 @@ public final class ConfigManager {
 
 	/** First launch: a tasteful set of modules turned on. */
 	private static void applyDefaults() {
-		enable("Shader Sky", "Watermark", "Array List", "Keybinds", "Potions", "Target Hud", "Notifications", "Target ESP", "Jump Circles", "Zoom");
+		enable("Shader Sky", "Watermark", "Array List", "Keybinds", "Potions", "Target Hud", "Notifications", "Target ESP", "Jump Circles", "Zoom", "Rain Effects");
 	}
 
 	private static void enable(String... names) {

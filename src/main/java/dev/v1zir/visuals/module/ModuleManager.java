@@ -39,6 +39,7 @@ import dev.v1zir.visuals.module.impl.hud.TargetHudModule;
 import dev.v1zir.visuals.module.impl.hud.WatermarkModule;
 import dev.v1zir.visuals.module.impl.visuals.AmbienceModule;
 import dev.v1zir.visuals.module.impl.visuals.AspectRatioModule;
+import dev.v1zir.visuals.module.impl.visuals.BlockReflectionModule;
 import dev.v1zir.visuals.module.impl.visuals.CameraTweaksModule;
 import dev.v1zir.visuals.module.impl.visuals.ColorGradingModule;
 import dev.v1zir.visuals.module.impl.visuals.DamageTintModule;
@@ -49,6 +50,7 @@ import dev.v1zir.visuals.module.impl.visuals.GlintColorModule;
 import dev.v1zir.visuals.module.impl.visuals.HandChamsModule;
 import dev.v1zir.visuals.module.impl.visuals.NametagsModule;
 import dev.v1zir.visuals.module.impl.visuals.NoRenderModule;
+import dev.v1zir.visuals.module.impl.visuals.RainEffectsModule;
 import dev.v1zir.visuals.module.impl.visuals.ShaderSkyModule;
 import dev.v1zir.visuals.module.impl.visuals.SwingAnimationsModule;
 import dev.v1zir.visuals.module.impl.visuals.ViewModelModule;
@@ -100,6 +102,8 @@ public final class ModuleManager {
 		register(new NoRenderModule());
 		register(new DamageTintModule());
 		register(new ColorGradingModule());
+		register(new BlockReflectionModule());
+		register(new RainEffectsModule());
 		register(new EntityGlowModule());
 		register(new NametagsModule());
 		// impl.effects

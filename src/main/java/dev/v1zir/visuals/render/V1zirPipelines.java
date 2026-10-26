@@ -154,6 +154,11 @@ public final class V1zirPipelines {
 		.withCull(false)
 		.build();
 
+	/** Reflections and rain (render/Reflections): traces the reflected rays, usually at half resolution. */
+	public static final RenderPipeline REFLECT_TRACE = reflectPipeline("reflect_trace", 4);
+	/** Composites the traced reflections and the wet look back onto the frame. */
+	public static final RenderPipeline REFLECT_COMPOSITE = reflectPipeline("reflect_composite", 5);
+
 	/** Click GUI open and close animations: the captured window composited over the frame (render/GuiCapture). */
 	public static final RenderPipeline GUI_TRANSITION = RenderPipeline.builder()
 		.withLocation(V1zir.id("pipeline/gui_transition"))
@@ -215,6 +220,22 @@ public final class V1zirPipelines {
 			.build();
 	}
 
+	/** Full screen pass of the reflections: the frame, its depth, the block textures (and the traces). */
+	private static RenderPipeline reflectPipeline(String name, int samplers) {
+		RenderPipeline.Builder builder = RenderPipeline.builder()
+			.withLocation(V1zir.id("pipeline/" + name))
+			.withVertexShader(V1zir.id("core/fullscreen"))
+			.withFragmentShader(V1zir.id("core/" + name))
+			.withVertexFormat(VertexFormats.POSITION, VertexFormat.DrawMode.TRIANGLES)
+			.withUniform("ReflectParams", UniformType.UNIFORM_BUFFER)
+			.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+			.withDepthWrite(false)
+			.withoutBlend()
+			.withCull(false);
+		for (int i = 0; i < samplers; i++) builder.withSampler("Sampler" + i);
+		return builder.build();
+	}
+
 	private static RenderPipeline worldPipeline(String name, BlendFunction blend, boolean depthTest) {
 		// Effects are always depth tested against the world: purely visual, nothing shows through walls.
 		return RenderPipeline.builder()
@@ -258,6 +279,8 @@ public final class V1zirPipelines {
 		RenderPipelines.register(SKY_PANORAMA);
 		RenderPipelines.register(SKY_CACHED);
 		RenderPipelines.register(COLOR_GRADE);
+		RenderPipelines.register(REFLECT_TRACE);
+		RenderPipelines.register(REFLECT_COMPOSITE);
 		RenderPipelines.register(GUI_TRANSITION);
 		RenderPipelines.register(GUI_SHARDS);
 		RenderPipelines.register(BLUR_DOWN);
