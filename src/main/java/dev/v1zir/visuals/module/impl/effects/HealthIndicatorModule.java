@@ -14,6 +14,8 @@ import dev.v1zir.visuals.render.world.WorldText;
 import dev.v1zir.visuals.util.Anim;
 import dev.v1zir.visuals.util.ColorUtil;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.ints.IntArrays;
+import it.unimi.dsi.fastutil.ints.IntComparator;
 import net.minecraft.client.texture.Sprite;
 import net.minecraft.client.texture.SpriteAtlasTexture;
 import net.minecraft.client.world.ClientWorld;
@@ -61,8 +63,10 @@ public final class HealthIndicatorModule extends Module implements WorldEffect {
 	public final BoolSetting number = add(new BoolSetting("Number", false));
 
 	private final Int2ObjectOpenHashMap<Entry> byId = new Int2ObjectOpenHashMap<>();
-	/** The same entries as a list, kept sorted back to front while drawing. */
+	/** The same entries as a list, so drawing iterates without an iterator, and their drawing order (back to front). */
 	private final List<Entry> entries = new ArrayList<>();
+	private int[] order = new int[16];
+	private final IntComparator backToFront = (a, b) -> Float.compare(entries.get(b).dist, entries.get(a).dist);
 	private final WorldText.Style text = new WorldText.Style().weight(0.05f).shadow().align(WorldText.Align.LEFT);
 	/** Entity ids start over in a new world, and so does the verdict on hidden health. */
 	private ClientWorld world;
@@ -159,15 +163,13 @@ public final class HealthIndicatorModule extends Module implements WorldEffect {
 			}
 			e.dist = distance(e);
 		}
-		// Back to front, so nearer hearts blend over farther ones; the order barely changes between frames.
-		for (int i = 1; i < entries.size(); i++) {
-			Entry e = entries.get(i);
-			int j = i - 1;
-			for (; j >= 0 && entries.get(j).dist < e.dist; j--) entries.set(j + 1, entries.get(j));
-			entries.set(j + 1, e);
-		}
-		for (int i = 0; i < entries.size(); i++) {
-			Entry e = entries.get(i);
+		// Back to front, so nearer hearts blend over farther ones.
+		int n = entries.size();
+		if (order.length < n) order = new int[n * 2];
+		for (int i = 0; i < n; i++) order[i] = i;
+		IntArrays.quickSort(order, 0, n, backToFront);
+		for (int i = 0; i < n; i++) {
+			Entry e = entries.get(order[i]);
 			float fade = e.appear.get();
 			if (fade > 0.01f) draw(e, view, fade);
 		}
@@ -203,7 +205,8 @@ public final class HealthIndicatorModule extends Module implements WorldEffect {
 		float left = (size - width) * 0.5f;
 		int tint = ColorUtil.withAlpha(0xFFFFFF, Math.round(255f * fade));
 		boolean through = throughWalls.on();
-		for (int i = 0; i < hearts; i++) {
+		// Last heart first, as vanilla draws them: each overlaps the next one by a pixel.
+		for (int i = hearts - 1; i >= 0; i--) {
 			float dx = left + (i % PER_ROW) * 8f * px;
 			float dy = (i / PER_ROW) * 10f * px + size * 0.5f;
 			WorldSprites.draw(e.x, e.y, e.z, dx, dy, size, size, container, view, through, tint);
