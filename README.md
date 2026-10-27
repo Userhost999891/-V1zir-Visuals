@@ -12,7 +12,13 @@ krawędzie w każdej skali GUI), rozmyte "szklane" panele i własne fonty render
 - **Ekran blokady** jak w telefonie: duży zegar, data i powitanie zależne od pory dnia
   („Dzień dobry”, „Dobry wieczór”, „Dobranoc” + nick). Przeciągnij w górę (albo kółko, dowolny
   klawisz, klik w napis na dole), a menu wysuwa się z animacją.
-- Tło to animowany shader (domyślnie Magma), u góry mały zegar z powitaniem.
+- Osobna tapeta dla ekranu blokady (domyślnie nowy **Żar**) i ekranu głównego (domyślnie **Magma**):
+  6 animowanych tapet (Żar, Toń, Jedwab, Gwiezdny pył, Poświata, Wydmy), wszystkie niebiosa shadera
+  oraz własne obrazy PNG / JPG / animowane GIF z `config/v1zir/wallpapers`.
+- **Przytrzymaj** lewy przycisk myszy przez 3 s na pustym miejscu ekranu, żeby zmienić jego tapetę:
+  karuzela kart z podglądem na żywo, rozmycie i przyciemnienie, dla obrazów Wypełnij / Dopasuj i ruch,
+  „Dodaj obraz…”, folder, usuwanie oraz opcja „Na obu ekranach”.
+- U góry ekranu głównego mały zegar z powitaniem.
 - Okrągłe przyciski z ikonami: matowe, rozmyte wypełnienie, które po najechaniu rozjaśnia się od
   środka; sterowanie także klawiaturą (Tab / strzałki / Enter).
 - Ustawienia w module **Main Menu**: ekran blokady, blokada po wyjściu ze świata, 12/24 h,

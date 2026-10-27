@@ -885,6 +885,15 @@ final class WallpaperEditor {
 		go(focus);
 	}
 
+	/** The title screen went away: the picker closes without saving and frees its cards. */
+	void dispose() {
+		open = false;
+		zoom.snap(0f);
+		e = 0f;
+		drafts.clear();
+		release();
+	}
+
 	/** Frees every card once the picker has zoomed back in. */
 	private void release() {
 		if (cards.isEmpty()) return;

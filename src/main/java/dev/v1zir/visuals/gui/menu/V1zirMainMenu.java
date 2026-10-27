@@ -411,6 +411,12 @@ public final class V1zirMainMenu extends Screen {
 	}
 
 	@Override
+	public void removed() {
+		editor.dispose();
+		swallowRelease = false;
+	}
+
+	@Override
 	public boolean shouldCloseOnEsc() {
 		return false;
 	}
