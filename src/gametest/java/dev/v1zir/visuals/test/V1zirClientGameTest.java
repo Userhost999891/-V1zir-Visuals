@@ -9,12 +9,14 @@ import dev.v1zir.visuals.module.impl.client.ClickGuiModule;
 import dev.v1zir.visuals.module.impl.client.MainMenuModule;
 import dev.v1zir.visuals.module.impl.client.ThemeModule;
 import dev.v1zir.visuals.module.impl.effects.CrosshairModule;
+import dev.v1zir.visuals.module.impl.effects.HealthIndicatorModule;
 import dev.v1zir.visuals.module.impl.effects.JumpCirclesModule;
 import dev.v1zir.visuals.module.impl.hud.ArmorModule;
 import dev.v1zir.visuals.module.impl.hud.ArrayListModule;
 import dev.v1zir.visuals.module.impl.hud.ClockModule;
 import dev.v1zir.visuals.module.impl.hud.CompassModule;
 import dev.v1zir.visuals.module.impl.hud.CoordinatesModule;
+import dev.v1zir.visuals.module.impl.hud.CustomIndicatorsModule;
 import dev.v1zir.visuals.module.impl.hud.InventoryModule;
 import dev.v1zir.visuals.module.impl.hud.ItemCounterModule;
 import dev.v1zir.visuals.module.impl.hud.KeybindsModule;
@@ -89,6 +91,8 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			hud(context, singleplayer);
 			hudElements(context, singleplayer);
 			targetHud(context, singleplayer);
+			customIndicators(context, singleplayer);
+			healthIndicator(context, singleplayer);
 			reflections(context, singleplayer);
 			clickGui(context);
 
@@ -460,6 +464,60 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.takeScreenshot("target-hud-mob");
 		context.runOnClient(client -> ModuleManager.get(TargetHudModule.class).setEnabled(wasOn, false));
 		singleplayer.getServer().runCommand("kill @e[tag=v1zir_target]");
+		context.waitTicks(25);
+	}
+
+	/** Custom Indicators over the hotbar with the player hurt, a little hungry, absorbing and a few levels up. */
+	private static void customIndicators(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
+		context.runOnClient(client -> {
+			CustomIndicatorsModule bars = ModuleManager.get(CustomIndicatorsModule.class);
+			bars.experience.set(true);
+			bars.setEnabled(true, false);
+		});
+		for (String command : List.of("damage @a 7 minecraft:generic", "effect give @a minecraft:hunger 2 255 true",
+			"effect give @a minecraft:absorption 30 0 true", "xp add @a 7 levels", "xp add @a 30 points")) {
+			singleplayer.getServer().runCommand(command);
+		}
+		context.waitTicks(60);
+		context.takeScreenshot("custom-indicators");
+		context.runOnClient(client -> {
+			CustomIndicatorsModule bars = ModuleManager.get(CustomIndicatorsModule.class);
+			bars.setEnabled(false, false);
+			bars.experience.reset();
+		});
+		// Full health and food and no experience again for the screenshots after this one.
+		for (String command : List.of("effect clear @a minecraft:absorption", "effect give @a minecraft:instant_health 1 5 true",
+			"effect give @a minecraft:saturation 1 10 true", "xp set @a 0 levels", "xp set @a 0 points")) {
+			singleplayer.getServer().runCommand(command);
+		}
+		context.waitTicks(10);
+	}
+
+	/**
+	 * Health Indicator over mobs (no other player can join the test world): halves and empty hearts on a husk with
+	 * the number on, and one row standing for "x5" on an iron golem.
+	 */
+	private static void healthIndicator(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
+		context.runOnClient(client -> {
+			HealthIndicatorModule hearts = ModuleManager.get(HealthIndicatorModule.class);
+			hearts.mobs.set(true);
+			hearts.number.set(true);
+			hearts.setEnabled(true, false);
+		});
+		singleplayer.getServer().runCommand("execute as @a at @s run summon minecraft:husk ^0.8 ^ ^4 "
+			+ "{NoAI:1b,Silent:1b,PersistenceRequired:1b,Health:13f,Tags:[\"v1zir_hearts\"],DeathLootTable:\"minecraft:empty\"}");
+		singleplayer.getServer().runCommand("execute as @a at @s run summon minecraft:iron_golem ^-1.8 ^ ^5.5 "
+			+ "{NoAI:1b,Silent:1b,Health:73f,Tags:[\"v1zir_hearts\"],DeathLootTable:\"minecraft:empty\"}");
+		singleplayer.getServer().runCommand("execute as @a at @s anchored eyes run tp @s ~ ~ ~ facing entity @e[tag=v1zir_hearts,sort=nearest,limit=1] eyes");
+		context.waitTicks(30);
+		context.takeScreenshot("health-indicator");
+		context.runOnClient(client -> {
+			HealthIndicatorModule hearts = ModuleManager.get(HealthIndicatorModule.class);
+			hearts.setEnabled(false, false);
+			hearts.mobs.reset();
+			hearts.number.reset();
+		});
+		singleplayer.getServer().runCommand("kill @e[tag=v1zir_hearts]");
 		context.waitTicks(25);
 	}
 

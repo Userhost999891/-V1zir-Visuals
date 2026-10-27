@@ -184,7 +184,8 @@ public final class CustomIndicatorsModule extends HudModule {
 		float rx = lx + column + gapX;
 		float bottom = y + height - pad;
 		float base = Render2D.alpha();
-		if (xpS > 0.01f) bar(ctx, xp, lx, bottom - row, w - pad * 2f, row, compact, false, Icons.SPARKLE, base * xp.shown.get());
+		float xpAlpha = xp.shown.get();
+		if (xpAlpha > 0.01f) bar(ctx, xp, lx, bottom - row, w - pad * 2f, row, compact, false, Icons.SPARKLE, base * xpAlpha);
 		bottom -= xpS * (row + ROW_GAP);
 		bar(ctx, health, lx, bottom - row, column, row, compact, false, Icons.HEART, base);
 		bar(ctx, food, rx, bottom - row, column, row, compact, true, Icons.CHERRY, base);
