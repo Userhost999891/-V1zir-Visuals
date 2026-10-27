@@ -200,7 +200,7 @@ public final class V1zirMainMenu extends Screen {
 			WallpaperStyle style = Wallpapers.style(Wallpapers.Screen.LOCK);
 			boolean ready = WallpaperRenderer.queueScreen(WallpaperRenderer.LOCK, Wallpapers.selected(Wallpapers.Screen.LOCK), style, px, py);
 			// While its content shows, the lock screen's glass blurs its own wallpaper rather than the home screen's.
-			if (ready && lock.progress() < 0.35f) WallpaperRenderer.backdrop(WallpaperRenderer.LOCK);
+			if (ready && lock.contentShown()) WallpaperRenderer.backdrop(WallpaperRenderer.LOCK);
 			lock.renderSheet(ctx, width, height, ready ? WallpaperRenderer.LOCK.textureSetup() : null, style.tint(WallpaperEditor.LEVEL));
 		}
 		float intro = Anim.easeInOutSine(Anim.progress(t, 0f, 1.1f));

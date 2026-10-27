@@ -32,6 +32,8 @@ public final class LockScreen {
 	private static final float HINT_AREA = 0.8f;
 	/** How far the sheet has gone when an action it was opened into runs. */
 	private static final float ACTION_AT = 0.5f;
+	/** The content fades out over the first 1 / FADE of the slide. */
+	private static final float FADE = 2.6f;
 	private static final Render2D.TextStyle CLOCK = new Render2D.TextStyle().weight(0f);
 	/** A soft, slightly offset copy of the digits under them gives the clock depth. */
 	private static final Render2D.TextStyle DEPTH = new Render2D.TextStyle().weight(0.06f).soft(0.3f);
@@ -127,9 +129,9 @@ public final class LockScreen {
 		return locked || progress < 0.999f;
 	}
 
-	/** How far the sheet has gone this frame. */
-	float progress() {
-		return progress;
+	/** Whether the content (and so its glass) can still be seen; it is gone early in the slide. */
+	boolean contentShown() {
+		return progress < 1f / FADE;
 	}
 
 	void unlock() {
@@ -259,7 +261,7 @@ public final class LockScreen {
 		renderHint(ctx, width, height, t, time, clock.hint, lift, fade, mouseX, mouseY);
 		widgets.begin();
 		float p = Math.max(progress, 0f);
-		float alpha = appear * Anim.clamp01(1f - p * 2.6f) * fade;
+		float alpha = appear * Anim.clamp01(1f - p * FADE) * fade;
 		if (alpha <= 0.004f) return;
 		float cx = width / 2f;
 		Matrix3x2fStack matrices = ctx.getMatrices();
