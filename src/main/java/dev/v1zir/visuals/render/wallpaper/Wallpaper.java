@@ -4,6 +4,7 @@ import dev.v1zir.visuals.render.sky.SkyPreset;
 import org.jetbrains.annotations.Nullable;
 
 import java.nio.file.Path;
+import java.util.Locale;
 
 /**
  * One wallpaper of the title screen: a dedicated wallpaper shader (wallpaper.fsh), a sky preset seen from the menu's
@@ -24,6 +25,7 @@ public final class Wallpaper {
 	public final SkyPreset preset;
 	@Nullable
 	public final Path file;
+	private final boolean gif;
 
 	private Wallpaper(Kind kind, String id, String name, String polishName, int shader, @Nullable SkyPreset preset, @Nullable Path file) {
 		this.kind = kind;
@@ -33,6 +35,7 @@ public final class Wallpaper {
 		this.shader = shader;
 		this.preset = preset;
 		this.file = file;
+		gif = file != null && file.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".gif");
 	}
 
 	static Wallpaper shader(String key, String name, String polishName, int index) {
@@ -40,7 +43,7 @@ public final class Wallpaper {
 	}
 
 	static Wallpaper sky(SkyPreset preset) {
-		return new Wallpaper(Kind.SKY, "sky:" + preset.name().toLowerCase(), preset.title(), preset.title(), -1, preset, null);
+		return new Wallpaper(Kind.SKY, "sky:" + preset.name().toLowerCase(Locale.ROOT), preset.title(), preset.title(), -1, preset, null);
 	}
 
 	static Wallpaper image(Path file) {
@@ -54,7 +57,8 @@ public final class Wallpaper {
 		return polish ? polishName : name;
 	}
 
+	/** An animated picture (its frames are small already, and cards share them). */
 	public boolean gif() {
-		return file != null && file.getFileName().toString().toLowerCase().endsWith(".gif");
+		return gif;
 	}
 }

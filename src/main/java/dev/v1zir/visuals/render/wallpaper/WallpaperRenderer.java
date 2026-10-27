@@ -219,7 +219,7 @@ public final class WallpaperRenderer {
 	public static void flip() {
 		frame++;
 		if (storage != null) storage.clear();
-		for (Runnable release : RETIRED) release.run();
+		for (int i = 0; i < RETIRED.size(); i++) RETIRED.get(i).run();
 		RETIRED.clear();
 		WallpaperImages.tick();
 	}

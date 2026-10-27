@@ -410,7 +410,7 @@ final class WallpaperEditor {
 		SdfFont font = Fonts.semibold();
 		String confirm = polish ? "Usunąć?" : "Delete?";
 		float size = 18f;
-		float w = size + a * (font.width(confirm, 7f) + 8f);
+		float w = size + a * (delete.label.width(font, confirm, 7f) + 8f);
 		delete.set(right - 8f - w, top + 8f, w, size, Anim.clamp01(e * 2f - 1f));
 		float hover = delete.hover(mouseX, mouseY);
 		Render2D.shadow(ctx, delete.x, delete.y + 1f, delete.w, delete.h, size / 2f, 8f, 0x60000000);

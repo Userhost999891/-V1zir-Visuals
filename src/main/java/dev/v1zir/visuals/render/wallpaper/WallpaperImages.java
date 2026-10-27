@@ -53,6 +53,7 @@ public final class WallpaperImages {
 	private static final ConcurrentLinkedQueue<Decoded> DECODED = new ConcurrentLinkedQueue<>();
 	private static final List<Decoded> UPLOADING = new ArrayList<>();
 	private static ExecutorService worker;
+	private static long nextEviction;
 
 	private WallpaperImages() {
 	}
@@ -151,6 +152,7 @@ public final class WallpaperImages {
 
 	/** Once per frame, after it was drawn: uploads decoded frames and frees pictures nothing drew for a while. */
 	static void tick() {
+		if (FULL.isEmpty() && SMALL.isEmpty() && UPLOADING.isEmpty() && DECODED.isEmpty()) return;
 		for (Decoded decoded; (decoded = DECODED.poll()) != null; ) UPLOADING.add(decoded);
 		int budget = UPLOADS_PER_FRAME;
 		for (int i = 0; i < UPLOADING.size() && budget > 0; ) {
@@ -160,6 +162,8 @@ public final class WallpaperImages {
 			else i++;
 		}
 		long now = System.nanoTime();
+		if (now < nextEviction) return;
+		nextEviction = now + 1_000_000_000L;
 		evict(FULL, now);
 		evict(SMALL, now);
 	}
