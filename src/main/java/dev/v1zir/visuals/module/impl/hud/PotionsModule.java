@@ -36,7 +36,7 @@ public final class PotionsModule extends HudModule {
 
 	@Override
 	public boolean hasContent() {
-		if (mc.player == null) return false;
+		if (mc.player == null || mc.player.getStatusEffects().isEmpty()) return false;
 		for (StatusEffectInstance effect : mc.player.getStatusEffects()) if (effect.shouldShowIcon()) return true;
 		return false;
 	}

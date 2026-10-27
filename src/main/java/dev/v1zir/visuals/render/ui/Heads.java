@@ -157,11 +157,11 @@ public final class Heads {
 			int by1 = (int) Math.ceil(Math.max(sy0, sy1));
 			if (bx1 <= bx0 || by1 <= by0) return true;
 			// A square of `side` blocks around the eyes: the head with a little of the neck and shoulders.
-			float side = Math.max(0.6f, Math.min(living.width * 1.25f, living.height * 0.6f));
+			float side = Math.max(0.6f, Math.min(e.getWidth() * 1.25f, e.getHeight() * 0.6f));
 			float pixelsPerBlock = Math.abs(sx1 - sx0) / side;
 			// Vanilla centres the entity on the pixel box; move the eyes onto the exact centre of the head box.
 			translation.set(((sx0 + sx1) - (bx0 + bx1)) * 0.5f / pixelsPerBlock,
-				living.standingEyeHeight + ((sy0 + sy1) - (by0 + by1)) * 0.5f / pixelsPerBlock, 0f);
+				e.getStandingEyeHeight() + ((sy0 + sy1) - (by0 + by1)) * 0.5f / pixelsPerBlock, 0f);
 			ScreenRect clip = ctx.scissorStack.peekLast();
 			if (offscreen == null || bx0 != x0 || by0 != y0 || bx1 != x1 || by1 != y1 || pixelsPerBlock != scale
 				|| !Objects.equals(clip, scissor)) {

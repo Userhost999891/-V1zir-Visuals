@@ -86,19 +86,17 @@ public final class TargetHudModule extends HudModule {
 		float hurt = Math.max(0f, e.hurtTime - tickDelta) / 10f;
 		float squash = 1f - Math.min(1f, hurt) * 0.12f;
 		SkinTextures skin = Heads.skinOf(e);
-		boolean drewHead;
 		if (skin != null) {
 			float s = avatar * squash;
 			float o = (avatar - s) / 2f;
 			Heads.skin(ctx, skin, ax + o, ay + o, s, 5f * squash, ColorUtil.lerp(0xFFFFFFFF, HURT_TINT, Math.min(1f, hurt)));
-			drewHead = true;
 		} else {
-			// Mobs show their own model's head; vanilla's red hurt overlay is part of that render.
-			drewHead = Heads.portrait(ctx, e, tickDelta, ax, ay, avatar, 5f, squash, 0xFFFFFFFF);
-		}
-		if (!drewHead) {
+			// Other entities show their own model's head on an accent well (vanilla's red hurt overlay is part of
+			// that render), or an icon when it cannot be drawn.
 			Render2D.round(ctx, ax, ay, avatar, avatar, 5f, ColorUtil.withAlpha(Theme.accent(), 45));
-			Render2D.icon(ctx, e instanceof PlayerEntity ? Icons.USER : Icons.SKULL, ax + avatar / 2f, ay + avatar / 2f, 14f, Theme.accent());
+			if (!Heads.portrait(ctx, e, tickDelta, ax, ay, avatar, 5f, squash, 0xFFFFFFFF)) {
+				Render2D.icon(ctx, e instanceof PlayerEntity ? Icons.USER : Icons.SKULL, ax + avatar / 2f, ay + avatar / 2f, 14f, Theme.accent());
+			}
 		}
 		Render2D.outline(ctx, ax, ay, avatar, avatar, 5f, 1f, ColorUtil.withAlpha(0xFFFFFF, 30));
 
