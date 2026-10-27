@@ -9,6 +9,7 @@ import dev.v1zir.visuals.util.ColorUtil;
 import dev.v1zir.visuals.util.Theme;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.resource.language.I18n;
 
 import java.text.DateFormat;
 import java.time.LocalDate;
@@ -18,14 +19,28 @@ import java.util.Arrays;
 import java.util.Locale;
 
 /**
- * The time, the date in the game's language and a greeting for the time of day, shown by the lock screen and the
- * main menu header. The texts are rebuilt once a second (or when a setting or the language changes), never per frame.
+ * The time, the date in the game's language, a greeting for the time of day and the lock screen's other strings, shown
+ * by the lock screen and the main menu header. The texts are rebuilt once a second (or when a setting or the language
+ * changes), never per frame.
  */
 final class MenuClock {
 	private static final String[] ENGLISH = {"Good morning", "Good afternoon", "Good evening", "Good night"};
 	/** Polish has no afternoon greeting: "Dzień dobry" lasts until the evening. */
 	private static final String[] POLISH = {"Dzień dobry", "Dzień dobry", "Dobry wieczór", "Dobranoc"};
 	private static final int[] ICONS = {Icons.SUNRISE, Icons.SUN, Icons.SUNSET, Icons.MOON};
+	/** AM/PM in the time's style (so a soft shadow pass stays soft), refilled per draw. */
+	private static final Render2D.TextStyle PERIOD = new Render2D.TextStyle();
+	/** The lock screen notification's tip of the day. */
+	private static final String[] TIPS = {
+		"Hold anywhere for 3 seconds to change the wallpaper.",
+		"The lock and home screens can each have their own wallpaper.",
+		"Add your own pictures and GIFs in the wallpaper picker."
+	};
+	private static final String[] POLISH_TIPS = {
+		"Przytrzymaj ekran 3 sekundy, aby zmienić tapetę.",
+		"Ekran blokady i ekran główny mogą mieć osobne tapety.",
+		"Własne obrazy i GIF-y dodasz w wyborze tapet."
+	};
 
 	/** "14:07", "2:07" in 12-hour mode, with ":32" when seconds are shown. */
 	String time = "";
@@ -37,12 +52,19 @@ final class MenuClock {
 	String greeting = "";
 	int greetingIcon = Icons.SUN;
 	String hint = "";
+	String tip = "";
+	/** "now" next to the notification's title. */
+	String nowLabel = "";
+	String lastPlayed = "";
+	String singleplayer = "";
+	String multiplayer = "";
 
 	private long second = Long.MIN_VALUE;
 	private String language = "";
 	private boolean twelveHour;
 	private boolean seconds;
 	private boolean greet;
+	private boolean bold = true;
 	private DateTimeFormatter timeFormat;
 	private DateTimeFormatter dateFormat;
 	private boolean polish;
@@ -58,12 +80,17 @@ final class MenuClock {
 		boolean twelve = module != null && module.timeFormat.is("12-hour");
 		boolean secs = module != null && module.seconds.on();
 		boolean hello = module == null || module.greeting.on();
+		bold = module == null || module.clockStyle.is("Bold");
 		if (now == second && lang.equals(language) && twelve == twelveHour && secs == seconds && hello == greet) return;
 		if (!lang.equals(language) || dateFormat == null) {
 			language = lang;
 			polish = lang.startsWith("pl_");
 			dateFormat = DateTimeFormatter.ofPattern("EEEE, d MMMM", locale(lang));
 			hint = polish ? "Przesuń w górę, aby otworzyć" : "Swipe up to open";
+			nowLabel = polish ? "teraz" : "now";
+			lastPlayed = polish ? "Ostatnio grane" : "Last played";
+			singleplayer = I18n.translate("menu.singleplayer");
+			multiplayer = I18n.translate("menu.multiplayer");
 		}
 		if (timeFormat == null || twelve != twelveHour || secs != seconds) {
 			timeFormat = DateTimeFormatter.ofPattern((twelve ? "h:mm" : "HH:mm") + (secs ? ":ss" : ""));
@@ -81,17 +108,23 @@ final class MenuClock {
 		int slot = hour < 5 ? 3 : hour < 12 ? 0 : hour < 18 ? 1 : hour < 22 ? 2 : 3;
 		greetingIcon = ICONS[slot];
 		greeting = hello ? (polish ? POLISH : ENGLISH)[slot] + ", " + client.getSession().getUsername() : "";
+		tip = (polish ? POLISH_TIPS : TIPS)[t.getDayOfYear() % TIPS.length];
+	}
+
+	/** The big clocks' digits in the chosen style. */
+	SdfFont font() {
+		return Fonts.clock(bold);
 	}
 
 	/** Height of the digits at this size, to centre the time on them rather than on its line box. */
-	static float digitHeight(float size) {
-		SdfFont font = Fonts.clock();
+	float digitHeight(float size) {
+		SdfFont font = font();
 		return -(font.glyph('0').y0() + SdfFont.PADDING) * font.k(size);
 	}
 
 	/** Draws the time (and a small AM/PM) centred on cx with its digits standing on baseline; returns their left edge. */
 	float drawTime(DrawContext ctx, float cx, float baseline, float size, Render2D.TextStyle style) {
-		SdfFont font = Fonts.clock();
+		SdfFont font = font();
 		SdfFont small = Fonts.semibold();
 		float periodSize = size * 0.2f;
 		float gap = size * 0.08f;
@@ -100,7 +133,10 @@ final class MenuClock {
 		float x = cx - (timeW + periodW) / 2f;
 		Render2D.text(ctx, font, time, x, baseline - font.ascent(size), size, style);
 		if (periodW > 0f) {
-			Render2D.text(ctx, small, period, x + timeW + gap, baseline - small.ascent(periodSize), periodSize, ColorUtil.fade(style.color, 0.8f));
+			PERIOD.color = ColorUtil.fade(style.color, 0.8f);
+			PERIOD.weight = style.weight;
+			PERIOD.softness = style.softness;
+			Render2D.text(ctx, small, period, x + timeW + gap, baseline - small.ascent(periodSize), periodSize, PERIOD);
 		}
 		return x;
 	}

@@ -43,6 +43,7 @@ public final class Fonts {
 	private static SdfFont fallback;
 	private static SdfFont title;
 	private static SdfFont clock;
+	private static SdfFont clockBold;
 	private static SdfFont icons;
 	private static Family family = Family.INTER;
 
@@ -84,10 +85,14 @@ public final class Fonts {
 	}
 
 	/**
-	 * Inter Display Light for big clocks: digits, colon and space only, with the tabular digits and the raised
-	 * colon as the default glyphs so the time never jitters. Rasterised large because it is shown large.
+	 * Inter Display Bold (or Light) for big clocks: digits, colon and space only, with the tabular digits and the
+	 * raised colon as the default glyphs so the time never jitters. Rasterised large because it is shown large.
 	 */
-	public static SdfFont clock() {
+	public static SdfFont clock(boolean bold) {
+		if (bold) {
+			if (clockBold == null) clockBold = SdfFont.load("inter_display_bold", path("inter_display_bold"), 96).withFallback(fallback());
+			return clockBold;
+		}
 		if (clock == null) clock = SdfFont.load("inter_display_light", path("inter_display_light"), 96).withFallback(fallback());
 		return clock;
 	}

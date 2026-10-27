@@ -78,9 +78,12 @@ public final class V1zirMainMenu extends Screen {
 		pressed = null;
 		float size = Math.max(26f, Math.min(42f, height * 0.072f));
 		float gap = size * 0.42f;
+		Runnable singleplayer = () -> client.setScreen(new SelectWorldScreen(this));
+		Runnable multiplayer = () -> client.setScreen(new MultiplayerScreen(this));
+		lock.init(client, singleplayer, multiplayer, () -> LastPlayed.join(client, this));
 		List<RoundButton> row = new ArrayList<>();
-		row.add(new RoundButton(Icons.USER, () -> client.setScreen(new SelectWorldScreen(this)), false));
-		row.add(new RoundButton(Icons.USERS, () -> client.setScreen(new MultiplayerScreen(this)), false));
+		row.add(new RoundButton(Icons.USER, singleplayer, false));
+		row.add(new RoundButton(Icons.USERS, multiplayer, false));
 		if (!client.isDemo()) row.add(new RoundButton(Icons.GLOBE, () -> client.setScreen(new RealmsMainScreen(this)), false));
 		if (FabricLoader.getInstance().isModLoaded("modmenu")) row.add(new RoundButton(Icons.PUZZLE, this::openModMenu, false));
 		row.add(new RoundButton(Icons.SETTINGS, () -> client.setScreen(new OptionsScreen(this, client.options)), false));
@@ -159,7 +162,8 @@ public final class V1zirMainMenu extends Screen {
 		Render2D.setAlpha(1f);
 
 		clock.update(client, module);
-		float open = lock.update(module == null || module.lockScreen.on());
+		boolean widgets = module == null || module.widgets.on();
+		float open = lock.update(module == null || module.lockScreen.on(), widgets);
 		if (!overlay) lock.drag(mouseY, height);
 		if (lock.dragged()) hold.cancel();
 		if (hold.update(mouseX, mouseY)) startEditing();
@@ -195,13 +199,17 @@ public final class V1zirMainMenu extends Screen {
 		if (locked && editing != Wallpapers.Screen.LOCK) {
 			WallpaperStyle style = Wallpapers.style(Wallpapers.Screen.LOCK);
 			boolean ready = WallpaperRenderer.queueScreen(WallpaperRenderer.LOCK, Wallpapers.selected(Wallpapers.Screen.LOCK), style, px, py);
+			// While its content shows, the lock screen's glass blurs its own wallpaper rather than the home screen's.
+			if (ready && lock.progress() < 0.35f) WallpaperRenderer.backdrop(WallpaperRenderer.LOCK);
 			lock.renderSheet(ctx, width, height, ready ? WallpaperRenderer.LOCK.textureSetup() : null, style.tint(WallpaperEditor.LEVEL));
 		}
 		float intro = Anim.easeInOutSine(Anim.progress(t, 0f, 1.1f));
 		if (intro < 1f) Render2D.rect(ctx, 0, 0, width, height, ColorUtil.withAlpha(0x000000, Math.round((1f - intro) * 255)));
 		if (locked) {
 			if (editing == Wallpapers.Screen.LOCK) editor.pushContentTransform(ctx);
-			lock.renderContent(ctx, width, height, t, time, clock, fade);
+			boolean input = !overlay && !editor.active();
+			lock.renderContent(ctx, client, width, height, t, time, clock, fade, input ? mouseX : -10000, input ? mouseY : -10000,
+				widgets, module == null || module.notification.on());
 			if (editing == Wallpapers.Screen.LOCK) ctx.getMatrices().popMatrix();
 		}
 		if (picker) editor.renderControls(ctx, mouseX, mouseY);
@@ -255,7 +263,7 @@ public final class V1zirMainMenu extends Screen {
 		Render2D.setAlpha(appear);
 		float size = Math.max(24f, Math.min(52f, height * 0.12f));
 		float cx = width / 2f - px * 3f;
-		float baseline = height * 0.3f + MenuClock.digitHeight(size) / 2f + py * 2f + (1f - appear) * 8f;
+		float baseline = height * 0.3f + clock.digitHeight(size) / 2f + py * 2f + (1f - appear) * 8f;
 		TIME_STYLE.color = 0xF2FFFFFF;
 		clock.drawTime(ctx, cx, baseline, size, TIME_STYLE);
 		float sub = Math.max(7f, Math.min(10f, height * 0.026f));
@@ -314,8 +322,9 @@ public final class V1zirMainMenu extends Screen {
 		}
 		if (lock.locked()) {
 			if (left) {
-				lock.press(click.y(), height);
-				hold.start(click.x(), click.y());
+				lock.press(click.x(), click.y(), height);
+				// Held still on the wallpaper (not on a widget or button), it opens the wallpaper picker.
+				if (!lock.occupied(click.x(), click.y())) hold.start(click.x(), click.y());
 			}
 			return true;
 		}
@@ -359,7 +368,7 @@ public final class V1zirMainMenu extends Screen {
 				editor.mouseReleased(click.x(), click.y());
 				return true;
 			}
-			lock.release(click.y(), height);
+			lock.release(click.x(), click.y(), height);
 			RoundButton button = pressed;
 			pressed = null;
 			// It fires when let go over it, so the press can be seen (and taken back by moving away).
@@ -411,8 +420,14 @@ public final class V1zirMainMenu extends Screen {
 	}
 
 	@Override
+	public void tick() {
+		lock.tick();
+	}
+
+	@Override
 	public void removed() {
 		editor.dispose();
+		lock.dispose();
 		swallowRelease = false;
 	}
 

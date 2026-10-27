@@ -9,9 +9,13 @@ krawędzie w każdej skali GUI), rozmyte "szklane" panele i własne fonty render
 ## Funkcje
 
 ### Menu główne
-- **Ekran blokady** jak w telefonie: duży zegar, data i powitanie zależne od pory dnia
-  („Dzień dobry”, „Dobry wieczór”, „Dobranoc” + nick). Przeciągnij w górę (albo kółko, dowolny
-  klawisz, klik w napis na dole), a menu wysuwa się z animacją.
+- **Ekran blokady** jak w iOS: kłódka, data nad dużym, pogrubionym zegarem w kolorze motywu (styl
+  Bold albo Light), pod nim szklane widżety: co teraz gra (okładka, tytuł, postęp, pauza), ostatni
+  świat lub serwer z pingiem (kliknięcie od razu do niego dołącza) i głowa gracza z wersją gry.
+  Niżej powiadomienie z powitaniem zależnym od pory dnia („Dzień dobry”, „Dobry wieczór”,
+  „Dobranoc” + nick) i wskazówką dnia, a w rogach okrągłe szybkie akcje: gra jednoosobowa
+  i wieloosobowa. Przeciągnij w górę (albo kółko, dowolny klawisz, klik w napis na dole lub
+  w powiadomienie): zawartość lekko się powiększa i znika, a menu wysuwa się z animacją.
 - Osobna tapeta dla ekranu blokady (domyślnie nowy **Żar**) i ekranu głównego (domyślnie **Magma**):
   6 animowanych tapet (Żar, Toń, Jedwab, Gwiezdny pył, Poświata, Wydmy), wszystkie niebiosa shadera
   oraz własne obrazy PNG / JPG / animowane GIF z `config/v1zir/wallpapers`.
@@ -21,8 +25,8 @@ krawędzie w każdej skali GUI), rozmyte "szklane" panele i własne fonty render
 - U góry ekranu głównego mały zegar z powitaniem.
 - Okrągłe przyciski z ikonami: matowe, rozmyte wypełnienie, które po najechaniu rozjaśnia się od
   środka; sterowanie także klawiaturą (Tab / strzałki / Enter).
-- Ustawienia w module **Main Menu**: ekran blokady, blokada po wyjściu ze świata, 12/24 h,
-  sekundy, powitanie.
+- Ustawienia w module **Main Menu**: ekran blokady, blokada po wyjściu ze świata, widżety
+  i powiadomienie ekranu blokady, styl zegara, 12/24 h, sekundy, powitanie.
 
 ### Click GUI (Right Shift)
 - Poziome okno w matowym stylu: u góry logo, nazwa, przycisk edytora HUD i wyszukiwarka

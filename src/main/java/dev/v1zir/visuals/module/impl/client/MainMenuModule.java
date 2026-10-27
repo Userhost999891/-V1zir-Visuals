@@ -1,5 +1,6 @@
 package dev.v1zir.visuals.module.impl.client;
 
+import dev.v1zir.visuals.gui.menu.LastPlayed;
 import dev.v1zir.visuals.gui.menu.LockScreen;
 import dev.v1zir.visuals.module.Category;
 import dev.v1zir.visuals.module.Module;
@@ -7,6 +8,7 @@ import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.setting.BoolSetting;
 import dev.v1zir.visuals.module.setting.ModeSetting;
 import dev.v1zir.visuals.module.setting.NumberSetting;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 
 /**
  * Options of the custom title screen. Its wallpapers are picked on the screens themselves (hold the mouse button on an
@@ -25,6 +27,12 @@ public final class MainMenuModule extends Module {
 	/** The title screen opens on a phone-style lock screen with a big clock that is swiped up to open. */
 	public final BoolSetting lockScreen = add(new BoolSetting("Lock screen", true));
 	public final BoolSetting lockAfterWorld = add(new BoolSetting("Lock after leaving a world", false).visibleIf(lockScreen::on));
+	/** Now playing, the last world or server and the profile, in glass widgets under the lock screen clock. */
+	public final BoolSetting widgets = add(new BoolSetting("Lock screen widgets", true).visibleIf(lockScreen::on));
+	/** The welcome notification with a tip above the lock screen's quick actions. */
+	public final BoolSetting notification = add(new BoolSetting("Lock screen notification", true).visibleIf(lockScreen::on));
+	/** Heavy display digits for the big clocks, or the thin ones. */
+	public final ModeSetting clockStyle = add(new ModeSetting("Clock style", "Bold", "Bold", "Light"));
 	public final ModeSetting timeFormat = add(new ModeSetting("Time format", "24-hour", "24-hour", "12-hour"));
 	public final BoolSetting seconds = add(new BoolSetting("Show seconds", false));
 	public final BoolSetting greeting = add(new BoolSetting("Greeting", true));
@@ -32,12 +40,15 @@ public final class MainMenuModule extends Module {
 	public MainMenuModule() {
 		super("Main Menu", "Custom animated title screen", Category.SETTINGS);
 		setEnabled(true, false);
+		ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> LastPlayed.joined(client));
 	}
 
 	@Override
 	public void onTick() {
+		if (mc.world == null) return;
+		LastPlayed.tick(mc);
 		// Playing a world locks the title screen again for when the player comes back to it.
-		if (mc.world != null && lockScreen.on() && lockAfterWorld.on()) LockScreen.lock();
+		if (lockScreen.on() && lockAfterWorld.on()) LockScreen.lock();
 	}
 
 	@Override
