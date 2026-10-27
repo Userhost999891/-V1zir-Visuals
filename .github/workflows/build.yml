@@ -34,24 +34,19 @@ jobs:
           echo "mapped jar: $jar"
           sig() { javap -p -cp "$jar" "$@" 2>&1 || true; }
           code() { javap -c -p -cp "$jar" "$1" 2>&1 | awk -v m="$2" 'index($0, " " m "(") && /\(/ {p=1} p {print} p && /^$/ {p=0}'; }
-          for c in net.minecraft.entity.player.SkinTextures net.minecraft.util.AssetInfo net.minecraft.util.AssetInfo\$TextureAsset \
-                   net.minecraft.client.network.ClientPlayerLikeEntity net.minecraft.client.network.AbstractClientPlayerEntity \
-                   net.minecraft.client.gui.render.SpecialGuiElementRenderer net.minecraft.client.gui.render.EntityGuiElementRenderer \
-                   net.minecraft.client.gui.render.state.special.EntityGuiElementRenderState net.minecraft.client.gui.render.state.GuiRenderState \
-                   net.minecraft.client.gui.render.GuiRenderer net.minecraft.client.render.entity.EntityRenderManager \
-                   net.minecraft.client.render.entity.state.EntityRenderState net.minecraft.client.render.entity.state.LivingEntityRenderState \
-                   net.minecraft.entity.effect.StatusEffectInstance; do
+          for c in net.minecraft.client.model.ModelPart net.minecraft.client.model.ModelPart\$Cuboid net.minecraft.client.model.ModelPart\$Quad \
+                   net.minecraft.client.model.ModelPart\$Vertex net.minecraft.client.model.Model net.minecraft.client.render.entity.LivingEntityRenderer \
+                   net.minecraft.client.gui.hud.InGameHud net.minecraft.client.gui.hud.bar.ExperienceBar net.minecraft.client.texture.AtlasManager \
+                   net.minecraft.client.texture.SpriteAtlasTexture net.minecraft.client.texture.Sprite net.minecraft.util.Atlases \
+                   net.minecraft.entity.player.HungerManager net.minecraft.client.network.ClientPlayerInteractionManager; do
             echo "=== SIG $c"; sig "$c"
           done
-          echo "=== CODE SpecialGuiElementRenderer.render"; code net.minecraft.client.gui.render.SpecialGuiElementRenderer render
-          echo "=== CODE SpecialGuiElementRenderer.renderElement"; code net.minecraft.client.gui.render.SpecialGuiElementRenderer renderElement
-          echo "=== CODE EntityGuiElementRenderer.render"; code net.minecraft.client.gui.render.EntityGuiElementRenderer render
-          echo "=== CODE EntityGuiElementRenderer.getYOffset"; code net.minecraft.client.gui.render.EntityGuiElementRenderer getYOffset
-          echo "=== CODE InventoryScreen.drawEntity"; code net.minecraft.client.gui.screen.ingame.InventoryScreen drawEntity
-          echo "=== CODE GuiRenderer.render"; code net.minecraft.client.gui.render.GuiRenderer render
-          echo "=== CODE GuiRenderState.forEachSpecialElement"; code net.minecraft.client.gui.render.state.GuiRenderState forEachSpecialElement
-          echo "=== CODE AbstractClientPlayerEntity.getSkin"; code net.minecraft.client.network.AbstractClientPlayerEntity getSkin
-          echo "=== CODE InGameHud.renderStatusEffectOverlay"; code net.minecraft.client.gui.hud.InGameHud renderStatusEffectOverlay
+          echo "=== CODE ModelPart\$Vertex.worldZ"; code net.minecraft.client.model.ModelPart\$Vertex worldZ
+          echo "=== CODE ModelPart\$Cuboid.<init>"; code net.minecraft.client.model.ModelPart\$Cuboid 'net.minecraft.client.model.ModelPart$Cuboid'
+          echo "=== CODE EntityModel.setAngles"; code net.minecraft.client.render.entity.model.EntityModel setAngles
+          echo "=== CODE AtlasManager.getAtlasTexture"; code net.minecraft.client.texture.AtlasManager getAtlasTexture
+          echo "=== CODE DrawContext.<init>"; code net.minecraft.client.gui.DrawContext 'net.minecraft.client.gui.DrawContext'
+          echo "=== CODE InGameHud.renderMainHud"; code net.minecraft.client.gui.hud.InGameHud renderMainHud
 
   client:
     name: Dev client

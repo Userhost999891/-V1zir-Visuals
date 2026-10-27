@@ -28,7 +28,7 @@ import java.util.function.Supplier;
 /**
  * Immediate renderer for the 3D effects. Geometry is built camera-relative into two batches
  * (additive glow and alpha blended) and drawn right after the world, depth tested against it;
- * {@link WorldText} strings queued by the effects are drawn last, on top of both.
+ * {@link WorldSprites} come next and {@link WorldText} strings queued by the effects last, on top.
  */
 public final class WorldEffectRenderer {
 	private static final int UBO_SIZE = new Std140SizeCalculator().putMat4f().putMat4f().putVec4().get();
@@ -107,13 +107,14 @@ public final class WorldEffectRenderer {
 				}
 			}
 		}
-		if (GLOW.quads == 0 && TRANSLUCENT.quads == 0 && WorldText.isEmpty()) return;
+		if (GLOW.quads == 0 && TRANSLUCENT.quads == 0 && WorldSprites.isEmpty() && WorldText.isEmpty()) return;
 
 		if (storage == null) storage = new DynamicUniformStorage<>("V1zir world effects UBO", UBO_SIZE, 4);
 		DATA.time = V1zir.time();
 		GpuBufferSlice params = storage.write(DATA);
 		draw(V1zirPipelines.WORLD_TRANSLUCENT, TRANSLUCENT, params);
 		draw(V1zirPipelines.WORLD_GLOW, GLOW, params);
+		WorldSprites.flush(params);
 		WorldText.flush(params);
 	}
 

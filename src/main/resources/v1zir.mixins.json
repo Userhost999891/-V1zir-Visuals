@@ -37,7 +37,6 @@
 		"ScreenMixin",
 		"SkyRenderingMixin",
 		"SliderWidgetMixin",
-		"SpecialGuiElementRendererMixin",
 		"TextFieldWidgetMixin",
 		"TextureTransformMixin",
 		"TooltipBackgroundRendererMixin",

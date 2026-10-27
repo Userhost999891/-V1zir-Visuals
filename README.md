@@ -45,7 +45,8 @@ Jump Circles (tylko przy skoku), China Hat, Trails, Block Highlight, Break Effec
 ### Combat
 Target ESP, Hit Particles, Crosshair, Hit Color, Damage Numbers, Hit Marker, Kill Effects
 (piorun, dusza, wybuch), Pop Chams, Totem Animation, Crystal Chams, Trajectories (łuk, kusza,
-trójząb, perły, mikstury…), Damage Tint, Nametags, Entity Glow.
+trójząb, perły, mikstury…), Damage Tint, Nametags, Health Indicator (dokładne zdrowie w sercach
+nad graczami, z połówkami i złotymi sercami absorpcji), Entity Glow.
 
 ### Shaders
 **Shader Sky** – niebo z presetami: Realistic (wolumetryczne chmury, atmosfera, księżyc
@@ -57,9 +58,11 @@ chlapnięcia przy skoku i lądowaniu), Color Grading, Ambience, Full Bright, Wor
 Sky Lanterns, Glint Color.
 
 ### Hud
-Watermark (z logo), Array List, Keybinds, Potions, Target HUD, Coordinates, Compass, Clock,
-Speed, Server Info (ping, TPS), Performance (FPS i wykres czasu klatki), Keystrokes (z CPS),
-Inventory, Armor, Item Counter, powiadomienia. Wszystko przesuwa się w edytorze HUD.
+Watermark (z logo), Array List, Keybinds, Potions, Target HUD (twarz gracza albo moba wycięta
+z jego tekstury), Custom Indicators (paski zdrowia, głodu, pancerza, powietrza i doświadczenia
+z liczbami zamiast ikon), Coordinates, Compass, Clock, Speed, Server Info (ping, TPS),
+Performance (FPS i wykres czasu klatki), Keystrokes (z CPS), Inventory, Armor, Item Counter,
+powiadomienia. Wszystko przesuwa się w edytorze HUD.
 
 ### Spotify
 Bez konfiguracji: Windows 10/11 (systemowe sterowanie multimediami), macOS (aplikacja Spotify)
