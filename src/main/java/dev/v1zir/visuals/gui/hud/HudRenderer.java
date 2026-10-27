@@ -8,6 +8,7 @@ import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.client.ThemeModule;
 import dev.v1zir.visuals.module.impl.effects.CrosshairModule;
 import dev.v1zir.visuals.module.impl.effects.HitMarkerModule;
+import dev.v1zir.visuals.module.impl.hud.CustomIndicatorsModule;
 import dev.v1zir.visuals.module.impl.hud.HudModule;
 import dev.v1zir.visuals.module.impl.visuals.DamageTintModule;
 import dev.v1zir.visuals.render.ui.Render2D;
@@ -20,6 +21,7 @@ import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.ChatScreen;
 import net.minecraft.client.render.RenderTickCounter;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.util.Identifier;
 
 /** Draws every enabled HUD module through Fabric's HUD element registry. */
 public final class HudRenderer {
@@ -53,6 +55,13 @@ public final class HudRenderer {
 			HitMarkerModule marker = ModuleManager.get(HitMarkerModule.class);
 			if (marker != null && marker.isEnabled()) marker.render(ctx);
 		});
+		// Custom Indicators draws these rows itself while it is on.
+		for (Identifier row : CustomIndicatorsModule.ROWS) {
+			HudElementRegistry.replaceElement(row, vanilla -> (ctx, tickCounter) -> {
+				CustomIndicatorsModule indicators = ModuleManager.get(CustomIndicatorsModule.class);
+				if (indicators == null || !indicators.replaces(row)) vanilla.render(ctx, tickCounter);
+			});
+		}
 	}
 
 	/** Offers a click to the visible HUD elements; true if one used it. */
