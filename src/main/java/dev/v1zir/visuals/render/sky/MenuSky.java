@@ -1,116 +1,59 @@
 package dev.v1zir.visuals.render.sky;
 
-import com.mojang.blaze3d.buffers.GpuBufferSlice;
-import dev.v1zir.visuals.V1zir;
 import dev.v1zir.visuals.module.ModuleManager;
-import dev.v1zir.visuals.module.impl.client.MainMenuModule;
 import dev.v1zir.visuals.module.impl.visuals.ShaderSkyModule;
-import com.mojang.blaze3d.textures.GpuTextureView;
-import net.minecraft.client.gl.Framebuffer;
-import net.minecraft.client.texture.TextureSetup;
 import org.joml.Matrix4d;
 import org.joml.Matrix4f;
 
 /**
- * Menu background sky: a slowly drifting virtual camera. The screen prepares it while it builds
- * the GUI; the sky is then rendered at reduced resolution right before the GUI is drawn
- * (GuiRendererMixin) and the background element upsamples it.
+ * Sky presets as title screen wallpapers: a slowly drifting virtual camera per preset. WallpaperRenderer renders them
+ * at reduced resolution like every other wallpaper.
  */
 public final class MenuSky {
-	private static final SkyUniforms.Data DATA = new SkyUniforms.Data();
-	private static final SkyTarget TARGET = new SkyTarget("V1zir menu sky");
-	private static boolean pending;
-	private static int renderedFrame = -1;
-	private static int frame;
 	private static final Matrix4f PROJECTION = new Matrix4f();
 	private static final Matrix4f VIEW = new Matrix4f();
 	private static final Matrix4d INVERSE = new Matrix4d();
-	private static GpuBufferSlice slice;
-	private static float time;
-	private static long last;
 
 	private MenuSky() {
 	}
 
-	public static TextureSetup textureSetup() {
-		return TARGET.textureSetup();
-	}
-
-	/** Renders the background prepared this frame into its texture. */
-	public static void renderPending() {
-		if (!pending) return;
-		pending = false;
-		if (slice != null) {
-			TARGET.render(slice);
-			renderedFrame = frame;
-		}
-	}
-
-	/** Called once per frame (RenderSystem.flipFrame). */
-	public static void flip() {
-		frame++;
-	}
-
-	/** Whether the menu sky was drawn (or is about to be) in the current frame. */
-	public static boolean renderedThisFrame() {
-		return renderedFrame == frame || pending;
-	}
-
-	public static GpuTextureView view() {
-		return TARGET.view();
-	}
-
-	public static int width() {
-		return TARGET.width();
-	}
-
-	public static int height() {
-		return TARGET.height();
-	}
-
-	/**
-	 * Writes the uniform block for this frame. parallaxX/Y are -1..1 offsets from the mouse.
-	 */
-	public static void prepare(SkyPreset preset, float width, float height, float parallaxX, float parallaxY, float speed) {
-		long now = System.nanoTime();
-		if (last != 0) time += Math.min((now - last) / 1.0e9f, 0.25f) * speed;
-		last = now;
-
+	/** Writes the sky parameters of the preset at this animation time; parallaxX/Y are -1..1 offsets from the mouse. */
+	public static void fill(SkyUniforms.Data data, SkyPreset preset, float aspect, float parallaxX, float parallaxY, float time) {
 		long timeOfDay = switch (preset) {
 			case REALISTIC -> 12620L;
 			case SUNSET, SYNTHWAVE -> 11800L;
 			case BLOOD_MOON -> 15500L;
 			default -> 18000L;
 		};
-		ShaderSkyModule.fillSun(DATA, timeOfDay, 0f);
-		DATA.timing.set(time, 0f, 0f, 1f);
+		ShaderSkyModule.fillSun(data, timeOfDay, 0f);
+		data.timing.set(time, 0f, 0f, 1f);
 
 		ShaderSkyModule sky = ModuleManager.get(ShaderSkyModule.class);
 		if (sky != null) {
-			sky.fillColors(DATA, preset);
-			DATA.settings.set(1.0f, 0.42f, Math.max(sky.stars.f(), 0.6f), 1f);
+			sky.fillColors(data, preset);
+			data.settings.set(1.0f, 0.42f, Math.max(sky.stars.f(), 0.6f), 1f);
 		} else {
-			DATA.colorA.set(1f, 1f, 1f, 0f);
-			DATA.colorB.set(1f, 1f, 1f, 0f);
-			DATA.settings.set(1.0f, 0.42f, 1f, 1f);
+			data.colorA.set(1f, 1f, 1f, 0f);
+			data.colorB.set(1f, 1f, 1f, 0f);
+			data.settings.set(1.0f, 0.42f, 1f, 1f);
 		}
-		DATA.camera.set(time * 18f, 80f, time * 6f, preset.index());
-		DATA.extra.set(1f, 1f, 0f, 0f);
+		data.camera.set(time * 18f, 80f, time * 6f, preset.index());
+		data.extra.set(1f, 1f, 0f, 0f);
 
 		float yaw;
 		float pitch;
 		float fov = 72f;
 		switch (preset) {
 			case REALISTIC, SUNSET -> {
-				yaw = faceYaw(DATA.sunDir.x, DATA.sunDir.z);
+				yaw = faceYaw(data.sunDir.x, data.sunDir.z);
 				pitch = 0.17f;
 			}
 			case SYNTHWAVE -> {
-				yaw = faceYaw(DATA.sunDir.x, DATA.sunDir.z);
+				yaw = faceYaw(data.sunDir.x, data.sunDir.z);
 				pitch = 0.07f;
 			}
 			case BLOOD_MOON -> {
-				yaw = faceYaw(DATA.moonDir.x, DATA.moonDir.z);
+				yaw = faceYaw(data.moonDir.x, data.moonDir.z);
 				pitch = 0.62f;
 			}
 			case MAGMA -> {
@@ -130,16 +73,9 @@ public final class MenuSky {
 		yaw += parallaxX * 0.10f;
 		pitch += parallaxY * 0.06f;
 
-		PROJECTION.identity().perspective((float) Math.toRadians(fov), Math.max(width, 1f) / Math.max(height, 1f), 0.05f, 100f);
+		PROJECTION.identity().perspective((float) Math.toRadians(fov), aspect, 0.05f, 100f);
 		VIEW.identity().rotateX(-pitch).rotateY(-yaw);
-		DATA.invViewProj.set(INVERSE.set(PROJECTION).mul(VIEW).invert());
-		slice = SkyUniforms.write(DATA);
-
-		MainMenuModule menu = ModuleManager.get(MainMenuModule.class);
-		float scale = menu != null ? menu.renderScale.f() : 0.5f;
-		Framebuffer fb = V1zir.mc().getFramebuffer();
-		TARGET.ensure(fb.textureWidth, fb.textureHeight, scale);
-		pending = true;
+		data.invViewProj.set(INVERSE.set(PROJECTION).mul(VIEW).invert());
 	}
 
 	/** Yaw that makes the camera look towards the given horizontal direction. */

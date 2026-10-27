@@ -6,7 +6,7 @@ import com.mojang.blaze3d.buffers.Std140SizeCalculator;
 import dev.v1zir.visuals.V1zir;
 import dev.v1zir.visuals.gui.clickgui.WindowTransition;
 import dev.v1zir.visuals.optimize.Optimizations;
-import dev.v1zir.visuals.render.sky.MenuSky;
+import dev.v1zir.visuals.render.wallpaper.WallpaperRenderer;
 import dev.v1zir.visuals.render.sky.SkyCache;
 import dev.v1zir.visuals.render.sky.SkyUniforms;
 import dev.v1zir.visuals.render.world.WorldEffectRenderer;
@@ -37,7 +37,7 @@ public final class FrameUniforms {
 		cursorX = -1f;
 		cursorY = -1f;
 		SkyUniforms.flip();
-		MenuSky.flip();
+		WallpaperRenderer.flip();
 		SkyCache.flip();
 		BackdropBlur.flip();
 		ColorGrade.flip();

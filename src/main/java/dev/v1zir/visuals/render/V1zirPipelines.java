@@ -71,11 +71,12 @@ public final class V1zirPipelines {
 		.withCull(false)
 		.build();
 
+	/** A wallpaper target upsampled into a rounded rectangle (render/ui/MenuBackgroundElement, SHAPE's layout). */
 	public static final RenderPipeline MENU_BACKGROUND = RenderPipeline.builder(RenderPipelines.GUI_SNIPPET)
 		.withLocation(V1zir.id("pipeline/menu_background"))
 		.withVertexShader(V1zir.id("core/menu_background"))
 		.withFragmentShader(V1zir.id("core/menu_background"))
-		.withVertexFormat(VertexFormats.POSITION_TEXTURE_COLOR, VertexFormat.DrawMode.QUADS)
+		.withVertexFormat(VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL, VertexFormat.DrawMode.QUADS)
 		.withSampler("Sampler0")
 		.withUniform("V1zirGui", UniformType.UNIFORM_BUFFER)
 		.withCull(false)
@@ -106,6 +107,13 @@ public final class V1zirPipelines {
 		.withoutBlend()
 		.withCull(false)
 		.build();
+
+	/** Title screen wallpaper shaders into a wallpaper target (render/wallpaper/WallpaperRenderer). */
+	public static final RenderPipeline WALLPAPER = wallpaperPipeline("wallpaper", false);
+	/** A picture from the wallpapers folder, filled or fitted, into a wallpaper target. */
+	public static final RenderPipeline WALLPAPER_IMAGE = wallpaperPipeline("wallpaper_image", true);
+	/** One direction of the gaussian blur of a wallpaper target. */
+	public static final RenderPipeline WALLPAPER_BLUR = wallpaperPipeline("wallpaper_blur", true);
 
 	/** Builds rows of a sky cache panorama (render/sky/SkyCache). */
 	public static final RenderPipeline SKY_PANORAMA = RenderPipeline.builder()
@@ -205,6 +213,21 @@ public final class V1zirPipelines {
 	private V1zirPipelines() {
 	}
 
+	private static RenderPipeline wallpaperPipeline(String name, boolean sampler) {
+		RenderPipeline.Builder builder = RenderPipeline.builder()
+			.withLocation(V1zir.id("pipeline/" + name))
+			.withVertexShader(V1zir.id("core/fullscreen"))
+			.withFragmentShader(V1zir.id("core/" + name))
+			.withVertexFormat(VertexFormats.POSITION, VertexFormat.DrawMode.TRIANGLES)
+			.withUniform("WallpaperParams", UniformType.UNIFORM_BUFFER)
+			.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+			.withDepthWrite(false)
+			.withoutBlend()
+			.withCull(false);
+		if (sampler) builder.withSampler("Sampler0");
+		return builder.build();
+	}
+
 	private static RenderPipeline blurPipeline(String name) {
 		return RenderPipeline.builder()
 			.withLocation(V1zir.id("pipeline/" + name))
@@ -276,6 +299,9 @@ public final class V1zirPipelines {
 		RenderPipelines.register(MENU_BACKGROUND);
 		RenderPipelines.register(SKY);
 		RenderPipelines.register(SKY_UPSAMPLE);
+		RenderPipelines.register(WALLPAPER);
+		RenderPipelines.register(WALLPAPER_IMAGE);
+		RenderPipelines.register(WALLPAPER_BLUR);
 		RenderPipelines.register(SKY_PANORAMA);
 		RenderPipelines.register(SKY_CACHED);
 		RenderPipelines.register(COLOR_GRADE);

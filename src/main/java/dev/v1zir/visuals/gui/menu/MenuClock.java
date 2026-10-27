@@ -47,6 +47,11 @@ final class MenuClock {
 	private DateTimeFormatter dateFormat;
 	private boolean polish;
 
+	/** Whether the game speaks Polish (the menu's own strings follow it). */
+	boolean polish() {
+		return polish;
+	}
+
 	void update(MinecraftClient client, MainMenuModule module) {
 		long now = System.currentTimeMillis() / 1000L;
 		String lang = client.getLanguageManager().getLanguage();

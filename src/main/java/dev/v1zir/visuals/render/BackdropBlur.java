@@ -13,7 +13,8 @@ import com.mojang.blaze3d.textures.TextureFormat;
 import dev.v1zir.visuals.V1zir;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.client.ThemeModule;
-import dev.v1zir.visuals.render.sky.MenuSky;
+import dev.v1zir.visuals.render.wallpaper.WallpaperRenderer;
+import dev.v1zir.visuals.render.wallpaper.WallpaperTarget;
 import dev.v1zir.visuals.util.Theme;
 import net.minecraft.client.gl.DynamicUniformStorage;
 import net.minecraft.client.gl.Framebuffer;
@@ -56,10 +57,10 @@ public final class BackdropBlur {
 	private BackdropBlur() {
 	}
 
-	/** Blur needs something behind the GUI: the world, or outside a world the menu sky. */
+	/** Blur needs something behind the GUI: the world, or outside a world the title screen's wallpaper. */
 	public static boolean available() {
 		if (Theme.style() == Theme.Style.NORMAL) return false;
-		return V1zir.mc().world != null || MenuSky.renderedThisFrame();
+		return V1zir.mc().world != null || WallpaperRenderer.backdropReady();
 	}
 
 	/** Requests the blur of the whole frame (the click GUI's transitions). */
@@ -132,11 +133,12 @@ public final class BackdropBlur {
 		GpuTextureView source = fb.getColorAttachmentView();
 		int sw = fb.textureWidth;
 		int sh = fb.textureHeight;
-		if (V1zir.mc().world == null && MenuSky.renderedThisFrame()) {
-			// Outside a world the GUI draws over the menu sky, which lives in its own texture.
-			source = MenuSky.view();
-			sw = MenuSky.width();
-			sh = MenuSky.height();
+		WallpaperTarget wallpaper = V1zir.mc().world == null ? WallpaperRenderer.backdropTarget() : null;
+		if (wallpaper != null) {
+			// Outside a world the GUI draws over a wallpaper, which lives in its own texture.
+			source = wallpaper.view();
+			sw = wallpaper.width();
+			sh = wallpaper.height();
 		}
 		boolean scissored = !fullFrame && regionCount > 0;
 		if (scissored) prepareRegions(levels, offset);

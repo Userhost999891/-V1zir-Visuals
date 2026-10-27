@@ -1,17 +1,17 @@
 package dev.v1zir.visuals.gui.menu;
 
-import dev.v1zir.visuals.render.BackdropBlur;
 import dev.v1zir.visuals.render.font.Fonts;
 import dev.v1zir.visuals.render.font.SdfFont;
 import dev.v1zir.visuals.render.ui.Logo;
 import dev.v1zir.visuals.render.ui.Render2D;
-import dev.v1zir.visuals.render.ui.ShapeElement;
 import dev.v1zir.visuals.util.Anim;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.texture.TextureSetup;
+import org.jetbrains.annotations.Nullable;
 
 /**
- * Phone-style lock screen the title screen opens on: a large clock with the date and a greeting over the blurred,
- * dimmed menu background, and a shimmering "swipe up to open" hint above a handle. It is a sheet: dragged up it
+ * Phone-style lock screen the title screen opens on: a large clock with the date and a greeting over its own
+ * wallpaper, and a shimmering "swipe up to open" hint above a handle. It is a sheet: dragged up it
  * follows the cursor with some resistance, and let go past a threshold (or flicked) it slides away with a spring
  * while the main menu comes in; let go early and it springs back. Scrolling, any key or a click on the hint open it too.
  */
@@ -103,6 +103,16 @@ public final class LockScreen {
 		progress = p;
 	}
 
+	/** Whether the press being held has started moving the sheet. */
+	boolean dragged() {
+		return dragging && moved;
+	}
+
+	/** Forgets the press being held (it became a long press): letting go then does nothing. */
+	void cancelPress() {
+		dragging = false;
+	}
+
 	void release(double y, int height) {
 		if (!dragging) return;
 		dragging = false;
@@ -122,22 +132,28 @@ public final class LockScreen {
 		}
 	}
 
-	/** The sheet: the menu background blurred and dimmed, with rounded bottom corners and a shadow while it slides. */
-	void renderSheet(DrawContext ctx, int width, int height) {
+	/**
+	 * The sheet: the lock screen's wallpaper (null while a picture loads), with rounded bottom corners and a shadow
+	 * while it slides. tint dims it.
+	 */
+	void renderSheet(DrawContext ctx, int width, int height, @Nullable TextureSetup wallpaper, int tint) {
 		float y = -progress * height;
 		float radius = Anim.clamp01(Math.abs(progress) * 12f) * 16f;
 		if (progress > 0.001f) Render2D.shadow(ctx, 0f, y + height - 40f, width, 40f, radius, 24f, 0x70000000);
-		if (BackdropBlur.available()) {
-			Render2D.glass(ctx, 0f, y, width, height, radius, Render2D.CORNERS_BOTTOM, ShapeElement.MATTE, 0x5C000000);
+		if (wallpaper != null) {
+			Render2D.wallpaper(ctx, wallpaper, 0f, y, width, height, radius, Render2D.CORNERS_BOTTOM, tint);
 		} else {
-			Render2D.round(ctx, 0f, y, width, height, radius, Render2D.CORNERS_BOTTOM, 0xA6000000);
+			Render2D.round(ctx, 0f, y, width, height, radius, Render2D.CORNERS_BOTTOM, 0xFF050505);
 		}
 	}
 
-	/** Logo, greeting, clock, date and hint; t is the intro time and time the seconds since the screen opened. */
-	void renderContent(DrawContext ctx, int width, int height, float t, float time, MenuClock clock) {
+	/**
+	 * Logo, greeting, clock, date and hint; t is the intro time, time the seconds since the screen opened and fade the
+	 * opacity left by the wallpaper picker.
+	 */
+	void renderContent(DrawContext ctx, int width, int height, float t, float time, MenuClock clock, float fade) {
 		float appear = Anim.easeOutQuart(Anim.progress(t, 0.25f, 0.9f));
-		float alpha = appear * Anim.clamp01(1f - Math.max(progress, 0f) * 1.6f);
+		float alpha = appear * Anim.clamp01(1f - Math.max(progress, 0f) * 1.6f) * fade;
 		if (alpha <= 0.004f) return;
 		float lift = -progress * height + (1f - appear) * 10f;
 		float cx = width / 2f;

@@ -12,6 +12,7 @@ import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.hud.HudModule;
 import dev.v1zir.visuals.module.setting.Setting;
 import dev.v1zir.visuals.optimize.Optimizations;
+import dev.v1zir.visuals.render.wallpaper.Wallpapers;
 import net.fabricmc.loader.api.FabricLoader;
 
 import java.io.IOException;
@@ -19,7 +20,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-/** Saves modules, settings, keybinds, HUD positions and GUI layout to config/v1zir/config.json. */
+/** Saves modules, settings, keybinds, HUD positions, GUI layout and wallpapers to config/v1zir/config.json. */
 public final class ConfigManager {
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
@@ -57,6 +58,7 @@ public final class ConfigManager {
 			}
 			if (root.has("gui")) ClickGuiScreen.loadLayout(root.getAsJsonObject("gui"));
 			if (root.has("optimizations")) Optimizations.fromJson(root.getAsJsonObject("optimizations"));
+			Wallpapers.fromJson(root);
 		} catch (IOException | RuntimeException e) {
 			V1zir.LOGGER.error("Could not read {}, using defaults", path, e);
 			applyDefaults();
@@ -95,6 +97,7 @@ public final class ConfigManager {
 		root.add("modules", modules);
 		root.add("gui", ClickGuiScreen.saveLayout());
 		root.add("optimizations", Optimizations.toJson());
+		root.add("wallpapers", Wallpapers.toJson());
 		Path path = file();
 		try {
 			Files.createDirectories(path.getParent());

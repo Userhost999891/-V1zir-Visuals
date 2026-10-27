@@ -8,10 +8,11 @@ import dev.v1zir.visuals.render.BackdropBlur;
 import dev.v1zir.visuals.render.font.Fonts;
 import dev.v1zir.visuals.render.font.Icons;
 import dev.v1zir.visuals.render.font.SdfFont;
-import dev.v1zir.visuals.render.sky.MenuSky;
-import dev.v1zir.visuals.render.sky.SkyPreset;
 import dev.v1zir.visuals.render.ui.Render2D;
 import dev.v1zir.visuals.render.ui.ShapeElement;
+import dev.v1zir.visuals.render.wallpaper.WallpaperRenderer;
+import dev.v1zir.visuals.render.wallpaper.WallpaperStyle;
+import dev.v1zir.visuals.render.wallpaper.Wallpapers;
 import dev.v1zir.visuals.util.Anim;
 import dev.v1zir.visuals.util.ColorUtil;
 import dev.v1zir.visuals.util.Theme;
@@ -35,8 +36,9 @@ import java.util.List;
 import java.util.Random;
 
 /**
- * Replacement title screen: animated shader background, the time with a greeting and a row of round frosted
- * icon buttons. It opens on the {@link LockScreen}; once that slides away the menu comes up from below.
+ * Replacement title screen: an animated wallpaper, the time with a greeting and a row of round frosted icon buttons.
+ * It opens on the {@link LockScreen}, which has a wallpaper of its own; once that slides away the menu comes up from
+ * below. Holding the mouse button on an empty spot of either screen opens the {@link WallpaperEditor} for it.
  */
 public final class V1zirMainMenu extends Screen {
 	private static final int DANGER = 0xFFFF4D5E;
@@ -47,6 +49,10 @@ public final class V1zirMainMenu extends Screen {
 	private final List<RoundButton> buttons = new ArrayList<>();
 	private final LockScreen lock = new LockScreen();
 	private final MenuClock clock = new MenuClock();
+	private final LongPress hold = new LongPress();
+	private final WallpaperEditor editor = new WallpaperEditor();
+	/** The press that opened the wallpaper picker is still held: letting go of it does nothing. */
+	private boolean swallowRelease;
 	private final Anim parallaxX = new Anim(0f, 3.5f);
 	private final Anim parallaxY = new Anim(0f, 3.5f);
 	/** 1 for the first intro of the session, shorter when coming back to the menu later. */
@@ -149,29 +155,66 @@ public final class V1zirMainMenu extends Screen {
 		float px = parallaxX.get();
 		float py = parallaxY.get();
 
-		SkyPreset preset = module != null ? module.preset() : SkyPreset.MAGMA;
-		float speed = module != null ? module.speed.f() : 1f;
-		MenuSky.prepare(preset, width, height, px, py, speed);
-
+		WallpaperRenderer.advance(module != null ? module.speed.f() : 1f);
 		Render2D.setAlpha(1f);
-		Render2D.menuBackground(ctx, width, height, 0xFFD2D2D2);
-		renderParticles(ctx, dt, px, py);
 
 		clock.update(client, module);
 		float open = lock.update(module == null || module.lockScreen.on());
 		if (!overlay) lock.drag(mouseY, height);
-		boolean interactive = !overlay && !lock.locked();
+		if (lock.dragged()) hold.cancel();
+		if (hold.update(mouseX, mouseY)) startEditing();
+
+		// The picker draws first: while it is open (or zooming) its cards stand in for the screen's wallpaper.
+		boolean picker = editor.render(ctx, width, height, mouseX, mouseY, px, py);
+		Wallpapers.Screen editing = picker ? editor.screen() : null;
+		float fade = picker ? editor.contentAlpha() : 1f;
+		boolean interactive = !overlay && !lock.locked() && !editor.active();
 		float shown = Anim.clamp01(open);
-		if (shown > 0.001f) renderMenu(ctx, interactive ? mouseX : -10000, interactive ? mouseY : -10000, t, px, py, shown);
+		if (shown > 0.001f) {
+			if (editing != Wallpapers.Screen.HOME) {
+				WallpaperStyle style = Wallpapers.style(Wallpapers.Screen.HOME);
+				if (WallpaperRenderer.queueScreen(WallpaperRenderer.HOME, Wallpapers.selected(Wallpapers.Screen.HOME), style, px, py)) {
+					WallpaperRenderer.backdrop(WallpaperRenderer.HOME);
+					Render2D.wallpaper(ctx, WallpaperRenderer.HOME.textureSetup(), 0f, 0f, width, height, 0f, 0, style.tint(WallpaperEditor.LEVEL));
+				} else {
+					Render2D.rect(ctx, 0f, 0f, width, height, 0xFF050505);
+				}
+			}
+			if (editing == Wallpapers.Screen.HOME) editor.pushContentTransform(ctx);
+			if (fade > 0.004f) {
+				Render2D.setAlpha(fade);
+				renderParticles(ctx, dt, px, py);
+				renderMenu(ctx, interactive ? mouseX : -10000, interactive ? mouseY : -10000, t, px, py, shown * fade);
+			}
+			if (editing == Wallpapers.Screen.HOME) ctx.getMatrices().popMatrix();
+		}
 
 		// Intro: the background rises out of black under the lock screen's clock, or under the menu's header and
 		// buttons as they fade in.
 		boolean locked = lock.visible();
-		if (locked) lock.renderSheet(ctx, width, height);
-		float fade = Anim.easeInOutSine(Anim.progress(t, 0f, 1.1f));
-		if (fade < 1f) Render2D.rect(ctx, 0, 0, width, height, ColorUtil.withAlpha(0x000000, Math.round((1f - fade) * 255)));
-		if (locked) lock.renderContent(ctx, width, height, t, time, clock);
+		if (locked && editing != Wallpapers.Screen.LOCK) {
+			WallpaperStyle style = Wallpapers.style(Wallpapers.Screen.LOCK);
+			boolean ready = WallpaperRenderer.queueScreen(WallpaperRenderer.LOCK, Wallpapers.selected(Wallpapers.Screen.LOCK), style, px, py);
+			lock.renderSheet(ctx, width, height, ready ? WallpaperRenderer.LOCK.textureSetup() : null, style.tint(WallpaperEditor.LEVEL));
+		}
+		float intro = Anim.easeInOutSine(Anim.progress(t, 0f, 1.1f));
+		if (intro < 1f) Render2D.rect(ctx, 0, 0, width, height, ColorUtil.withAlpha(0x000000, Math.round((1f - intro) * 255)));
+		if (locked) {
+			if (editing == Wallpapers.Screen.LOCK) editor.pushContentTransform(ctx);
+			lock.renderContent(ctx, width, height, t, time, clock, fade);
+			if (editing == Wallpapers.Screen.LOCK) ctx.getMatrices().popMatrix();
+		}
+		if (picker) editor.renderControls(ctx, mouseX, mouseY);
+		hold.render(ctx);
 		Render2D.setAlpha(1f);
+	}
+
+	/** The hold completed: the picker opens for the screen it was made on. */
+	private void startEditing() {
+		lock.cancelPress();
+		pressed = null;
+		swallowRelease = true;
+		editor.open(lock.locked() ? Wallpapers.Screen.LOCK : Wallpapers.Screen.HOME, clock.polish());
 	}
 
 	/**
@@ -264,11 +307,19 @@ public final class V1zirMainMenu extends Screen {
 	@Override
 	public boolean mouseClicked(Click click, boolean doubled) {
 		if (client.getOverlay() != null) return true;
-		if (lock.locked()) {
-			if (click.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) lock.press(click.y(), height);
+		boolean left = click.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT;
+		if (editor.active()) {
+			if (left) editor.mouseClicked(click.x(), click.y());
 			return true;
 		}
-		if (click.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+		if (lock.locked()) {
+			if (left) {
+				lock.press(click.y(), height);
+				hold.start(click.x(), click.y());
+			}
+			return true;
+		}
+		if (left) {
 			for (RoundButton button : buttons) {
 				if (button.hovered(click.x(), click.y())) {
 					pressed = button;
@@ -276,12 +327,19 @@ public final class V1zirMainMenu extends Screen {
 					return true;
 				}
 			}
+			// An empty spot: held long enough, it opens the wallpaper picker.
+			hold.start(click.x(), click.y());
+			return true;
 		}
 		return super.mouseClicked(click, doubled);
 	}
 
 	@Override
 	public boolean mouseDragged(Click click, double offsetX, double offsetY) {
+		if (editor.active()) {
+			editor.mouseDragged(click.x());
+			return true;
+		}
 		if (lock.locked()) {
 			lock.drag(click.y(), height);
 			return true;
@@ -292,6 +350,15 @@ public final class V1zirMainMenu extends Screen {
 	@Override
 	public boolean mouseReleased(Click click) {
 		if (click.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+			hold.cancel();
+			if (swallowRelease) {
+				swallowRelease = false;
+				return true;
+			}
+			if (editor.active()) {
+				editor.mouseReleased(click.x(), click.y());
+				return true;
+			}
 			lock.release(click.y(), height);
 			RoundButton button = pressed;
 			pressed = null;
@@ -306,6 +373,10 @@ public final class V1zirMainMenu extends Screen {
 
 	@Override
 	public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+		if (editor.active()) {
+			editor.mouseScrolled(verticalAmount != 0 ? verticalAmount : -horizontalAmount);
+			return true;
+		}
 		if (lock.locked()) {
 			if (verticalAmount != 0) lock.unlock();
 			return true;
@@ -315,6 +386,10 @@ public final class V1zirMainMenu extends Screen {
 
 	@Override
 	public boolean keyPressed(KeyInput input) {
+		if (editor.active()) {
+			editor.keyPressed(input.key());
+			return true;
+		}
 		if (lock.locked()) {
 			// Any key opens it, once the loading overlay is gone and the lock screen can be seen.
 			if (client.getOverlay() == null) lock.unlock();

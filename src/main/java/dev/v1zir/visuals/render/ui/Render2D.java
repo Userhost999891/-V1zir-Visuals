@@ -254,12 +254,25 @@ public final class Render2D {
 		shape(ctx, V1zirPipelines.IMAGE, texture, x, y, w, h, radius, 0, 0, ShapeElement.FILL, 0, color, color, color, color);
 	}
 
-	/** Animated shader background (sky presets in "menu" mode) covering the given area. */
-	public static void menuBackground(DrawContext ctx, float width, float height, int color) {
+	/**
+	 * A title screen wallpaper (a WallpaperTarget's texture) filling a rounded rectangle with the menu's cinematic finish;
+	 * color dims it (white = unchanged) and carries its opacity. corners as for round() (0 = all).
+	 */
+	public static void wallpaper(DrawContext ctx, TextureSetup texture, float x, float y, float w, float h, float radius, int corners, int color) {
+		color = a(color);
+		if (w <= 0 || h <= 0 || texture == null || (color >>> 24) == 0) return;
 		Matrix3x2f pose = pose(ctx);
-		ScreenRect bounds = bounds(0, 0, width, height, pose, scissor(ctx));
+		ScreenRect scissor = scissor(ctx);
+		ScreenRect bounds = bounds(x - 1, y - 1, w + 2, h + 2, pose, scissor);
 		if (bounds == null) return;
-		ctx.state.addSimpleElement(new MenuBackgroundElement(pose, scissor(ctx), bounds, width, height, a(color)));
+		ctx.state.addSimpleElement(new MenuBackgroundElement(texture, pose, scissor, bounds, x, y, w, h, radius, corners, color));
+	}
+
+	/** Arc of a ring (progress indicators): thickness inside the radius, swept clockwise from twelve o'clock, round caps. */
+	public static void arc(DrawContext ctx, float cx, float cy, float radius, float thickness, float sweep, int color) {
+		if (sweep <= 0f) return;
+		shape(ctx, V1zirPipelines.SHAPE, TextureSetup.empty(), cx - radius, cy - radius, radius * 2, radius * 2, radius,
+			Math.min(sweep, 1f) * 360f, thickness, ShapeElement.ARC, 0, color, color, color, color);
 	}
 
 	// ------------------------------------------------------------------ text

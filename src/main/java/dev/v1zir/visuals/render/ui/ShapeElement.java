@@ -28,6 +28,8 @@ public record ShapeElement(
 	public static final int FILL = 0;
 	public static final int OUTLINE = 1;
 	public static final int SHADOW = 2;
+	/** A ring swept clockwise from twelve o'clock over softness degrees (Render2D.arc). */
+	public static final int ARC = 3;
 	/** Flag: fine static grain over the fill (the matte surface of panels and cards). */
 	public static final int MATTE = 8;
 	/** Flag: the shape catches the soft light that follows the cursor (FrameUniforms.cursor). */

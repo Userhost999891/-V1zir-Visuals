@@ -10,7 +10,7 @@ import dev.v1zir.visuals.gui.clickgui.WindowTransition;
 import dev.v1zir.visuals.render.FrameUniforms;
 import dev.v1zir.visuals.render.GuiCapture;
 import dev.v1zir.visuals.render.V1zirPipelines;
-import dev.v1zir.visuals.render.sky.MenuSky;
+import dev.v1zir.visuals.render.wallpaper.WallpaperRenderer;
 import net.minecraft.client.gl.Framebuffer;
 import net.minecraft.client.gui.render.GuiRenderer;
 import org.spongepowered.asm.mixin.Mixin;
@@ -26,8 +26,8 @@ public abstract class GuiRendererMixin {
 	private void v1zir$beforeGui(GpuBufferSlice fogBuffer, CallbackInfo ci) {
 		if (GuiCapture.isCapturing(this)) return;
 		FrameUniforms.gui();
-		// The menu sky first: outside a world it is what glass panels blur.
-		MenuSky.renderPending();
+		// The title screen wallpapers first: outside a world they are what glass panels blur.
+		WallpaperRenderer.renderPending();
 		if (WindowTransition.wantsBlur()) BackdropBlur.request();
 		BackdropBlur.runIfRequested();
 	}
