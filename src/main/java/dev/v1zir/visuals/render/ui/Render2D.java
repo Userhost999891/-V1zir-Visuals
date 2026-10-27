@@ -254,7 +254,7 @@ public final class Render2D {
 		image(ctx, texture, x, y, w, h, radius, color, 0f, 0f, 1f, 1f, 0);
 	}
 
-	/** The texture region (u0, v0)-(u1, v1) (0 to 1) filling a rounded rectangle; flags: ImageElement.PIXEL_ART, PREMULTIPLIED. */
+	/** The texture region (u0, v0)-(u1, v1) (0 to 1) filling a rounded rectangle; flags: corner mask (0 = all) | ImageElement.PIXEL_ART. */
 	public static void image(DrawContext ctx, TextureSetup texture, float x, float y, float w, float h, float radius, int color,
 							 float u0, float v0, float u1, float v1, int flags) {
 		if (w <= 0 || h <= 0) return;

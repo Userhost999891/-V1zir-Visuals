@@ -19,8 +19,8 @@ vec4 v1zirPremultiplied(ivec2 p) {
 	return vec4(c.rgb * c.a, c.a);
 }
 
-// A texture region (album art, the logo, a skin's face, an entity portrait) stretched over a rounded rectangle;
-// the vertex colour tints it and carries its opacity. Flags: 1 pixel art, 2 premultiplied texture.
+// A texture region (album art, the logo, a skin's or a mob's face) stretched over a rounded rectangle;
+// the vertex colour tints it and carries its opacity. Flags: 1 pixel art.
 void main() {
 	float d = v1zirShapeDistance(localPos, shape, style.z);
 	float coverage = v1zirShapeCoverage(d, shape, style);
@@ -58,7 +58,6 @@ void main() {
 			}
 		}
 		texel /= float(n * n);
-		if ((f & 2) != 0) texel.rgb /= max(texel.a, 1e-4);
 	}
 	fragColor = vec4(texel.rgb * vertexColor.rgb, texel.a * vertexColor.a * coverage) * ColorModulator;
 }

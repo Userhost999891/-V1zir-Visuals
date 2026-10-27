@@ -8,3 +8,5 @@ accessible field net/minecraft/client/network/ClientPlayerInteractionManager cur
 accessible field net/minecraft/client/network/ClientPlayerInteractionManager currentBreakingProgress F
 accessible field net/minecraft/client/render/WorldRenderer blockBreakingInfos Lit/unimi/dsi/fastutil/ints/Int2ObjectMap;
 accessible field net/minecraft/client/render/OverlayTexture texture Lnet/minecraft/client/texture/NativeImageBackedTexture;
+accessible field net/minecraft/client/model/ModelPart cuboids Ljava/util/List;
+accessible field net/minecraft/client/model/ModelPart children Ljava/util/Map;

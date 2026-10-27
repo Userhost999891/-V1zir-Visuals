@@ -449,7 +449,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		singleplayer.getServer().runCommand("clear @a");
 	}
 
-	/** The Target HUD on a pig under the crosshair (how it picks a target without a fight): the mob's own head as a 3D portrait. */
+	/** The Target HUD on a pig under the crosshair (how it picks a target without a fight): the face cut from the pig's own texture. */
 	private static void targetHud(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
 		boolean wasOn = context.computeOnClient(client -> ModuleManager.get(TargetHudModule.class).isEnabled());
 		context.runOnClient(client -> ModuleManager.get(TargetHudModule.class).setEnabled(true, false));

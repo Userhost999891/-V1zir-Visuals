@@ -23,8 +23,6 @@ public record ImageElement(
 ) implements SimpleGuiElementRenderState {
 	/** Flag: pixel art (skins), every texel a crisp square with anti-aliased edges. */
 	public static final int PIXEL_ART = 16;
-	/** Flag: the texture holds premultiplied colour (offscreen entity renders). */
-	public static final int PREMULTIPLIED = 32;
 	/** How far the quad reaches past the image, for the anti-aliased rim; gui_image.vsh derives the half size from it. */
 	static final float PAD = 2f;
 	private static final float UV_SCALE = 16384f;

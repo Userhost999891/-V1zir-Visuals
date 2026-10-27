@@ -82,21 +82,19 @@ public final class TargetHudModule extends HudModule {
 		float ax = x + 6f;
 		float ay = y + 6f;
 		Render2D.shadow(ctx, ax, ay, avatar, avatar, 5f, 6f, ColorUtil.withAlpha(Theme.accent(), 90));
-		// The head goes through the panel's own drawing (same fade and transform); a hit squashes it for a moment.
-		float hurt = Math.max(0f, e.hurtTime - tickDelta) / 10f;
-		float squash = 1f - Math.min(1f, hurt) * 0.12f;
+		// The face goes through the panel's own drawing (same fade and transform); a hit squashes and reddens it for a
+		// moment. Players show their skin's face, other entities the face cut from their own texture, or an icon.
+		float hurt = Math.min(1f, Math.max(0f, e.hurtTime - tickDelta) / 10f);
+		float squash = 1f - hurt * 0.12f;
+		float s = avatar * squash;
+		float o = (avatar - s) / 2f;
+		int tint = ColorUtil.lerp(0xFFFFFFFF, HURT_TINT, hurt);
 		SkinTextures skin = Heads.skinOf(e);
 		if (skin != null) {
-			float s = avatar * squash;
-			float o = (avatar - s) / 2f;
-			Heads.skin(ctx, skin, ax + o, ay + o, s, 5f * squash, ColorUtil.lerp(0xFFFFFFFF, HURT_TINT, Math.min(1f, hurt)));
-		} else {
-			// Other entities show their own model's head on an accent well (vanilla's red hurt overlay is part of
-			// that render), or an icon when it cannot be drawn.
+			Heads.skin(ctx, skin, ax + o, ay + o, s, 5f * squash, tint);
+		} else if (!Heads.face(ctx, e, tickDelta, ax + o, ay + o, s, 5f * squash, tint)) {
 			Render2D.round(ctx, ax, ay, avatar, avatar, 5f, ColorUtil.withAlpha(Theme.accent(), 45));
-			if (!Heads.portrait(ctx, e, tickDelta, ax, ay, avatar, 5f, squash, 0xFFFFFFFF)) {
-				Render2D.icon(ctx, e instanceof PlayerEntity ? Icons.USER : Icons.SKULL, ax + avatar / 2f, ay + avatar / 2f, 14f, Theme.accent());
-			}
+			Render2D.icon(ctx, e instanceof PlayerEntity ? Icons.USER : Icons.SKULL, ax + avatar / 2f, ay + avatar / 2f, 14f, Theme.accent());
 		}
 		Render2D.outline(ctx, ax, ay, avatar, avatar, 5f, 1f, ColorUtil.withAlpha(0xFFFFFF, 30));
 

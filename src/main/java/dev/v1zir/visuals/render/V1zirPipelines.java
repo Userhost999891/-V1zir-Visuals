@@ -26,7 +26,7 @@ import net.minecraft.client.render.VertexFormats;
  *     UV0    float2  position relative to the image centre (GUI px), 2 px past the image at the corners
  *     UV1    short2  texture region u0, v0 * 16384
  *     UV2    short2  texture region u1, v1 * 16384
- *     Normal byte3   corner radius * 8 (high and low 7 bits), corner mask | PIXEL_ART | PREMULTIPLIED flags
+ *     Normal byte3   corner radius * 8 (high and low 7 bits), corner mask | PIXEL_ART flag
  *   TEXT (particle vertex format)
  *     UV0    float2  SDF atlas coordinates
  *     UV2    short2  weight shift * 256, extra softness * 256
@@ -57,7 +57,7 @@ public final class V1zirPipelines {
 		.withCull(false)
 		.build();
 
-	/** A texture region (album art, skin faces, entity portraits) in a rounded rectangle, tinted by the vertex colour. */
+	/** A texture region (album art, skin and mob faces) in a rounded rectangle, tinted by the vertex colour. */
 	public static final RenderPipeline IMAGE = RenderPipeline.builder(RenderPipelines.GUI_SNIPPET)
 		.withLocation(V1zir.id("pipeline/gui_image"))
 		.withVertexShader(V1zir.id("core/gui_image"))
