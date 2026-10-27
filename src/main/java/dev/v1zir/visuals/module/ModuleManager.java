@@ -11,6 +11,7 @@ import dev.v1zir.visuals.module.impl.effects.CrystalChamsModule;
 import dev.v1zir.visuals.module.impl.effects.DamageNumbersModule;
 import dev.v1zir.visuals.module.impl.effects.HitColorModule;
 import dev.v1zir.visuals.module.impl.effects.HitMarkerModule;
+import dev.v1zir.visuals.module.impl.effects.HealthIndicatorModule;
 import dev.v1zir.visuals.module.impl.effects.HitParticlesModule;
 import dev.v1zir.visuals.module.impl.effects.JumpCirclesModule;
 import dev.v1zir.visuals.module.impl.effects.KillEffectsModule;
@@ -116,6 +117,7 @@ public final class ModuleManager {
 		register(new CrosshairModule());
 		register(new HitColorModule());
 		register(new DamageNumbersModule());
+		register(new HealthIndicatorModule());
 		register(new HitMarkerModule());
 		register(new KillEffectsModule());
 		register(new PopChamsModule());

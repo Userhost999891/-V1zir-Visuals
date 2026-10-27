@@ -16,6 +16,7 @@ import dev.v1zir.visuals.util.Theme;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
 import net.minecraft.client.world.ClientWorld;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
@@ -157,8 +158,7 @@ public final class NametagsModule extends Module implements WorldEffect {
 		double dy = tag.y - WorldEffectRenderer.camY;
 		double dz = tag.z - WorldEffectRenderer.camZ;
 		float dist = (float) Math.sqrt(dx * dx + dy * dy + dz * dz);
-		// At 100% the tag keeps the on-screen size it has at NEAR blocks however far it is.
-		float k = scale.f() * (1f + minSize.f() / 100f * Math.max(0f, dist / NEAR - 1f));
+		float k = scaleAt(dist);
 		int meters = Math.round(dist);
 		if (meters != tag.meters) {
 			tag.meters = meters;
@@ -261,6 +261,22 @@ public final class NametagsModule extends Module implements WorldEffect {
 		if (distW > 0f) {
 			WorldText.draw(tag.distance, x, ay, z, right, row3Y, text.font(smallFont).size(small).color(Theme.textDim()).align(WorldText.Align.RIGHT));
 		}
+	}
+
+	/** Size factor of a tag dist blocks away: at 100% Min size it keeps the on-screen size it has at NEAR blocks however far it is. */
+	private float scaleAt(float dist) {
+		return scale.f() * (1f + minSize.f() / 100f * Math.max(0f, dist / NEAR - 1f));
+	}
+
+	/**
+	 * How far above a player's head the top of its tag is, in blocks, dist blocks from the camera (the plate's height
+	 * as draw() lays it out); 0 when it has none. Health Indicator stacks its hearts above it.
+	 */
+	public float tagTop(Entity entity, float dist) {
+		Tag tag = byId.get(entity.getId());
+		if (!isEnabled() || tag == null || !tag.seen) return 0f;
+		float rows = (items.on() || distance.on() ? SMALL * 0.72f + GAP : 0f) + (healthBar.on() ? BAR + GAP : 0f);
+		return 0.25f + (PAD_Y * 2f + rows + NAME * 0.72f) * scaleAt(dist);
 	}
 
 	private static int healthColor(float fraction) {

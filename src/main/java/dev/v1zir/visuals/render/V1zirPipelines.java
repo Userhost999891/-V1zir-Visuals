@@ -209,9 +209,19 @@ public final class V1zirPipelines {
 	/** Regular alpha blended world geometry (china hat body...). */
 	public static final RenderPipeline WORLD_TRANSLUCENT = worldPipeline("world_translucent", BlendFunction.TRANSLUCENT, true);
 	/** World-space SDF text (WorldText), depth tested against the world. */
-	public static final RenderPipeline WORLD_TEXT = worldTextPipeline("world_text", true);
+	public static final RenderPipeline WORLD_TEXT = worldTexturedPipeline("world_text", "world_text", VertexFormats.POSITION_TEXTURE_COLOR_LIGHT, true);
 	/** World-space SDF text that shows through walls. */
-	public static final RenderPipeline WORLD_TEXT_SEE_THROUGH = worldTextPipeline("world_text_see_through", false);
+	public static final RenderPipeline WORLD_TEXT_SEE_THROUGH = worldTexturedPipeline("world_text_see_through", "world_text",
+		VertexFormats.POSITION_TEXTURE_COLOR_LIGHT, false);
+	/**
+	 * Pixel-art sprites of the GUI atlas (hearts) on camera-facing quads (WorldSprites), depth tested. Entity vertex
+	 * format: UV1 and UV2 carry the sprite's region (u0, v0 and u1, v1 * 16384) so sampling never leaves it.
+	 */
+	public static final RenderPipeline WORLD_SPRITE = worldTexturedPipeline("world_sprite", "world_sprite",
+		VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL, true);
+	/** World-space sprites that show through walls. */
+	public static final RenderPipeline WORLD_SPRITE_SEE_THROUGH = worldTexturedPipeline("world_sprite_see_through", "world_sprite",
+		VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL, false);
 
 	private static boolean registered;
 
@@ -279,12 +289,12 @@ public final class V1zirPipelines {
 			.build();
 	}
 
-	private static RenderPipeline worldTextPipeline(String name, boolean depthTest) {
+	private static RenderPipeline worldTexturedPipeline(String name, String shader, VertexFormat format, boolean depthTest) {
 		return RenderPipeline.builder()
 			.withLocation(V1zir.id("pipeline/" + name))
-			.withVertexShader(V1zir.id("core/world_text"))
-			.withFragmentShader(V1zir.id("core/world_text"))
-			.withVertexFormat(VertexFormats.POSITION_TEXTURE_COLOR_LIGHT, VertexFormat.DrawMode.QUADS)
+			.withVertexShader(V1zir.id("core/" + shader))
+			.withFragmentShader(V1zir.id("core/" + shader))
+			.withVertexFormat(format, VertexFormat.DrawMode.QUADS)
 			.withSampler("Sampler0")
 			.withUniform("WorldParams", UniformType.UNIFORM_BUFFER)
 			.withDepthTestFunction(depthTest ? DepthTestFunction.LEQUAL_DEPTH_TEST : DepthTestFunction.NO_DEPTH_TEST)
@@ -320,6 +330,8 @@ public final class V1zirPipelines {
 		RenderPipelines.register(WORLD_TRANSLUCENT);
 		RenderPipelines.register(WORLD_TEXT);
 		RenderPipelines.register(WORLD_TEXT_SEE_THROUGH);
+		RenderPipelines.register(WORLD_SPRITE);
+		RenderPipelines.register(WORLD_SPRITE_SEE_THROUGH);
 	}
 
 	public static boolean isOurs(RenderPipeline pipeline) {
