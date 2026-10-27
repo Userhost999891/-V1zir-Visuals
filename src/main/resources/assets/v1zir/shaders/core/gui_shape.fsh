@@ -11,9 +11,28 @@ in vec3 style;
 
 out vec4 fragColor;
 
+// Arc (mode 3): a ring of thickness style.x inside the shape's circle, swept clockwise from twelve o'clock over
+// shape.w degrees, with round caps.
+float arcDistance(vec2 p, vec4 shape, float thickness) {
+	float aperture = radians(clamp(shape.w, 0.0, 360.0)) * 0.5;
+	vec2 q = vec2(p.x, -p.y);
+	q = vec2(q.x * cos(aperture) - q.y * sin(aperture), q.x * sin(aperture) + q.y * cos(aperture));
+	q.x = abs(q.x);
+	vec2 sc = vec2(sin(aperture), cos(aperture));
+	float ra = shape.x - thickness * 0.5;
+	return (sc.y * q.x > sc.x * q.y ? length(q - sc * ra) : abs(length(q) - ra)) - thickness * 0.5;
+}
+
 void main() {
-	float d = v1zirShapeDistance(localPos, shape, style.z);
-	float coverage = v1zirShapeCoverage(d, shape, style);
+	float d;
+	float coverage;
+	if ((int(style.y) & 7) == 3) {
+		d = arcDistance(localPos, shape, style.x);
+		coverage = clamp(0.5 - d / max(fwidth(d), 1e-4), 0.0, 1.0);
+	} else {
+		d = v1zirShapeDistance(localPos, shape, style.z);
+		coverage = v1zirShapeCoverage(d, shape, style);
+	}
 	if (coverage <= 0.0) discard;
 	vec4 color = vertexColor;
 	int flags = int(style.y);
