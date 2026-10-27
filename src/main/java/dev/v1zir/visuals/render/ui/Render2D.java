@@ -251,7 +251,22 @@ public final class Render2D {
 
 	/** A texture (album art) filling a rounded rectangle; color tints it and carries its opacity (white = unchanged). */
 	public static void image(DrawContext ctx, TextureSetup texture, float x, float y, float w, float h, float radius, int color) {
-		shape(ctx, V1zirPipelines.IMAGE, texture, x, y, w, h, radius, 0, 0, ShapeElement.FILL, 0, color, color, color, color);
+		image(ctx, texture, x, y, w, h, radius, color, 0f, 0f, 1f, 1f, 0);
+	}
+
+	/** The texture region (u0, v0)-(u1, v1) (0 to 1) filling a rounded rectangle; flags: ImageElement.PIXEL_ART, PREMULTIPLIED. */
+	public static void image(DrawContext ctx, TextureSetup texture, float x, float y, float w, float h, float radius, int color,
+							 float u0, float v0, float u1, float v1, int flags) {
+		if (w <= 0 || h <= 0) return;
+		color = a(color);
+		if ((color >>> 24) == 0) return;
+		Matrix3x2f pose = pose(ctx);
+		ScreenRect scissor = scissor(ctx);
+		float pad = ImageElement.PAD;
+		ScreenRect bounds = bounds(x - pad, y - pad, w + pad * 2, h + pad * 2, pose, scissor);
+		if (bounds == null) return;
+		ctx.state.addSimpleElement(new ImageElement(V1zirPipelines.IMAGE, texture, pose, scissor, bounds,
+			x, y, w, h, radius, color, u0, v0, u1, v1, flags));
 	}
 
 	/** Animated shader background (sky presets in "menu" mode) covering the given area. */

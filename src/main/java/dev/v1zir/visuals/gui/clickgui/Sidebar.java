@@ -5,14 +5,13 @@ import dev.v1zir.visuals.module.Module;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.render.font.Fonts;
 import dev.v1zir.visuals.render.font.SdfFont;
+import dev.v1zir.visuals.render.ui.Heads;
 import dev.v1zir.visuals.render.ui.Render2D;
 import dev.v1zir.visuals.util.Anim;
 import dev.v1zir.visuals.util.ColorUtil;
 import dev.v1zir.visuals.util.Theme;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.PlayerSkinDrawer;
-import net.minecraft.client.network.PlayerListEntry;
 
 import java.util.Arrays;
 import java.util.List;
@@ -117,17 +116,16 @@ final class Sidebar {
 		}
 	}
 
-	/** Player head and name over the config name; only drawn in a world with a player list entry. */
+	/** Player head (rounded, fading with the window) and name over the config name; only drawn in a world. */
 	private void renderFooter(DrawContext ctx, float fx, float fy, float fw) {
 		MinecraftClient mc = MinecraftClient.getInstance();
-		if (mc.player == null || mc.getNetworkHandler() == null) return;
-		PlayerListEntry entry = mc.getNetworkHandler().getPlayerListEntry(mc.player.getUuid());
-		if (entry == null) return;
+		if (mc.player == null) return;
 		Render2D.rect(ctx, fx + 8f, fy, fw - 16f, 1f, Ui.HAIRLINE);
 		float head = 16f;
 		float hx = fx + 12f;
 		float hy = fy + (FOOTER - head) / 2f;
-		PlayerSkinDrawer.draw(ctx, entry.getSkinTextures(), (int) hx, (int) hy, (int) head, ColorUtil.fade(0xFFFFFFFF, Render2D.alpha()));
+		Heads.skin(ctx, mc.player.getSkin(), hx, hy, head, Ui.CELL_RADIUS, 0xFFFFFFFF);
+		Render2D.outline(ctx, hx, hy, head, head, Ui.CELL_RADIUS, 1f, ColorUtil.withAlpha(0xFFFFFF, 30));
 		String name = mc.getSession().getUsername();
 		float maxName = fw - 44f;
 		if (!name.equals(shownName) || maxName != nameMax) {

@@ -6,16 +6,21 @@ import dev.v1zir.visuals.render.font.SdfFont;
 import dev.v1zir.visuals.render.ui.Render2D;
 import dev.v1zir.visuals.util.ColorUtil;
 import dev.v1zir.visuals.util.Theme;
+import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.gui.hud.InGameHud;
 import net.minecraft.entity.effect.StatusEffect;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.registry.entry.RegistryEntry;
+import net.minecraft.util.Identifier;
 
 import java.util.Arrays;
 
-/** Active status effects with remaining time. */
+/** Active status effects with their vanilla icon, level and remaining time. */
 public final class PotionsModule extends HudModule {
 	private static final String[] ROMAN = {"", " II", " III", " IV", " V", " VI", " VII", " VIII", " IX", " X"};
+	/** Icon size in GUI pixels: half the 18 px sprite, so it maps onto whole screen pixels at the usual GUI scales. */
+	private static final int ICON = 9;
 
 	private Row[] rows = new Row[4];
 
@@ -31,7 +36,9 @@ public final class PotionsModule extends HudModule {
 
 	@Override
 	public boolean hasContent() {
-		return mc.player != null && !mc.player.getStatusEffects().isEmpty();
+		if (mc.player == null) return false;
+		for (StatusEffectInstance effect : mc.player.getStatusEffects()) if (effect.shouldShowIcon()) return true;
+		return false;
 	}
 
 	@Override
@@ -44,11 +51,13 @@ public final class PotionsModule extends HudModule {
 		int count = 0;
 		float w = 100f;
 		for (StatusEffectInstance effect : mc.player.getStatusEffects()) {
+			// Hidden effects stay off the HUD, like vanilla's.
+			if (!effect.shouldShowIcon()) continue;
 			if (count == rows.length) rows = Arrays.copyOf(rows, rows.length * 2);
 			Row row = rows[count];
 			if (row == null) rows[count] = row = new Row();
 			row.update(effect, font, timeFont, size);
-			w = Math.max(w, row.nameWidth + row.timeWidth + 30f);
+			w = Math.max(w, row.nameWidth + row.timeWidth + 34f);
 			count++;
 		}
 		float h = 18f + Math.max(1, count) * rowH + 3f;
@@ -57,22 +66,36 @@ public final class PotionsModule extends HudModule {
 		float cy = headerPanel(ctx, x, y, w, h, Icons.FLASK_CONICAL, "Potions");
 		for (int i = 0; i < count; i++) {
 			Row row = rows[i];
-			StatusEffectInstance effect = row.effect;
-			int color = ColorUtil.rgb(effect.getEffectType().value().getColor());
-			boolean ending = !effect.isInfinite() && effect.getDuration() < 200;
-			float blink = ending ? 0.55f + 0.45f * (float) Math.sin(System.nanoTime() / 1.0e9 * 8.0) : 1f;
-			Render2D.circle(ctx, x + 9f, cy + rowH / 2f, 2.2f, ColorUtil.fade(color, blink));
-			Render2D.textMiddle(ctx, font, row.name, x + 15f, cy + rowH / 2f, size, Theme.text());
-			Render2D.textMiddle(ctx, timeFont, row.time, x + w - 7f - row.timeWidth, cy + rowH / 2f, size, ColorUtil.fade(Theme.textDim(), blink));
+			float blink = blink(row.effect, tickDelta);
+			// Sprites are pixel art: whole GUI pixels keep them crisp.
+			ctx.drawGuiTexture(RenderPipelines.GUI_TEXTURED, row.icon, Math.round(x + 5f), Math.round(cy + (rowH - ICON) / 2f), ICON, ICON,
+				blink * Render2D.alpha());
+			Render2D.textMiddle(ctx, font, row.name, x + 8f + ICON, cy + rowH / 2f, size, Theme.text());
+			Render2D.textMiddle(ctx, timeFont, row.time, x + w - 7f - row.timeWidth, cy + rowH / 2f, size,
+				ColorUtil.fade(Theme.textDim(), 0.4f + 0.6f * blink));
 			cy += rowH;
 		}
 		// Drop references to effects that ended, so they can be collected.
 		for (int i = count; i < rows.length && rows[i] != null; i++) rows[i].effect = null;
 	}
 
-	/** One effect row; its name and time strings are rebuilt only when the effect, its level or the shown second changes. */
+	/**
+	 * Vanilla's icon opacity: full, then over the last 10 seconds about half with a blink that deepens towards the
+	 * end (smoothed between ticks). Ambient (beacon) and infinite effects never blink.
+	 */
+	private static float blink(StatusEffectInstance effect, float tickDelta) {
+		int duration = effect.getDuration();
+		if (effect.isAmbient() || effect.isInfinite() || duration >= 200) return 1f;
+		float ticks = Math.max(0f, duration - tickDelta);
+		float f = Math.min(ticks / 100f, 0.5f)
+			+ (float) Math.cos(ticks * Math.PI / 5.0) * Math.min((10 - duration / 20) / 40f, 0.25f);
+		return Math.max(0f, Math.min(1f, f));
+	}
+
+	/** One effect row; its icon, name and time strings are rebuilt only when the effect, its level or the shown second changes. */
 	private static final class Row {
 		StatusEffectInstance effect;
+		Identifier icon;
 		String name;
 		String time;
 		float nameWidth;
@@ -92,6 +115,7 @@ public final class PotionsModule extends HudModule {
 			if (fontChanged || effect.getEffectType() != type || amp != amplifier) {
 				type = effect.getEffectType();
 				amplifier = amp;
+				icon = InGameHud.getEffectTexture(type);
 				name = type.value().getName().getString() + (amp > 0 && amp < ROMAN.length ? ROMAN[amp] : amp > 0 ? " " + (amp + 1) : "");
 				nameWidth = font.width(name, size);
 			}
