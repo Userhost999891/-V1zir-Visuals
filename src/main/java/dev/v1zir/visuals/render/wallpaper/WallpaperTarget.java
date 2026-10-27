@@ -32,7 +32,16 @@ public final class WallpaperTarget {
 		w = Math.max(1, w);
 		h = Math.max(1, h);
 		if (view != null && w == width && h == height) return;
-		close();
+		// GUI elements drawn earlier this frame may still sample the old texture: it goes once the frame is done.
+		if (view != null) {
+			GpuTexture oldTexture = texture;
+			GpuTextureView oldView = view;
+			WallpaperRenderer.retire(() -> {
+				oldView.close();
+				oldTexture.close();
+			});
+		}
+		dropScratch();
 		texture = RenderSystem.getDevice().createTexture(label.get(), 15, TextureFormat.RGBA8, w, h, 1, 1);
 		view = RenderSystem.getDevice().createTextureView(texture);
 		setup = TextureSetup.of(view, RenderSystem.getSamplerCache().get(FilterMode.LINEAR));

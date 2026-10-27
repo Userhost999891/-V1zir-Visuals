@@ -119,6 +119,15 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.takeScreenshot("lock-screen-drag");
 		context.getInput().releaseMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
 		context.waitTicks(20);
+
+		// Holding the mouse button still on an empty spot opens the lock screen's wallpaper picker; the right arrow
+		// moves to the next card (the test input has no mouse wheel) and Escape cancels.
+		openWallpaperPicker(context, 200, 200, "wallpaper-edit-lock");
+		context.getInput().pressKey(GLFW.GLFW_KEY_RIGHT);
+		context.waitTicks(15);
+		context.takeScreenshot("wallpaper-edit-lock-next");
+		context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+		context.waitTicks(20);
 		context.getInput().pressKey(GLFW.GLFW_KEY_SPACE);
 
 		// Intro: the lock screen slides away and the menu comes up from below.
@@ -140,7 +149,23 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.getInput().setCursorPos(cursor[0], cursor[1]);
 		context.waitTicks(10);
 		context.takeScreenshot("main-menu-hover");
+
+		// The same on the home screen, below the buttons.
+		openWallpaperPicker(context, 200, 560, "wallpaper-edit-home");
+		context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+		context.waitTicks(20);
 		context.getInput().setCursorPos(640, 360);
+	}
+
+	/** Holds the left mouse button still at (x, y) in window pixels past the three seconds and shoots the picker. */
+	private static void openWallpaperPicker(ClientGameTestContext context, double x, double y, String name) {
+		context.getInput().setCursorPos(x, y);
+		context.getInput().holdMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+		// Ticks follow real time, at most one per frame, so this is at least 3.3 seconds.
+		context.waitTicks(66);
+		context.getInput().releaseMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+		context.waitTicks(20);
+		context.takeScreenshot(name);
 	}
 
 	/** Every way back to the title screen must land on our menu, never on the vanilla one. */

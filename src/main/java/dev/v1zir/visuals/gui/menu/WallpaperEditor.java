@@ -89,6 +89,8 @@ final class WallpaperEditor {
 	private boolean open;
 	private boolean polish;
 	private boolean useForBoth;
+	/** The category marker jumps to its tab the first time, then slides. */
+	private boolean tabsPlaced;
 	private int focus;
 	/** The card that zooms: the screen's wallpaper while opening, the chosen one while closing. */
 	private int zoomIndex;
@@ -131,7 +133,7 @@ final class WallpaperEditor {
 		focus = Math.max(0, list.indexOf(Wallpapers.selected(screen)));
 		zoomIndex = focus;
 		pos.snap(focus);
-		tabW.snap(0f);
+		tabsPlaced = false;
 		zoom.target(1f);
 	}
 
@@ -255,9 +257,9 @@ final class WallpaperEditor {
 
 	private void layout() {
 		float aspect = width / (float) Math.max(height, 1);
-		cardH = Math.min(height * 0.42f, width * 0.5f / aspect);
+		cardH = Math.min(height * 0.48f, width * 0.56f / aspect);
 		cardW = cardH * aspect;
-		cardY = height * 0.42f;
+		cardY = height * 0.43f;
 		spacing = cardW * (0.5f + SIDE * 0.5f) + Math.max(10f, cardW * 0.06f);
 	}
 
@@ -324,7 +326,7 @@ final class WallpaperEditor {
 		if (alpha <= 0.004f || index < 0 || index >= list.size()) return;
 		TextureSetup texture = preview(list.get(index));
 		if (texture == null) return;
-		int v = Math.round(70 * (1f - 0.85f * style(index).dim));
+		int v = Math.round(100 * (1f - 0.85f * style(index).dim));
 		Render2D.wallpaper(ctx, texture, 0f, 0f, width, height, 0f, 0, ColorUtil.argb(Math.round(255 * alpha), v, v, v));
 	}
 
@@ -425,9 +427,8 @@ final class WallpaperEditor {
 
 	/** Title, categories, name, page indicator, adjustments and actions; drawn over the screen's shrunk content. */
 	void renderControls(DrawContext ctx, int mouseX, int mouseY) {
-		if (e <= 0.004f) return;
-		float alpha = Anim.clamp01(e * 1.6f - 0.4f);
-		if (!open) alpha = Anim.clamp01(e * 2f - 1f);
+		// They come in once the card has nearly settled, and go first when it zooms back in.
+		float alpha = Anim.clamp01((e - 0.7f) / 0.3f);
 		if (alpha <= 0.004f) return;
 		int mx = open ? mouseX : -10000;
 		int my = open ? mouseY : -10000;
@@ -435,8 +436,11 @@ final class WallpaperEditor {
 		boolean picture = focus >= list.size() || list.get(focus).kind == Wallpaper.Kind.IMAGE;
 		float imageShown = imageT.target(picture ? 1f : 0f).get();
 		renderHeader(ctx, mx, my);
-		renderName(ctx);
-		float rowY = renderPages(ctx) + 10f;
+		// Name and dots sit under the zooming card until it has settled into place.
+		cardRect(zoomIndex);
+		float below = Math.max(cardY + cardH / 2f, rect[1] + rect[3]);
+		renderName(ctx, below);
+		float rowY = renderPages(ctx, below) + 10f;
 		if (focus < list.size()) renderAdjustments(ctx, rowY, mx, my, imageShown);
 		else hideAdjustments();
 		renderActions(ctx, mx, my, imageShown);
@@ -470,11 +474,13 @@ final class WallpaperEditor {
 			tab.set(tx, tabY, tw, tabSize + 7f, 1f);
 			float hover = tab.hover(mx, my);
 			if (i == active) {
-				tabX.target(tx);
-				tabW.target(tw);
-				if (tabW.value() == 0f) {
+				if (tabsPlaced) {
+					tabX.target(tx);
+					tabW.target(tw);
+				} else {
 					tabX.snap(tx);
 					tabW.snap(tw);
+					tabsPlaced = true;
 				}
 			}
 			int color = i == active ? 0xF2FFFFFF : ColorUtil.lerp(0x8CFFFFFF, 0xCCFFFFFF, hover);
@@ -507,10 +513,10 @@ final class WallpaperEditor {
 	}
 
 	/** The focused card's name under it; while scrolling the names slide and cross-fade with their cards. */
-	private void renderName(DrawContext ctx) {
+	private void renderName(DrawContext ctx, float below) {
 		SdfFont font = Fonts.semibold();
 		float size = Math.max(7f, Math.min(10f, height * 0.026f));
-		float y = cardY + cardH / 2f + size + 2f;
+		float y = below + size + 2f;
 		int lo = (int) Math.floor(p);
 		for (int i = lo; i <= lo + 1; i++) {
 			if (i < 0 || i >= count()) continue;
@@ -526,9 +532,9 @@ final class WallpaperEditor {
 	}
 
 	/** Dots, the current one stretched into a pill; with very many wallpapers "n / total" instead. Returns its bottom. */
-	private float renderPages(DrawContext ctx) {
+	private float renderPages(DrawContext ctx, float below) {
 		float size = Math.max(7f, Math.min(10f, height * 0.026f));
-		float y = cardY + cardH / 2f + size * 2f + 9f;
+		float y = below + size * 2f + 9f;
 		int n = count();
 		if (n > 28) {
 			if (pageFor != focus) {
