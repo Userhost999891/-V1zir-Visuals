@@ -1,6 +1,7 @@
 package dev.v1zir.visuals.test;
 
 import dev.v1zir.visuals.gui.clickgui.ClickGuiScreen;
+import dev.v1zir.visuals.gui.menu.LockScreen;
 import dev.v1zir.visuals.gui.menu.V1zirMainMenu;
 import dev.v1zir.visuals.module.Category;
 import dev.v1zir.visuals.module.Module;
@@ -40,6 +41,7 @@ import net.minecraft.client.gui.hud.DebugHud;
 import net.minecraft.client.gui.screen.AccessibilityOnboardingScreen;
 import net.minecraft.client.gui.screen.TitleScreen;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
+import net.minecraft.client.gui.screen.multiplayer.MultiplayerScreen;
 import net.minecraft.client.gui.screen.option.OptionsScreen;
 import net.minecraft.client.option.GameOptions;
 import net.minecraft.client.option.KeyBinding;
@@ -156,6 +158,34 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		openWallpaperPicker(context, 200, 560, "wallpaper-edit-home");
 		context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
 		context.waitTicks(20);
+
+		// Locked again: hovering the multiplayer quick action shows its name, and a click unlocks straight into
+		// the multiplayer screen, which goes back to the home screen.
+		context.runOnClient(client -> {
+			LockScreen.lock();
+			client.setScreen(new V1zirMainMenu());
+		});
+		context.waitTicks(40);
+		double[] multiplayer = context.computeOnClient(client -> {
+			Object lock = field(client.currentScreen, V1zirMainMenu.class, "lock");
+			Object widgets = field(lock, LockScreen.class, "widgets");
+			float[] box = (float[]) field(widgets, widgets.getClass(), "box");
+			int i = (int) field(null, widgets.getClass(), "MULTI") * 4;
+			double scale = client.getWindow().getScaleFactor();
+			return new double[]{(box[i] + box[i + 2] / 2f) * scale, (box[i + 1] + box[i + 3] / 2f) * scale};
+		});
+		context.getInput().setCursorPos(multiplayer[0], multiplayer[1]);
+		context.waitTicks(10);
+		context.takeScreenshot("lock-screen-action");
+		context.getInput().holdMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+		context.waitTicks(2);
+		context.getInput().releaseMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+		context.waitForScreen(MultiplayerScreen.class);
+		context.waitTicks(5);
+		context.takeScreenshot("lock-screen-multiplayer");
+		context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+		context.waitForScreen(V1zirMainMenu.class);
+		context.waitTicks(10);
 		context.getInput().setCursorPos(640, 360);
 	}
 
