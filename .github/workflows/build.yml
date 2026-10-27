@@ -34,19 +34,24 @@ jobs:
           echo "mapped jar: $jar"
           sig() { javap -p -cp "$jar" "$@" 2>&1 || true; }
           code() { javap -c -p -cp "$jar" "$1" 2>&1 | awk -v m="$2" 'index($0, " " m "(") && /\(/ {p=1} p {print} p && /^$/ {p=0}'; }
-          for c in net.minecraft.client.gl.GlCommandEncoder net.minecraft.client.gl.Framebuffer net.minecraft.world.World \
-                   net.minecraft.world.WorldView net.minecraft.world.HeightLimitView net.minecraft.world.chunk.Chunk \
-                   net.minecraft.world.chunk.WorldChunk net.minecraft.world.chunk.ChunkSection net.minecraft.world.biome.Biome \
-                   net.minecraft.world.biome.Biome\$Precipitation net.minecraft.block.AbstractBlock\$AbstractBlockState \
-                   com.mojang.blaze3d.pipeline.RenderPipeline\$Builder; do
+          for c in net.minecraft.entity.player.SkinTextures net.minecraft.util.AssetInfo net.minecraft.util.AssetInfo\$TextureAsset \
+                   net.minecraft.client.network.ClientPlayerLikeEntity net.minecraft.client.network.AbstractClientPlayerEntity \
+                   net.minecraft.client.gui.render.SpecialGuiElementRenderer net.minecraft.client.gui.render.EntityGuiElementRenderer \
+                   net.minecraft.client.gui.render.state.special.EntityGuiElementRenderState net.minecraft.client.gui.render.state.GuiRenderState \
+                   net.minecraft.client.gui.render.GuiRenderer net.minecraft.client.render.entity.EntityRenderManager \
+                   net.minecraft.client.render.entity.state.EntityRenderState net.minecraft.client.render.entity.state.LivingEntityRenderState \
+                   net.minecraft.entity.effect.StatusEffectInstance; do
             echo "=== SIG $c"; sig "$c"
           done
-          echo "=== CODE GlCommandEncoder.writeToTexture"; code net.minecraft.client.gl.GlCommandEncoder writeToTexture
-          echo "=== CODE GlCommandEncoder.createRenderPass"; code net.minecraft.client.gl.GlCommandEncoder createRenderPass
-          echo "=== CODE Framebuffer.initFbo"; code net.minecraft.client.gl.Framebuffer initFbo
-          echo "=== CODE World.getTopY"; code net.minecraft.world.World getTopY
-          echo "=== CODE World.getChunk"; code net.minecraft.world.World getChunk
-          echo "=== CODE RenderPipeline\$Builder.withSampler"; code com.mojang.blaze3d.pipeline.RenderPipeline\$Builder withSampler
+          echo "=== CODE SpecialGuiElementRenderer.render"; code net.minecraft.client.gui.render.SpecialGuiElementRenderer render
+          echo "=== CODE SpecialGuiElementRenderer.renderElement"; code net.minecraft.client.gui.render.SpecialGuiElementRenderer renderElement
+          echo "=== CODE EntityGuiElementRenderer.render"; code net.minecraft.client.gui.render.EntityGuiElementRenderer render
+          echo "=== CODE EntityGuiElementRenderer.getYOffset"; code net.minecraft.client.gui.render.EntityGuiElementRenderer getYOffset
+          echo "=== CODE InventoryScreen.drawEntity"; code net.minecraft.client.gui.screen.ingame.InventoryScreen drawEntity
+          echo "=== CODE GuiRenderer.render"; code net.minecraft.client.gui.render.GuiRenderer render
+          echo "=== CODE GuiRenderState.forEachSpecialElement"; code net.minecraft.client.gui.render.state.GuiRenderState forEachSpecialElement
+          echo "=== CODE AbstractClientPlayerEntity.getSkin"; code net.minecraft.client.network.AbstractClientPlayerEntity getSkin
+          echo "=== CODE InGameHud.renderStatusEffectOverlay"; code net.minecraft.client.gui.hud.InGameHud renderStatusEffectOverlay
 
   client:
     name: Dev client

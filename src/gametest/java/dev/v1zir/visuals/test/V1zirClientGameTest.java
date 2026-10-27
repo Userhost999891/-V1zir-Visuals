@@ -24,6 +24,7 @@ import dev.v1zir.visuals.module.impl.hud.PerformanceModule;
 import dev.v1zir.visuals.module.impl.hud.PotionsModule;
 import dev.v1zir.visuals.module.impl.hud.ServerInfoModule;
 import dev.v1zir.visuals.module.impl.hud.SpeedModule;
+import dev.v1zir.visuals.module.impl.hud.TargetHudModule;
 import dev.v1zir.visuals.module.impl.hud.WatermarkModule;
 import dev.v1zir.visuals.module.impl.visuals.BlockReflectionModule;
 import dev.v1zir.visuals.module.impl.visuals.RainEffectsModule;
@@ -87,6 +88,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			walk(context, singleplayer);
 			hud(context, singleplayer);
 			hudElements(context, singleplayer);
+			targetHud(context, singleplayer);
 			reflections(context, singleplayer);
 			clickGui(context);
 
@@ -445,6 +447,20 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		});
 		context.setScreen(() -> null);
 		singleplayer.getServer().runCommand("clear @a");
+	}
+
+	/** The Target HUD on a pig under the crosshair (how it picks a target without a fight): the mob's own head as a 3D portrait. */
+	private static void targetHud(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
+		boolean wasOn = context.computeOnClient(client -> ModuleManager.get(TargetHudModule.class).isEnabled());
+		context.runOnClient(client -> ModuleManager.get(TargetHudModule.class).setEnabled(true, false));
+		singleplayer.getServer().runCommand("execute as @a at @s anchored eyes run summon minecraft:pig ^ ^-0.5 ^2.2 "
+			+ "{NoAI:1b,Silent:1b,Invulnerable:1b,Tags:[\"v1zir_target\"],DeathLootTable:\"minecraft:empty\"}");
+		singleplayer.getServer().runCommand("execute as @a at @s anchored eyes run tp @s ~ ~ ~ facing entity @e[tag=v1zir_target,limit=1] eyes");
+		context.waitTicks(30);
+		context.takeScreenshot("target-hud-mob");
+		context.runOnClient(client -> ModuleManager.get(TargetHudModule.class).setEnabled(wasOn, false));
+		singleplayer.getServer().runCommand("kill @e[tag=v1zir_target]");
+		context.waitTicks(25);
 	}
 
 	/**

@@ -17,11 +17,16 @@ import net.minecraft.client.render.VertexFormats;
  * GUI pipelines go through vanilla's GuiRenderer (so they sort and layer like vanilla
  * elements); per-element parameters travel in vertex attributes:
  * <pre>
- *   SHAPE / GLASS / IMAGE (entity vertex format)
+ *   SHAPE / GLASS (entity vertex format)
  *     UV0    float2  position relative to the shape centre (GUI px)
  *     UV1    short2  half size * 8
  *     UV2    short2  corner radius * 8, softness * 8
  *     Normal byte3   outline thickness / 16, mode (kind | MATTE | LIT flags), corner mask
+ *   IMAGE (entity vertex format)
+ *     UV0    float2  position relative to the image centre (GUI px), 2 px past the image at the corners
+ *     UV1    short2  texture region u0, v0 * 16384
+ *     UV2    short2  texture region u1, v1 * 16384
+ *     Normal byte3   corner radius * 8 (high and low 7 bits), corner mask | PIXEL_ART | PREMULTIPLIED flags
  *   TEXT (particle vertex format)
  *     UV0    float2  SDF atlas coordinates
  *     UV2    short2  weight shift * 256, extra softness * 256
@@ -52,10 +57,10 @@ public final class V1zirPipelines {
 		.withCull(false)
 		.build();
 
-	/** A texture (album art) in a rounded rectangle, tinted by the vertex colour. */
+	/** A texture region (album art, skin faces, entity portraits) in a rounded rectangle, tinted by the vertex colour. */
 	public static final RenderPipeline IMAGE = RenderPipeline.builder(RenderPipelines.GUI_SNIPPET)
 		.withLocation(V1zir.id("pipeline/gui_image"))
-		.withVertexShader(V1zir.id("core/gui_shape"))
+		.withVertexShader(V1zir.id("core/gui_image"))
 		.withFragmentShader(V1zir.id("core/gui_image"))
 		.withVertexFormat(VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL, VertexFormat.DrawMode.QUADS)
 		.withSampler("Sampler0")

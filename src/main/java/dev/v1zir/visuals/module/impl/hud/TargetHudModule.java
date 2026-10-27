@@ -3,19 +3,21 @@ package dev.v1zir.visuals.module.impl.hud;
 import dev.v1zir.visuals.render.font.Fonts;
 import dev.v1zir.visuals.render.font.Icons;
 import dev.v1zir.visuals.render.font.SdfFont;
+import dev.v1zir.visuals.render.ui.Heads;
 import dev.v1zir.visuals.render.ui.Render2D;
 import dev.v1zir.visuals.render.world.Effects;
 import dev.v1zir.visuals.util.Anim;
 import dev.v1zir.visuals.util.ColorUtil;
 import dev.v1zir.visuals.util.Theme;
 import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.PlayerSkinDrawer;
-import net.minecraft.client.network.PlayerListEntry;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.entity.player.SkinTextures;
 
 /** Panel with the head, name, health and distance of the current target. */
 public final class TargetHudModule extends HudModule {
+	/** Multiplied into a player's face at the height of a hit. */
+	private static final int HURT_TINT = 0xFFFF7A7A;
 	private final Anim health = new Anim(1f, 8f);
 	private final Anim healthLag = new Anim(1f, 2.5f);
 	private final Anim appear = new Anim(0f, 10f);
@@ -80,22 +82,21 @@ public final class TargetHudModule extends HudModule {
 		float ax = x + 6f;
 		float ay = y + 6f;
 		Render2D.shadow(ctx, ax, ay, avatar, avatar, 5f, 6f, ColorUtil.withAlpha(Theme.accent(), 90));
-		boolean drewHead = false;
-		if (e instanceof PlayerEntity player && mc.getNetworkHandler() != null) {
-			PlayerListEntry entry = mc.getNetworkHandler().getPlayerListEntry(player.getUuid());
-			if (entry != null) {
-				float hurtScale = 1f - Math.min(e.hurtTime, 10) * 0.012f;
-				ctx.getMatrices().pushMatrix();
-				ctx.getMatrices().translate(ax + avatar / 2f, ay + avatar / 2f);
-				ctx.getMatrices().scale(hurtScale, hurtScale);
-				PlayerSkinDrawer.draw(ctx, entry.getSkinTextures(), -(int) (avatar / 2f), -(int) (avatar / 2f), (int) avatar);
-				ctx.getMatrices().popMatrix();
-				drewHead = true;
-			}
-		}
-		if (!drewHead) {
+		// The head goes through the panel's own drawing (same fade and transform); a hit squashes it for a moment.
+		float hurt = Math.max(0f, e.hurtTime - tickDelta) / 10f;
+		float squash = 1f - Math.min(1f, hurt) * 0.12f;
+		SkinTextures skin = Heads.skinOf(e);
+		if (skin != null) {
+			float s = avatar * squash;
+			float o = (avatar - s) / 2f;
+			Heads.skin(ctx, skin, ax + o, ay + o, s, 5f * squash, ColorUtil.lerp(0xFFFFFFFF, HURT_TINT, Math.min(1f, hurt)));
+		} else {
+			// Other entities show their own model's head on an accent well (vanilla's red hurt overlay is part of
+			// that render), or an icon when it cannot be drawn.
 			Render2D.round(ctx, ax, ay, avatar, avatar, 5f, ColorUtil.withAlpha(Theme.accent(), 45));
-			Render2D.icon(ctx, e instanceof PlayerEntity ? Icons.USER : Icons.SKULL, ax + avatar / 2f, ay + avatar / 2f, 14f, Theme.accent());
+			if (!Heads.portrait(ctx, e, tickDelta, ax, ay, avatar, 5f, squash, 0xFFFFFFFF)) {
+				Render2D.icon(ctx, e instanceof PlayerEntity ? Icons.USER : Icons.SKULL, ax + avatar / 2f, ay + avatar / 2f, 14f, Theme.accent());
+			}
 		}
 		Render2D.outline(ctx, ax, ay, avatar, avatar, 5f, 1f, ColorUtil.withAlpha(0xFFFFFF, 30));
 
