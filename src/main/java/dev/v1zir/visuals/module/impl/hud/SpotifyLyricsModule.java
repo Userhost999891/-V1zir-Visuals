@@ -448,6 +448,6 @@ public final class SpotifyLyricsModule extends HudModule implements WorldEffect 
 			world.leaveAll();
 		}
 		if (world.isEmpty()) return;
-		world.render(letter, distance.f(), clock, accent(), depth.on(), glow.on());
+		world.render(letter, clock, accent(), depth.on(), glow.on());
 	}
 }

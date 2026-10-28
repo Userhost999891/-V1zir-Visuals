@@ -16,13 +16,14 @@ import java.util.concurrent.ThreadLocalRandom;
 /**
  * The 3D preset of Spotify Lyrics, in two looks:
  * <ul>
- *   <li>Shine: the line floats a few blocks ahead at eye height, trails the view on lagging springs
- *   and turns to face the camera. Words come in one by one in time with the song (onsets estimated
+ *   <li>Shine: the line appears a few blocks ahead in the current view, a little above the eyes, and
+ *   stays at that spot in the world: walk on or turn away and it is left behind. It only turns to
+ *   face the camera and floats gently. Words come in one by one in time with the song (onsets estimated
  *   from the line's duration, weighted by word length): the next word shows up small, thin and
  *   faint just before it is sung, then springs to full size while a glint sweeps across it and its
  *   glow flares; long words throw a few sparks. A slow shine keeps passing over the playing line.</li>
  *   <li>Extruded: every line appears at a new spot in the field of view (alternating sides and
- *   heights) as extruded letters that pop in one after another, and stays where it appeared.</li>
+ *   heights) as extruded letters that pop in one after another, and stays at that spot in the world.</li>
  * </ul>
  * Either way finished lines fade, drift up and scatter letter by letter. Lines are laid out once
  * when they spawn; frames only move letters.
@@ -36,6 +37,13 @@ final class Lyrics3D {
 	private static final float MAX_PITCH = 0.6f;
 	private static final float[] SIDES = {-22f, 18f, -8f, 26f, -29f, 10f};
 	private static final float[] HEIGHTS = {0.35f, -0.2f, 0.6f, 0.05f, -0.3f, 0.45f};
+	/** Shiny lines use a fraction of SIDES, so they stay nearly straight ahead. */
+	private static final float SHINE_SPREAD = 0.3f;
+	/** A new shiny line rises this far (blocks) into its spot. */
+	private static final float RISE = 0.18f;
+	/** Gentle float of a line in its spot: amplitude in blocks and speed in radians per second. */
+	private static final float FLOAT = 0.035f;
+	private static final float FLOAT_SPEED = 1.3f;
 	/** Shiny lines float this far above eye height, in blocks. */
 	private static final float LIFT = 0.12f;
 	/** Longest time per letter when word onsets are spread over a line, so a line before a long pause is not sung slowly. */
@@ -118,20 +126,19 @@ final class Lyrics3D {
 		final boolean shiny;
 		/** Half the widest row, in letter heights. */
 		final float half;
-		/** Camera position when it appeared; the springs below are relative to it, which keeps floats precise. */
+		/** Camera position when it appeared; the offsets below are relative to it, which keeps floats precise. */
 		final double ox;
 		final double oy;
 		final double oz;
-		/** Where it sits relative to the camera, in world directions; shiny lines move it with the view. */
-		float offX;
-		float offY;
-		float offZ;
+		/** Where it sits in the world relative to (ox, oy, oz); fixed once it appears. */
+		final float offX;
+		final float offY;
+		final float offZ;
+		/** Phase of the gentle float, so neighbouring lines do not bob in step. */
+		final float phase;
 		final Anim px = new Anim(0f, 1.8f);
 		final Anim py = new Anim(0f, 1.8f);
 		final Anim pz = new Anim(0f, 1.8f);
-		/** Direction and height a shiny line keeps in front of the camera. */
-		final Anim heading = new Anim(0f, 3f);
-		final Anim lift = new Anim(0f, 3f);
 		final Anim yaw = new Anim(0f, 4f);
 		final Anim pitch = new Anim(0f, 4f);
 		final Vector3f right = new Vector3f();
@@ -158,6 +165,7 @@ final class Lyrics3D {
 			this.offX = offX;
 			this.offY = offY;
 			this.offZ = offZ;
+			this.phase = ThreadLocalRandom.current().nextFloat() * 6.2832f;
 			px.snap(offX);
 			py.snap(offY);
 			pz.snap(offZ);
@@ -248,19 +256,17 @@ final class Lyrics3D {
 		Letter[] laid = letters.toArray(new Letter[0]);
 		Word[] timed = words.toArray(new Word[0]);
 		float half = line.widest() / 2f;
+		int slot = spawned++ % SIDES.length;
 		if (shiny) {
-			Line spawn = new Line(laid, timed, true, half, 0f, 0f, 0f);
-			spawn.heading.snap((float) Math.atan2(fx, fz));
-			spawn.lift.snap(lift(distance));
-			follow(spawn, distance);
-			spawn.px.snap(spawn.offX);
-			spawn.py.snap(spawn.offY);
-			spawn.pz.snap(spawn.offZ);
+			// Straight ahead in the current view, nudged a little to alternating sides, rising into place.
+			double heading = Math.atan2(fx, fz) + Math.toRadians(SIDES[slot] * SHINE_SPREAD);
+			Line spawn = new Line(laid, timed, true, half, (float) Math.sin(heading) * distance, lift(distance),
+				(float) Math.cos(heading) * distance);
+			spawn.py.snap(spawn.offY - RISE);
 			lines.add(spawn);
 			return;
 		}
 		// A spot in the current view, turned to alternating sides and heights.
-		int slot = spawned++ % SIDES.length;
 		float angle = (float) Math.toRadians(SIDES[slot]);
 		float cos = (float) Math.cos(angle);
 		float sin = (float) Math.sin(angle);
@@ -289,7 +295,7 @@ final class Lyrics3D {
 	 * line in seconds, accent the colour of glows and gradients; depth extrudes the extruded look,
 	 * glow adds the halos.
 	 */
-	void render(float size, float distance, float clock, int accent, boolean depth, boolean glow) {
+	void render(float size, float clock, int accent, boolean depth, boolean glow) {
 		long now = System.nanoTime();
 		extruded.font(Fonts.bold()).weight(0.05f).extrude(depth ? 0.24f : 0f, depth ? 10 : 0).extrudeColor(depth ? ColorUtil.darken(accent, 0.1f) : 0)
 			.glow(glow ? accent : 0, glow ? 0.3f : 0f).color(ColorUtil.lerp(0xFFFFFFFF, accent, 0.12f));
@@ -301,11 +307,11 @@ final class Lyrics3D {
 		double camZ = WorldEffectRenderer.camZ;
 		for (int l = lines.size() - 1; l >= 0; l--) {
 			Line line = lines.get(l);
-			if (line.shiny) follow(line, distance);
-			// Follow the camera loosely: the target moves with it, the spring lags behind.
-			float lx = line.px.target((float) (camX - line.ox) + line.offX).get();
-			float ly = line.py.target((float) (camY - line.oy) + line.offY).get();
-			float lz = line.pz.target((float) (camZ - line.oz) + line.offZ).get();
+			// Anchored in the world where it appeared; it only settles in and floats a little.
+			float t = (now - line.born) / 1.0e9f;
+			float lx = line.px.target(line.offX).get();
+			float ly = line.py.target(line.offY).get() + (float) Math.sin(t * FLOAT_SPEED + line.phase) * FLOAT;
+			float lz = line.pz.target(line.offZ).get();
 			line.wx = line.ox + lx;
 			line.wy = line.oy + ly;
 			line.wz = line.oz + lz;
@@ -452,17 +458,6 @@ final class Lyrics3D {
 			mesh.orb(line.wx + r.x * px + u.x * py, line.wy + r.y * px + u.y * py, line.wz + r.z * px + u.z * py,
 				size * 0.12f * (1f - 0.5f * life), ColorUtil.fade(ColorUtil.lerp(0xFFFFFFFF, accent, life), 1f - life));
 		}
-	}
-
-	/** Moves a shiny line's spot with the view: same distance ahead, heading and height on springs. */
-	private static void follow(Line line, float distance) {
-		float current = line.heading.target();
-		// Take the short way round, so the line swings around the player instead of through them.
-		float delta = (float) Math.IEEEremainder(Math.atan2(fx, fz) - current, Math.PI * 2.0);
-		float heading = line.heading.target(current + delta).get();
-		line.offX = (float) Math.sin(heading) * distance;
-		line.offY = line.lift.target(lift(distance)).get();
-		line.offZ = (float) Math.cos(heading) * distance;
 	}
 
 	/** Height of a shiny line relative to the eyes: a little above, following the pitch only partly. */
