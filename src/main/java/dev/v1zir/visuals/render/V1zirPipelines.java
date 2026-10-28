@@ -1,0 +1,340 @@
+package dev.v1zir.visuals.render;
+
+import com.mojang.blaze3d.pipeline.BlendFunction;
+import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.platform.DepthTestFunction;
+import com.mojang.blaze3d.platform.DestFactor;
+import com.mojang.blaze3d.platform.SourceFactor;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import dev.v1zir.visuals.V1zir;
+import net.minecraft.client.gl.RenderPipelines;
+import net.minecraft.client.gl.UniformType;
+import net.minecraft.client.render.VertexFormats;
+
+/**
+ * Every custom pipeline of the mod.
+ *
+ * GUI pipelines go through vanilla's GuiRenderer (so they sort and layer like vanilla
+ * elements); per-element parameters travel in vertex attributes:
+ * <pre>
+ *   SHAPE / GLASS (entity vertex format)
+ *     UV0    float2  position relative to the shape centre (GUI px)
+ *     UV1    short2  half size * 8
+ *     UV2    short2  corner radius * 8, softness * 8
+ *     Normal byte3   outline thickness / 16, mode (kind | MATTE | LIT flags), corner mask
+ *   IMAGE (entity vertex format)
+ *     UV0    float2  position relative to the image centre (GUI px), 2 px past the image at the corners
+ *     UV1    short2  texture region u0, v0 * 16384
+ *     UV2    short2  texture region u1, v1 * 16384
+ *     Normal byte3   corner radius * 8 (high and low 7 bits), corner mask | PIXEL_ART flag
+ *   TEXT (particle vertex format)
+ *     UV0    float2  SDF atlas coordinates
+ *     UV2    short2  weight shift * 256, extra softness * 256
+ * </pre>
+ * WORLD_TEXT uses the TEXT layout with camera-relative positions; UV2.y gains 16384 on additive layers.
+ */
+public final class V1zirPipelines {
+	public static final BlendFunction ADDITIVE = new BlendFunction(SourceFactor.SRC_ALPHA, DestFactor.ONE);
+	/** Premultiplied alpha: a fragment with zero alpha adds light, so blended and additive layers share one draw. */
+	public static final BlendFunction PREMULTIPLIED = new BlendFunction(SourceFactor.ONE, DestFactor.ONE_MINUS_SRC_ALPHA);
+
+	public static final RenderPipeline SHAPE = RenderPipeline.builder(RenderPipelines.GUI_SNIPPET)
+		.withLocation(V1zir.id("pipeline/gui_shape"))
+		.withVertexShader(V1zir.id("core/gui_shape"))
+		.withFragmentShader(V1zir.id("core/gui_shape"))
+		.withVertexFormat(VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL, VertexFormat.DrawMode.QUADS)
+		.withUniform("V1zirGui", UniformType.UNIFORM_BUFFER)
+		.withCull(false)
+		.build();
+
+	public static final RenderPipeline GLASS = RenderPipeline.builder(RenderPipelines.GUI_SNIPPET)
+		.withLocation(V1zir.id("pipeline/gui_glass"))
+		.withVertexShader(V1zir.id("core/gui_shape"))
+		.withFragmentShader(V1zir.id("core/gui_glass"))
+		.withVertexFormat(VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL, VertexFormat.DrawMode.QUADS)
+		.withSampler("Sampler0")
+		.withUniform("V1zirGui", UniformType.UNIFORM_BUFFER)
+		.withCull(false)
+		.build();
+
+	/** A texture region (album art, skin and mob faces) in a rounded rectangle, tinted by the vertex colour. */
+	public static final RenderPipeline IMAGE = RenderPipeline.builder(RenderPipelines.GUI_SNIPPET)
+		.withLocation(V1zir.id("pipeline/gui_image"))
+		.withVertexShader(V1zir.id("core/gui_image"))
+		.withFragmentShader(V1zir.id("core/gui_image"))
+		.withVertexFormat(VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL, VertexFormat.DrawMode.QUADS)
+		.withSampler("Sampler0")
+		.withCull(false)
+		.build();
+
+	public static final RenderPipeline TEXT = RenderPipeline.builder(RenderPipelines.GUI_SNIPPET)
+		.withLocation(V1zir.id("pipeline/gui_sdf_text"))
+		.withVertexShader(V1zir.id("core/gui_sdf_text"))
+		.withFragmentShader(V1zir.id("core/gui_sdf_text"))
+		.withVertexFormat(VertexFormats.POSITION_TEXTURE_COLOR_LIGHT, VertexFormat.DrawMode.QUADS)
+		.withSampler("Sampler0")
+		.withCull(false)
+		.build();
+
+	/** A wallpaper target upsampled into a rounded rectangle (render/ui/MenuBackgroundElement, SHAPE's layout). */
+	public static final RenderPipeline MENU_BACKGROUND = RenderPipeline.builder(RenderPipelines.GUI_SNIPPET)
+		.withLocation(V1zir.id("pipeline/menu_background"))
+		.withVertexShader(V1zir.id("core/menu_background"))
+		.withFragmentShader(V1zir.id("core/menu_background"))
+		.withVertexFormat(VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL, VertexFormat.DrawMode.QUADS)
+		.withSampler("Sampler0")
+		.withUniform("V1zirGui", UniformType.UNIFORM_BUFFER)
+		.withCull(false)
+		.build();
+
+	/** Full screen sky, drawn from inside the vanilla sky pass. */
+	public static final RenderPipeline SKY = RenderPipeline.builder()
+		.withLocation(V1zir.id("pipeline/shader_sky"))
+		.withVertexShader(V1zir.id("core/shader_sky"))
+		.withFragmentShader(V1zir.id("core/shader_sky"))
+		.withVertexFormat(VertexFormats.POSITION, VertexFormat.DrawMode.TRIANGLES)
+		.withUniform("SkyParams", UniformType.UNIFORM_BUFFER)
+		.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+		.withDepthWrite(false)
+		.withoutBlend()
+		.withCull(false)
+		.build();
+
+	/** Upsamples the reduced-resolution sky texture onto the screen (see SkyTarget). */
+	public static final RenderPipeline SKY_UPSAMPLE = RenderPipeline.builder()
+		.withLocation(V1zir.id("pipeline/sky_upsample"))
+		.withVertexShader(V1zir.id("core/fullscreen"))
+		.withFragmentShader(V1zir.id("core/sky_upsample"))
+		.withVertexFormat(VertexFormats.POSITION, VertexFormat.DrawMode.TRIANGLES)
+		.withSampler("Sampler0")
+		.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+		.withDepthWrite(false)
+		.withoutBlend()
+		.withCull(false)
+		.build();
+
+	/** Title screen wallpaper shaders into a wallpaper target (render/wallpaper/WallpaperRenderer). */
+	public static final RenderPipeline WALLPAPER = wallpaperPipeline("wallpaper", false);
+	/** A picture from the wallpapers folder, filled or fitted, into a wallpaper target. */
+	public static final RenderPipeline WALLPAPER_IMAGE = wallpaperPipeline("wallpaper_image", true);
+	/** One direction of the gaussian blur of a wallpaper target. */
+	public static final RenderPipeline WALLPAPER_BLUR = wallpaperPipeline("wallpaper_blur", true);
+
+	/** Builds rows of a sky cache panorama (render/sky/SkyCache). */
+	public static final RenderPipeline SKY_PANORAMA = RenderPipeline.builder()
+		.withLocation(V1zir.id("pipeline/sky_panorama"))
+		.withVertexShader(V1zir.id("core/fullscreen"))
+		.withFragmentShader(V1zir.id("core/sky_panorama"))
+		.withVertexFormat(VertexFormats.POSITION, VertexFormat.DrawMode.TRIANGLES)
+		.withUniform("SkyParams", UniformType.UNIFORM_BUFFER)
+		.withUniform("SkyCache", UniformType.UNIFORM_BUFFER)
+		.withSampler("Sampler0")
+		.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+		.withDepthWrite(false)
+		.withoutBlend()
+		.withCull(false)
+		.build();
+
+	/** Draws the world sky from the cached panoramas. */
+	public static final RenderPipeline SKY_CACHED = RenderPipeline.builder()
+		.withLocation(V1zir.id("pipeline/sky_cached"))
+		.withVertexShader(V1zir.id("core/shader_sky"))
+		.withFragmentShader(V1zir.id("core/sky_cached"))
+		.withVertexFormat(VertexFormats.POSITION, VertexFormat.DrawMode.TRIANGLES)
+		.withUniform("SkyParams", UniformType.UNIFORM_BUFFER)
+		.withUniform("SkyCache", UniformType.UNIFORM_BUFFER)
+		.withSampler("Sampler0")
+		.withSampler("Sampler1")
+		.withSampler("Sampler2")
+		.withSampler("Sampler3")
+		.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+		.withDepthWrite(false)
+		.withoutBlend()
+		.withCull(false)
+		.build();
+
+	/** Colour grading of the world, from a copy of the frame back onto it (render/ColorGrade). */
+	public static final RenderPipeline COLOR_GRADE = RenderPipeline.builder()
+		.withLocation(V1zir.id("pipeline/color_grade"))
+		.withVertexShader(V1zir.id("core/fullscreen"))
+		.withFragmentShader(V1zir.id("core/color_grade"))
+		.withVertexFormat(VertexFormats.POSITION, VertexFormat.DrawMode.TRIANGLES)
+		.withSampler("Sampler0")
+		.withUniform("GradeParams", UniformType.UNIFORM_BUFFER)
+		.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+		.withDepthWrite(false)
+		.withoutBlend()
+		.withCull(false)
+		.build();
+
+	/** Reflections and rain (render/Reflections): traces the reflected rays, usually at half resolution. */
+	public static final RenderPipeline REFLECT_TRACE = reflectPipeline("reflect_trace", 4);
+	/** Composites the traced reflections and the wet look back onto the frame. */
+	public static final RenderPipeline REFLECT_COMPOSITE = reflectPipeline("reflect_composite", 5);
+
+	/** Click GUI open and close animations: the captured window composited over the frame (render/GuiCapture). */
+	public static final RenderPipeline GUI_TRANSITION = RenderPipeline.builder()
+		.withLocation(V1zir.id("pipeline/gui_transition"))
+		.withVertexShader(V1zir.id("core/fullscreen"))
+		.withFragmentShader(V1zir.id("core/gui_transition"))
+		.withVertexFormat(VertexFormats.POSITION, VertexFormat.DrawMode.TRIANGLES)
+		.withSampler("Sampler0")
+		.withSampler("Sampler1")
+		.withUniform("TransitionParams", UniformType.UNIFORM_BUFFER)
+		.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+		.withDepthWrite(false)
+		.withBlend(PREMULTIPLIED)
+		.withCull(false)
+		.build();
+
+	/** Shards of the shattering click GUI (3D Frost close), textured with its captured window. */
+	public static final RenderPipeline GUI_SHARDS = RenderPipeline.builder()
+		.withLocation(V1zir.id("pipeline/gui_shards"))
+		.withVertexShader(V1zir.id("core/gui_shards"))
+		.withFragmentShader(V1zir.id("core/gui_shards"))
+		.withVertexFormat(VertexFormats.POSITION_TEXTURE_COLOR, VertexFormat.DrawMode.TRIANGLES)
+		.withSampler("Sampler0")
+		.withUniform("TransitionParams", UniformType.UNIFORM_BUFFER)
+		.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+		.withDepthWrite(false)
+		.withBlend(PREMULTIPLIED)
+		.withCull(false)
+		.build();
+
+	public static final RenderPipeline BLUR_DOWN = blurPipeline("blur_down");
+	public static final RenderPipeline BLUR_UP = blurPipeline("blur_up");
+
+	/** World effects (target ESP, jump circles, trails...) - additive glow, depth tested. */
+	public static final RenderPipeline WORLD_GLOW = worldPipeline("world_glow", ADDITIVE, true);
+	/** Regular alpha blended world geometry (china hat body...). */
+	public static final RenderPipeline WORLD_TRANSLUCENT = worldPipeline("world_translucent", BlendFunction.TRANSLUCENT, true);
+	/** World-space SDF text (WorldText), depth tested against the world. */
+	public static final RenderPipeline WORLD_TEXT = worldTexturedPipeline("world_text", "world_text", VertexFormats.POSITION_TEXTURE_COLOR_LIGHT, true);
+	/** World-space SDF text that shows through walls. */
+	public static final RenderPipeline WORLD_TEXT_SEE_THROUGH = worldTexturedPipeline("world_text_see_through", "world_text",
+		VertexFormats.POSITION_TEXTURE_COLOR_LIGHT, false);
+	/**
+	 * Pixel-art sprites of the GUI atlas (hearts) on camera-facing quads (WorldSprites), depth tested. Entity vertex
+	 * format: UV1 and UV2 carry the sprite's region (u0, v0 and u1, v1 * 16384) so sampling never leaves it.
+	 */
+	public static final RenderPipeline WORLD_SPRITE = worldTexturedPipeline("world_sprite", "world_sprite",
+		VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL, true);
+	/** World-space sprites that show through walls. */
+	public static final RenderPipeline WORLD_SPRITE_SEE_THROUGH = worldTexturedPipeline("world_sprite_see_through", "world_sprite",
+		VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL, false);
+
+	private static boolean registered;
+
+	private V1zirPipelines() {
+	}
+
+	private static RenderPipeline wallpaperPipeline(String name, boolean sampler) {
+		RenderPipeline.Builder builder = RenderPipeline.builder()
+			.withLocation(V1zir.id("pipeline/" + name))
+			.withVertexShader(V1zir.id("core/fullscreen"))
+			.withFragmentShader(V1zir.id("core/" + name))
+			.withVertexFormat(VertexFormats.POSITION, VertexFormat.DrawMode.TRIANGLES)
+			.withUniform("WallpaperParams", UniformType.UNIFORM_BUFFER)
+			.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+			.withDepthWrite(false)
+			.withoutBlend()
+			.withCull(false);
+		if (sampler) builder.withSampler("Sampler0");
+		return builder.build();
+	}
+
+	private static RenderPipeline blurPipeline(String name) {
+		return RenderPipeline.builder()
+			.withLocation(V1zir.id("pipeline/" + name))
+			.withVertexShader(V1zir.id("core/fullscreen"))
+			.withFragmentShader(V1zir.id("core/" + name))
+			.withVertexFormat(VertexFormats.POSITION, VertexFormat.DrawMode.TRIANGLES)
+			.withSampler("Sampler0")
+			.withUniform("BlurParams", UniformType.UNIFORM_BUFFER)
+			.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+			.withDepthWrite(false)
+			.withoutBlend()
+			.withCull(false)
+			.build();
+	}
+
+	/** Full screen pass of the reflections: the frame, its depth, the block textures (and the traces). */
+	private static RenderPipeline reflectPipeline(String name, int samplers) {
+		RenderPipeline.Builder builder = RenderPipeline.builder()
+			.withLocation(V1zir.id("pipeline/" + name))
+			.withVertexShader(V1zir.id("core/fullscreen"))
+			.withFragmentShader(V1zir.id("core/" + name))
+			.withVertexFormat(VertexFormats.POSITION, VertexFormat.DrawMode.TRIANGLES)
+			.withUniform("ReflectParams", UniformType.UNIFORM_BUFFER)
+			.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+			.withDepthWrite(false)
+			.withoutBlend()
+			.withCull(false);
+		for (int i = 0; i < samplers; i++) builder.withSampler("Sampler" + i);
+		return builder.build();
+	}
+
+	private static RenderPipeline worldPipeline(String name, BlendFunction blend, boolean depthTest) {
+		// Effects are always depth tested against the world: purely visual, nothing shows through walls.
+		return RenderPipeline.builder()
+			.withLocation(V1zir.id("pipeline/" + name))
+			.withVertexShader(V1zir.id("core/world_effect"))
+			.withFragmentShader(V1zir.id("core/world_effect"))
+			.withVertexFormat(VertexFormats.POSITION_TEXTURE_COLOR, VertexFormat.DrawMode.QUADS)
+			.withUniform("WorldParams", UniformType.UNIFORM_BUFFER)
+			.withDepthTestFunction(depthTest ? DepthTestFunction.LEQUAL_DEPTH_TEST : DepthTestFunction.NO_DEPTH_TEST)
+			.withDepthWrite(false)
+			.withBlend(blend)
+			.withCull(false)
+			.build();
+	}
+
+	private static RenderPipeline worldTexturedPipeline(String name, String shader, VertexFormat format, boolean depthTest) {
+		return RenderPipeline.builder()
+			.withLocation(V1zir.id("pipeline/" + name))
+			.withVertexShader(V1zir.id("core/" + shader))
+			.withFragmentShader(V1zir.id("core/" + shader))
+			.withVertexFormat(format, VertexFormat.DrawMode.QUADS)
+			.withSampler("Sampler0")
+			.withUniform("WorldParams", UniformType.UNIFORM_BUFFER)
+			.withDepthTestFunction(depthTest ? DepthTestFunction.LEQUAL_DEPTH_TEST : DepthTestFunction.NO_DEPTH_TEST)
+			.withDepthWrite(false)
+			.withBlend(PREMULTIPLIED)
+			.withCull(false)
+			.build();
+	}
+
+	public static void register() {
+		if (registered) return;
+		registered = true;
+		RenderPipelines.register(SHAPE);
+		RenderPipelines.register(GLASS);
+		RenderPipelines.register(IMAGE);
+		RenderPipelines.register(TEXT);
+		RenderPipelines.register(MENU_BACKGROUND);
+		RenderPipelines.register(SKY);
+		RenderPipelines.register(SKY_UPSAMPLE);
+		RenderPipelines.register(WALLPAPER);
+		RenderPipelines.register(WALLPAPER_IMAGE);
+		RenderPipelines.register(WALLPAPER_BLUR);
+		RenderPipelines.register(SKY_PANORAMA);
+		RenderPipelines.register(SKY_CACHED);
+		RenderPipelines.register(COLOR_GRADE);
+		RenderPipelines.register(REFLECT_TRACE);
+		RenderPipelines.register(REFLECT_COMPOSITE);
+		RenderPipelines.register(GUI_TRANSITION);
+		RenderPipelines.register(GUI_SHARDS);
+		RenderPipelines.register(BLUR_DOWN);
+		RenderPipelines.register(BLUR_UP);
+		RenderPipelines.register(WORLD_GLOW);
+		RenderPipelines.register(WORLD_TRANSLUCENT);
+		RenderPipelines.register(WORLD_TEXT);
+		RenderPipelines.register(WORLD_TEXT_SEE_THROUGH);
+		RenderPipelines.register(WORLD_SPRITE);
+		RenderPipelines.register(WORLD_SPRITE_SEE_THROUGH);
+	}
+
+	public static boolean isOurs(RenderPipeline pipeline) {
+		return pipeline.getLocation().getNamespace().equals(V1zir.MOD_ID);
+	}
+}

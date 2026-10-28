@@ -1,0 +1,114 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build mod
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build
+        run: ./gradlew build --stacktrace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v1zir-visuals-jar
+          path: build/libs/
+      # Temporary: method signatures of the mapped 1.21.11 classes the mod hooks into, so mixin
+      # targets can be checked against the real game (javap prints declarations and bytecode only).
+      - name: API signatures
+        run: |
+          jar=$(find .gradle ~/.gradle -path '*minecraftMaven*' -name 'minecraft-*.jar' ! -name '*sources*' 2>/dev/null | head -1)
+          echo "mapped jar: $jar"
+          sig() { javap -p -cp "$jar" "$@" 2>&1 || true; }
+          code() { javap -c -p -cp "$jar" "$1" 2>&1 | awk -v m="$2" 'index($0, " " m "(") && /\(/ {p=1} p {print} p && /^$/ {p=0}'; }
+          for c in net.minecraft.client.model.ModelPart net.minecraft.client.model.ModelPart\$Cuboid net.minecraft.client.model.ModelPart\$Quad \
+                   net.minecraft.client.model.ModelPart\$Vertex net.minecraft.client.model.Model net.minecraft.client.render.entity.LivingEntityRenderer \
+                   net.minecraft.client.gui.hud.InGameHud net.minecraft.client.gui.hud.bar.ExperienceBar net.minecraft.client.texture.AtlasManager \
+                   net.minecraft.client.texture.SpriteAtlasTexture net.minecraft.client.texture.Sprite net.minecraft.util.Atlases \
+                   net.minecraft.entity.player.HungerManager net.minecraft.client.network.ClientPlayerInteractionManager; do
+            echo "=== SIG $c"; sig "$c"
+          done
+          echo "=== CODE ModelPart\$Vertex.worldZ"; code net.minecraft.client.model.ModelPart\$Vertex worldZ
+          echo "=== CODE ModelPart\$Cuboid.<init>"; code net.minecraft.client.model.ModelPart\$Cuboid 'net.minecraft.client.model.ModelPart$Cuboid'
+          echo "=== CODE EntityModel.setAngles"; code net.minecraft.client.render.entity.model.EntityModel setAngles
+          echo "=== CODE AtlasManager.getAtlasTexture"; code net.minecraft.client.texture.AtlasManager getAtlasTexture
+          echo "=== CODE DrawContext.<init>"; code net.minecraft.client.gui.DrawContext 'net.minecraft.client.gui.DrawContext'
+          echo "=== CODE InGameHud.renderMainHud"; code net.minecraft.client.gui.hud.InGameHud renderMainHud
+
+  client:
+    name: Dev client
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install Xvfb and Mesa
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q xvfb libgl1-mesa-dri imagemagick
+      - name: Run dev client (client game test)
+        timeout-minutes: 40
+        env:
+          # Leave CPU for the integrated server; llvmpipe takes every core by default.
+          LP_NUM_THREADS: 2
+        run: |
+          # Two thread dumps of the client JVM if world loading stalls, to diagnose the hang.
+          (log=build/run/clientGameTest/logs/latest.log
+          for _ in $(seq 1 120); do
+            sleep 5
+            if [ -f "$log" ] && [ "$(grep -c 'Preparing spawn area' "$log")" -ge 30 ]; then
+              for i in 1 2; do
+                for p in $(jps -l | awk '/devlaunchinjector|KnotClient/ {print $1}'); do jstack -l "$p" > "/tmp/thread-dump-$i.txt" 2>&1; done
+                sleep 10
+              done
+              break
+            fi
+          done) &
+          xvfb-run -a -s "-screen 0 1920x1080x24" ./gradlew runClientGameTest --stacktrace
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dev-client-screenshots
+          path: build/run/clientGameTest/screenshots/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dev-client-logs
+          path: |
+            build/run/clientGameTest/logs/
+            build/run/clientGameTest/crash-reports/
+            build/run/clientGameTest/v1zir-*.jfr
+      - name: Profile summary
+        if: always()
+        run: |
+          shopt -s nullglob
+          files=(build/run/clientGameTest/v1zir-*.jfr)
+          if [ ${#files[@]} -gt 0 ]; then python3 .github/scripts/jfr_summary.py "${files[@]}"; fi
+      - name: Screenshot previews
+        if: always()
+        run: |
+          shopt -s nullglob
+          for f in build/run/clientGameTest/crash-reports/*.txt; do echo "=== $f"; cat "$f"; done
+          for f in /tmp/thread-dump-*.txt; do echo "=== $f"; cat "$f"; done
+          for f in build/run/clientGameTest/screenshots/*.png; do
+            convert "$f" -resize 800x450 -quality 72 /tmp/preview.jpg
+            echo "V1ZIR-PREVIEW-BEGIN $(basename "$f")"
+            base64 -w 4000 /tmp/preview.jpg
+            echo "V1ZIR-PREVIEW-END"
+          done
