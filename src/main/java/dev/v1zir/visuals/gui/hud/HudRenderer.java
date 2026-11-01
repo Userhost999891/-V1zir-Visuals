@@ -8,6 +8,7 @@ import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.client.ThemeModule;
 import dev.v1zir.visuals.module.impl.effects.CrosshairModule;
 import dev.v1zir.visuals.module.impl.effects.HitMarkerModule;
+import dev.v1zir.visuals.module.impl.effects.KillEffectsModule;
 import dev.v1zir.visuals.module.impl.hud.CustomIndicatorsModule;
 import dev.v1zir.visuals.module.impl.hud.HudModule;
 import dev.v1zir.visuals.module.impl.visuals.DamageTintModule;
@@ -34,6 +35,11 @@ public final class HudRenderer {
 		HudElementRegistry.attachElementAfter(VanillaHudElements.MISC_OVERLAYS, V1zir.id("damage_tint"), (ctx, tickCounter) -> {
 			DamageTintModule tint = ModuleManager.get(DamageTintModule.class);
 			if (tint != null && tint.isEnabled() && !V1zir.mc().options.hudHidden) tint.render(ctx);
+		});
+		HudElementRegistry.attachElementAfter(VanillaHudElements.MISC_OVERLAYS, V1zir.id("world_overlays"), (ctx, tickCounter) -> {
+			if (V1zir.mc().options.hudHidden) return;
+			KillEffectsModule kills = ModuleManager.get(KillEffectsModule.class);
+			if (kills != null && kills.isEnabled()) kills.renderFlash(ctx);
 		});
 		// With the chat open, HUD elements can be clicked (the Spotify buttons).
 		ScreenEvents.AFTER_INIT.register((client, screen, width, height) -> {

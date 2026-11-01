@@ -5,6 +5,7 @@ import dev.v1zir.visuals.module.impl.client.ClickGuiModule;
 import dev.v1zir.visuals.module.impl.client.CustomUiModule;
 import dev.v1zir.visuals.module.impl.client.MainMenuModule;
 import dev.v1zir.visuals.module.impl.client.ThemeModule;
+import dev.v1zir.visuals.module.impl.effects.BloodModule;
 import dev.v1zir.visuals.module.impl.effects.ChinaHatModule;
 import dev.v1zir.visuals.module.impl.effects.CrosshairModule;
 import dev.v1zir.visuals.module.impl.effects.CrystalChamsModule;
@@ -114,6 +115,7 @@ public final class ModuleManager {
 		register(new ChinaHatModule());
 		register(new TrailsModule());
 		register(new HitParticlesModule());
+		register(new BloodModule());
 		register(new CrosshairModule());
 		register(new HitColorModule());
 		register(new DamageNumbersModule());

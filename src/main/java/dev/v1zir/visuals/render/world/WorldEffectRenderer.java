@@ -17,6 +17,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.DynamicUniformStorage;
 import net.minecraft.util.math.Vec3d;
 import org.joml.Matrix4f;
+import org.joml.Matrix4fc;
 import org.joml.Vector3f;
 import org.lwjgl.system.MemoryUtil;
 
@@ -27,8 +28,9 @@ import java.util.function.Supplier;
 
 /**
  * Immediate renderer for the 3D effects. Geometry is built camera-relative into two batches
- * (additive glow and alpha blended) and drawn right after the world, depth tested against it;
- * {@link WorldSprites} come next and {@link WorldText} strings queued by the effects last, on top.
+ * (additive glow and alpha blended) and drawn right after the world, depth tested against it, then
+ * the same two kinds of batches that show through walls (ESP, chams); {@link WorldSprites} come
+ * next and {@link WorldText} strings queued by the effects last, on top.
  */
 public final class WorldEffectRenderer {
 	private static final int UBO_SIZE = new Std140SizeCalculator().putMat4f().putMat4f().putVec4().get();
@@ -36,7 +38,11 @@ public final class WorldEffectRenderer {
 	private static final Matrix4f PROJECTION = new Matrix4f();
 	private static final Mesh GLOW = new Mesh();
 	private static final Mesh TRANSLUCENT = new Mesh();
+	private static final Mesh GLOW_THROUGH = new Mesh();
+	private static final Mesh TRANSLUCENT_THROUGH = new Mesh();
 	private static DynamicUniformStorage<WorldData> storage;
+	/** Counts rendered world frames, so geometry collected while the world renders knows when a new frame began. */
+	private static int frame;
 
 	/** Camera position of the frame being rendered; vertices are relative to it. */
 	public static double camX;
@@ -58,6 +64,20 @@ public final class WorldEffectRenderer {
 	public static void captureMatrices(Matrix4f view, Matrix4f projection) {
 		VIEW.set(view);
 		PROJECTION.set(projection);
+		frame++;
+	}
+
+	public static int frame() {
+		return frame;
+	}
+
+	/** View (camera rotation) and projection of the last world frame, for projecting points to the screen. */
+	public static Matrix4fc view() {
+		return VIEW;
+	}
+
+	public static Matrix4fc projection() {
+		return PROJECTION;
 	}
 
 	/** How much narrower than the default 70 degrees this frame's field of view is (1 when wider). */
@@ -71,6 +91,16 @@ public final class WorldEffectRenderer {
 
 	public static Mesh translucent() {
 		return TRANSLUCENT;
+	}
+
+	/** Additive quads that are not hidden by the world (seen through walls). */
+	public static Mesh glowThrough() {
+		return GLOW_THROUGH;
+	}
+
+	/** Alpha blended quads that are not hidden by the world. */
+	public static Mesh translucentThrough() {
+		return TRANSLUCENT_THROUGH;
 	}
 
 	/** Called after the world has been rendered (WorldRendererMixin). */
@@ -96,6 +126,8 @@ public final class WorldEffectRenderer {
 
 		GLOW.reset();
 		TRANSLUCENT.reset();
+		GLOW_THROUGH.reset();
+		TRANSLUCENT_THROUGH.reset();
 		WorldText.begin();
 		for (Module module : effects) {
 			if (module.isEnabled()) {
@@ -107,13 +139,16 @@ public final class WorldEffectRenderer {
 				}
 			}
 		}
-		if (GLOW.quads == 0 && TRANSLUCENT.quads == 0 && WorldSprites.isEmpty() && WorldText.isEmpty()) return;
+		if (GLOW.quads == 0 && TRANSLUCENT.quads == 0 && GLOW_THROUGH.quads == 0 && TRANSLUCENT_THROUGH.quads == 0
+			&& WorldSprites.isEmpty() && WorldText.isEmpty()) return;
 
 		if (storage == null) storage = new DynamicUniformStorage<>("V1zir world effects UBO", UBO_SIZE, 4);
 		DATA.time = V1zir.time();
 		GpuBufferSlice params = storage.write(DATA);
 		draw(V1zirPipelines.WORLD_TRANSLUCENT, TRANSLUCENT, params);
 		draw(V1zirPipelines.WORLD_GLOW, GLOW, params);
+		draw(V1zirPipelines.WORLD_TRANSLUCENT_SEE_THROUGH, TRANSLUCENT_THROUGH, params);
+		draw(V1zirPipelines.WORLD_GLOW_SEE_THROUGH, GLOW_THROUGH, params);
 		WorldSprites.flush(params);
 		WorldText.flush(params);
 	}
@@ -158,6 +193,11 @@ public final class WorldEffectRenderer {
 
 		/** Adds one vertex at world position (x, y, z). Four vertices make a quad. */
 		public Mesh vertex(double x, double y, double z, float u, float v, int argb) {
+			return relative((float) (x - camX), (float) (y - camY), (float) (z - camZ), u, v, argb);
+		}
+
+		/** Adds one vertex at (x, y, z) relative to the camera, as entity models are rendered. */
+		public Mesh relative(float x, float y, float z, float u, float v, int argb) {
 			int needed = (vertices + 1) * STRIDE;
 			if (needed > buffer.capacity()) {
 				ByteBuffer bigger = MemoryUtil.memAlloc(buffer.capacity() * 2);
@@ -166,9 +206,9 @@ public final class WorldEffectRenderer {
 				buffer = bigger;
 			}
 			long p = MemoryUtil.memAddress(buffer) + (long) vertices * STRIDE;
-			MemoryUtil.memPutFloat(p, (float) (x - camX));
-			MemoryUtil.memPutFloat(p + 4, (float) (y - camY));
-			MemoryUtil.memPutFloat(p + 8, (float) (z - camZ));
+			MemoryUtil.memPutFloat(p, x);
+			MemoryUtil.memPutFloat(p + 4, y);
+			MemoryUtil.memPutFloat(p + 8, z);
 			MemoryUtil.memPutFloat(p + 12, u);
 			MemoryUtil.memPutFloat(p + 16, v);
 			MemoryUtil.memPutByte(p + 20, (byte) (argb >> 16 & 0xFF));
