@@ -20,7 +20,7 @@ import org.lwjgl.glfw.GLFW;
  * play state and prev / play / next buttons that work with the chat or the HUD editor open. Callers
  * draw the panel; texts are measured once per song and font, so frames neither measure nor format.
  */
-final class MediaCard {
+public final class MediaCard {
 	/** Height of the card with controls, and without. */
 	static final float HEIGHT = 62f;
 	static final float HEIGHT_PLAIN = 52f;
@@ -219,7 +219,7 @@ final class MediaCard {
 	}
 
 	/** Three bars dancing while the song plays; they settle into dots when it pauses. */
-	static void equalizer(DrawContext ctx, float x, float bottom, float play, int accent) {
+	public static void equalizer(DrawContext ctx, float x, float bottom, float play, int accent) {
 		float t = (float) ((System.nanoTime() / 1.0e9) % 1000.0);
 		for (int i = 0; i < 3; i++) {
 			float wave = 0.5f + 0.5f * (float) Math.sin(t * (6.1f + i * 1.7f) + i * 2.1f);
