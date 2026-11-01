@@ -99,9 +99,11 @@ public final class SkyRenderer {
 				TARGET.upsampleTo(color);
 				return true;
 			}
+			GpuTextureView noise = CloudNoise.view();
 			try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(() -> "V1zir shader sky", color, OptionalInt.empty())) {
 				pass.setPipeline(V1zirPipelines.SKY);
 				pass.setUniform("SkyParams", params);
+				CloudNoise.bind(pass, noise);
 				pass.setVertexBuffer(0, Fullscreen.buffer());
 				pass.draw(0, 3);
 			}

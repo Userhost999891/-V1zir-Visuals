@@ -256,11 +256,13 @@ public final class SkyCache {
 		/** Runs the sky shader over rows [from, to) of this panorama, blended into the history panorama. */
 		void render(Panorama history, GpuBufferSlice snapshot, float hemisphere, int from, int to) {
 			GpuBufferSlice cache = storage.write(new CacheData(buildWeight, hemisphere, jitterX, jitterY));
+			GpuTextureView noise = CloudNoise.view();
 			try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(() -> "V1zir sky cache build", view, OptionalInt.empty())) {
 				pass.setPipeline(V1zirPipelines.SKY_PANORAMA);
 				pass.setUniform("SkyParams", snapshot);
 				pass.setUniform("SkyCache", cache);
 				pass.bindTexture("Sampler0", history.view, RenderSystem.getSamplerCache().get(FilterMode.NEAREST));
+				CloudNoise.bind(pass, noise);
 				pass.enableScissor(0, from, size, to - from);
 				pass.setVertexBuffer(0, Fullscreen.buffer());
 				pass.draw(0, 3);

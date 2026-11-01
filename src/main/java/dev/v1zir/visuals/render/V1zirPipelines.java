@@ -94,6 +94,7 @@ public final class V1zirPipelines {
 		.withFragmentShader(V1zir.id("core/shader_sky"))
 		.withVertexFormat(VertexFormats.POSITION, VertexFormat.DrawMode.TRIANGLES)
 		.withUniform("SkyParams", UniformType.UNIFORM_BUFFER)
+		.withSampler("CloudNoise")
 		.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
 		.withDepthWrite(false)
 		.withoutBlend()
@@ -129,6 +130,19 @@ public final class V1zirPipelines {
 		.withUniform("SkyParams", UniformType.UNIFORM_BUFFER)
 		.withUniform("SkyCache", UniformType.UNIFORM_BUFFER)
 		.withSampler("Sampler0")
+		.withSampler("CloudNoise")
+		.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+		.withDepthWrite(false)
+		.withoutBlend()
+		.withCull(false)
+		.build();
+
+	/** Bakes the noise the volumetric clouds are carved from, once (render/sky/CloudNoise). */
+	public static final RenderPipeline CLOUD_NOISE = RenderPipeline.builder()
+		.withLocation(V1zir.id("pipeline/cloud_noise"))
+		.withVertexShader(V1zir.id("core/fullscreen"))
+		.withFragmentShader(V1zir.id("core/cloud_noise"))
+		.withVertexFormat(VertexFormats.POSITION, VertexFormat.DrawMode.TRIANGLES)
 		.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
 		.withDepthWrite(false)
 		.withoutBlend()
@@ -319,6 +333,7 @@ public final class V1zirPipelines {
 		RenderPipelines.register(WALLPAPER_BLUR);
 		RenderPipelines.register(SKY_PANORAMA);
 		RenderPipelines.register(SKY_CACHED);
+		RenderPipelines.register(CLOUD_NOISE);
 		RenderPipelines.register(COLOR_GRADE);
 		RenderPipelines.register(REFLECT_TRACE);
 		RenderPipelines.register(REFLECT_COMPOSITE);
