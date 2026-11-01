@@ -10,6 +10,9 @@ public enum Category {
 	COMBAT("Combat", Icons.SWORDS, "Target", "Hits", "Info"),
 	SHADERS("Shaders", Icons.CLOUD_SUN, "Sky", "World"),
 	HUD("Hud", Icons.LAYOUT_DASHBOARD, "Info", "Widgets", "Media"),
+	KNIVES("Knives", Icons.SWORD),
+	COSMETICS("Cosmetics", Icons.SHIRT),
+	/** Pinned to the bottom of the sidebar, above the profile footer. */
 	SETTINGS("Settings", Icons.SETTINGS);
 
 	private final String title;

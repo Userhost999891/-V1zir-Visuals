@@ -17,8 +17,9 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Left column of the window: the five tabs with icons, a soft accent pill that glides (spring) to the
- * selected tab, hover light on the others, and a small profile footer at the bottom.
+ * Left column of the window: the tabs with icons from the top, Settings pinned at the bottom above the
+ * profile footer, a soft accent pill that glides (spring) to the selected tab, and hover light on the
+ * others.
  */
 final class Sidebar {
 	private static final Category[] TABS = Category.values();
@@ -27,6 +28,7 @@ final class Sidebar {
 	private static final float TABS_TOP = 8f;
 	private static final float FOOTER = 36f;
 
+	/** Top of the selection pill relative to the sidebar, so it can glide to the pinned Settings tab too. */
 	private final Anim pill;
 	private final Anim pillFade = new Anim(1f, 16f);
 	private final Anim[] hover = new Anim[TABS.length];
@@ -43,9 +45,10 @@ final class Sidebar {
 	private float x;
 	private float y;
 	private float w;
+	private float h;
 
 	Sidebar(int selected) {
-		pill = new Anim(selected, 16f);
+		pill = new Anim(TABS_TOP + selected * (TAB_H + TAB_GAP), 16f);
 		for (int i = 0; i < TABS.length; i++) {
 			hover[i] = new Anim(0f, 20f);
 			countWidth[i] = new Label();
@@ -62,15 +65,16 @@ final class Sidebar {
 		this.x = x;
 		this.y = y;
 		this.w = w;
+		this.h = h;
 		int accent = Theme.accent();
 		Render2D.matte(ctx, x, y, w, h, Ui.PANEL_RADIUS, Theme.raised(), Ui.LIT);
 		Render2D.rim(ctx, x, y, w, h, Ui.PANEL_RADIUS, Ui.HAIRLINE, Ui.LIT);
 
 		float tx = x + 8f;
 		float tw = w - 16f;
-		float slide = pill.target(selected).get();
+		float slide = pill.target(tabY(selected)).get();
 		float fade = pillFade.target(searching ? 0.35f : 1f).get();
-		float py = y + TABS_TOP + slide * (TAB_H + TAB_GAP);
+		float py = y + slide;
 		// The selection: a neutral plate with a short accent bar on its left edge, gliding between tabs.
 		float alpha = Render2D.alpha();
 		Render2D.setAlpha(alpha * fade);
@@ -81,11 +85,15 @@ final class Sidebar {
 
 		SdfFont font = Fonts.medium();
 		countEnabled();
+		if (Category.SETTINGS.ordinal() < TABS.length) {
+			// A hairline separates the pinned Settings tab from the others.
+			Render2D.rect(ctx, tx + 4f, y + tabY(Category.SETTINGS.ordinal()) - TAB_GAP - 1f, tw - 8f, 1f, Ui.HAIRLINE);
+		}
 		for (int i = 0; i < TABS.length; i++) {
-			float ry = y + TABS_TOP + i * (TAB_H + TAB_GAP);
+			float ry = y + tabY(i);
 			boolean active = i == selected && !searching;
 			// A tab brightens while the selection glides over it.
-			float near = Math.max(0f, 1f - Math.abs(slide - i)) * fade;
+			float near = Math.max(0f, 1f - Math.abs(slide - tabY(i)) / (TAB_H + TAB_GAP)) * fade;
 			float hv = hover[i].target(!active && Ui.inside(mx, my, tx, ry, tw, TAB_H) ? 1f : 0f).get();
 			if (hv > 0.01f) Render2D.matte(ctx, tx, ry, tw, TAB_H, Ui.CELL_RADIUS + 2f, ColorUtil.withAlpha(0xFFFFFF, Math.round(9 * hv)), Ui.LIT);
 			float light = Math.max(near, hv * 0.7f);
@@ -142,8 +150,14 @@ final class Sidebar {
 		float tx = x + 8f;
 		float tw = w - 16f;
 		for (int i = 0; i < TABS.length; i++) {
-			if (Ui.inside(mx, my, tx, y + TABS_TOP + i * (TAB_H + TAB_GAP), tw, TAB_H)) return i;
+			if (Ui.inside(mx, my, tx, y + tabY(i), tw, TAB_H)) return i;
 		}
 		return -1;
+	}
+
+	/** Top of a tab relative to the sidebar: listed from the top, Settings just above the footer. */
+	private float tabY(int index) {
+		if (TABS[index] == Category.SETTINGS) return h - FOOTER - 8f - TAB_H;
+		return TABS_TOP + index * (TAB_H + TAB_GAP);
 	}
 }
