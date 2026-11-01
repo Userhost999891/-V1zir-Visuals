@@ -27,8 +27,9 @@ import org.lwjgl.glfw.GLFW;
  *   smaller and dimmer, spring scrolling between lines, a per-word or per-line fill and faded edges.
  *   The cover in its corner can be clicked (chat or HUD editor open): the card morphs into the now
  *   playing view ({@link MediaCard}) for a few seconds, the cover growing into place, then back.</li>
- *   <li>3D: the line floating in the world in front of the player ({@link Lyrics3D}): shiny words
- *   coming in one by one in time with the song, or extruded letters around the player.</li>
+ *   <li>3D: the lyrics in the world ahead of the player, on top of everything ({@link Lyrics3D}): every
+ *   word floating at its own spot and glowing as it is sung (Scatter), the line's words shining in one by
+ *   one (Shine), or extruded letters around the player (Extruded).</li>
  *   <li>Karaoke: centred subtitles above the hotbar with a fill sweeping across in time and the
  *   next line faintly below.</li>
  * </ul>
@@ -54,7 +55,7 @@ public final class SpotifyLyricsModule extends HudModule implements WorldEffect 
 	public final NumberSetting lines = add(new NumberSetting("Lines", 5, 3, 9, 1).visibleIf(() -> preset.is("Window")));
 	public final NumberSetting windowWidth = add(new NumberSetting("Width", 210, 160, 300, 5).visibleIf(() -> preset.is("Window")));
 	public final NumberSetting mediaTime = add(new NumberSetting("Media view", 6, 2, 20, 1).suffix(" s").visibleIf(() -> preset.is("Window")));
-	public final ModeSetting style = add(new ModeSetting("Style", "Shine", "Shine", "Extruded").visibleIf(() -> preset.is("3D")));
+	public final ModeSetting style = add(new ModeSetting("Style", "Scatter", "Scatter", "Shine", "Extruded").visibleIf(() -> preset.is("3D")));
 	public final NumberSetting size = add(new NumberSetting("Size", 1.0, 0.5, 2.0, 0.05).suffix("x").visibleIf(() -> preset.is("3D")));
 	public final NumberSetting distance = add(new NumberSetting("Distance", 3.4, 2.0, 6.0, 0.1).suffix(" m").visibleIf(() -> preset.is("3D")));
 	public final BoolSetting depth = add(new BoolSetting("Depth", true).visibleIf(() -> preset.is("3D") && style.is("Extruded")));
@@ -513,6 +514,7 @@ public final class SpotifyLyricsModule extends HudModule implements WorldEffect 
 			shown3D = -1;
 			return;
 		}
+		world.track();
 		update();
 		float letter = 0.26f * size.f();
 		float clock = 0f;
@@ -524,7 +526,8 @@ public final class SpotifyLyricsModule extends HudModule implements WorldEffect 
 				shown3D = index;
 				shown3DLyrics = lyrics;
 				left3D = false;
-				world.show(lyrics.line(index), letter, distance.f(), style.is("Shine"), (lyrics.end(index, duration) - start) / 1000f);
+				Lyrics3D.Look look = style.is("Scatter") ? Lyrics3D.Look.SCATTER : style.is("Shine") ? Lyrics3D.Look.SHINE : Lyrics3D.Look.EXTRUDED;
+				world.show(lyrics.line(index), letter, distance.f(), look, (lyrics.end(index, duration) - start) / 1000f);
 			} else if (!left3D && position >= lyrics.end(index, duration)) {
 				left3D = true;
 				world.leaveAll();

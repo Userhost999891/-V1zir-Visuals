@@ -28,9 +28,10 @@ import java.util.Arrays;
  *
  * <p>Call {@link #draw} from {@link WorldEffect#render3D}. Every string of the frame is queued,
  * sorted back to front and drawn after the other world effects; neighbours in that order that
- * share a font atlas page and depth mode share one draw call. Positions are world coordinates and
- * sizes are in blocks. A {@link Style} is mutable and reusable: keep one per use and change it
- * freely between calls.
+ * share a font atlas page and depth mode share one draw call. {@link Style#overlay Overlay} parts
+ * wait until the hand is drawn ({@link #flushOverlay}) and go on top of everything. Positions are
+ * world coordinates and sizes are in blocks. A {@link Style} is mutable and reusable: keep one per
+ * use and change it freely between calls.
  *
  * <p>Labels (nametags) are built from several parts around one anchor: text moved within the text
  * plane by an offset, and rounded {@link #plate plates} and soft {@link #halo halos} for
@@ -70,6 +71,7 @@ public final class WorldText {
 	private static int[] spanQuads = new int[64];
 	private static int[] spanPage = new int[64];
 	private static boolean[] spanSeeThrough = new boolean[64];
+	private static boolean[] spanOverlay = new boolean[64];
 	private static float[] spanDepth = new float[64];
 	private static int[] order = new int[64];
 	private static int spans;
@@ -83,6 +85,12 @@ public final class WorldText {
 	private static GlyphAtlas[] pages = new GlyphAtlas[4];
 	private static GpuTextureView[] views = new GpuTextureView[4];
 	private static int pageCount;
+
+	/** Whether the after-hand hook has run: until then overlay parts are drawn with the rest, through walls. */
+	private static boolean overlayHooked;
+	/** Overlay parts of this frame wait in the staging buffer for flushOverlay, with the frame's uniforms. */
+	private static boolean overlayPending;
+	private static GpuBufferSlice overlayParams;
 
 	// Layout of the string being queued: plane rectangle (x0, y0 top, x1, y1 bottom) and atlas rectangle per glyph.
 	private static float[] layout = new float[8 * 32];
@@ -138,6 +146,7 @@ public final class WorldText {
 		private final Vector3f right = new Vector3f(1, 0, 0);
 		private final Vector3f up = new Vector3f(0, 1, 0);
 		private boolean seeThrough;
+		private boolean overlay;
 		private int outlineColor;
 		private float outline;
 		private int glowColor;
@@ -224,6 +233,12 @@ public final class WorldText {
 		/** Draws through walls instead of being hidden by the world. */
 		public Style seeThrough(boolean seeThrough) {
 			this.seeThrough = seeThrough;
+			return this;
+		}
+
+		/** The topmost layer: through walls and entities and over the hand, drawn once the hand is (3D lyrics). */
+		public Style overlay(boolean overlay) {
+			this.overlay = overlay;
 			return this;
 		}
 
@@ -325,7 +340,7 @@ public final class WorldText {
 			if (queued(page, i)) continue;
 			int first = quads;
 			emit(font, page, style);
-			addSpan(first, quads - first, slot(page), style.seeThrough, depth);
+			addSpan(first, quads - first, slot(page), style, depth);
 		}
 	}
 
@@ -377,7 +392,7 @@ public final class WorldText {
 		vertex(p + STRIDE * 2, ax, ay, az, dx + ex, dy - ey, u, -v, b, aspectBits, shapeBits);
 		vertex(p + STRIDE * 3, ax, ay, az, dx + ex, dy + ey, u, v, b, aspectBits, shapeBits);
 		quads++;
-		addSpan(quads - 1, 1, ANY_PAGE, style.seeThrough, ax * ax + ay * ay + az * az);
+		addSpan(quads - 1, 1, ANY_PAGE, style, ax * ax + ay * ay + az * az);
 	}
 
 	/** Moves the anchor of the next part into camera space; false when it lies entirely behind the camera. */
@@ -611,13 +626,14 @@ public final class WorldText {
 		return pageCount++;
 	}
 
-	private static void addSpan(int first, int count, int page, boolean seeThrough, float depth) {
+	private static void addSpan(int first, int count, int page, Style style, float depth) {
 		if (spans == spanFirst.length) {
 			int n = spans * 2;
 			spanFirst = Arrays.copyOf(spanFirst, n);
 			spanQuads = Arrays.copyOf(spanQuads, n);
 			spanPage = Arrays.copyOf(spanPage, n);
 			spanSeeThrough = Arrays.copyOf(spanSeeThrough, n);
+			spanOverlay = Arrays.copyOf(spanOverlay, n);
 			spanDepth = Arrays.copyOf(spanDepth, n);
 			order = Arrays.copyOf(order, n);
 			batchPage = Arrays.copyOf(batchPage, n);
@@ -628,7 +644,8 @@ public final class WorldText {
 		spanFirst[spans] = first;
 		spanQuads[spans] = count;
 		spanPage[spans] = page;
-		spanSeeThrough[spans] = seeThrough;
+		spanSeeThrough[spans] = style.seeThrough || style.overlay;
+		spanOverlay[spans] = style.overlay;
 		spanDepth[spans] = depth;
 		spans++;
 	}
@@ -644,6 +661,8 @@ public final class WorldText {
 		quads = 0;
 		spans = 0;
 		pageCount = 0;
+		overlayPending = false;
+		overlayParams = null;
 		defaultFont = null;
 		// RIGHT x UP points at the viewer, so UP x RIGHT is the view direction.
 		Vector3f right = WorldEffectRenderer.RIGHT;
@@ -657,11 +676,44 @@ public final class WorldText {
 		return spans == 0;
 	}
 
-	/** Draws everything queued this frame back to front, merging neighbours that can share a draw (WorldEffectRenderer). */
+	/**
+	 * Draws everything queued this frame back to front, merging neighbours that can share a draw (WorldEffectRenderer).
+	 * Overlay parts stay queued for {@link #flushOverlay} once that hook is known to run.
+	 */
 	static void flush(GpuBufferSlice params) {
 		if (spans == 0) return;
-		for (int i = 0; i < spans; i++) order[i] = i;
-		IntArrays.quickSort(order, 0, spans, BACK_TO_FRONT);
+		overlayPending = draw(params, false);
+		if (overlayPending) overlayParams = params;
+		else clear();
+	}
+
+	/** After the hand (GameRendererMixin): the overlay parts of the frame on top of everything. */
+	public static void flushOverlay() {
+		overlayHooked = true;
+		if (!overlayPending) return;
+		draw(overlayParams, true);
+		clear();
+	}
+
+	private static void clear() {
+		quads = 0;
+		spans = 0;
+		pageCount = 0;
+		overlayPending = false;
+		overlayParams = null;
+	}
+
+	/** Draws the spans of one pass sorted back to front; returns whether overlay spans were left for later. */
+	private static boolean draw(GpuBufferSlice params, boolean overlayPass) {
+		int count = 0;
+		boolean deferred = false;
+		for (int i = 0; i < spans; i++) {
+			boolean later = spanOverlay[i] && overlayHooked;
+			if (overlayPass ? spanOverlay[i] : !later) order[count++] = i;
+			else deferred |= !overlayPass;
+		}
+		if (count == 0) return deferred;
+		IntArrays.quickSort(order, 0, count, BACK_TO_FRONT);
 		if (upload.capacity() < quads * QUAD) upload = MemoryUtil.memRealloc(upload, Math.max(upload.capacity() * 2, quads * QUAD));
 
 		long src = MemoryUtil.memAddress(staging);
@@ -669,7 +721,7 @@ public final class WorldText {
 		int written = 0;
 		int batches = 0;
 		int largest = 0;
-		for (int i = 0; i < spans; i++) {
+		for (int i = 0; i < count; i++) {
 			int s = order[i];
 			int page = spanPage[s];
 			int last = batches - 1;
@@ -708,8 +760,6 @@ public final class WorldText {
 				pass.drawIndexed(batchFirst[b] * 4, 0, batchQuads[b] * 6, 1);
 			}
 		}
-		quads = 0;
-		spans = 0;
-		pageCount = 0;
+		return deferred;
 	}
 }
