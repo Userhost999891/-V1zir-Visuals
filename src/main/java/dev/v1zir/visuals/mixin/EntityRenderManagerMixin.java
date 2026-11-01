@@ -1,5 +1,6 @@
 package dev.v1zir.visuals.mixin;
 
+import dev.v1zir.visuals.module.impl.effects.ChamsModule;
 import dev.v1zir.visuals.module.impl.effects.KillEffectsModule;
 import dev.v1zir.visuals.module.impl.visuals.EntityGlowModule;
 import dev.v1zir.visuals.module.impl.visuals.NoRenderModule;
@@ -43,5 +44,6 @@ public abstract class EntityRenderManagerMixin {
 	private void v1zir$marks(Entity entity, float tickProgress, CallbackInfoReturnable<EntityRenderState> cir) {
 		MarkedRenderState marks = (MarkedRenderState) cir.getReturnValue();
 		marks.v1zir$setHidden(KillEffectsModule.hides(entity));
+		marks.v1zir$setChams(ChamsModule.color(entity));
 	}
 }

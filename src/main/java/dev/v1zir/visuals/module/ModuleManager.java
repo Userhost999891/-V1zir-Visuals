@@ -6,6 +6,7 @@ import dev.v1zir.visuals.module.impl.client.CustomUiModule;
 import dev.v1zir.visuals.module.impl.client.MainMenuModule;
 import dev.v1zir.visuals.module.impl.client.ThemeModule;
 import dev.v1zir.visuals.module.impl.effects.BloodModule;
+import dev.v1zir.visuals.module.impl.effects.ChamsModule;
 import dev.v1zir.visuals.module.impl.effects.ChinaHatModule;
 import dev.v1zir.visuals.module.impl.effects.CrosshairModule;
 import dev.v1zir.visuals.module.impl.effects.CrystalChamsModule;
@@ -110,6 +111,7 @@ public final class ModuleManager {
 		register(new EntityGlowModule());
 		register(new NametagsModule());
 		// impl.effects
+		register(new ChamsModule());
 		register(new TargetEspModule());
 		register(new JumpCirclesModule());
 		register(new ChinaHatModule());
