@@ -9,8 +9,8 @@ import dev.v1zir.visuals.media.Track;
 import dev.v1zir.visuals.module.setting.BoolSetting;
 import dev.v1zir.visuals.module.setting.ModeSetting;
 import dev.v1zir.visuals.module.setting.NumberSetting;
+import dev.v1zir.visuals.gui.clickgui.Ui;
 import dev.v1zir.visuals.render.font.Fonts;
-import dev.v1zir.visuals.render.font.Icons;
 import dev.v1zir.visuals.render.font.SdfFont;
 import dev.v1zir.visuals.render.ui.Render2D;
 import dev.v1zir.visuals.render.world.WorldEffect;
@@ -18,12 +18,15 @@ import dev.v1zir.visuals.util.Anim;
 import dev.v1zir.visuals.util.ColorUtil;
 import dev.v1zir.visuals.util.Theme;
 import net.minecraft.client.gui.DrawContext;
+import org.lwjgl.glfw.GLFW;
 
 /**
  * Synced lyrics of the playing song (LRCLIB) in three presets:
  * <ul>
  *   <li>Window: a card like Spotify's lyrics view; the current line big and bright, the others
- *   smaller and dimmer, spring scrolling between lines, a per-word or per-line fill and faded edges.</li>
+ *   smaller and dimmer, spring scrolling between lines, a per-word or per-line fill and faded edges.
+ *   The cover in its corner can be clicked (chat or HUD editor open): the card morphs into the now
+ *   playing view ({@link MediaCard}) for a few seconds, the cover growing into place, then back.</li>
  *   <li>3D: the line floating in the world in front of the player ({@link Lyrics3D}): shiny words
  *   coming in one by one in time with the song, or extruded letters around the player.</li>
  *   <li>Karaoke: centred subtitles above the hotbar with a fill sweeping across in time and the
@@ -37,6 +40,8 @@ public final class SpotifyLyricsModule extends HudModule implements WorldEffect 
 	private static final float WINDOW_ROW = 12f;
 	private static final float WINDOW_GAP = 4.5f;
 	private static final float WINDOW_HEADER = 22f;
+	/** The cover in the header's corner, which opens the now playing view. */
+	private static final float ICON = 13f;
 	private static final float KARAOKE_SIZE = 13f;
 	private static final float KARAOKE_NEXT = 8.5f;
 	/** Distance of the karaoke block from the bottom of the screen: above the hotbar, hearts and armour. */
@@ -48,6 +53,7 @@ public final class SpotifyLyricsModule extends HudModule implements WorldEffect 
 	public final ModeSetting highlight = add(new ModeSetting("Highlight", "Word", "Word", "Line", "Off").visibleIf(() -> preset.is("Window")));
 	public final NumberSetting lines = add(new NumberSetting("Lines", 5, 3, 9, 1).visibleIf(() -> preset.is("Window")));
 	public final NumberSetting windowWidth = add(new NumberSetting("Width", 210, 160, 300, 5).visibleIf(() -> preset.is("Window")));
+	public final NumberSetting mediaTime = add(new NumberSetting("Media view", 6, 2, 20, 1).suffix(" s").visibleIf(() -> preset.is("Window")));
 	public final ModeSetting style = add(new ModeSetting("Style", "Shine", "Shine", "Extruded").visibleIf(() -> preset.is("3D")));
 	public final NumberSetting size = add(new NumberSetting("Size", 1.0, 0.5, 2.0, 0.05).suffix("x").visibleIf(() -> preset.is("3D")));
 	public final NumberSetting distance = add(new NumberSetting("Distance", 3.4, 2.0, 6.0, 0.1).suffix(" m").visibleIf(() -> preset.is("3D")));
@@ -66,6 +72,17 @@ public final class SpotifyLyricsModule extends HudModule implements WorldEffect 
 	/** Whether the karaoke line is being sung (it fades out during long breaks). */
 	private final Anim present = new Anim(0f, 7f);
 	private final Lyrics3D world = new Lyrics3D();
+	/** 0 shows the lyrics, 1 the now playing view the window morphs into when its cover is clicked. */
+	private final Anim mediaView = new Anim(0f, 7f);
+	private final Anim iconHover = new Anim(0f, 16f);
+	private final Anim iconPress = new Anim(0f, 9f);
+	private final MediaCard media = new MediaCard();
+	/** When the now playing view goes back to the lyrics (System.nanoTime); 0 while the lyrics show. */
+	private long mediaUntil;
+	/** Where the cover sat this frame, for clicks: the header corner, or the big cover of the now playing view. */
+	private float coverX;
+	private float coverY;
+	private float coverSize;
 	private final Render2D.TextStyle lineStyle = new Render2D.TextStyle();
 	private final Render2D.TextStyle karaokeStyle = new Render2D.TextStyle().shadow(0xA0000000);
 
@@ -79,6 +96,7 @@ public final class SpotifyLyricsModule extends HudModule implements WorldEffect 
 	/** Header text ("title · artist") fitted to the window width. */
 	private String header = "";
 	private SdfFont headerFont;
+	private float headerWidth;
 
 	private LyricLine[] layout = new LyricLine[0];
 	private Lyrics layoutLyrics;
@@ -115,6 +133,20 @@ public final class SpotifyLyricsModule extends HudModule implements WorldEffect 
 		Media.release(this);
 		world.clear();
 		shown3D = -1;
+		mediaUntil = 0L;
+	}
+
+	/** The cover toggles the now playing view; while it shows, its buttons work too. */
+	@Override
+	public boolean mouseClicked(double mouseX, double mouseY, int button) {
+		if (!preset.is("Window") || button != GLFW.GLFW_MOUSE_BUTTON_LEFT) return false;
+		boolean showing = mediaView.target() > 0.5f;
+		if (showing && media.click(mouseX, mouseY, button)) return true;
+		if (!Ui.inside(mouseX, mouseY, coverX - 2f, coverY - 2f, coverSize + 4f, coverSize + 4f)) return false;
+		mediaUntil = showing ? 0L : System.nanoTime() + (long) (mediaTime.f() * 1.0e9f);
+		iconPress.snap(1f);
+		iconPress.target(0f);
+		return true;
 	}
 
 	// ------------------------------------------------------------------ state
@@ -227,31 +259,86 @@ public final class SpotifyLyricsModule extends HudModule implements WorldEffect 
 		update();
 		appear.target(visible() ? 1f : 0f);
 		Render2D.setAlpha(appear.get());
-		if (preset.is("Window")) renderWindow(ctx, x, y);
-		else if (preset.is("Karaoke")) renderKaraoke(ctx, x, y);
-		else renderWorldChip(ctx, x, y);
+		if (preset.is("Window")) {
+			renderWindow(ctx, x, y);
+		} else {
+			mediaUntil = 0L;
+			if (preset.is("Karaoke")) renderKaraoke(ctx, x, y);
+			else renderWorldChip(ctx, x, y);
+		}
 		Render2D.setAlpha(1f);
 	}
 
 	private void renderWindow(DrawContext ctx, float x, float y) {
 		float w = windowWidth.f();
-		float areaH = lines.i() * (WINDOW_ROW + WINDOW_GAP * 0.6f);
-		float h = WINDOW_HEADER + areaH + 6f;
+		float lyricsH = WINDOW_HEADER + lines.i() * (WINDOW_ROW + WINDOW_GAP * 0.6f) + 6f;
+		if (mediaUntil != 0L && System.nanoTime() >= mediaUntil) mediaUntil = 0L;
+		float m = mediaView.target(mediaUntil != 0L ? 1f : 0f).get();
+		float h = lyricsH + (MediaCard.HEIGHT - lyricsH) * m;
 		width = w;
 		height = h;
 		int accent = accent();
-		panel(ctx, x, y, w, h, 8f);
-		Render2D.gradientV(ctx, x, y, w, h * 0.6f, 8f, ColorUtil.withAlpha(accent, 26), ColorUtil.withAlpha(accent, 0));
-
-		// Header: the cover, "title · artist" and the microphone.
-		AlbumArt.draw(ctx, x + 8f, y + 5f, 12f, 3f, 0xFFFFFFFF, accent, Theme.accent2());
-		SdfFont small = Fonts.medium();
-		if (headerFont != small) {
-			headerFont = small;
-			header = track == null ? "Spotify Lyrics" : small.trim(track.artist().isEmpty() ? track.title() : track.title() + " · " + track.artist(), 6.5f, w - 50f);
+		int accent2 = ColorUtil.lerp(accent, 0xFFFFFFFF, 0.35f);
+		float alpha = Render2D.alpha();
+		float mx = -1f;
+		float my = -1f;
+		if (SpotifyModule.pointerActive()) {
+			mx = (float) mc.mouse.getScaledX(mc.getWindow());
+			my = (float) mc.mouse.getScaledY(mc.getWindow());
 		}
-		Render2D.textMiddle(ctx, small, header, x + 25f, y + 11f, 6.5f, Theme.textDim());
-		Render2D.icon(ctx, Icons.MIC_VOCAL, x + w - 13f, y + 11f, 8f, accent);
+		media.update(false);
+		panel(ctx, x, y, w, h, 8f);
+		// The lyrics' accent glow from the top gives way to the now playing card's wash from the left.
+		Render2D.gradientV(ctx, x, y, w, h * 0.6f, 8f, ColorUtil.withAlpha(accent, Math.round(26 * (1f - m))), ColorUtil.withAlpha(accent, 0));
+		if (m > 0.001f) Render2D.gradientH(ctx, x, y, w * 0.75f, h, 8f, ColorUtil.withAlpha(accent, Math.round(34 * m)), ColorUtil.withAlpha(accent, 0));
+
+		// Both views are clipped to the card while it changes height; the lyrics leave first, the details come in after.
+		ctx.enableScissor((int) Math.floor(x), (int) Math.floor(y), (int) Math.ceil(x + w), (int) Math.ceil(y + h));
+		float lyricsAlpha = Anim.clamp01(1f - m * 1.8f);
+		if (lyricsAlpha > 0.004f) {
+			Render2D.setAlpha(alpha * lyricsAlpha);
+			lyricsView(ctx, x, y - m * 8f, w, lyricsH, accent);
+		}
+		float art = MediaCard.HEIGHT - 12f;
+		float detailsAlpha = Anim.clamp01((m - 0.3f) / 0.7f);
+		if (detailsAlpha > 0.004f) {
+			Render2D.setAlpha(alpha * detailsAlpha);
+			float tx = x + art + 14f + (1f - detailsAlpha) * 6f;
+			media.details(ctx, tx, y, x + w - 9f - tx, true, accent, accent2, mx, my);
+		}
+		ctx.disableScissor();
+
+		// The cover grows from the header's corner into the now playing view's cover.
+		Render2D.setAlpha(alpha);
+		float iconX = x + w - 8f - ICON;
+		float iconY = y + (WINDOW_HEADER - 2f - ICON) / 2f;
+		coverSize = ICON + (art - ICON) * m;
+		coverX = iconX + (x + 6f - iconX) * m;
+		coverY = iconY + (y + 6f - iconY) * m;
+		boolean over = Ui.inside(mx, my, coverX - 2f, coverY - 2f, coverSize + 4f, coverSize + 4f);
+		float hover = iconHover.target(over ? 1f : 0f).get();
+		float k = 1f + 0.08f * hover * (1f - m) - 0.1f * iconPress.get();
+		float size = coverSize * k;
+		float cx = coverX + (coverSize - size) / 2f;
+		float cy = coverY + (coverSize - size) / 2f;
+		float radius = 3.5f + 3.5f * m;
+		if (hover > 0.01f) {
+			Render2D.glow(ctx, cx, cy, size, size, radius, 5f, ColorUtil.withAlpha(accent, Math.round(90 * hover)), ColorUtil.withAlpha(accent2, Math.round(60 * hover)));
+		}
+		media.cover(ctx, cx, cy, size, radius, accent, Theme.accent2());
+		if (hover > 0.01f) Render2D.outline(ctx, cx - 1f, cy - 1f, size + 2f, size + 2f, radius + 1f, 1f, ColorUtil.withAlpha(0xFFFFFF, Math.round(120 * hover)));
+	}
+
+	/** The lyrics card's contents: "title · artist" over the lines (or a status), at the full lyrics height h. */
+	private void lyricsView(DrawContext ctx, float x, float y, float w, float h, int accent) {
+		SdfFont small = Fonts.medium();
+		float maxHeader = w - 22f - ICON;
+		if (headerFont != small || headerWidth != maxHeader) {
+			headerFont = small;
+			headerWidth = maxHeader;
+			header = track == null ? "Spotify Lyrics" : small.trim(track.artist().isEmpty() ? track.title() : track.title() + " · " + track.artist(), 6.5f, maxHeader);
+		}
+		Render2D.textMiddle(ctx, small, header, x + 10f, y + 11f, 6.5f, Theme.textDim());
 		Render2D.rect(ctx, x + 8f, y + WINDOW_HEADER - 2f, w - 16f, 1f, ColorUtil.withAlpha(0xFFFFFF, 14));
 
 		float top = y + WINDOW_HEADER;
@@ -408,12 +495,12 @@ public final class SpotifyLyricsModule extends HudModule implements WorldEffect 
 		Render2D.setAlpha(alpha);
 	}
 
-	/** In the HUD editor the 3D preset shows a small chip, so the element can still be found and switched. */
+	/** In the HUD editor the 3D preset shows a small chip with the cover, so the element can still be found and switched. */
 	private void renderWorldChip(DrawContext ctx, float x, float y) {
 		width = 92f;
 		height = 18f;
 		panel(ctx, x, y, width, height, 9f);
-		Render2D.icon(ctx, Icons.MIC_VOCAL, x + 11f, y + 9f, 8f, accent());
+		AlbumArt.draw(ctx, x + 4f, y + 4f, 10f, 5f, 0xFFFFFFFF, accent(), Theme.accent2());
 		Render2D.textMiddle(ctx, Fonts.medium(), "Lyrics in 3D", x + 20f, y + 9f, 6.5f, Theme.text());
 	}
 
