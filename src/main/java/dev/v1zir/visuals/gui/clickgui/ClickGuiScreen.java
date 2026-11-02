@@ -38,9 +38,9 @@ import java.util.Map;
  * HUD editor is reached from the Hud tab or the top bar.
  * <p>
  * Switching tabs slides the content in from the side the new tab lies on. Resting on a card brings up
- * a tooltip; its star makes it a favourite. Keys: arrows move a focus ring over the cards (also through
- * search results), Enter toggles the focused module (Shift+Enter opens its settings), Tab and Shift+Tab
- * switch tabs, Escape closes what is open.
+ * a tooltip; its star makes it a favourite. The sidebar footer opens the config profiles. Keys: arrows
+ * move a focus ring over the cards (also through search results), Enter toggles the focused module
+ * (Shift+Enter opens its settings), Tab and Shift+Tab switch tabs, Escape closes what is open.
  */
 public final class ClickGuiScreen extends Screen {
 	private static final Category[] TABS = Category.values();
@@ -306,6 +306,7 @@ public final class ClickGuiScreen extends Screen {
 		}
 		ModuleGrid grid = activeGrid();
 		tooltip.render(ctx, grid != null ? grid.hovered() : null, mx, my, winX, winY, winX + winW, winY + winH);
+		sidebar.renderMenu(ctx, mx, my);
 		ctx.getMatrices().popMatrix();
 	}
 
@@ -432,6 +433,7 @@ public final class ClickGuiScreen extends Screen {
 		if (hudEditor) return hudEditorClicked(click.x(), click.y(), button);
 		double mx = toSpaceX(click.x());
 		double my = toSpaceY(click.y());
+		if (sidebar.menuClicked(mx, my, button)) return true;
 		searchFocused = false;
 		if (!Ui.inside(mx, my, winX, winY, winW, winH)) {
 			drawer.close();
@@ -574,6 +576,7 @@ public final class ClickGuiScreen extends Screen {
 			}
 			return super.keyPressed(input);
 		}
+		if (sidebar.menuKeyPressed(key)) return true;
 		for (ModuleCard card : cards) if (card.keyPressed(key)) return true;
 		if (drawer.keyPressed(key) || settingsPage.keyPressed(key)) return true;
 		if (navigate(key, (input.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0)) return true;
@@ -615,6 +618,7 @@ public final class ClickGuiScreen extends Screen {
 	@Override
 	public boolean charTyped(CharInput input) {
 		if (!input.isValidChar() || hudEditor) return false;
+		if (sidebar.menuCharTyped(input.asString())) return true;
 		if (anyBinding()) return true;
 		searchFocused = true;
 		if (search.length() < 32) setSearch(search + input.asString());
