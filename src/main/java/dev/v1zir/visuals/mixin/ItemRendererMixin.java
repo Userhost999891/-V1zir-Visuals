@@ -2,7 +2,10 @@ package dev.v1zir.visuals.mixin;
 
 import com.llamalad7.mixinextras.sugar.Local;
 import dev.v1zir.visuals.module.impl.visuals.HandChamsModule;
+import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.render.item.ItemRenderer;
+import net.minecraft.client.render.model.BakedQuad;
+import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.item.ItemDisplayContext;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -10,9 +13,12 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import java.util.List;
+
 /**
  * Hand Chams on held items. The deferred item draw still knows its display context, so the tint
- * is switched on for first-person items only and applied to the colour of every quad.
+ * is switched on for first-person items only and applied to the colour of every quad; the outline
+ * style draws the item's quads into its glow layer first.
  */
 @Mixin(ItemRenderer.class)
 public abstract class ItemRendererMixin {
@@ -22,6 +28,12 @@ public abstract class ItemRendererMixin {
 	@Inject(method = RENDER_ITEM, at = @At("HEAD"))
 	private static void v1zir$beginChams(CallbackInfo ci, @Local(argsOnly = true) ItemDisplayContext context) {
 		HandChamsModule.beginItem(context.isFirstPerson());
+	}
+
+	@Inject(method = RENDER_ITEM, at = @At("HEAD"))
+	private static void v1zir$outline(CallbackInfo ci, @Local(argsOnly = true) ItemDisplayContext context, @Local(argsOnly = true) MatrixStack matrices,
+									  @Local(argsOnly = true) VertexConsumerProvider consumers, @Local(argsOnly = true) List<BakedQuad> quads) {
+		HandChamsModule.outlineItem(context, matrices, consumers, quads);
 	}
 
 	@Inject(method = RENDER_ITEM, at = @At("RETURN"))

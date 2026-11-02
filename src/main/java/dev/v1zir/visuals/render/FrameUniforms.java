@@ -41,6 +41,8 @@ public final class FrameUniforms {
 		SkyCache.flip();
 		BackdropBlur.flip();
 		ColorGrade.flip();
+		MotionBlur.flip();
+		Bloom.flip();
 		Reflections.flip();
 		WindowTransition.flip();
 		WorldEffectRenderer.flip();

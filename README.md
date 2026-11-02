@@ -44,13 +44,17 @@ krawędzie w każdej skali GUI), rozmyte "szklane" panele i własne fonty render
   skala interfejsu, karty Main Menu i Custom UI oraz sekcja **Performance**.
 
 ### Visuals
-View Model, Swing Animations, Hand Chams, Zoom (C), Free Look (Left Alt), Camera Tweaks
+View Model, Swing Animations, Hand Chams (zabarwienie albo świecący obrys), Zoom (C), Free Look (Left Alt), Camera Tweaks
 (kamera przez bloki, dystans w trzeciej osobie, bez trzęsienia), Aspect Ratio, No Render,
 Jump Circles (tylko przy skoku), China Hat, Trails, Block Highlight, Break Effects, Item Physics.
 
 ### Combat
-Target ESP, Hit Particles, Crosshair, Hit Color, Damage Numbers, Hit Marker, Kill Effects
-(piorun, dusza, wybuch), Pop Chams, Totem Animation, Crystal Chams, Trajectories (łuk, kusza,
+**Chams** (gracze i opcjonalnie moby jako Glass – szkło z jasną krawędzią, Glow – świecąca
+sylwetka albo Flat, także przez ściany), **ESP** (Box 2D, Corners, Box 3D, z paskiem zdrowia),
+Target ESP, Hit Particles, **Blood** (krople krwi i plamy na ziemi przy uderzeniach), Crosshair,
+Hit Color, Damage Numbers, Hit Marker, **Kill Effects** (słup światła z nieba, rozgałęziony piorun,
+rozpad ciała na świecące kostki, dusza, wybuch krwi, fajerwerk; dla twoich zabójstw albo każdej
+śmierci w pobliżu), Pop Chams, Totem Animation, Crystal Chams, Trajectories (łuk, kusza,
 trójząb, perły, mikstury…), Damage Tint, Nametags, Health Indicator (dokładne zdrowie w sercach
 nad graczami, z połówkami i złotymi sercami absorpcji), Entity Glow.
 
@@ -60,8 +64,10 @@ z kraterami), Magma, Aurora (kurtyny zorzy), Nebula, Sunset, Ink, Synthwave, Blo
 Niebo jest liczone do panoram w tle i składane z nich, więc kosztuje mało i nie zależy od
 rozdzielczości. Oprócz tego: **Block Reflection** (Normal – odbicia na wodzie i gładkich blokach,
 Metal – wypolerowana, satynowa powierzchnia), **Rain Effects** (mokra ziemia w deszczu,
-chlapnięcia przy skoku i lądowaniu), Color Grading, Ambience, Full Bright, World Particles,
-Sky Lanterns, Glint Color.
+chlapnięcia przy skoku i lądowaniu), **Motion Blur** (rozmycie przy obracaniu kamery, tylko
+świat, bez kosztu gdy kamera stoi), **Bloom** (miękka poświata jasnych miejsc), **Shooting Stars**
+(spadające gwiazdy ze świecącymi smugami nocą), Color Grading, Ambience, Full Bright, World
+Particles (także unoszące się szklane kostki), Sky Lanterns, Glint Color.
 
 ### Hud
 Watermark (z logo), Array List, Keybinds, Potions, Target HUD (twarz gracza albo moba wycięta

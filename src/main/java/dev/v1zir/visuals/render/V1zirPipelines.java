@@ -167,6 +167,49 @@ public final class V1zirPipelines {
 		.withCull(false)
 		.build();
 
+	/** Motion blur of the world: the frame smeared along the camera's motion, blended with the previous result (render/MotionBlur). */
+	public static final RenderPipeline MOTION_BLUR = RenderPipeline.builder()
+		.withLocation(V1zir.id("pipeline/motion_blur"))
+		.withVertexShader(V1zir.id("core/fullscreen"))
+		.withFragmentShader(V1zir.id("core/motion_blur"))
+		.withVertexFormat(VertexFormats.POSITION, VertexFormat.DrawMode.TRIANGLES)
+		.withSampler("Sampler0")
+		.withSampler("Sampler1")
+		.withUniform("MotionParams", UniformType.UNIFORM_BUFFER)
+		.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+		.withDepthWrite(false)
+		.withoutBlend()
+		.withCull(false)
+		.build();
+
+	/** Bright pass of the bloom into half resolution (render/Bloom). */
+	public static final RenderPipeline BLOOM_BRIGHT = RenderPipeline.builder()
+		.withLocation(V1zir.id("pipeline/bloom_bright"))
+		.withVertexShader(V1zir.id("core/fullscreen"))
+		.withFragmentShader(V1zir.id("core/bloom_bright"))
+		.withVertexFormat(VertexFormats.POSITION, VertexFormat.DrawMode.TRIANGLES)
+		.withSampler("Sampler0")
+		.withUniform("BloomParams", UniformType.UNIFORM_BUFFER)
+		.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+		.withDepthWrite(false)
+		.withoutBlend()
+		.withCull(false)
+		.build();
+
+	/** The blurred bloom added onto the frame. */
+	public static final RenderPipeline BLOOM_COMPOSITE = RenderPipeline.builder()
+		.withLocation(V1zir.id("pipeline/bloom_composite"))
+		.withVertexShader(V1zir.id("core/fullscreen"))
+		.withFragmentShader(V1zir.id("core/bloom_composite"))
+		.withVertexFormat(VertexFormats.POSITION, VertexFormat.DrawMode.TRIANGLES)
+		.withSampler("Sampler0")
+		.withUniform("BloomParams", UniformType.UNIFORM_BUFFER)
+		.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+		.withDepthWrite(false)
+		.withBlend(ADDITIVE)
+		.withCull(false)
+		.build();
+
 	/** Reflections and rain (render/Reflections): traces the reflected rays, usually at half resolution. */
 	public static final RenderPipeline REFLECT_TRACE = reflectPipeline("reflect_trace", 4);
 	/** Composites the traced reflections and the wet look back onto the frame. */
@@ -208,6 +251,10 @@ public final class V1zirPipelines {
 	public static final RenderPipeline WORLD_GLOW = worldPipeline("world_glow", ADDITIVE, true);
 	/** Regular alpha blended world geometry (china hat body...). */
 	public static final RenderPipeline WORLD_TRANSLUCENT = worldPipeline("world_translucent", BlendFunction.TRANSLUCENT, true);
+	/** World effects that show through walls (ESP boxes, chams), additive. */
+	public static final RenderPipeline WORLD_GLOW_SEE_THROUGH = worldPipeline("world_glow_see_through", ADDITIVE, false);
+	/** Alpha blended world geometry that shows through walls. */
+	public static final RenderPipeline WORLD_TRANSLUCENT_SEE_THROUGH = worldPipeline("world_translucent_see_through", BlendFunction.TRANSLUCENT, false);
 	/** World-space SDF text (WorldText), depth tested against the world. */
 	public static final RenderPipeline WORLD_TEXT = worldTexturedPipeline("world_text", "world_text", VertexFormats.POSITION_TEXTURE_COLOR_LIGHT, true);
 	/** World-space SDF text that shows through walls. */
@@ -275,7 +322,6 @@ public final class V1zirPipelines {
 	}
 
 	private static RenderPipeline worldPipeline(String name, BlendFunction blend, boolean depthTest) {
-		// Effects are always depth tested against the world: purely visual, nothing shows through walls.
 		return RenderPipeline.builder()
 			.withLocation(V1zir.id("pipeline/" + name))
 			.withVertexShader(V1zir.id("core/world_effect"))
@@ -320,6 +366,9 @@ public final class V1zirPipelines {
 		RenderPipelines.register(SKY_PANORAMA);
 		RenderPipelines.register(SKY_CACHED);
 		RenderPipelines.register(COLOR_GRADE);
+		RenderPipelines.register(MOTION_BLUR);
+		RenderPipelines.register(BLOOM_BRIGHT);
+		RenderPipelines.register(BLOOM_COMPOSITE);
 		RenderPipelines.register(REFLECT_TRACE);
 		RenderPipelines.register(REFLECT_COMPOSITE);
 		RenderPipelines.register(GUI_TRANSITION);
@@ -328,6 +377,8 @@ public final class V1zirPipelines {
 		RenderPipelines.register(BLUR_UP);
 		RenderPipelines.register(WORLD_GLOW);
 		RenderPipelines.register(WORLD_TRANSLUCENT);
+		RenderPipelines.register(WORLD_GLOW_SEE_THROUGH);
+		RenderPipelines.register(WORLD_TRANSLUCENT_SEE_THROUGH);
 		RenderPipelines.register(WORLD_TEXT);
 		RenderPipelines.register(WORLD_TEXT_SEE_THROUGH);
 		RenderPipelines.register(WORLD_SPRITE);
