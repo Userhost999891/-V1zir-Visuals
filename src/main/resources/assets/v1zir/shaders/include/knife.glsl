@@ -65,9 +65,9 @@ vec3 knifeEnv(vec3 r, float rough) {
 	vec3 c = mix(vec3(0.16, 0.16, 0.17), vec3(0.6, 0.62, 0.66), smoothstep(-0.5, 0.8, r.y));
 	c += vec3(0.32, 0.31, 0.3) * exp(-abs(r.y + 0.04) * 14.0 / w);
 	vec3 front = normalize(vec3(-0.2, 0.42, 1.0));
-	c += vec3(0.95, 0.94, 0.92) * smoothstep(0.62 - 0.25 * rough, 0.93, dot(r, front));
+	c += vec3(0.78, 0.77, 0.75) * smoothstep(0.62 - 0.25 * rough, 0.93, dot(r, front));
 	vec3 top = normalize(vec3(0.05, 1.0, 0.2));
-	c += vec3(1.3, 1.27, 1.22) * pow(max(dot(r, top), 0.0), 34.0 / w);
+	c += vec3(1.1, 1.08, 1.04) * pow(max(dot(r, top), 0.0), 34.0 / w);
 	vec3 left = normalize(vec3(-1.0, 0.3, 0.25));
 	c += vec3(0.5, 0.58, 0.72) * pow(max(dot(r, left), 0.0), 10.0 / w);
 	vec3 right = normalize(vec3(1.0, 0.15, 0.1));

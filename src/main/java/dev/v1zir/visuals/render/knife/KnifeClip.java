@@ -4,9 +4,10 @@ import java.util.Arrays;
 
 /**
  * One first-person animation: keyframes of offsets from the resting pose, played additively. Channels are the
- * hand's position (view space, blocks) and turn (degrees about the knife's own axes: x along the blade, y towards
- * the spine, z through the flat), the knife's shift and spin relative to the hand (centimetres and degrees, the spin
- * about the clip's pivot) and the angles of the moving parts. Keys are joined by cubic Hermite curves whose tangents
+ * hand's position and turn about the grip (view space: blocks, and degrees of pitch, yaw and roll in the screen plane),
+ * the knife's shift and spin relative to the hand (centimetres and degrees about the knife's own axes: x along the
+ * blade, y towards the spine, z through the flat; the spin about the clip's pivot) and the angles of the moving parts.
+ * Keys are joined by cubic Hermite curves whose tangents
  * follow the neighbouring keys (Catmull-Rom over uneven spacing), so motion flows through every key; the clip eases
  * in from and out to its first and last key.
  * <p>
@@ -70,7 +71,7 @@ final class KnifeClip {
 		return set(HAND_X, x, y, z);
 	}
 
-	/** Hand turn, degrees about the knife's axes (x rolls the blade, z tips the point up, y swings it sideways). */
+	/** Hand turn about the grip, degrees in view space: x tips the point up, y turns it left, z rolls it anticlockwise on screen. */
 	KnifeClip turn(float rx, float ry, float rz) {
 		return set(HAND_RX, rx, ry, rz);
 	}

@@ -1,5 +1,6 @@
 package dev.v1zir.visuals.render.knife;
 
+import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 
@@ -13,7 +14,7 @@ import org.joml.Vector3f;
  */
 public final class KnifeAnimator {
 	/** Centimetres to blocks: the handle about the size of the blocky fist that holds it. */
-	public static final float SCALE = 0.031f;
+	public static final float SCALE = 0.046f;
 	private static final float DEG = (float) (Math.PI / 180.0);
 	/** Inspect fades out over this when an attack or a switch interrupts it, seconds. */
 	private static final float CANCEL = 0.16f;
@@ -30,7 +31,10 @@ public final class KnifeAnimator {
 	private final float[] sample = new float[KnifeClip.CHANNELS];
 	private final float[] sum = new float[KnifeClip.CHANNELS];
 	private final Matrix4f gripToArm = new Matrix4f();
-	private final Vector3f tmp = new Vector3f();
+	private final Matrix3f restTurn = new Matrix3f();
+	private final Matrix4f restTurn4 = new Matrix4f();
+	private final Vector3f elbow = new Vector3f();
+	private final Vector3f palm = new Vector3f();
 	private KnifeType type = KnifeType.KARAMBIT;
 	/** Animation time in seconds, advanced by the speed setting. */
 	private float clock;
@@ -149,10 +153,12 @@ public final class KnifeAnimator {
 		sum[KnifeClip.HAND_RX + 2] -= swayY * 140f;
 
 		Rest rest = Rest.of(type.grip);
+		rest.turn(restTurn);
 		grip.translation(rest.x + offsetX + sum[0], rest.y + offsetY + sum[1], rest.z + offsetZ + sum[2])
-			.rotateY(rest.yaw * DEG).rotateX(rest.pitch * DEG).rotateY((float) (Math.PI / 2)).rotateX(rest.roll * DEG)
-			.rotateX(sum[3] * DEG).rotateY(sum[4] * DEG).rotateZ(sum[5] * DEG);
-		knife.set(grip).translate(pivotX * SCALE, pivotY * SCALE, 0f)
+			.rotateY(sum[4] * DEG).rotateX(sum[3] * DEG).rotateZ(sum[5] * DEG).mul(restTurn4.set(restTurn));
+		// Forward grips hold the handle nearer its butt, so guard and bolster show in front of the fist.
+		float hold = type.grip == KnifeType.Grip.FORWARD ? 1.3f : 0f;
+		knife.set(grip).translate((pivotX + hold) * SCALE, pivotY * SCALE, 0f)
 			.rotateX(sum[9] * DEG).rotateY(sum[10] * DEG).rotateZ(sum[11] * DEG)
 			.translate((sum[6] - pivotX) * SCALE, (sum[7] - pivotY) * SCALE, sum[8] * SCALE);
 		armFromGrip(rest, slim);
@@ -165,7 +171,12 @@ public final class KnifeAnimator {
 
 	private void add(KnifeClip clip, float t, float weight) {
 		clip.sample(t, sample);
-		for (int i = 0; i < KnifeClip.CHANNELS; i++) sum[i] += sample[i] * weight;
+		for (int i = 0; i < KnifeClip.CHANNELS; i++) {
+			float v = sample[i];
+			// Angles count the short way round, so a clip faded out after a whole spin does not unwind it.
+			if (i >= KnifeClip.HAND_RX && i < KnifeClip.KNIFE_X || i >= KnifeClip.KNIFE_RX) v -= 360f * (float) Math.floor((v + 180f) / 360f);
+			sum[i] += v * weight;
+		}
 	}
 
 	private void springTo(float dt, float tx, float ty) {
@@ -187,24 +198,20 @@ public final class KnifeAnimator {
 	}
 
 	/**
-	 * The arm relative to the grip. The grip names where the forearm runs (towards the elbow, in knife space) and which
-	 * way the palm faces; the arm model's own frame (y from the shoulder to the hand, the fist at its far end) is
-	 * turned to match and moved so the fist's centre is the grip point. Last, the shoulder pivot and the slight roll
-	 * that PlayerEntityRenderer.renderArm applies itself are undone.
+	 * The arm relative to the grip. At rest the forearm runs from the fist towards the elbow and the palm faces a given
+	 * way (view space); taken into the knife's frame, that fixes how the fist holds the knife. The arm model's own frame
+	 * (y from the shoulder to the hand, the fist at its far end) is turned to match and moved so the fist's centre is
+	 * the grip point. Last, the shoulder pivot and the slight roll that PlayerEntityRenderer.renderArm applies itself
+	 * are undone.
 	 */
 	private void armFromGrip(Rest rest, boolean slim) {
-		Vector3f y = tmp.set(-rest.elbowX, -rest.elbowY, -rest.elbowZ).normalize();
-		float px = rest.palmX;
-		float py = rest.palmY;
-		float pz = rest.palmZ;
-		float d = px * y.x + py * y.y + pz * y.z;
-		px -= y.x * d;
-		py -= y.y * d;
-		pz -= y.z * d;
-		float len = (float) Math.sqrt(px * px + py * py + pz * pz);
-		px /= len;
-		py /= len;
-		pz /= len;
+		Vector3f y = restTurn.transformTranspose(elbow.set(-rest.elbowX, -rest.elbowY, -rest.elbowZ)).normalize();
+		Vector3f p = restTurn.transformTranspose(palm.set(rest.palmX, rest.palmY, rest.palmZ));
+		float d = p.dot(y);
+		p.sub(y.x * d, y.y * d, y.z * d).normalize();
+		float px = p.x;
+		float py = p.y;
+		float pz = p.z;
 		// z = x cross y completes the arm's frame.
 		float zx = py * y.z - pz * y.y;
 		float zy = pz * y.x - px * y.z;
@@ -215,12 +222,19 @@ public final class KnifeAnimator {
 		gripToArm.translate(-fistX / 16f, -8.2f / 16f, 0f).rotateZ(-0.1f).translate(5f / 16f, -(slim ? 2.5f : 2f) / 16f, 0f);
 	}
 
-	/** Resting pose and arm of a grip. Position in view space (blocks), orientation as yaw, pitch and roll (degrees). */
-	private record Rest(float x, float y, float z, float yaw, float pitch, float roll,
+	/**
+	 * Resting pose of a grip, all in view space (x right, y up, z towards the viewer): the grip point (blocks), where the
+	 * blade points (the knife's x axis, from butt to point), roughly where its spine faces (y axis), and the directions
+	 * from the fist to the elbow and out of the palm.
+	 */
+	private record Rest(float x, float y, float z, float bladeX, float bladeY, float bladeZ, float spineX, float spineY, float spineZ,
 						float elbowX, float elbowY, float elbowZ, float palmX, float palmY, float palmZ) {
-		private static final Rest FORWARD = new Rest(0.34f, -0.36f, -0.6f, 22f, 8f, -18f, -0.62f, -0.72f, 0.3f, 0f, 0f, 1f);
-		private static final Rest REVERSE = new Rest(0.36f, -0.24f, -0.58f, 12f, -62f, -20f, -0.2f, 0.75f, 0.62f, 0f, 0f, 1f);
-		private static final Rest PUSH = new Rest(0.3f, -0.34f, -0.58f, 18f, 6f, -12f, -1f, -0.05f, 0.1f, 0f, 0f, 1f);
+		private static final Rest FORWARD = new Rest(0.46f, -0.48f, -0.92f, -0.62f, 0.5f, -0.6f, 0.25f, 0.85f, 0.45f,
+			0.6f, -0.72f, 0.35f, -0.5f, 0.3f, -0.4f);
+		private static final Rest REVERSE = new Rest(0.46f, -0.34f, -0.9f, -0.4f, -0.8f, -0.3f, 0.5f, -0.6f, 0.6f,
+			0.8f, -0.25f, 0.5f, -0.5f, 0.4f, -0.5f);
+		private static final Rest PUSH = new Rest(0.44f, -0.46f, -0.9f, -0.4f, 0.3f, -0.87f, 0.15f, 0.95f, 0.27f,
+			0.4f, -0.35f, 0.85f, -0.8f, 0.1f, -0.2f);
 
 		static Rest of(KnifeType.Grip grip) {
 			return switch (grip) {
@@ -228,6 +242,23 @@ public final class KnifeAnimator {
 				case REVERSE -> REVERSE;
 				case PUSH -> PUSH;
 			};
+		}
+
+		/** The knife's resting orientation: blade direction, spine made square to it, flat normal completing the frame. */
+		void turn(Matrix3f out) {
+			float bl = (float) Math.sqrt(bladeX * bladeX + bladeY * bladeY + bladeZ * bladeZ);
+			float bx = bladeX / bl;
+			float by = bladeY / bl;
+			float bz = bladeZ / bl;
+			float d = spineX * bx + spineY * by + spineZ * bz;
+			float sx = spineX - bx * d;
+			float sy = spineY - by * d;
+			float sz = spineZ - bz * d;
+			float sl = (float) Math.sqrt(sx * sx + sy * sy + sz * sz);
+			sx /= sl;
+			sy /= sl;
+			sz /= sl;
+			out.set(bx, by, bz, sx, sy, sz, by * sz - bz * sy, bz * sx - bx * sz, bx * sy - by * sx);
 		}
 	}
 }

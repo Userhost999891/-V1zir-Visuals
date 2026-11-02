@@ -661,9 +661,9 @@ final class KnifeModels {
 		MeshBuilder b = new MeshBuilder();
 		// T-handle across the palm, wrapped in red cord; the blade comes out between the fingers.
 		b.place.rotationZ((float) (Math.PI / 2));
-		Curve side = Curve.start(-3.9f, 0.85f).cubic(-1.5f, 1.0f, 1.5f, 1.0f, 3.9f, 0.85f);
-		Curve under = Curve.start(-3.9f, -0.85f).cubic(-1.5f, -1.0f, 1.5f, -1.0f, 3.9f, -0.85f);
-		Handle h = new Handle(side, under, -3.9f, 3.9f).width(0.85f, 0.95f, 0.85f).material(KnifeMesh.CORD, CORD_RED);
+		Curve side = Curve.start(-2.7f, 0.8f).cubic(-1.0f, 0.95f, 1.0f, 0.95f, 2.7f, 0.8f);
+		Curve under = Curve.start(-2.7f, -0.8f).cubic(-1.0f, -0.95f, 1.0f, -0.95f, 2.7f, -0.8f);
+		Handle h = new Handle(side, under, -2.7f, 2.7f).width(0.8f, 0.9f, 0.8f).material(KnifeMesh.CORD, CORD_RED);
 		h.ridges = 0.06f;
 		h.ridgeSpacing = 0.3f;
 		h.roundness = 2.2f;
