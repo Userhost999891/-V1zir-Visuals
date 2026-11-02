@@ -167,6 +167,21 @@ public final class V1zirPipelines {
 		.withCull(false)
 		.build();
 
+	/** Motion blur of the world: the frame smeared along the camera's motion, blended with the previous result (render/MotionBlur). */
+	public static final RenderPipeline MOTION_BLUR = RenderPipeline.builder()
+		.withLocation(V1zir.id("pipeline/motion_blur"))
+		.withVertexShader(V1zir.id("core/fullscreen"))
+		.withFragmentShader(V1zir.id("core/motion_blur"))
+		.withVertexFormat(VertexFormats.POSITION, VertexFormat.DrawMode.TRIANGLES)
+		.withSampler("Sampler0")
+		.withSampler("Sampler1")
+		.withUniform("MotionParams", UniformType.UNIFORM_BUFFER)
+		.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+		.withDepthWrite(false)
+		.withoutBlend()
+		.withCull(false)
+		.build();
+
 	/** Reflections and rain (render/Reflections): traces the reflected rays, usually at half resolution. */
 	public static final RenderPipeline REFLECT_TRACE = reflectPipeline("reflect_trace", 4);
 	/** Composites the traced reflections and the wet look back onto the frame. */
@@ -323,6 +338,7 @@ public final class V1zirPipelines {
 		RenderPipelines.register(SKY_PANORAMA);
 		RenderPipelines.register(SKY_CACHED);
 		RenderPipelines.register(COLOR_GRADE);
+		RenderPipelines.register(MOTION_BLUR);
 		RenderPipelines.register(REFLECT_TRACE);
 		RenderPipelines.register(REFLECT_COMPOSITE);
 		RenderPipelines.register(GUI_TRANSITION);

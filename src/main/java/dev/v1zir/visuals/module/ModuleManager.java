@@ -53,6 +53,7 @@ import dev.v1zir.visuals.module.impl.visuals.FreeLookModule;
 import dev.v1zir.visuals.module.impl.visuals.FullBrightModule;
 import dev.v1zir.visuals.module.impl.visuals.GlintColorModule;
 import dev.v1zir.visuals.module.impl.visuals.HandChamsModule;
+import dev.v1zir.visuals.module.impl.visuals.MotionBlurModule;
 import dev.v1zir.visuals.module.impl.visuals.NametagsModule;
 import dev.v1zir.visuals.module.impl.visuals.NoRenderModule;
 import dev.v1zir.visuals.module.impl.visuals.RainEffectsModule;
@@ -109,6 +110,7 @@ public final class ModuleManager {
 		register(new NoRenderModule());
 		register(new DamageTintModule());
 		register(new ColorGradingModule());
+		register(new MotionBlurModule());
 		register(new BlockReflectionModule());
 		register(new RainEffectsModule());
 		register(new EntityGlowModule());
