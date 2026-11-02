@@ -1,5 +1,6 @@
 package dev.v1zir.visuals.module.impl.hud;
 
+import dev.v1zir.visuals.gui.clickgui.Ui;
 import dev.v1zir.visuals.media.AlbumArt;
 import dev.v1zir.visuals.media.Lyrics;
 import dev.v1zir.visuals.media.LyricsService;
@@ -9,7 +10,6 @@ import dev.v1zir.visuals.media.Track;
 import dev.v1zir.visuals.module.setting.BoolSetting;
 import dev.v1zir.visuals.module.setting.ModeSetting;
 import dev.v1zir.visuals.module.setting.NumberSetting;
-import dev.v1zir.visuals.gui.clickgui.Ui;
 import dev.v1zir.visuals.render.font.Fonts;
 import dev.v1zir.visuals.render.font.SdfFont;
 import dev.v1zir.visuals.render.ui.Render2D;
@@ -207,7 +207,8 @@ public final class SpotifyLyricsModule extends HudModule implements WorldEffect 
 	}
 
 	private boolean visible() {
-		if (editing()) return true;
+		// The now playing view stays for its time once opened, lyrics or not.
+		if (editing() || mediaUntil != 0L) return true;
 		if (track == null || preset.is("3D")) return false;
 		boolean showing = preset.is("Window") ? lyrics != null && lyrics.hasLines() : synced();
 		return showing || (System.nanoTime() - trackSince) / 1.0e9f < STATUS_SECONDS;
