@@ -15,7 +15,6 @@ import dev.v1zir.visuals.util.ColorUtil;
 import dev.v1zir.visuals.util.Theme;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.client.render.entity.state.EntityRenderState;
 import net.minecraft.client.render.entity.state.LivingEntityRenderState;
 import net.minecraft.client.texture.TextureSetup;
@@ -209,7 +208,11 @@ final class CosmeticsPage {
 			Render2D.icon(ctx, Icons.SHIRT, x + w / 2f, y + h / 2f, 22f, Theme.textFaint());
 			return;
 		}
-		EntityRenderState state = InventoryScreen.drawEntity(mc.player);
+		// As the inventory does: the player's render state, fully lit, without outline or shadow.
+		EntityRenderState state = mc.getEntityRenderDispatcher().getAndUpdateRenderState(mc.player, 1f);
+		state.light = 0xF000F0;
+		state.outlineColor = 0;
+		state.shadowPieces.clear();
 		if (state instanceof LivingEntityRenderState living) {
 			living.bodyYaw = 180f + yaw;
 			living.relativeHeadYaw = 0f;
