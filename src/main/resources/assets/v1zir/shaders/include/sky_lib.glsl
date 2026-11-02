@@ -680,10 +680,10 @@ vec3 vMoon(vec3 rd, vec3 moonDir, float phase, vec3 tint, float size, out float 
 //  base, cauliflower billows above.
 //
 //  Light: a cone of samples towards the sun or moon gives the optical depth to the light. Beer-
-//  Lambert with a powder term (darker creases between the billows facing the light), three octaves
-//  of multiple scattering with ever wider, weaker phase lobes (soft, glowing interiors), a strong
-//  forward lobe (the silver lining towards the sun) and ambient light from the sky above and the
-//  ground below.
+//  Lambert with a powder term (darker creases between the billows facing the light) and a strong
+//  forward lobe (the silver lining towards the sun), a second, wider octave of multiple scattering
+//  and the light that diffuses through the whole cloud (soft, glowing interiors and grey, never
+//  black bases), skylight dimmed by the cloud above a point and light from the ground below.
 //
 //  March: long steps through clear air test the cheap shape only; at a cloud the march backs up
 //  and goes on in short steps that add the billows and the light. The steps grow with distance
@@ -833,8 +833,9 @@ vec4 vClouds(vec3 rd, VCloudLight light, float coverage, float t, vec3 camPos, i
 
 	float mu = dot(rd, light.dir);
 	// Phase: a strong forward lobe (silver lining) and a soft backward one; the lobes of the
-	// multiple scattering get wider and weaker (Wrenninge).
-	float ph0 = mix(vHG(mu, 0.8), vHG(mu, -0.25), 0.3);
+	// multiple scattering get wider and weaker (Wrenninge). Far clouds are smaller than a texel
+	// and get a softer lobe, so their thin edges near the sun do not sparkle.
+	float ph0 = mix(vHG(mu, mix(0.8, 0.55, smoothstep(15.0, 60.0, t0))), vHG(mu, -0.25), 0.3);
 	float ph1 = mix(vHG(mu, 0.4), vHG(mu, -0.12), 0.3);
 	float ph2 = mix(vHG(mu, 0.2), vHG(mu, -0.06), 0.3);
 	// Powder darkens the billows' skin facing the light; looking into the light the fringes glow.
