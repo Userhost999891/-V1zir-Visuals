@@ -148,7 +148,7 @@ final class KnifeModels {
 		int stations = ex.length;
 		boolean fuller = g.fullerStart >= 0f && g.fullerDepth > 0f;
 		// Half cross-section from the edge to the spine; the loft runs it down the +z side and back up the -z side.
-		int half = fuller ? 10 : 5;
+		int half = fuller ? 11 : 5;
 		int points = half * 2;
 		MeshBuilder.Loft l = new MeshBuilder.Loft(stations, points);
 		float[] f = new float[half];
