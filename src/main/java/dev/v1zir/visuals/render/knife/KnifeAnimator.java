@@ -66,6 +66,16 @@ public final class KnifeAnimator {
 		previous = null;
 	}
 
+	/** Holds this knife at rest without drawing it (the Knives tab's preview), stopping anything that plays. */
+	public void hold(KnifeType type) {
+		this.type = type;
+		drawAt = clock - 1000f;
+		inspectAt = clock - 1000f;
+		inspectCancelAt = Float.MAX_VALUE;
+		attack = null;
+		previous = null;
+	}
+
 	/** Starts the inspect, unless the knife is being drawn or swung. */
 	public void inspect() {
 		if (drawing() || attacking()) return;

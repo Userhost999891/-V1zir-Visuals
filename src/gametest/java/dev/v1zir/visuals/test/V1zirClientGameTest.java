@@ -17,6 +17,7 @@ import dev.v1zir.visuals.module.impl.effects.HealthIndicatorModule;
 import dev.v1zir.visuals.module.impl.effects.JumpCirclesModule;
 import dev.v1zir.visuals.module.impl.effects.KillEffectsModule;
 import dev.v1zir.visuals.module.impl.hud.ArmorModule;
+import dev.v1zir.visuals.module.impl.knives.KnivesModule;
 import dev.v1zir.visuals.module.impl.hud.ArrayListModule;
 import dev.v1zir.visuals.module.impl.hud.ClockModule;
 import dev.v1zir.visuals.module.impl.hud.CompassModule;
@@ -42,6 +43,7 @@ import dev.v1zir.visuals.module.impl.visuals.ShaderSkyModule;
 import dev.v1zir.visuals.module.impl.visuals.ShootingStarsModule;
 import dev.v1zir.visuals.module.impl.visuals.WorldParticlesModule;
 import dev.v1zir.visuals.module.impl.visuals.ZoomModule;
+import dev.v1zir.visuals.render.knife.KnifeViewModel;
 import dev.v1zir.visuals.render.sky.SkyPreset;
 import dev.v1zir.visuals.util.Theme;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
@@ -56,6 +58,8 @@ import net.minecraft.client.gui.screen.multiplayer.MultiplayerScreen;
 import net.minecraft.client.gui.screen.option.OptionsScreen;
 import net.minecraft.client.option.GameOptions;
 import net.minecraft.client.option.KeyBinding;
+import net.minecraft.client.option.Perspective;
+import net.minecraft.util.Hand;
 import net.minecraft.util.profiler.log.MultiValueDebugSampleLog;
 import org.lwjgl.glfw.GLFW;
 
@@ -111,6 +115,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			shootingStars(context, singleplayer);
 			motionBlur(context, singleplayer);
 			handOutline(context, singleplayer);
+			knives(context, singleplayer);
 			reflections(context, singleplayer);
 			clickGui(context);
 			clickGuiFavourites(context);
@@ -712,6 +717,69 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			HandChamsModule chams = ModuleManager.get(HandChamsModule.class);
 			chams.setEnabled(wasOn, false);
 			chams.style.reset();
+		});
+		singleplayer.getServer().runCommand("clear @a");
+	}
+
+	/**
+	 * Knives: a diamond sword in hand becomes the selected knife held by the player's own arm: at rest after its draw,
+	 * in the middle of its inspect and of a stab, another knife and finish, in third person (F5), and the library on
+	 * the Knives tab of the Click GUI.
+	 */
+	private static void knives(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
+		singleplayer.getServer().runCommand("item replace entity @a weapon.mainhand with minecraft:diamond_sword");
+		look(singleplayer, 30f, 8f);
+		boolean wasOn = context.computeOnClient(client -> {
+			KnivesModule knives = ModuleManager.get(KnivesModule.class);
+			boolean on = knives.isEnabled();
+			knives.knife.set("Karambit");
+			knives.finish.set("Sunset Fade");
+			knives.setEnabled(true, false);
+			return on;
+		});
+		// The draw plays first; the knife then rests in hand.
+		context.waitTicks(40);
+		context.takeScreenshot("knife-first-person");
+		context.runOnClient(client -> KnifeViewModel.inspect());
+		context.waitTicks(22);
+		context.takeScreenshot("knife-inspect");
+		context.waitTicks(100);
+		context.runOnClient(client -> client.player.swingHand(Hand.MAIN_HAND));
+		context.waitTicks(3);
+		context.takeScreenshot("knife-attack");
+		context.waitTicks(20);
+		context.runOnClient(client -> {
+			KnivesModule knives = ModuleManager.get(KnivesModule.class);
+			knives.knife.set("Butterfly");
+			knives.finish.set("Damascus");
+		});
+		context.waitTicks(40);
+		context.runOnClient(client -> KnifeViewModel.inspect());
+		context.waitTicks(30);
+		context.takeScreenshot("knife-butterfly-inspect");
+		context.waitTicks(100);
+		context.runOnClient(client -> {
+			KnivesModule knives = ModuleManager.get(KnivesModule.class);
+			knives.knife.set("Bayonet");
+			knives.finish.set("Sapphire");
+			client.options.setPerspective(Perspective.THIRD_PERSON_FRONT);
+		});
+		context.waitTicks(15);
+		context.takeScreenshot("knife-third-person");
+		context.runOnClient(client -> client.options.setPerspective(Perspective.FIRST_PERSON));
+		context.waitTicks(40);
+		context.takeScreenshot("knife-bayonet");
+
+		context.runOnClient(client -> setStatic(ClickGuiScreen.class, "tab", Category.KNIVES.ordinal()));
+		context.setScreen(ClickGuiScreen::new);
+		context.waitTicks(30);
+		context.takeScreenshot("clickgui-tab-knives");
+		context.setScreen(() -> null);
+		context.runOnClient(client -> {
+			KnivesModule knives = ModuleManager.get(KnivesModule.class);
+			knives.setEnabled(wasOn, false);
+			knives.knife.reset();
+			knives.finish.reset();
 		});
 		singleplayer.getServer().runCommand("clear @a");
 	}

@@ -6,6 +6,7 @@ import com.mojang.blaze3d.buffers.Std140SizeCalculator;
 import dev.v1zir.visuals.V1zir;
 import dev.v1zir.visuals.gui.clickgui.WindowTransition;
 import dev.v1zir.visuals.optimize.Optimizations;
+import dev.v1zir.visuals.render.knife.KnifePreview;
 import dev.v1zir.visuals.render.knife.KnifeRenderer;
 import dev.v1zir.visuals.render.wallpaper.WallpaperRenderer;
 import dev.v1zir.visuals.render.sky.SkyCache;
@@ -48,6 +49,7 @@ public final class FrameUniforms {
 		WindowTransition.flip();
 		WorldEffectRenderer.flip();
 		KnifeRenderer.flip();
+		KnifePreview.flip();
 		GuiCapture.flip();
 		Optimizations.endFrame();
 	}
