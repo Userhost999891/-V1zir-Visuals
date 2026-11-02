@@ -37,7 +37,9 @@ jobs:
           for c in net.minecraft.client.render.item.HeldItemRenderer net.minecraft.client.render.entity.feature.HeldItemFeatureRenderer \
                    net.minecraft.client.render.entity.PlayerEntityRenderer net.minecraft.client.render.entity.EntityRenderManager \
                    net.minecraft.client.render.RenderSetup\$Builder net.minecraft.entity.PlayerLikeEntity \
-                   net.minecraft.client.render.entity.state.BipedEntityRenderState net.minecraft.client.render.entity.state.PlayerEntityRenderState; do
+                   net.minecraft.client.render.entity.state.BipedEntityRenderState net.minecraft.client.render.entity.state.PlayerEntityRenderState \
+                   net.minecraft.client.render.entity.feature.CapeFeatureRenderer net.minecraft.client.render.entity.feature.FeatureRenderer \
+                   net.minecraft.client.gui.screen.ingame.InventoryScreen; do
             echo "=== SIG $c"; sig "$c"
           done
           echo "=== CODE HeldItemFeatureRenderer.renderItem"; code net.minecraft.client.render.entity.feature.HeldItemFeatureRenderer renderItem

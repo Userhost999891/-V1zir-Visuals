@@ -17,6 +17,7 @@ import dev.v1zir.visuals.module.impl.effects.HealthIndicatorModule;
 import dev.v1zir.visuals.module.impl.effects.JumpCirclesModule;
 import dev.v1zir.visuals.module.impl.effects.KillEffectsModule;
 import dev.v1zir.visuals.module.impl.hud.ArmorModule;
+import dev.v1zir.visuals.module.impl.cosmetics.CosmeticsModule;
 import dev.v1zir.visuals.module.impl.knives.KnivesModule;
 import dev.v1zir.visuals.module.impl.hud.ArrayListModule;
 import dev.v1zir.visuals.module.impl.hud.ClockModule;
@@ -116,6 +117,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			motionBlur(context, singleplayer);
 			handOutline(context, singleplayer);
 			knives(context, singleplayer);
+			cosmetics(context, singleplayer);
 			reflections(context, singleplayer);
 			clickGui(context);
 			clickGuiFavourites(context);
@@ -782,6 +784,50 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			knives.finish.reset();
 		});
 		singleplayer.getServer().runCommand("clear @a");
+	}
+
+	/**
+	 * Cosmetics: a top hat, angel wings and the galaxy cape on the player, seen from the front and from behind in third
+	 * person, then the Cosmetics tab with the player preview.
+	 */
+	private static void cosmetics(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
+		look(singleplayer, 30f, 8f);
+		boolean wasOn = context.computeOnClient(client -> {
+			CosmeticsModule cosmetics = ModuleManager.get(CosmeticsModule.class);
+			boolean on = cosmetics.isEnabled();
+			cosmetics.hat.set("Top Hat");
+			cosmetics.wings.set("Angel Wings");
+			cosmetics.cape.set("Galaxy Cape");
+			cosmetics.setEnabled(true, false);
+			client.options.setPerspective(Perspective.THIRD_PERSON_FRONT);
+			return on;
+		});
+		context.waitTicks(20);
+		context.takeScreenshot("cosmetics-third-person");
+		context.runOnClient(client -> client.options.setPerspective(Perspective.THIRD_PERSON_BACK));
+		context.waitTicks(15);
+		context.takeScreenshot("cosmetics-back");
+		context.runOnClient(client -> {
+			CosmeticsModule cosmetics = ModuleManager.get(CosmeticsModule.class);
+			cosmetics.hat.set("Halo");
+			cosmetics.wings.set("Demon Wings");
+			cosmetics.cape.set("Aurora Cape");
+		});
+		context.waitTicks(15);
+		context.takeScreenshot("cosmetics-back-2");
+		context.runOnClient(client -> client.options.setPerspective(Perspective.FIRST_PERSON));
+		context.runOnClient(client -> setStatic(ClickGuiScreen.class, "tab", Category.COSMETICS.ordinal()));
+		context.setScreen(ClickGuiScreen::new);
+		context.waitTicks(30);
+		context.takeScreenshot("clickgui-tab-cosmetics");
+		context.setScreen(() -> null);
+		context.runOnClient(client -> {
+			CosmeticsModule cosmetics = ModuleManager.get(CosmeticsModule.class);
+			cosmetics.setEnabled(wasOn, false);
+			cosmetics.hat.reset();
+			cosmetics.wings.reset();
+			cosmetics.cape.reset();
+		});
 	}
 
 	/**

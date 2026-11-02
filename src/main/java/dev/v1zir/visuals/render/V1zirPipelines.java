@@ -317,6 +317,69 @@ public final class V1zirPipelines {
 		.withCull(true)
 		.build();
 
+	/**
+	 * Cosmetics on players (render/cosmetic), drawn through an entity render layer like the knife: UV1 carries the
+	 * material and the animation time, the light map in Sampler2, vanilla's light and fog blocks.
+	 */
+	public static final RenderPipeline COSMETIC = RenderPipeline.builder()
+		.withLocation(V1zir.id("pipeline/cosmetic"))
+		.withVertexShader(V1zir.id("core/cosmetic"))
+		.withFragmentShader(V1zir.id("core/cosmetic"))
+		.withVertexFormat(VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL, VertexFormat.DrawMode.TRIANGLES)
+		.withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
+		.withUniform("Projection", UniformType.UNIFORM_BUFFER)
+		.withUniform("Fog", UniformType.UNIFORM_BUFFER)
+		.withUniform("Lighting", UniformType.UNIFORM_BUFFER)
+		.withSampler("Sampler2")
+		.withDepthTestFunction(DepthTestFunction.LEQUAL_DEPTH_TEST)
+		.withDepthWrite(true)
+		.withoutBlend()
+		.withCull(true)
+		.build();
+
+	/** Glowing and translucent cosmetic parts (a halo's shine, butterfly and energy wings): blended, both sides. */
+	public static final RenderPipeline COSMETIC_GLOW = RenderPipeline.builder()
+		.withLocation(V1zir.id("pipeline/cosmetic_glow"))
+		.withVertexShader(V1zir.id("core/cosmetic"))
+		.withFragmentShader(V1zir.id("core/cosmetic"))
+		.withVertexFormat(VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL, VertexFormat.DrawMode.TRIANGLES)
+		.withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
+		.withUniform("Projection", UniformType.UNIFORM_BUFFER)
+		.withUniform("Fog", UniformType.UNIFORM_BUFFER)
+		.withUniform("Lighting", UniformType.UNIFORM_BUFFER)
+		.withSampler("Sampler2")
+		.withDepthTestFunction(DepthTestFunction.LEQUAL_DEPTH_TEST)
+		.withDepthWrite(false)
+		.withBlend(BlendFunction.TRANSLUCENT)
+		.withCull(false)
+		.build();
+
+	/** Cosmetic previews of the Cosmetics tab, into their own colour and depth target (render/cosmetic/CosmeticPreview). */
+	public static final RenderPipeline COSMETIC_PREVIEW = RenderPipeline.builder()
+		.withLocation(V1zir.id("pipeline/cosmetic_preview"))
+		.withVertexShader(V1zir.id("core/cosmetic_preview"))
+		.withFragmentShader(V1zir.id("core/cosmetic_preview"))
+		.withVertexFormat(VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL, VertexFormat.DrawMode.TRIANGLES)
+		.withUniform("CosmeticPreview", UniformType.UNIFORM_BUFFER)
+		.withDepthTestFunction(DepthTestFunction.LEQUAL_DEPTH_TEST)
+		.withDepthWrite(true)
+		.withoutBlend()
+		.withCull(true)
+		.build();
+
+	/** The previews' glowing and translucent parts, premultiplied over the target. */
+	public static final RenderPipeline COSMETIC_PREVIEW_GLOW = RenderPipeline.builder()
+		.withLocation(V1zir.id("pipeline/cosmetic_preview_glow"))
+		.withVertexShader(V1zir.id("core/cosmetic_preview"))
+		.withFragmentShader(V1zir.id("core/cosmetic_preview"))
+		.withVertexFormat(VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL, VertexFormat.DrawMode.TRIANGLES)
+		.withUniform("CosmeticPreview", UniformType.UNIFORM_BUFFER)
+		.withDepthTestFunction(DepthTestFunction.LEQUAL_DEPTH_TEST)
+		.withDepthWrite(false)
+		.withBlend(PREMULTIPLIED)
+		.withCull(false)
+		.build();
+
 	private static boolean registered;
 
 	private V1zirPipelines() {
@@ -433,6 +496,10 @@ public final class V1zirPipelines {
 		RenderPipelines.register(WORLD_SPRITE_SEE_THROUGH);
 		RenderPipelines.register(KNIFE);
 		RenderPipelines.register(KNIFE_PREVIEW);
+		RenderPipelines.register(COSMETIC);
+		RenderPipelines.register(COSMETIC_GLOW);
+		RenderPipelines.register(COSMETIC_PREVIEW);
+		RenderPipelines.register(COSMETIC_PREVIEW_GLOW);
 	}
 
 	public static boolean isOurs(RenderPipeline pipeline) {

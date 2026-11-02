@@ -1,5 +1,9 @@
 package dev.v1zir.visuals;
 
+import dev.v1zir.visuals.render.cosmetic.CosmeticsFeature;
+import net.fabricmc.fabric.api.client.rendering.v1.LivingEntityFeatureRendererRegistrationCallback;
+import net.minecraft.client.render.entity.PlayerEntityRenderer;
+import net.minecraft.entity.EntityType;
 import dev.v1zir.visuals.config.ConfigManager;
 import dev.v1zir.visuals.gui.clickgui.ClickGuiScreen;
 import dev.v1zir.visuals.gui.hud.HudRenderer;
@@ -26,6 +30,10 @@ public final class V1zirClient implements ClientModInitializer {
 		ConfigManager.load();
 		Optimizations.logCompatibility();
 		HudRenderer.register();
+		// Cosmetics ride on the player model as one more feature of the player renderers.
+		LivingEntityFeatureRendererRegistrationCallback.EVENT.register((entityType, renderer, helper, context) -> {
+			if (entityType == EntityType.PLAYER && renderer instanceof PlayerEntityRenderer<?> players) helper.register(new CosmeticsFeature(players));
+		});
 
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			// Safety net for any code path that shows the vanilla title screen without setScreen.

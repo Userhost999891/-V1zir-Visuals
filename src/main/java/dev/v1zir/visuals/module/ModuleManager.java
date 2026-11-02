@@ -42,6 +42,7 @@ import dev.v1zir.visuals.module.impl.hud.SpotifyLyricsModule;
 import dev.v1zir.visuals.module.impl.hud.SpotifyModule;
 import dev.v1zir.visuals.module.impl.hud.TargetHudModule;
 import dev.v1zir.visuals.module.impl.hud.WatermarkModule;
+import dev.v1zir.visuals.module.impl.cosmetics.CosmeticsModule;
 import dev.v1zir.visuals.module.impl.knives.KnivesModule;
 import dev.v1zir.visuals.module.impl.visuals.AmbienceModule;
 import dev.v1zir.visuals.module.impl.visuals.AspectRatioModule;
@@ -165,6 +166,7 @@ public final class ModuleManager {
 		register(new SpotifyLyricsModule());
 		// impl.knives
 		register(new KnivesModule());
+		register(new CosmeticsModule());
 		// impl.client
 		register(new ClickGuiModule());
 		register(new ThemeModule());
