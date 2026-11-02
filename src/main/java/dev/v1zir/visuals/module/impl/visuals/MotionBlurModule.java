@@ -58,7 +58,8 @@ public final class MotionBlurModule extends Module {
 		float turnYaw = MathHelper.wrapDegrees(yaw - lastYaw);
 		float turnPitch = pitch - lastPitch;
 		double mx = pos.x - lastX, my = pos.y - lastY, mz = pos.z - lastZ;
-		boolean first = !tracking || dt <= 0f || dt > 0.25f;
+		// After a pause (a menu, a loading screen) the view did not really move.
+		boolean first = !tracking || dt <= 0f || dt > 1f;
 		lastYaw = yaw;
 		lastPitch = pitch;
 		lastX = pos.x;
@@ -70,10 +71,11 @@ public final class MotionBlurModule extends Module {
 			MotionBlur.reset();
 			return;
 		}
-		float turn = (float) Math.sqrt(turnYaw * turnYaw + turnPitch * turnPitch) / dt;
-		float speed = (float) Math.sqrt(mx * mx + my * my + mz * mz) / dt;
-		// Degrees and blocks per second: a slow look around barely blurs, a flick or a sprint does.
-		float motion = Math.min(1f, smooth((turn - 4f) / 220f) + 0.35f * smooth((speed - 5f) / 25f));
+		// The smear is what the view swept during this frame (like a camera shutter open for the whole frame), so a
+		// slow look around barely blurs and a flick does; running through the world adds a little.
+		float turn = (float) Math.sqrt(turnYaw * turnYaw + turnPitch * turnPitch);
+		float speed = (float) Math.sqrt(mx * mx + my * my + mz * mz) / Math.max(dt, 1f / 240f);
+		float motion = Math.min(1f, smooth((turn - 0.1f) / 2.5f) + 0.35f * smooth((speed - 5f) / 25f));
 		if (motion <= 0.01f) {
 			MotionBlur.reset();
 			return;
@@ -86,7 +88,7 @@ public final class MotionBlurModule extends Module {
 		float sx = clamp(turnYaw / fovX * s);
 		float sy = clamp(turnPitch / fovY * s);
 		// The trail fades by the same amount per second at any frame rate.
-		MotionBlur.render(sx, sy, (float) Math.pow(0.88f * s * motion, dt * 60f));
+		MotionBlur.render(sx, sy, (float) Math.pow(0.88f * s * motion, Math.min(dt, 0.1f) * 60f));
 	}
 
 	private static float clamp(float v) {
