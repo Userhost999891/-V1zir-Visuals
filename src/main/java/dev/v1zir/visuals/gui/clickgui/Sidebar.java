@@ -54,6 +54,9 @@ final class Sidebar {
 	private float y;
 	private float w;
 	private float h;
+	/** Tab height and gap of this frame: squeezed when the window is short (see render). */
+	private float tabH = TAB_H;
+	private float tabGap = TAB_GAP;
 	/** Whether the footer was drawn (only in a world). */
 	private boolean footer;
 
@@ -76,6 +79,14 @@ final class Sidebar {
 		this.y = y;
 		this.w = w;
 		this.h = h;
+		// Squeeze the tabs on short windows, so the listed tabs, the pinned Settings tab and the footer
+		// never overlap: everything between the top inset and the footer must fit.
+		int listed = TABS.length - 1;
+		float room = h - FOOTER - 8f - TABS_TOP;
+		float scale = Math.max(0.6f, Math.min(1f, room / ((listed + 1) * TAB_H + (listed + 2) * TAB_GAP)));
+		tabH = TAB_H * scale;
+		tabGap = TAB_GAP * scale;
+		float barInset = Math.min(8f, tabH * 0.29f);
 		int accent = Theme.accent();
 		Render2D.matte(ctx, x, y, w, h, Ui.PANEL_RADIUS, Theme.raised(), Ui.LIT);
 		Render2D.rim(ctx, x, y, w, h, Ui.PANEL_RADIUS, Ui.HAIRLINE, Ui.LIT);
@@ -88,35 +99,35 @@ final class Sidebar {
 		// The selection: a neutral plate with a short accent bar on its left edge, gliding between tabs.
 		float alpha = Render2D.alpha();
 		Render2D.setAlpha(alpha * fade);
-		Render2D.matte(ctx, tx, py, tw, TAB_H, Ui.CELL_RADIUS + 2f, 0x17FFFFFF, Ui.LIT);
-		Render2D.rim(ctx, tx, py, tw, TAB_H, Ui.CELL_RADIUS + 2f, Ui.HAIRLINE, Ui.LIT);
-		Render2D.round(ctx, tx, py + 8f, 2f, TAB_H - 16f, 1f, accent);
+		Render2D.matte(ctx, tx, py, tw, tabH, Ui.CELL_RADIUS + 2f, 0x17FFFFFF, Ui.LIT);
+		Render2D.rim(ctx, tx, py, tw, tabH, Ui.CELL_RADIUS + 2f, Ui.HAIRLINE, Ui.LIT);
+		Render2D.round(ctx, tx, py + barInset, 2f, tabH - 2f * barInset, 1f, accent);
 		Render2D.setAlpha(alpha);
 
 		SdfFont font = Fonts.medium();
 		countEnabled();
 		if (Category.SETTINGS.ordinal() < TABS.length) {
 			// A hairline separates the pinned Settings tab from the others.
-			Render2D.rect(ctx, tx + 4f, y + tabY(Category.SETTINGS.ordinal()) - TAB_GAP - 1f, tw - 8f, 1f, Ui.HAIRLINE);
+			Render2D.rect(ctx, tx + 4f, y + tabY(Category.SETTINGS.ordinal()) - tabGap - 1f, tw - 8f, 1f, Ui.HAIRLINE);
 		}
 		for (int i = 0; i < TABS.length; i++) {
 			float ry = y + tabY(i);
 			boolean active = i == selected && !searching;
 			// A tab brightens while the selection glides over it.
-			float near = Math.max(0f, 1f - Math.abs(slide - tabY(i)) / (TAB_H + TAB_GAP)) * fade;
-			float hv = hover[i].target(!active && Ui.inside(mx, my, tx, ry, tw, TAB_H) ? 1f : 0f).get();
-			if (hv > 0.01f) Render2D.matte(ctx, tx, ry, tw, TAB_H, Ui.CELL_RADIUS + 2f, ColorUtil.withAlpha(0xFFFFFF, Math.round(9 * hv)), Ui.LIT);
+			float near = Math.max(0f, 1f - Math.abs(slide - tabY(i)) / (tabH + tabGap)) * fade;
+			float hv = hover[i].target(!active && Ui.inside(mx, my, tx, ry, tw, tabH) ? 1f : 0f).get();
+			if (hv > 0.01f) Render2D.matte(ctx, tx, ry, tw, tabH, Ui.CELL_RADIUS + 2f, ColorUtil.withAlpha(0xFFFFFF, Math.round(9 * hv)), Ui.LIT);
 			float light = Math.max(near, hv * 0.7f);
 			int iconColor = ColorUtil.lerp(ColorUtil.lerp(Theme.textDim(), Theme.text(), hv), accent, near);
-			Render2D.icon(ctx, TABS[i].icon(), tx + 14f, ry + TAB_H / 2f, Ui.ICON, iconColor);
-			Render2D.textMiddle(ctx, font, TABS[i].title(), tx + 26f, ry + TAB_H / 2f, 7.5f, ColorUtil.lerp(Theme.textDim(), Theme.text(), light));
+			Render2D.icon(ctx, TABS[i].icon(), tx + 14f, ry + tabH / 2f, Ui.ICON, iconColor);
+			Render2D.textMiddle(ctx, font, TABS[i].title(), tx + 26f, ry + tabH / 2f, 7.5f, ColorUtil.lerp(Theme.textDim(), Theme.text(), light));
 			if (enabled[i] > 0 && TABS[i] != Category.SETTINGS) {
 				if (enabled[i] != counts[i]) {
 					counts[i] = enabled[i];
 					countText[i] = Integer.toString(enabled[i]);
 				}
 				float cw = countWidth[i].width(Fonts.medium(), countText[i], 6f);
-				Render2D.textMiddle(ctx, Fonts.medium(), countText[i], tx + tw - 8f - cw, ry + TAB_H / 2f, 6f, Theme.textFaint());
+				Render2D.textMiddle(ctx, Fonts.medium(), countText[i], tx + tw - 8f - cw, ry + tabH / 2f, 6f, Theme.textFaint());
 			}
 		}
 		footer = false;
@@ -197,14 +208,14 @@ final class Sidebar {
 		float tx = x + 8f;
 		float tw = w - 16f;
 		for (int i = 0; i < TABS.length; i++) {
-			if (Ui.inside(mx, my, tx, y + tabY(i), tw, TAB_H)) return i;
+			if (Ui.inside(mx, my, tx, y + tabY(i), tw, tabH)) return i;
 		}
 		return -1;
 	}
 
 	/** Top of a tab relative to the sidebar: listed from the top, Settings just above the footer. */
 	private float tabY(int index) {
-		if (TABS[index] == Category.SETTINGS) return h - FOOTER - 8f - TAB_H;
-		return TABS_TOP + index * (TAB_H + TAB_GAP);
+		if (TABS[index] == Category.SETTINGS) return h - FOOTER - 8f - tabH;
+		return TABS_TOP + index * (tabH + tabGap);
 	}
 }
