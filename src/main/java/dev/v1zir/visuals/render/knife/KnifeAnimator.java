@@ -109,7 +109,7 @@ public final class KnifeAnimator {
 	 * Advances by dt real seconds and computes the matrices. yawSpeed and pitchSpeed are the camera's turn rate
 	 * (degrees per second) for the lag, sway scales breathing and lag, offset is the user's position offset.
 	 */
-	public void update(float dt, float speed, float yawSpeed, float pitchSpeed, float sway, float offsetX, float offsetY, float offsetZ, boolean slim) {
+	public void update(float dt, float speed, float yawSpeed, float pitchSpeed, float sway, float offsetX, float offsetY, float offsetZ) {
 		dt = Math.max(0f, Math.min(dt, 0.1f));
 		clock += dt * speed;
 		java.util.Arrays.fill(sum, 0f);
@@ -161,7 +161,7 @@ public final class KnifeAnimator {
 		knife.set(grip).translate((pivotX + hold) * SCALE, pivotY * SCALE, 0f)
 			.rotateX(sum[9] * DEG).rotateY(sum[10] * DEG).rotateZ(sum[11] * DEG)
 			.translate((sum[6] - pivotX) * SCALE, (sum[7] - pivotY) * SCALE, sum[8] * SCALE);
-		armFromGrip(rest, slim);
+		armFromGrip(rest);
 		arm.set(grip).mul(gripToArm);
 		parts[0] = 0f;
 		parts[1] = sum[KnifeClip.PART_A];
@@ -202,9 +202,9 @@ public final class KnifeAnimator {
 	 * way (view space); taken into the knife's frame, that fixes how the fist holds the knife. The arm model's own frame
 	 * (y from the shoulder to the hand, the fist at its far end) is turned to match and moved so the fist's centre is
 	 * the grip point. Last, the shoulder pivot and the slight roll that PlayerEntityRenderer.renderArm applies itself
-	 * are undone.
+	 * are undone. Fist centre and shoulder pivot sit between those of wide and slim arms (a quarter pixel off either).
 	 */
-	private void armFromGrip(Rest rest, boolean slim) {
+	private void armFromGrip(Rest rest) {
 		Vector3f y = restTurn.transformTranspose(elbow.set(-rest.elbowX, -rest.elbowY, -rest.elbowZ)).normalize();
 		Vector3f p = restTurn.transformTranspose(palm.set(rest.palmX, rest.palmY, rest.palmZ));
 		float d = p.dot(y);
@@ -218,8 +218,7 @@ public final class KnifeAnimator {
 		float zz = px * y.y - py * y.x;
 		// Columns: the arm's axes in knife space; then from the fist centre to the arm's model space.
 		gripToArm.set(px, py, pz, 0f, y.x, y.y, y.z, 0f, zx, zy, zz, 0f, 0f, 0f, 0f, 1f);
-		float fistX = slim ? -0.5f : -1f;
-		gripToArm.translate(-fistX / 16f, -8.2f / 16f, 0f).rotateZ(-0.1f).translate(5f / 16f, -(slim ? 2.5f : 2f) / 16f, 0f);
+		gripToArm.translate(0.75f / 16f, -8.2f / 16f, 0f).rotateZ(-0.1f).translate(5f / 16f, -2.25f / 16f, 0f);
 	}
 
 	/**

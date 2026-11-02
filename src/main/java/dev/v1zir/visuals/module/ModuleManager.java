@@ -39,6 +39,7 @@ import dev.v1zir.visuals.module.impl.hud.SpotifyLyricsModule;
 import dev.v1zir.visuals.module.impl.hud.SpotifyModule;
 import dev.v1zir.visuals.module.impl.hud.TargetHudModule;
 import dev.v1zir.visuals.module.impl.hud.WatermarkModule;
+import dev.v1zir.visuals.module.impl.knives.KnivesModule;
 import dev.v1zir.visuals.module.impl.visuals.AmbienceModule;
 import dev.v1zir.visuals.module.impl.visuals.AspectRatioModule;
 import dev.v1zir.visuals.module.impl.visuals.BlockReflectionModule;
@@ -150,6 +151,8 @@ public final class ModuleManager {
 		register(new NotificationsModule());
 		register(new SpotifyModule());
 		register(new SpotifyLyricsModule());
+		// impl.knives
+		register(new KnivesModule());
 		// impl.client
 		register(new ClickGuiModule());
 		register(new ThemeModule());

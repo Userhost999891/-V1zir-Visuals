@@ -5,6 +5,7 @@ import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.visuals.SwingAnimationsModule;
 import dev.v1zir.visuals.module.impl.visuals.ViewModelModule;
 import dev.v1zir.visuals.module.impl.visuals.ZoomModule;
+import dev.v1zir.visuals.render.knife.KnifeViewModel;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.render.command.OrderedRenderCommandQueue;
@@ -19,7 +20,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** First-person hands: View Model offsets, Swing Animations styles and Zoom's hand slide. */
+/** First-person hands: View Model offsets, Swing Animations styles, Zoom's hand slide and the Knives view model. */
 @Mixin(HeldItemRenderer.class)
 public abstract class HeldItemRendererMixin {
 	@Unique
@@ -40,6 +41,13 @@ public abstract class HeldItemRendererMixin {
 	private void v1zir$restoreHands(float tickProgress, MatrixStack matrices, OrderedRenderCommandQueue queue, ClientPlayerEntity player, int light, CallbackInfo ci) {
 		if (v1zir$handsLowered) matrices.pop();
 		v1zir$handsLowered = false;
+	}
+
+	/** Knives: the main hand's knife and the arm holding it replace vanilla's item, its swing and equip motion. */
+	@Inject(method = "renderFirstPersonItem", at = @At("HEAD"), cancellable = true)
+	private void v1zir$knife(AbstractClientPlayerEntity player, float tickProgress, float pitch, Hand hand, float swingProgress, ItemStack item,
+							 float equipProgress, MatrixStack matrices, OrderedRenderCommandQueue queue, int light, CallbackInfo ci) {
+		if (KnifeViewModel.render(player, tickProgress, hand, swingProgress, item, matrices, queue, light)) ci.cancel();
 	}
 
 	@Inject(method = "renderFirstPersonItem", at = @At("HEAD"))

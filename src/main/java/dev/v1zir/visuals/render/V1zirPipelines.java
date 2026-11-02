@@ -223,6 +223,39 @@ public final class V1zirPipelines {
 	public static final RenderPipeline WORLD_SPRITE_SEE_THROUGH = worldTexturedPipeline("world_sprite_see_through", "world_sprite",
 		VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL, false);
 
+	/**
+	 * Knife models (render/knife) in the hand and in the world, drawn through an entity render layer: entity vertex
+	 * format with UV1 carrying the material and finish, the light map in Sampler2, vanilla's light and fog blocks.
+	 */
+	public static final RenderPipeline KNIFE = RenderPipeline.builder()
+		.withLocation(V1zir.id("pipeline/knife"))
+		.withVertexShader(V1zir.id("core/knife"))
+		.withFragmentShader(V1zir.id("core/knife"))
+		.withVertexFormat(VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL, VertexFormat.DrawMode.TRIANGLES)
+		.withUniform("DynamicTransforms", UniformType.UNIFORM_BUFFER)
+		.withUniform("Projection", UniformType.UNIFORM_BUFFER)
+		.withUniform("Fog", UniformType.UNIFORM_BUFFER)
+		.withUniform("Lighting", UniformType.UNIFORM_BUFFER)
+		.withSampler("Sampler2")
+		.withDepthTestFunction(DepthTestFunction.LEQUAL_DEPTH_TEST)
+		.withDepthWrite(true)
+		.withoutBlend()
+		.withCull(true)
+		.build();
+
+	/** Knife previews of the Knives tab, into their own colour and depth target (render/knife/KnifePreview). */
+	public static final RenderPipeline KNIFE_PREVIEW = RenderPipeline.builder()
+		.withLocation(V1zir.id("pipeline/knife_preview"))
+		.withVertexShader(V1zir.id("core/knife_preview"))
+		.withFragmentShader(V1zir.id("core/knife_preview"))
+		.withVertexFormat(VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL, VertexFormat.DrawMode.TRIANGLES)
+		.withUniform("KnifePreview", UniformType.UNIFORM_BUFFER)
+		.withDepthTestFunction(DepthTestFunction.LEQUAL_DEPTH_TEST)
+		.withDepthWrite(true)
+		.withoutBlend()
+		.withCull(true)
+		.build();
+
 	private static boolean registered;
 
 	private V1zirPipelines() {
@@ -332,6 +365,8 @@ public final class V1zirPipelines {
 		RenderPipelines.register(WORLD_TEXT_SEE_THROUGH);
 		RenderPipelines.register(WORLD_SPRITE);
 		RenderPipelines.register(WORLD_SPRITE_SEE_THROUGH);
+		RenderPipelines.register(KNIFE);
+		RenderPipelines.register(KNIFE_PREVIEW);
 	}
 
 	public static boolean isOurs(RenderPipeline pipeline) {
