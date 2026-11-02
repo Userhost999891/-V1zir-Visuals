@@ -182,6 +182,34 @@ public final class V1zirPipelines {
 		.withCull(false)
 		.build();
 
+	/** Bright pass of the bloom into half resolution (render/Bloom). */
+	public static final RenderPipeline BLOOM_BRIGHT = RenderPipeline.builder()
+		.withLocation(V1zir.id("pipeline/bloom_bright"))
+		.withVertexShader(V1zir.id("core/fullscreen"))
+		.withFragmentShader(V1zir.id("core/bloom_bright"))
+		.withVertexFormat(VertexFormats.POSITION, VertexFormat.DrawMode.TRIANGLES)
+		.withSampler("Sampler0")
+		.withUniform("BloomParams", UniformType.UNIFORM_BUFFER)
+		.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+		.withDepthWrite(false)
+		.withoutBlend()
+		.withCull(false)
+		.build();
+
+	/** The blurred bloom added onto the frame. */
+	public static final RenderPipeline BLOOM_COMPOSITE = RenderPipeline.builder()
+		.withLocation(V1zir.id("pipeline/bloom_composite"))
+		.withVertexShader(V1zir.id("core/fullscreen"))
+		.withFragmentShader(V1zir.id("core/bloom_composite"))
+		.withVertexFormat(VertexFormats.POSITION, VertexFormat.DrawMode.TRIANGLES)
+		.withSampler("Sampler0")
+		.withUniform("BloomParams", UniformType.UNIFORM_BUFFER)
+		.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+		.withDepthWrite(false)
+		.withBlend(ADDITIVE)
+		.withCull(false)
+		.build();
+
 	/** Reflections and rain (render/Reflections): traces the reflected rays, usually at half resolution. */
 	public static final RenderPipeline REFLECT_TRACE = reflectPipeline("reflect_trace", 4);
 	/** Composites the traced reflections and the wet look back onto the frame. */
@@ -339,6 +367,8 @@ public final class V1zirPipelines {
 		RenderPipelines.register(SKY_CACHED);
 		RenderPipelines.register(COLOR_GRADE);
 		RenderPipelines.register(MOTION_BLUR);
+		RenderPipelines.register(BLOOM_BRIGHT);
+		RenderPipelines.register(BLOOM_COMPOSITE);
 		RenderPipelines.register(REFLECT_TRACE);
 		RenderPipelines.register(REFLECT_COMPOSITE);
 		RenderPipelines.register(GUI_TRANSITION);

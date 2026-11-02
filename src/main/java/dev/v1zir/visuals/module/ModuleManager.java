@@ -45,6 +45,7 @@ import dev.v1zir.visuals.module.impl.hud.WatermarkModule;
 import dev.v1zir.visuals.module.impl.visuals.AmbienceModule;
 import dev.v1zir.visuals.module.impl.visuals.AspectRatioModule;
 import dev.v1zir.visuals.module.impl.visuals.BlockReflectionModule;
+import dev.v1zir.visuals.module.impl.visuals.BloomModule;
 import dev.v1zir.visuals.module.impl.visuals.CameraTweaksModule;
 import dev.v1zir.visuals.module.impl.visuals.ColorGradingModule;
 import dev.v1zir.visuals.module.impl.visuals.DamageTintModule;
@@ -111,6 +112,7 @@ public final class ModuleManager {
 		register(new DamageTintModule());
 		register(new ColorGradingModule());
 		register(new MotionBlurModule());
+		register(new BloomModule());
 		register(new BlockReflectionModule());
 		register(new RainEffectsModule());
 		register(new EntityGlowModule());
