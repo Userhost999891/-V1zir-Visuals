@@ -9,6 +9,7 @@ import dev.v1zir.visuals.module.impl.visuals.CameraTweaksModule;
 import dev.v1zir.visuals.module.impl.visuals.ColorGradingModule;
 import dev.v1zir.visuals.module.impl.visuals.NoRenderModule;
 import dev.v1zir.visuals.module.impl.visuals.ZoomModule;
+import dev.v1zir.visuals.render.world.WorldText;
 import net.minecraft.client.render.GameRenderer;
 import net.minecraft.client.util.math.MatrixStack;
 import org.joml.Matrix4f;
@@ -25,7 +26,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * a plain one for frustum culling (getProjectionMatrix) and the hand's (ProjectionMatrix3.set). They
  * are changed at those call sites only, so nothing else that asks for a projection is affected.
  * No Render takes the nausea and portal wobble out of the world projection; Color Grading runs
- * once the world and the hand are drawn, before any GUI.
+ * once the world and the hand are drawn, before any GUI, and overlay world text (3D lyrics) last of all.
  */
 @Mixin(GameRenderer.class)
 public abstract class GameRendererMixin {
@@ -95,5 +96,11 @@ public abstract class GameRendererMixin {
 	@Inject(method = RENDER_WORLD, at = @At("RETURN"))
 	private void v1zir$colorGrade(CallbackInfo ci) {
 		ColorGradingModule.renderIfEnabled();
+	}
+
+	/** World text on the overlay layer (3D lyrics) goes on top of everything once the world and the hand are drawn. */
+	@Inject(method = RENDER_WORLD, at = @At("RETURN"))
+	private void v1zir$overlayText(CallbackInfo ci) {
+		WorldText.flushOverlay();
 	}
 }
