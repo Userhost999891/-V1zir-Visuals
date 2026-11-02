@@ -7,6 +7,7 @@ import dev.v1zir.visuals.gui.custom.CustomUi;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.client.ThemeModule;
 import dev.v1zir.visuals.module.impl.effects.CrosshairModule;
+import dev.v1zir.visuals.module.impl.effects.EspModule;
 import dev.v1zir.visuals.module.impl.effects.HitMarkerModule;
 import dev.v1zir.visuals.module.impl.effects.KillEffectsModule;
 import dev.v1zir.visuals.module.impl.hud.CustomIndicatorsModule;
@@ -38,6 +39,8 @@ public final class HudRenderer {
 		});
 		HudElementRegistry.attachElementAfter(VanillaHudElements.MISC_OVERLAYS, V1zir.id("world_overlays"), (ctx, tickCounter) -> {
 			if (V1zir.mc().options.hudHidden) return;
+			EspModule esp = ModuleManager.get(EspModule.class);
+			if (esp != null && esp.isEnabled()) esp.render2D(ctx, tickCounter.getTickProgress(false));
 			KillEffectsModule kills = ModuleManager.get(KillEffectsModule.class);
 			if (kills != null && kills.isEnabled()) kills.renderFlash(ctx);
 		});

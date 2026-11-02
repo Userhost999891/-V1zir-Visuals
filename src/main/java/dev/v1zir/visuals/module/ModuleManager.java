@@ -11,6 +11,7 @@ import dev.v1zir.visuals.module.impl.effects.ChinaHatModule;
 import dev.v1zir.visuals.module.impl.effects.CrosshairModule;
 import dev.v1zir.visuals.module.impl.effects.CrystalChamsModule;
 import dev.v1zir.visuals.module.impl.effects.DamageNumbersModule;
+import dev.v1zir.visuals.module.impl.effects.EspModule;
 import dev.v1zir.visuals.module.impl.effects.HitColorModule;
 import dev.v1zir.visuals.module.impl.effects.HitMarkerModule;
 import dev.v1zir.visuals.module.impl.effects.HealthIndicatorModule;
@@ -112,6 +113,7 @@ public final class ModuleManager {
 		register(new NametagsModule());
 		// impl.effects
 		register(new ChamsModule());
+		register(new EspModule());
 		register(new TargetEspModule());
 		register(new JumpCirclesModule());
 		register(new ChinaHatModule());
