@@ -9,6 +9,7 @@ import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.client.ClickGuiModule;
 import dev.v1zir.visuals.module.impl.client.MainMenuModule;
 import dev.v1zir.visuals.module.impl.client.ThemeModule;
+import dev.v1zir.visuals.module.impl.effects.ChinaHatModule;
 import dev.v1zir.visuals.module.impl.effects.CrosshairModule;
 import dev.v1zir.visuals.module.impl.effects.HealthIndicatorModule;
 import dev.v1zir.visuals.module.impl.effects.JumpCirclesModule;
@@ -30,9 +31,11 @@ import dev.v1zir.visuals.module.impl.hud.SpeedModule;
 import dev.v1zir.visuals.module.impl.hud.TargetHudModule;
 import dev.v1zir.visuals.module.impl.hud.WatermarkModule;
 import dev.v1zir.visuals.module.impl.visuals.BlockReflectionModule;
+import dev.v1zir.visuals.module.impl.visuals.FreeLookModule;
 import dev.v1zir.visuals.module.impl.visuals.RainEffectsModule;
 import dev.v1zir.visuals.module.impl.visuals.ShaderSkyModule;
 import dev.v1zir.visuals.module.impl.visuals.WorldParticlesModule;
+import dev.v1zir.visuals.module.impl.visuals.ZoomModule;
 import dev.v1zir.visuals.render.sky.SkyPreset;
 import dev.v1zir.visuals.util.Theme;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
@@ -91,12 +94,14 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			sky(context, singleplayer);
 			walk(context, singleplayer);
 			hud(context, singleplayer);
+			dynamicIsland(context);
 			hudElements(context, singleplayer);
 			targetHud(context, singleplayer);
 			customIndicators(context, singleplayer);
 			healthIndicator(context, singleplayer);
 			reflections(context, singleplayer);
 			clickGui(context);
+			clickGuiFavourites(context);
 
 			// The test runner expects to end on the vanilla title screen.
 			context.runOnClient(client -> MainMenuModule.suspended = true);
@@ -445,6 +450,21 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.setScreen(() -> null);
 	}
 
+	/** A module toggled with the HUD showing: the Dynamic Island at the top centre shows its tab icon, name and ON. */
+	private static void dynamicIsland(ClientGameTestContext context) {
+		context.runOnClient(client -> {
+			NotificationsModule notifications = ModuleManager.get(NotificationsModule.class);
+			notifications.setEnabled(true, false);
+			notifications.style.set("Island");
+			ModuleManager.get(ChinaHatModule.class).setEnabled(true);
+		});
+		context.waitTicks(10);
+		context.takeScreenshot("dynamic-island");
+		context.runOnClient(client -> ModuleManager.get(ChinaHatModule.class).setEnabled(false, false));
+		// Back to the idle pill before the next screenshots.
+		context.waitTicks(40);
+	}
+
 	/** The info and widget HUD elements with live data (items, armour, walking), then their HUD editor previews. */
 	private static void hudElements(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
 		// The sword first, so it takes the selected hotbar slot; the rest spills into the main inventory.
@@ -683,6 +703,36 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.runOnClient(client -> setStatic(ClickGuiScreen.class, "tab", Category.VISUALS.ordinal()));
 		context.setScreen(() -> null);
 		animations(context);
+	}
+
+	/** Three Visuals modules starred, the Visuals tab on its favourites chip and the mouse resting on the first card (its star and tooltip). */
+	@SuppressWarnings("unchecked")
+	private static void clickGuiFavourites(ClientGameTestContext context) {
+		List<Class<? extends Module>> starred = List.of(ZoomModule.class, FreeLookModule.class, ChinaHatModule.class);
+		context.runOnClient(client -> {
+			for (Class<? extends Module> type : starred) ModuleManager.get(type).setFavourite(true);
+			((Map<Category, String>) field(null, ClickGuiScreen.class, "SUBS")).put(Category.VISUALS, "Favourites");
+			setStatic(ClickGuiScreen.class, "tab", Category.VISUALS.ordinal());
+		});
+		context.setScreen(ClickGuiScreen::new);
+		context.waitTicks(30);
+		double[] cursor = context.computeOnClient(client -> {
+			Object grid = ((Object[]) field(client.currentScreen, ClickGuiScreen.class, "grids"))[Category.VISUALS.ordinal()];
+			Object card = ((List<?>) field(grid, grid.getClass(), "visible")).getFirst();
+			double scale = client.getWindow().getScaleFactor();
+			float x = (float) field(card, card.getClass(), "x");
+			float y = (float) field(card, card.getClass(), "y");
+			float w = (float) field(card, card.getClass(), "w");
+			return new double[]{(x + w * 0.4f) * scale, (y + 20f) * scale};
+		});
+		context.getInput().setCursorPos(cursor[0], cursor[1]);
+		context.waitTicks(25);
+		context.takeScreenshot("clickgui-favourites");
+		context.setScreen(() -> null);
+		context.runOnClient(client -> {
+			for (Class<? extends Module> type : starred) ModuleManager.get(type).setFavourite(false);
+			((Map<Category, String>) field(null, ClickGuiScreen.class, "SUBS")).put(Category.VISUALS, "All");
+		});
 	}
 
 	/** Frames in the middle of the open and close animations, played at half speed so a frame lands inside them. */
