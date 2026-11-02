@@ -90,6 +90,13 @@ public final class KnifeViewModel {
 		float pitchSpeed = dt > 0f ? (pitch - lastPitch) / dt : 0f;
 		lastYaw = yaw;
 		lastPitch = pitch;
+		// Movement relative to the view, in blocks per second (velocity is per tick).
+		double yawRad = Math.toRadians(yaw);
+		float fx = (float) -Math.sin(yawRad);
+		float fz = (float) Math.cos(yawRad);
+		float vx = (float) player.getVelocity().x * 20f;
+		float vz = (float) player.getVelocity().z * 20f;
+		ANIMATOR.move(vx * fx + vz * fz, vx * -fz + vz * fx, (float) player.getVelocity().y * 20f, player.isOnGround(), player.isSprinting());
 		ANIMATOR.update(dt, module.speed.f(), clampSpeed(yawSpeed), clampSpeed(pitchSpeed), module.sway.f(),
 			module.offsetX.f(), module.offsetY.f(), module.offsetZ.f());
 

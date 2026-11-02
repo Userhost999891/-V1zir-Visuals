@@ -49,6 +49,18 @@ public final class KnifeAnimator {
 	private float previousAt = -100f;
 	private float previousEnd = -100f;
 	private boolean slash;
+	// The player's movement (move()) and the motion it drives.
+	private float moveForward;
+	private float moveStrafe;
+	private float moveVertical;
+	private boolean grounded = true;
+	private boolean running;
+	private float walk;
+	private float sprint;
+	private float lean;
+	private float bobPhase;
+	private float lift;
+	private float liftVel;
 	// Lag behind the camera: a critically damped spring per axis.
 	private float swayX;
 	private float swayY;
@@ -164,6 +176,7 @@ public final class KnifeAnimator {
 		sum[KnifeClip.HAND_X + 1] += swayY;
 		sum[KnifeClip.HAND_RX + 1] += swayX * 160f;
 		sum[KnifeClip.HAND_RX] -= swayY * 140f;
+		living(dt, sway);
 
 		Rest rest = Rest.of(type.grip);
 		rest.turn(restTurn);
@@ -217,6 +230,64 @@ public final class KnifeAnimator {
 			if (i >= KnifeClip.HAND_RX && i < KnifeClip.KNIFE_X || i >= KnifeClip.KNIFE_RX) v -= 360f * (float) Math.floor((v + 180f) / 360f);
 			sum[i] += v * weight;
 		}
+	}
+
+	/**
+	 * The player's movement this frame, relative to the view (blocks per second: forward, to the right, up), whether
+	 * they stand on the ground and sprint. Drives the walking bob, the sprint pose, leaning into strafes and the
+	 * spring of jumps and landings. Call before {@link #update}; previews leave it at rest.
+	 */
+	public void move(float forward, float strafe, float vertical, boolean onGround, boolean sprinting) {
+		moveForward = forward;
+		moveStrafe = strafe;
+		moveVertical = vertical;
+		grounded = onGround;
+		running = sprinting;
+	}
+
+	/**
+	 * Motion that keeps the knife alive between and under the clips: breathing on several axes, a walking bob in a
+	 * figure of eight, the knife lowered and turned in while sprinting, the arm leaning against strafes, a springy dip
+	 * as a jump pushes off and a bounce on landing, and the wrist settling the knife in the fingers.
+	 */
+	private void living(float dt, float sway) {
+		float speed = (float) Math.sqrt(moveForward * moveForward + moveStrafe * moveStrafe);
+		walk += ((grounded ? Math.min(1f, speed / 4.3f) : 0f) - walk) * (1f - (float) Math.exp(-dt * 8f));
+		sprint += ((running && grounded ? 1f : 0f) - sprint) * (1f - (float) Math.exp(-dt * 6f));
+		lean += (Math.max(-6f, Math.min(6f, moveStrafe)) - lean) * (1f - (float) Math.exp(-dt * 6f));
+		if (walk > 0.01f) bobPhase += dt * (5.4f + speed * 1.05f);
+		if (bobPhase > 1000f) bobPhase -= (float) (Math.PI * 2.0 * 150.0);
+		float bob = walk * sway;
+		float s = (float) Math.sin(bobPhase);
+		float c = (float) Math.cos(bobPhase);
+		sum[KnifeClip.HAND_X] += s * 0.024f * bob;
+		sum[KnifeClip.HAND_X + 1] += (0.014f - Math.abs(c) * 0.028f) * bob;
+		sum[KnifeClip.HAND_RX] += (float) Math.cos(bobPhase * 2f) * 1.6f * bob;
+		sum[KnifeClip.HAND_RX + 1] += s * 2.4f * bob;
+		sum[KnifeClip.HAND_RX + 2] += s * 2.0f * bob;
+		// Sprinting: lowered, tipped down and turned in, like running with a knife.
+		sum[KnifeClip.HAND_X] += 0.035f * sprint;
+		sum[KnifeClip.HAND_X + 1] -= 0.06f * sprint;
+		sum[KnifeClip.HAND_X + 2] += 0.02f * sprint;
+		sum[KnifeClip.HAND_RX] -= 14f * sprint;
+		sum[KnifeClip.HAND_RX + 1] -= 6f * sprint;
+		sum[KnifeClip.HAND_RX + 2] += 18f * sprint;
+		// Strafing: the arm trails the move, swinging a little the other way.
+		sum[KnifeClip.HAND_RX + 1] += lean * 1.2f * sway;
+		sum[KnifeClip.HAND_X] -= lean * 0.004f * sway;
+		// Jumps and landings on an underdamped spring: the knife dips as the jump pushes off, floats while falling and
+		// bounces when the fall stops.
+		float target = Math.max(-0.04f, Math.min(0.05f, -moveVertical * 0.006f));
+		float omega = 10f;
+		liftVel += (omega * omega * (target - lift) - 2f * 0.4f * omega * liftVel) * dt;
+		lift += liftVel * dt;
+		sum[KnifeClip.HAND_X + 1] += lift * sway;
+		sum[KnifeClip.HAND_RX] += lift * 60f * sway;
+		// Breathing on more axes, slowly out of step, and the knife settling in the fingers.
+		sum[KnifeClip.HAND_X] += 0.006f * (float) Math.sin(clock * 0.9f) * sway;
+		sum[KnifeClip.HAND_RX] += 1.1f * (float) Math.sin(clock * 1.3f + 1f) * sway;
+		sum[KnifeClip.HAND_RX + 1] += 0.8f * (float) Math.sin(clock * 0.7f + 2f) * sway;
+		sum[KnifeClip.KNIFE_RX + 2] += 1.3f * (float) Math.sin(clock * 1.1f + 0.5f) * sway;
 	}
 
 	private void springTo(float dt, float tx, float ty) {
