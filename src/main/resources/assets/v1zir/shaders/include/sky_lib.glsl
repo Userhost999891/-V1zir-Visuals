@@ -797,12 +797,12 @@ vec4 vCirrus(vec3 rd, VCloudLight light, float coverage, vec2 wind) {
 	// Patches where the cirrus forms.
 	float amount = smoothstep(0.66, 0.95, vCloudNoise2(p * 0.006 + 0.37, 3.0).r + coverage * 0.2);
 	if (amount <= 0.0) return vec4(0.0);
-	// Wisps stretched along the wind, bent by a slow flow, with fine fibres running along them.
-	vec2 warp = vCloudNoise2(p * 0.01 + 0.71, 11.0).rg - 0.5;
-	vec2 q = mat2(0.94, 0.34, -0.34, 0.94) * (p + warp * 10.0);
-	float body = vCloudNoise2(vec2(q.x * 0.008, q.y * 0.03), 27.0).r;
-	float fibres = vCloudNoise2(vec2(q.x * 0.01, q.y * 0.2) + 0.5, 41.0).b;
-	float density = smoothstep(0.62, 0.95, body * 0.75 + fibres * 0.4) * amount;
+	// Soft wisps stretched along the wind and bent by a slow flow, streaked with finer fibres.
+	vec2 warp = vCloudNoise2(p * 0.02 + 0.71, 11.0).rg - 0.5;
+	vec2 q = mat2(0.94, 0.34, -0.34, 0.94) * (p + warp * 8.0);
+	float body = vCloudNoise2(vec2(q.x * 0.01, q.y * 0.03), 27.0).r;
+	float fibres = vCloudNoise2(vec2(q.x * 0.02, q.y * 0.09) + 0.5, 41.0).a;
+	float density = smoothstep(0.6, 0.9, body) * (0.35 + 0.65 * fibres) * amount;
 	if (density <= 0.0) return vec4(0.0);
 	float mu = dot(rd, light.dir);
 	vec3 col = light.color * (vHG(mu, 0.6) * 0.5 + 0.05) + light.top * 0.5;
