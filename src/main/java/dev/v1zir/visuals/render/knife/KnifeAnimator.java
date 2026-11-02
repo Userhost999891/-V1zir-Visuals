@@ -16,6 +16,8 @@ public final class KnifeAnimator {
 	/** Centimetres to blocks: the handle about the size of the blocky fist that holds it. */
 	public static final float SCALE = 0.046f;
 	private static final float DEG = (float) (Math.PI / 180.0);
+	/** Fist to elbow, blocks: the elbow sits below the bottom right corner of the view, the pivot of arm swings. */
+	private static final float FOREARM = 0.62f;
 	/** Inspect fades out over this when an attack or a switch interrupts it, seconds. */
 	private static final float CANCEL = 0.16f;
 	/** A new attack cross-fades from the previous one over this, seconds. */
@@ -96,20 +98,21 @@ public final class KnifeAnimator {
 	}
 
 	/**
-	 * A swing started: a heavy stab when the attack was fully charged, otherwise quick stabs and slashes in turn.
+	 * A swing started: a heavy stab for a critical hit (heavy = true), otherwise slashes, across and back in turn.
 	 * Purely visual; the game's own attack timing is untouched.
 	 */
-	public void attack(boolean charged) {
+	public void attack(boolean heavy) {
 		if (attacking()) {
 			previous = attack;
 			previousAt = attackAt;
 			previousEnd = clock;
 		}
 		if (inspecting() && inspectCancelAt == Float.MAX_VALUE) inspectCancelAt = clock;
-		if (charged) {
+		if (heavy) {
 			attack = KnifeClips.HEAVY;
 		} else {
-			attack = slash ? KnifeClips.SLASH : KnifeClips.STAB;
+			// Like the slashes of a knife's primary attack: across from the right, then back from the left.
+			attack = slash ? KnifeClips.SLASH_BACK : KnifeClips.SLASH;
 			slash = !slash;
 		}
 		attackAt = clock;
@@ -160,17 +163,44 @@ public final class KnifeAnimator {
 		sum[KnifeClip.HAND_X] += swayX;
 		sum[KnifeClip.HAND_X + 1] += swayY;
 		sum[KnifeClip.HAND_RX + 1] += swayX * 160f;
-		sum[KnifeClip.HAND_RX + 2] -= swayY * 140f;
+		sum[KnifeClip.HAND_RX] -= swayY * 140f;
 
 		Rest rest = Rest.of(type.grip);
 		rest.turn(restTurn);
-		grip.translation(rest.x + offsetX + sum[0], rest.y + offsetY + sum[1], rest.z + offsetZ + sum[2])
-			.rotateY(sum[4] * DEG).rotateX(sum[3] * DEG).rotateZ(sum[5] * DEG).mul(restTurn4.set(restTurn));
+		// The arm moves like an arm: the fist is carried by the shoulder (hand offset), swung about the elbow below the
+		// view (pitch lifts it, yaw sweeps it left across the view like a wiper) and the forearm twists about its own
+		// axis (roll), so the wrist turns
+		// the knife over without the forearm ever pointing at the camera. Bends of the wrist and tricks in the fingers
+		// are the knife's own spin, below.
+		float fx = rest.elbowX;
+		float fy = rest.elbowY;
+		float fz = rest.elbowZ;
+		float fl = (float) Math.sqrt(fx * fx + fy * fy + fz * fz);
+		fx /= fl;
+		fy /= fl;
+		fz /= fl;
+		float gx = rest.x + offsetX + sum[0];
+		float gy = rest.y + offsetY + sum[1];
+		float gz = rest.z + offsetZ + sum[2];
+		float ex = gx + fx * FOREARM;
+		float ey = gy + fy * FOREARM;
+		float ez = gz + fz * FOREARM;
+		// Pitch axis: up x forearm, level and square to the forearm, so a positive pitch lifts the fist.
+		float ax = fz;
+		float az = -fx;
+		float al = (float) Math.sqrt(ax * ax + az * az);
+		grip.translation(ex, ey, ez)
+			.rotateZ(sum[4] * DEG)
+			.rotate(sum[3] * DEG, ax / al, 0f, az / al)
+			.translate(gx - ex, gy - ey, gz - ez)
+			.rotate(sum[5] * DEG, fx, fy, fz)
+			.mul(restTurn4.set(restTurn));
 		// Forward grips hold the handle nearer its butt, so guard and bolster show in front of the fist.
 		float hold = type.grip == KnifeType.Grip.FORWARD ? 1.3f : 0f;
-		knife.set(grip).translate((pivotX + hold) * SCALE, pivotY * SCALE, 0f)
+		// The shift is in the hand's frame (a toss rises, whichever way the knife is turning), the spin about the pivot.
+		knife.set(grip).translate((sum[6] + pivotX + hold) * SCALE, (sum[7] + pivotY) * SCALE, sum[8] * SCALE)
 			.rotateX(sum[9] * DEG).rotateY(sum[10] * DEG).rotateZ(sum[11] * DEG)
-			.translate((sum[6] - pivotX) * SCALE, (sum[7] - pivotY) * SCALE, sum[8] * SCALE);
+			.translate(-pivotX * SCALE, -pivotY * SCALE, 0f);
 		armFromGrip(rest);
 		arm.set(grip).mul(gripToArm);
 		parts[0] = 0f;
@@ -238,12 +268,16 @@ public final class KnifeAnimator {
 	 */
 	private record Rest(float x, float y, float z, float bladeX, float bladeY, float bladeZ, float spineX, float spineY, float spineZ,
 						float elbowX, float elbowY, float elbowZ, float palmX, float palmY, float palmZ) {
-		private static final Rest FORWARD = new Rest(0.46f, -0.48f, -0.92f, -0.62f, 0.5f, -0.6f, 0.25f, 0.85f, 0.45f,
-			0.6f, -0.72f, 0.35f, -0.5f, 0.3f, -0.4f);
-		private static final Rest REVERSE = new Rest(0.46f, -0.34f, -0.9f, -0.4f, -0.8f, -0.3f, 0.5f, -0.6f, 0.6f,
-			0.8f, -0.25f, 0.5f, -0.5f, 0.4f, -0.5f);
-		private static final Rest PUSH = new Rest(0.44f, -0.46f, -0.9f, -0.4f, 0.3f, -0.87f, 0.15f, 0.95f, 0.27f,
-			0.4f, -0.35f, 0.85f, -0.8f, 0.1f, -0.2f);
+		// The fist sits low in the right of the view with the forearm rising to it from below the corner; the blade
+		// leaves the fist bent up at the wrist and points left across the view, its flat towards the eye.
+		private static final Rest FORWARD = new Rest(0.47f, -0.4f, -0.88f, -0.88f, 0.3f, -0.37f, 0.15f, 0.97f, 0.1f,
+			0.55f, -0.75f, 0.38f, -0.6f, 0.15f, -0.5f);
+		// Reverse grip: the ring or butt on top of the fist, the blade below it curving forward and left.
+		private static final Rest REVERSE = new Rest(0.48f, -0.27f, -0.85f, -0.55f, -0.6f, -0.5f, 0.75f, -0.1f, 0.65f,
+			0.55f, -0.75f, 0.38f, -0.6f, 0.1f, -0.5f);
+		// Push dagger: the T-handle across the palm, the blade out between the fingers pointing forward and left.
+		private static final Rest PUSH = new Rest(0.45f, -0.38f, -0.86f, -0.7f, 0.2f, -0.68f, 0.1f, 0.98f, 0.1f,
+			0.55f, -0.75f, 0.38f, -0.5f, 0.2f, -0.6f);
 
 		static Rest of(KnifeType.Grip grip) {
 			return switch (grip) {

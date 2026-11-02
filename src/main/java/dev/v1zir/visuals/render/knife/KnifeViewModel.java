@@ -75,8 +75,13 @@ public final class KnifeViewModel {
 			ANIMATOR.draw(type);
 			lastSwing = swingProgress;
 		}
-		// A swing starts when the progress jumps back; the charge is last frame's, before the hit reset it.
-		if (swingProgress > 0f && (lastSwing == 0f || swingProgress < lastSwing - 0.05f)) ANIMATOR.attack(lastCharge >= 0.95f);
+		// A swing starts when the progress jumps back. A charged hit while falling (a critical hit) is the heavy stab,
+		// every other one a slash; the charge is last frame's, before the hit reset it.
+		if (swingProgress > 0f && (lastSwing == 0f || swingProgress < lastSwing - 0.05f)) {
+			boolean critical = lastCharge >= 0.9f && !player.isOnGround() && player.getVelocity().y < 0.0 && !player.isClimbing()
+				&& !player.isTouchingWater() && !player.hasVehicle();
+			ANIMATOR.attack(critical);
+		}
 		lastSwing = swingProgress;
 		lastCharge = player.getAttackCooldownProgress(0f);
 		float yaw = player.getYaw(tickProgress);
