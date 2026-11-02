@@ -33,6 +33,12 @@ krawędzie w każdej skali GUI), rozmyte "szklane" panele i własne fonty render
   (Ctrl+F albo po prostu pisz), po lewej zakładki **Visuals, Combat, Shaders, Hud, Settings**.
 - Moduły jako karty z opisem i przełącznikiem; LPM włącza, PPM (lub strzałka) wysuwa panel
   ustawień z prawej, ŚPM przypisuje klawisz. Filtry podkategorii nad listą.
+- Gwiazdka na karcie dodaje moduł do **ulubionych** (filtr z gwiazdką nad listą każdej zakładki,
+  w wyszukiwarce ulubione są pierwsze). Po chwili na karcie pojawia się podpowiedź (pełny opis,
+  klawisz), zakładki zmieniają się płynnym przejściem, a klawiatura działa wszędzie: strzałki,
+  Enter (włącz/wyłącz), Shift+Enter (ustawienia), Tab (zakładki).
+- **Profile konfiguracji** w stopce paska bocznego: przełączanie, nowy profil (kopia obecnych
+  ustawień), zmiana nazwy i usuwanie; zapisywane w `config/v1zir/configs`.
 - **Settings**: motywy (domyślny V1zir – pomarańczowy gradient), edytor motywu, animacje
   otwierania (Normal, 3D) i zamykania (Fade out, **3D Frost** – okno pęka jak szkło),
   skala interfejsu, karty Main Menu i Custom UI oraz sekcja **Performance**.
@@ -68,14 +74,18 @@ Watermark (z logo), Array List, Keybinds, Potions, Target HUD (twarz gracza albo
 z jego tekstury), Custom Indicators (paski zdrowia, głodu, pancerza, powietrza i doświadczenia
 z liczbami zamiast ikon), Coordinates, Compass, Clock, Speed, Server Info (ping, TPS),
 Performance (FPS i wykres czasu klatki), Keystrokes (z CPS), Inventory, Armor, Item Counter,
-powiadomienia. Wszystko przesuwa się w edytorze HUD.
+powiadomienia (**Dynamic Island** u góry ekranu – włączanie modułów, otwarcie i zamknięcie menu,
+zmiana utworu – albo klasyczne dymki). Wszystko przesuwa się w edytorze HUD.
 
 ### Spotify
 Bez konfiguracji: Windows 10/11 (systemowe sterowanie multimediami), macOS (aplikacja Spotify)
 i Linux (`playerctl`). **Spotify** (HUD) – okładka, tytuł, wykonawca, pasek postępu, przyciski
 działające przy otwartym czacie, style Card i Compact. **Spotify Lyrics** – zsynchronizowane
-teksty z LRCLIB (zapisywane w `config/v1zir/lyrics`) w presetach **Window**, **3D** (błyszczące
-napisy pojawiające się słowo po słowie przed graczem; styl Shine lub Extruded) i **Karaoke**.
+teksty z LRCLIB (zapisywane w `config/v1zir/lyrics`) w presetach **Window** (kliknięcie okładki
+w rogu pokazuje na kilka sekund widok odtwarzacza), **3D** i **Karaoke**. Napisy 3D zostają w świecie
+tam, gdzie się pojawiły, pojawiają się przed graczem z wyprzedzeniem jego ruchu, obracają się do
+kamery także z góry i z dołu i są zawsze na wierzchu (przez bloki i nad ręką); style **Scatter**
+(każde słowo w innym miejscu, świecące w kolorze okładki), Shine i Extruded.
 
 ### Optymalizacje (wbudowane, nie moduły)
 Ukrywanie bytów i bloków z zawartością schowanych za ścianami, odcinanie z dystansu tekstu na

@@ -22,6 +22,7 @@ public abstract class Module {
 	private String subCategory = GENERAL;
 	private final List<Setting<?>> settings = new ArrayList<>();
 	private boolean enabled;
+	private boolean favourite;
 	private int key = GLFW.GLFW_KEY_UNKNOWN;
 
 	protected Module(String name, String description, Category category) {
@@ -93,6 +94,16 @@ public abstract class Module {
 			V1zir.LOGGER.error("Error while toggling {}", name, e);
 		}
 		if (notify && showInList()) Notifications.moduleToggled(this);
+	}
+
+	/** Starred in the click GUI: listed under its tab's favourites chip and first in searches. */
+	public boolean isFavourite() {
+		return favourite;
+	}
+
+	public void setFavourite(boolean favourite) {
+		this.favourite = favourite;
+		ModuleManager.changed();
 	}
 
 	public int key() {
