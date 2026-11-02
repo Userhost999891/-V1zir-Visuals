@@ -102,6 +102,55 @@ public final class Draw3D {
 		box(mesh, minX, minY, minZ, maxX, maxY, maxZ, bottom, top, 3f, 3f, 0f, 0f, 3f, 3f, 0f, 0f, 3f, 3f, 0f, 0f);
 	}
 
+	/**
+	 * Cube of half edge {@code half} around (x, y, z), turned so its faces are spanned by the rows of
+	 * {@code basis} (three unit axes, a, b, c as x, y, z each), every face carrying the glowing rounded
+	 * border of {@link #roundedBox}. Half edges from 1/64 to 7.5 blocks.
+	 */
+	public static void cube(WorldEffectRenderer.Mesh mesh, double x, double y, double z, float half, float[] basis, int color) {
+		float q = 16f * quantize(half);
+		float u0 = q - half, u1 = q + half;
+		float v0 = -half - q - 8f, v1 = half - q - 8f;
+		for (int axis = 0; axis < 3; axis++) {
+			// The face normal is this axis, the face is spanned by the other two.
+			int n = axis * 3, a = (axis + 1) % 3 * 3, b = (axis + 2) % 3 * 3;
+			float ax = basis[a] * half, ay = basis[a + 1] * half, az = basis[a + 2] * half;
+			float bx = basis[b] * half, by = basis[b + 1] * half, bz = basis[b + 2] * half;
+			for (int side = -1; side <= 1; side += 2) {
+				double fx = x + basis[n] * half * side, fy = y + basis[n + 1] * half * side, fz = z + basis[n + 2] * half * side;
+				mesh.vertex(fx - ax - bx, fy - ay - by, fz - az - bz, u0, v0, color);
+				mesh.vertex(fx + ax - bx, fy + ay - by, fz + az - bz, u1, v0, color);
+				mesh.vertex(fx + ax + bx, fy + ay + by, fz + az + bz, u1, v1, color);
+				mesh.vertex(fx - ax + bx, fy - ay + by, fz - az + bz, u0, v1, color);
+			}
+		}
+	}
+
+	/** Rotation of angle radians about the unit axis (x, y, z), written into basis as three rows (Rodrigues). */
+	public static void rotation(float[] basis, float x, float y, float z, float angle) {
+		float c = (float) Math.cos(angle), s = (float) Math.sin(angle), k = 1f - c;
+		basis[0] = c + x * x * k;
+		basis[1] = x * y * k + z * s;
+		basis[2] = x * z * k - y * s;
+		basis[3] = y * x * k - z * s;
+		basis[4] = c + y * y * k;
+		basis[5] = y * z * k + x * s;
+		basis[6] = z * x * k + y * s;
+		basis[7] = z * y * k - x * s;
+		basis[8] = c + z * z * k;
+	}
+
+	/**
+	 * Soft glowing ellipse lying flat at height y (the orb falloff on a horizontal quad); (ux, uz) and
+	 * (vx, vz) are its two half axes.
+	 */
+	public static void flatOrb(WorldEffectRenderer.Mesh mesh, double x, double y, double z, float ux, float uz, float vx, float vz, int argb) {
+		mesh.vertex(x - ux - vx, y, z - uz - vz, -1f, 2f, argb);
+		mesh.vertex(x - ux + vx, y, z - uz + vz, -1f, 4f, argb);
+		mesh.vertex(x + ux + vx, y, z + uz + vz, 1f, 4f, argb);
+		mesh.vertex(x + ux - vx, y, z + uz - vz, 1f, 2f, argb);
+	}
+
 	private static float quantize(float half) {
 		return Math.max(1, Math.min(480, Math.round(half * 64f)));
 	}

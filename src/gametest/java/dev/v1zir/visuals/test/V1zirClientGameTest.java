@@ -9,9 +9,13 @@ import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.client.ClickGuiModule;
 import dev.v1zir.visuals.module.impl.client.MainMenuModule;
 import dev.v1zir.visuals.module.impl.client.ThemeModule;
+import dev.v1zir.visuals.module.impl.effects.ChamsModule;
+import dev.v1zir.visuals.module.impl.effects.ChinaHatModule;
 import dev.v1zir.visuals.module.impl.effects.CrosshairModule;
+import dev.v1zir.visuals.module.impl.effects.EspModule;
 import dev.v1zir.visuals.module.impl.effects.HealthIndicatorModule;
 import dev.v1zir.visuals.module.impl.effects.JumpCirclesModule;
+import dev.v1zir.visuals.module.impl.effects.KillEffectsModule;
 import dev.v1zir.visuals.module.impl.hud.ArmorModule;
 import dev.v1zir.visuals.module.impl.hud.ArrayListModule;
 import dev.v1zir.visuals.module.impl.hud.ClockModule;
@@ -30,9 +34,14 @@ import dev.v1zir.visuals.module.impl.hud.SpeedModule;
 import dev.v1zir.visuals.module.impl.hud.TargetHudModule;
 import dev.v1zir.visuals.module.impl.hud.WatermarkModule;
 import dev.v1zir.visuals.module.impl.visuals.BlockReflectionModule;
+import dev.v1zir.visuals.module.impl.visuals.FreeLookModule;
+import dev.v1zir.visuals.module.impl.visuals.HandChamsModule;
+import dev.v1zir.visuals.module.impl.visuals.MotionBlurModule;
 import dev.v1zir.visuals.module.impl.visuals.RainEffectsModule;
 import dev.v1zir.visuals.module.impl.visuals.ShaderSkyModule;
+import dev.v1zir.visuals.module.impl.visuals.ShootingStarsModule;
 import dev.v1zir.visuals.module.impl.visuals.WorldParticlesModule;
+import dev.v1zir.visuals.module.impl.visuals.ZoomModule;
 import dev.v1zir.visuals.render.sky.SkyPreset;
 import dev.v1zir.visuals.util.Theme;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
@@ -55,6 +64,7 @@ import jdk.jfr.Recording;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -91,12 +101,19 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			sky(context, singleplayer);
 			walk(context, singleplayer);
 			hud(context, singleplayer);
+			dynamicIsland(context);
 			hudElements(context, singleplayer);
 			targetHud(context, singleplayer);
 			customIndicators(context, singleplayer);
 			healthIndicator(context, singleplayer);
+			chamsAndEsp(context, singleplayer);
+			killEffects(context, singleplayer);
+			shootingStars(context, singleplayer);
+			motionBlur(context, singleplayer);
+			handOutline(context, singleplayer);
 			reflections(context, singleplayer);
 			clickGui(context);
+			clickGuiFavourites(context);
 
 			// The test runner expects to end on the vanilla title screen.
 			context.runOnClient(client -> MainMenuModule.suspended = true);
@@ -445,6 +462,21 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.setScreen(() -> null);
 	}
 
+	/** A module toggled with the HUD showing: the Dynamic Island at the top centre shows its tab icon, name and ON. */
+	private static void dynamicIsland(ClientGameTestContext context) {
+		context.runOnClient(client -> {
+			NotificationsModule notifications = ModuleManager.get(NotificationsModule.class);
+			notifications.setEnabled(true, false);
+			notifications.style.set("Island");
+			ModuleManager.get(ChinaHatModule.class).setEnabled(true);
+		});
+		context.waitTicks(10);
+		context.takeScreenshot("dynamic-island");
+		context.runOnClient(client -> ModuleManager.get(ChinaHatModule.class).setEnabled(false, false));
+		// Back to the idle pill before the next screenshots.
+		context.waitTicks(40);
+	}
+
 	/** The info and widget HUD elements with live data (items, armour, walking), then their HUD editor previews. */
 	private static void hudElements(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
 		// The sword first, so it takes the selected hotbar slot; the rest spills into the main inventory.
@@ -549,6 +581,139 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		});
 		singleplayer.getServer().runCommand("kill @e[tag=v1zir_hearts]");
 		context.waitTicks(25);
+	}
+
+	/**
+	 * Chams and ESP (mobs on for the test) on a husk in the open and a pig behind a stone wall, which
+	 * both show through it: Glass with Box 2D, Glow with Corners, Flat with Box 3D.
+	 */
+	private static void chamsAndEsp(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
+		singleplayer.getServer().runCommand("time set 6000");
+		look(singleplayer, 0, 8);
+		for (String command : List.of(
+			"execute as @a at @s run summon minecraft:husk ^-0.6 ^ ^4 {NoAI:1b,Silent:1b,PersistenceRequired:1b,Tags:[\"v1zir_chams\"],DeathLootTable:\"minecraft:empty\"}",
+			"execute as @a at @s run summon minecraft:pig ^1.6 ^ ^6.5 {NoAI:1b,Silent:1b,Tags:[\"v1zir_chams\"],DeathLootTable:\"minecraft:empty\"}",
+			"execute as @a at @s run fill ^1 ^ ^5 ^2 ^1 ^5 minecraft:stone")) {
+			singleplayer.getServer().runCommand(command);
+		}
+		context.runOnClient(client -> {
+			ChamsModule chams = ModuleManager.get(ChamsModule.class);
+			chams.mobs.set(true);
+			chams.setEnabled(true, false);
+			EspModule esp = ModuleManager.get(EspModule.class);
+			esp.mobs.set(true);
+			esp.setEnabled(true, false);
+		});
+		context.waitTicks(20);
+		for (String[] look : new String[][]{{"Glass", "Box 2D"}, {"Glow", "Corners"}, {"Flat", "Box 3D"}}) {
+			context.runOnClient(client -> {
+				ModuleManager.get(ChamsModule.class).style.set(look[0]);
+				ModuleManager.get(EspModule.class).mode.set(look[1]);
+			});
+			context.waitTicks(5);
+			context.takeScreenshot("chams-" + look[0].toLowerCase(Locale.ROOT) + "-esp-" + look[1].toLowerCase(Locale.ROOT).replace(' ', '-'));
+		}
+		bench(context, "chams-esp");
+		context.runOnClient(client -> {
+			ChamsModule chams = ModuleManager.get(ChamsModule.class);
+			chams.setEnabled(false, false);
+			chams.mobs.reset();
+			chams.style.reset();
+			EspModule esp = ModuleManager.get(EspModule.class);
+			esp.setEnabled(false, false);
+			esp.mobs.reset();
+			esp.mode.reset();
+		});
+		singleplayer.getServer().runCommand("kill @e[tag=v1zir_chams]");
+		singleplayer.getServer().runCommand("execute as @a at @s run fill ^1 ^ ^5 ^2 ^1 ^5 minecraft:air");
+		context.waitTicks(25);
+	}
+
+	/** Kill Effects on husks killed with a command (every death nearby counts here): Light Pillar just after the strike, then Shatter. */
+	private static void killEffects(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
+		look(singleplayer, 0, 2);
+		boolean wasOn = context.computeOnClient(client -> {
+			KillEffectsModule kills = ModuleManager.get(KillEffectsModule.class);
+			boolean on = kills.isEnabled();
+			kills.trigger.set("All deaths");
+			kills.setEnabled(true, false);
+			return on;
+		});
+		for (String mode : List.of("Light Pillar", "Shatter")) {
+			context.runOnClient(client -> ModuleManager.get(KillEffectsModule.class).mode.set(mode));
+			singleplayer.getServer().runCommand("execute as @a at @s run summon minecraft:husk ^ ^ ^5 "
+				+ "{NoAI:1b,Silent:1b,PersistenceRequired:1b,Tags:[\"v1zir_kill\"],DeathLootTable:\"minecraft:empty\"}");
+			context.waitTicks(15);
+			singleplayer.getServer().runCommand("kill @e[tag=v1zir_kill]");
+			context.waitTicks(3);
+			context.takeScreenshot("kill-" + mode.toLowerCase(Locale.ROOT).replace(' ', '-'));
+			context.waitTicks(40);
+		}
+		context.runOnClient(client -> {
+			KillEffectsModule kills = ModuleManager.get(KillEffectsModule.class);
+			kills.setEnabled(wasOn, false);
+			kills.trigger.reset();
+			kills.mode.reset();
+		});
+	}
+
+	/** Shooting Stars at night, looking up: a few meteors launched at once, as a high rate would over a while. */
+	private static void shootingStars(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
+		singleplayer.getServer().runCommand("time set 18000");
+		look(singleplayer, 0, -55);
+		context.runOnClient(client -> ModuleManager.get(ShootingStarsModule.class).setEnabled(true, false));
+		context.waitTicks(20);
+		context.runOnClient(client -> {
+			ShootingStarsModule stars = ModuleManager.get(ShootingStarsModule.class);
+			for (int i = 0; i < 8; i++) invoke(stars, ShootingStarsModule.class, "spawn");
+		});
+		context.waitTicks(2);
+		context.takeScreenshot("shooting-stars");
+		bench(context, "shooting-stars");
+		context.runOnClient(client -> ModuleManager.get(ShootingStarsModule.class).setEnabled(false, false));
+		singleplayer.getServer().runCommand("time set 6000");
+	}
+
+	/**
+	 * Motion Blur while turning. The screenshot renders a frame of its own while the game waits, so the view
+	 * turns right before it: that frame sees the whole turn since the last one.
+	 */
+	private static void motionBlur(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
+		look(singleplayer, 0, 10);
+		context.runOnClient(client -> {
+			MotionBlurModule blur = ModuleManager.get(MotionBlurModule.class);
+			blur.strength.set(1.0);
+			blur.setEnabled(true, false);
+		});
+		context.waitTicks(10);
+		context.runOnClient(client -> client.player.setYaw(client.player.getYaw() + 25f));
+		context.takeScreenshot("motion-blur-turning");
+		context.runOnClient(client -> {
+			MotionBlurModule blur = ModuleManager.get(MotionBlurModule.class);
+			blur.setEnabled(false, false);
+			blur.strength.reset();
+		});
+		look(singleplayer, 0, 0);
+	}
+
+	/** Hand Chams Outline: the held sword wrapped in a glowing rim. */
+	private static void handOutline(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
+		singleplayer.getServer().runCommand("item replace entity @a weapon.mainhand with minecraft:diamond_sword");
+		boolean wasOn = context.computeOnClient(client -> {
+			HandChamsModule chams = ModuleManager.get(HandChamsModule.class);
+			boolean on = chams.isEnabled();
+			chams.style.set("Outline");
+			chams.setEnabled(true, false);
+			return on;
+		});
+		context.waitTicks(10);
+		context.takeScreenshot("hand-chams-outline");
+		context.runOnClient(client -> {
+			HandChamsModule chams = ModuleManager.get(HandChamsModule.class);
+			chams.setEnabled(wasOn, false);
+			chams.style.reset();
+		});
+		singleplayer.getServer().runCommand("clear @a");
 	}
 
 	/**
@@ -685,6 +850,36 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		animations(context);
 	}
 
+	/** Three Visuals modules starred, the Visuals tab on its favourites chip and the mouse resting on the first card (its star and tooltip). */
+	@SuppressWarnings("unchecked")
+	private static void clickGuiFavourites(ClientGameTestContext context) {
+		List<Class<? extends Module>> starred = List.of(ZoomModule.class, FreeLookModule.class, ChinaHatModule.class);
+		context.runOnClient(client -> {
+			for (Class<? extends Module> type : starred) ModuleManager.get(type).setFavourite(true);
+			((Map<Category, String>) field(null, ClickGuiScreen.class, "SUBS")).put(Category.VISUALS, "Favourites");
+			setStatic(ClickGuiScreen.class, "tab", Category.VISUALS.ordinal());
+		});
+		context.setScreen(ClickGuiScreen::new);
+		context.waitTicks(30);
+		double[] cursor = context.computeOnClient(client -> {
+			Object grid = ((Object[]) field(client.currentScreen, ClickGuiScreen.class, "grids"))[Category.VISUALS.ordinal()];
+			Object card = ((List<?>) field(grid, grid.getClass(), "visible")).getFirst();
+			double scale = client.getWindow().getScaleFactor();
+			float x = (float) field(card, card.getClass(), "x");
+			float y = (float) field(card, card.getClass(), "y");
+			float w = (float) field(card, card.getClass(), "w");
+			return new double[]{(x + w * 0.4f) * scale, (y + 20f) * scale};
+		});
+		context.getInput().setCursorPos(cursor[0], cursor[1]);
+		context.waitTicks(25);
+		context.takeScreenshot("clickgui-favourites");
+		context.setScreen(() -> null);
+		context.runOnClient(client -> {
+			for (Class<? extends Module> type : starred) ModuleManager.get(type).setFavourite(false);
+			((Map<Category, String>) field(null, ClickGuiScreen.class, "SUBS")).put(Category.VISUALS, "All");
+		});
+	}
+
 	/** Frames in the middle of the open and close animations, played at half speed so a frame lands inside them. */
 	private static void animations(ClientGameTestContext context) {
 		context.runOnClient(client -> {
@@ -715,6 +910,16 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			return field.get(target);
 		} catch (ReflectiveOperationException e) {
 			throw new AssertionError("Cannot read " + owner.getSimpleName() + "." + name, e);
+		}
+	}
+
+	private static void invoke(Object target, Class<?> owner, String name) {
+		try {
+			Method method = owner.getDeclaredMethod(name);
+			method.setAccessible(true);
+			method.invoke(target);
+		} catch (ReflectiveOperationException e) {
+			throw new AssertionError("Cannot call " + owner.getSimpleName() + "." + name, e);
 		}
 	}
 

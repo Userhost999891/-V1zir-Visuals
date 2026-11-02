@@ -33,18 +33,28 @@ krawędzie w każdej skali GUI), rozmyte "szklane" panele i własne fonty render
   (Ctrl+F albo po prostu pisz), po lewej zakładki **Visuals, Combat, Shaders, Hud, Settings**.
 - Moduły jako karty z opisem i przełącznikiem; LPM włącza, PPM (lub strzałka) wysuwa panel
   ustawień z prawej, ŚPM przypisuje klawisz. Filtry podkategorii nad listą.
+- Gwiazdka na karcie dodaje moduł do **ulubionych** (filtr z gwiazdką nad listą każdej zakładki,
+  w wyszukiwarce ulubione są pierwsze). Po chwili na karcie pojawia się podpowiedź (pełny opis,
+  klawisz), zakładki zmieniają się płynnym przejściem, a klawiatura działa wszędzie: strzałki,
+  Enter (włącz/wyłącz), Shift+Enter (ustawienia), Tab (zakładki).
+- **Profile konfiguracji** w stopce paska bocznego: przełączanie, nowy profil (kopia obecnych
+  ustawień), zmiana nazwy i usuwanie; zapisywane w `config/v1zir/configs`.
 - **Settings**: motywy (domyślny V1zir – pomarańczowy gradient), edytor motywu, animacje
   otwierania (Normal, 3D) i zamykania (Fade out, **3D Frost** – okno pęka jak szkło),
   skala interfejsu, karty Main Menu i Custom UI oraz sekcja **Performance**.
 
 ### Visuals
-View Model, Swing Animations, Hand Chams, Zoom (C), Free Look (Left Alt), Camera Tweaks
+View Model, Swing Animations, Hand Chams (zabarwienie albo świecący obrys), Zoom (C), Free Look (Left Alt), Camera Tweaks
 (kamera przez bloki, dystans w trzeciej osobie, bez trzęsienia), Aspect Ratio, No Render,
 Jump Circles (tylko przy skoku), China Hat, Trails, Block Highlight, Break Effects, Item Physics.
 
 ### Combat
-Target ESP, Hit Particles, Crosshair, Hit Color, Damage Numbers, Hit Marker, Kill Effects
-(piorun, dusza, wybuch), Pop Chams, Totem Animation, Crystal Chams, Trajectories (łuk, kusza,
+**Chams** (gracze i opcjonalnie moby jako Glass – szkło z jasną krawędzią, Glow – świecąca
+sylwetka albo Flat, także przez ściany), **ESP** (Box 2D, Corners, Box 3D, z paskiem zdrowia),
+Target ESP, Hit Particles, **Blood** (krople krwi i plamy na ziemi przy uderzeniach), Crosshair,
+Hit Color, Damage Numbers, Hit Marker, **Kill Effects** (słup światła z nieba, rozgałęziony piorun,
+rozpad ciała na świecące kostki, dusza, wybuch krwi, fajerwerk; dla twoich zabójstw albo każdej
+śmierci w pobliżu), Pop Chams, Totem Animation, Crystal Chams, Trajectories (łuk, kusza,
 trójząb, perły, mikstury…), Damage Tint, Nametags, Health Indicator (dokładne zdrowie w sercach
 nad graczami, z połówkami i złotymi sercami absorpcji), Entity Glow.
 
@@ -54,22 +64,28 @@ z kraterami), Magma, Aurora (kurtyny zorzy), Nebula, Sunset, Ink, Synthwave, Blo
 Niebo jest liczone do panoram w tle i składane z nich, więc kosztuje mało i nie zależy od
 rozdzielczości. Oprócz tego: **Block Reflection** (Normal – odbicia na wodzie i gładkich blokach,
 Metal – wypolerowana, satynowa powierzchnia), **Rain Effects** (mokra ziemia w deszczu,
-chlapnięcia przy skoku i lądowaniu), Color Grading, Ambience, Full Bright, World Particles,
-Sky Lanterns, Glint Color.
+chlapnięcia przy skoku i lądowaniu), **Motion Blur** (rozmycie przy obracaniu kamery, tylko
+świat, bez kosztu gdy kamera stoi), **Bloom** (miękka poświata jasnych miejsc), **Shooting Stars**
+(spadające gwiazdy ze świecącymi smugami nocą), Color Grading, Ambience, Full Bright, World
+Particles (także unoszące się szklane kostki), Sky Lanterns, Glint Color.
 
 ### Hud
 Watermark (z logo), Array List, Keybinds, Potions, Target HUD (twarz gracza albo moba wycięta
 z jego tekstury), Custom Indicators (paski zdrowia, głodu, pancerza, powietrza i doświadczenia
 z liczbami zamiast ikon), Coordinates, Compass, Clock, Speed, Server Info (ping, TPS),
 Performance (FPS i wykres czasu klatki), Keystrokes (z CPS), Inventory, Armor, Item Counter,
-powiadomienia. Wszystko przesuwa się w edytorze HUD.
+powiadomienia (**Dynamic Island** u góry ekranu – włączanie modułów, otwarcie i zamknięcie menu,
+zmiana utworu – albo klasyczne dymki). Wszystko przesuwa się w edytorze HUD.
 
 ### Spotify
 Bez konfiguracji: Windows 10/11 (systemowe sterowanie multimediami), macOS (aplikacja Spotify)
 i Linux (`playerctl`). **Spotify** (HUD) – okładka, tytuł, wykonawca, pasek postępu, przyciski
 działające przy otwartym czacie, style Card i Compact. **Spotify Lyrics** – zsynchronizowane
-teksty z LRCLIB (zapisywane w `config/v1zir/lyrics`) w presetach **Window**, **3D** (błyszczące
-napisy pojawiające się słowo po słowie przed graczem; styl Shine lub Extruded) i **Karaoke**.
+teksty z LRCLIB (zapisywane w `config/v1zir/lyrics`) w presetach **Window** (kliknięcie okładki
+w rogu pokazuje na kilka sekund widok odtwarzacza), **3D** i **Karaoke**. Napisy 3D zostają w świecie
+tam, gdzie się pojawiły, pojawiają się przed graczem z wyprzedzeniem jego ruchu, obracają się do
+kamery także z góry i z dołu i są zawsze na wierzchu (przez bloki i nad ręką); style **Scatter**
+(każde słowo w innym miejscu, świecące w kolorze okładki), Shine i Extruded.
 
 ### Optymalizacje (wbudowane, nie moduły)
 Ukrywanie bytów i bloków z zawartością schowanych za ścianami, odcinanie z dystansu tekstu na

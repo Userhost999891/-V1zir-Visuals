@@ -7,7 +7,9 @@ import dev.v1zir.visuals.gui.custom.CustomUi;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.client.ThemeModule;
 import dev.v1zir.visuals.module.impl.effects.CrosshairModule;
+import dev.v1zir.visuals.module.impl.effects.EspModule;
 import dev.v1zir.visuals.module.impl.effects.HitMarkerModule;
+import dev.v1zir.visuals.module.impl.effects.KillEffectsModule;
 import dev.v1zir.visuals.module.impl.hud.CustomIndicatorsModule;
 import dev.v1zir.visuals.module.impl.hud.HudModule;
 import dev.v1zir.visuals.module.impl.visuals.DamageTintModule;
@@ -25,6 +27,9 @@ import net.minecraft.util.Identifier;
 
 /** Draws every enabled HUD module through Fabric's HUD element registry. */
 public final class HudRenderer {
+	/** The click GUI screen being shown, so a resize (which inits it again) does not count as opening it. */
+	private static ClickGuiScreen openMenu;
+
 	private HudRenderer() {
 	}
 
@@ -35,10 +40,30 @@ public final class HudRenderer {
 			DamageTintModule tint = ModuleManager.get(DamageTintModule.class);
 			if (tint != null && tint.isEnabled() && !V1zir.mc().options.hudHidden) tint.render(ctx);
 		});
+		HudElementRegistry.attachElementAfter(VanillaHudElements.MISC_OVERLAYS, V1zir.id("world_overlays"), (ctx, tickCounter) -> {
+			if (V1zir.mc().options.hudHidden) return;
+			EspModule esp = ModuleManager.get(EspModule.class);
+			if (esp != null && esp.isEnabled()) esp.render2D(ctx, tickCounter.getTickProgress(false));
+			KillEffectsModule kills = ModuleManager.get(KillEffectsModule.class);
+			if (kills != null && kills.isEnabled()) kills.renderFlash(ctx);
+		});
 		// With the chat open, HUD elements can be clicked (the Spotify buttons).
 		ScreenEvents.AFTER_INIT.register((client, screen, width, height) -> {
 			if (screen instanceof ChatScreen) {
 				ScreenMouseEvents.allowMouseClick(screen).register((s, click) -> !click(click.x(), click.y(), click.button()));
+			}
+			// The island shows the click GUI opening and closing, drawn over it while it is open. Screen events
+			// are renewed on every init (a resize too), so only the first init of a screen counts as opening.
+			if (screen instanceof ClickGuiScreen gui && client.player != null) {
+				if (gui != openMenu) {
+					openMenu = gui;
+					Notifications.menu(true, gui.isHudEditor());
+				}
+				ScreenEvents.afterRender(screen).register((s, ctx, mouseX, mouseY, delta) -> Notifications.renderOverMenu(ctx, s.width, s.height));
+				ScreenEvents.remove(screen).register(s -> {
+					openMenu = null;
+					Notifications.menu(false, gui.isHudEditor());
+				});
 			}
 		});
 		HudElementRegistry.replaceElement(VanillaHudElements.HOTBAR, vanilla -> (ctx, tickCounter) -> {

@@ -34,19 +34,16 @@ jobs:
           echo "mapped jar: $jar"
           sig() { javap -p -cp "$jar" "$@" 2>&1 || true; }
           code() { javap -c -p -cp "$jar" "$1" 2>&1 | awk -v m="$2" 'index($0, " " m "(") && /\(/ {p=1} p {print} p && /^$/ {p=0}'; }
-          for c in net.minecraft.client.model.ModelPart net.minecraft.client.model.ModelPart\$Cuboid net.minecraft.client.model.ModelPart\$Quad \
-                   net.minecraft.client.model.ModelPart\$Vertex net.minecraft.client.model.Model net.minecraft.client.render.entity.LivingEntityRenderer \
-                   net.minecraft.client.gui.hud.InGameHud net.minecraft.client.gui.hud.bar.ExperienceBar net.minecraft.client.texture.AtlasManager \
-                   net.minecraft.client.texture.SpriteAtlasTexture net.minecraft.client.texture.Sprite net.minecraft.util.Atlases \
-                   net.minecraft.entity.player.HungerManager net.minecraft.client.network.ClientPlayerInteractionManager; do
+          for c in net.minecraft.client.render.RenderLayers net.minecraft.client.render.VertexConsumer net.minecraft.client.model.ModelPart \
+                   net.minecraft.entity.LivingEntity net.minecraft.client.render.command.OrderedRenderCommandQueue\$Custom \
+                   net.minecraft.client.render.command.ModelCommandRenderer; do
             echo "=== SIG $c"; sig "$c"
           done
-          echo "=== CODE ModelPart\$Vertex.worldZ"; code net.minecraft.client.model.ModelPart\$Vertex worldZ
-          echo "=== CODE ModelPart\$Cuboid.<init>"; code net.minecraft.client.model.ModelPart\$Cuboid 'net.minecraft.client.model.ModelPart$Cuboid'
-          echo "=== CODE EntityModel.setAngles"; code net.minecraft.client.render.entity.model.EntityModel setAngles
-          echo "=== CODE AtlasManager.getAtlasTexture"; code net.minecraft.client.texture.AtlasManager getAtlasTexture
-          echo "=== CODE DrawContext.<init>"; code net.minecraft.client.gui.DrawContext 'net.minecraft.client.gui.DrawContext'
-          echo "=== CODE InGameHud.renderMainHud"; code net.minecraft.client.gui.hud.InGameHud renderMainHud
+          echo "=== CODE EntityRenderer.getAndUpdateRenderState"; code net.minecraft.client.render.entity.EntityRenderer getAndUpdateRenderState
+          echo "=== CODE ModelCommandRenderer.render"; code net.minecraft.client.render.command.ModelCommandRenderer render
+          echo "=== CODE VertexConsumer.quad"; code net.minecraft.client.render.VertexConsumer quad
+          echo "=== CODE PlayerEntityModel.setAngles"; code net.minecraft.client.render.entity.model.PlayerEntityModel setAngles
+          echo "=== CODE ModelPart.render"; code net.minecraft.client.model.ModelPart render
 
   client:
     name: Dev client

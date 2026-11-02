@@ -1,7 +1,10 @@
 package dev.v1zir.visuals.mixin;
 
+import dev.v1zir.visuals.module.impl.effects.ChamsModule;
+import dev.v1zir.visuals.module.impl.effects.KillEffectsModule;
 import dev.v1zir.visuals.module.impl.visuals.EntityGlowModule;
 import dev.v1zir.visuals.module.impl.visuals.NoRenderModule;
+import dev.v1zir.visuals.render.world.MarkedRenderState;
 import net.minecraft.client.render.Frustum;
 import net.minecraft.client.render.entity.EntityRenderManager;
 import net.minecraft.client.render.entity.state.EntityRenderState;
@@ -14,7 +17,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * No Render: far armour stands (often server holograms) are culled before a render state is built
- * for them. Entity Glow: the finished render state of an outlined entity takes its colour.
+ * for them. Entity Glow: the finished render state of an outlined entity takes its colour. The
+ * effects mark the state for the frame (MarkedRenderState).
  */
 @Mixin(EntityRenderManager.class)
 public abstract class EntityRenderManagerMixin {
@@ -33,5 +37,13 @@ public abstract class EntityRenderManagerMixin {
 		if (glow == null) return;
 		int color = glow.color(entity);
 		if (color != 0) cir.getReturnValue().outlineColor = color;
+	}
+
+	/** States are built fresh every frame, so the marks are written for every entity rendered in the world. */
+	@Inject(method = "getAndUpdateRenderState(Lnet/minecraft/entity/Entity;F)Lnet/minecraft/client/render/entity/state/EntityRenderState;", at = @At("RETURN"))
+	private void v1zir$marks(Entity entity, float tickProgress, CallbackInfoReturnable<EntityRenderState> cir) {
+		MarkedRenderState marks = (MarkedRenderState) cir.getReturnValue();
+		marks.v1zir$setHidden(KillEffectsModule.hides(entity));
+		marks.v1zir$setChams(ChamsModule.color(entity));
 	}
 }

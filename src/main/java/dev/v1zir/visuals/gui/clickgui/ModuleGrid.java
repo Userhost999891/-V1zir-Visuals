@@ -1,6 +1,7 @@
 package dev.v1zir.visuals.gui.clickgui;
 
 import dev.v1zir.visuals.module.Module;
+import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.render.font.Fonts;
 import dev.v1zir.visuals.render.font.Icons;
 import dev.v1zir.visuals.render.font.SdfFont;
@@ -17,10 +18,14 @@ import java.util.Locale;
 
 /**
  * Module cards of one tab (or of a search) in a scrolling grid of two or three columns. Above it,
- * a row of sub-category chips filters the grid; an outlined pill glides to the selected chip.
+ * a row of chips filters the grid: the starred favourites, all, and the sub-categories; an outlined
+ * pill glides to the selected chip. Searches list favourites first. The arrow keys move a focus
+ * ring over the cards.
  */
 final class ModuleGrid {
 	static final String ALL = "All";
+	/** The favourites chip, drawn as a star. */
+	static final String FAVOURITES = "Favourites";
 	/** Delay between two cards starting to appear, in seconds. */
 	private static final float STAGGER = 0.018f;
 	private static final float CHIP_H = 16f;
@@ -41,6 +46,12 @@ final class ModuleGrid {
 	private final Scroller scroller = new Scroller();
 	private long shownAt = System.nanoTime();
 	private final Label emptyWidth = new Label();
+	private final Label hintWidth = new Label();
+	/** Module list version the visible cards were filtered for: a star or a toggle filters again. */
+	private int filteredFor = -1;
+	@Nullable
+	private ModuleCard focus;
+	private int columns = 1;
 	// Viewport of the last frame.
 	private float viewX;
 	private float viewY;
@@ -57,9 +68,10 @@ final class ModuleGrid {
 		for (String sub : order) for (ModuleCard card : source) if (card.module.subCategory().equals(sub) && !subs.contains(sub)) subs.add(sub);
 		for (ModuleCard card : source) if (!subs.contains(card.module.subCategory())) subs.add(card.module.subCategory());
 		for (String sub : subs) for (ModuleCard card : source) if (card.module.subCategory().equals(sub)) cards.add(card);
-		if (withChips && subs.size() > 1) {
+		if (withChips) {
+			chips.add(FAVOURITES);
 			chips.add(ALL);
-			chips.addAll(subs);
+			if (subs.size() > 1) chips.addAll(subs);
 		}
 		int n = chips.size();
 		chipLabels = new Label[n];
@@ -70,7 +82,8 @@ final class ModuleGrid {
 		}
 		chipX = new float[n];
 		chipW = new float[n];
-		chip = Math.max(0, chips.indexOf(selectedSub));
+		int saved = chips.indexOf(selectedSub);
+		chip = saved >= 0 ? saved : Math.max(0, chips.indexOf(ALL));
 		filter();
 	}
 
@@ -101,14 +114,20 @@ final class ModuleGrid {
 	}
 
 	private void filter() {
+		filteredFor = ModuleManager.version();
 		visible.clear();
 		String q = query.toLowerCase(Locale.ROOT);
-		String sub = chip == 0 ? null : chips.get(chip);
-		for (ModuleCard card : cards) {
-			Module m = card.module;
-			if (!q.isEmpty() && !m.name().toLowerCase(Locale.ROOT).contains(q)) continue;
-			if (sub != null && !m.subCategory().equals(sub)) continue;
-			visible.add(card);
+		String sub = chips.isEmpty() ? ALL : chips.get(chip);
+		boolean favourites = sub.equals(FAVOURITES);
+		// A search lists the favourites first: two passes, starred then the rest.
+		for (int pass = q.isEmpty() ? 1 : 0; pass < 2; pass++) {
+			for (ModuleCard card : cards) {
+				Module m = card.module;
+				if (!q.isEmpty() && (pass == 0) != m.isFavourite()) continue;
+				if (!q.isEmpty() && !m.name().toLowerCase(Locale.ROOT).contains(q)) continue;
+				if (favourites ? !m.isFavourite() : !sub.equals(ALL) && !m.subCategory().equals(sub)) continue;
+				visible.add(card);
+			}
 		}
 	}
 
@@ -129,7 +148,7 @@ final class ModuleGrid {
 		SdfFont font = Fonts.medium();
 		float total = -CHIP_GAP;
 		for (int i = 0; i < n; i++) {
-			chipW[i] = chipLabels[i].width(font, chips.get(i), Ui.SMALL) + 16f;
+			chipW[i] = chips.get(i).equals(FAVOURITES) ? 24f : chipLabels[i].width(font, chips.get(i), Ui.SMALL) + 16f;
 			total += chipW[i] + CHIP_GAP;
 		}
 		float cx = rightX - total;
@@ -154,7 +173,8 @@ final class ModuleGrid {
 		for (int i = 0; i < n; i++) {
 			float hv = chipHover[i].target(i != chip && Ui.inside(mx, my, chipX[i], chipY, chipW[i], CHIP_H) ? 1f : 0f).get();
 			int color = i == chip ? Theme.text() : ColorUtil.lerp(Theme.textDim(), Theme.text(), hv);
-			Render2D.textMiddle(ctx, font, chips.get(i), chipX[i] + 8f, centerY, Ui.SMALL, color);
+			if (chips.get(i).equals(FAVOURITES)) Render2D.icon(ctx, Icons.STAR, chipX[i] + chipW[i] / 2f, centerY, 7f, i == chip ? Theme.accent() : color);
+			else Render2D.textMiddle(ctx, font, chips.get(i), chipX[i] + 8f, centerY, Ui.SMALL, color);
 		}
 		return rowX - 2f;
 	}
@@ -181,7 +201,9 @@ final class ModuleGrid {
 		viewY = y;
 		viewW = w;
 		viewH = h;
+		if (filteredFor != ModuleManager.version()) filter();
 		int cols = columns(w);
+		columns = cols;
 		float gap = Ui.CARD_GAP;
 		float cardW = (w - gap * (cols - 1)) / cols;
 		int rows = (visible.size() + cols - 1) / cols;
@@ -193,9 +215,15 @@ final class ModuleGrid {
 
 		if (visible.isEmpty()) {
 			SdfFont font = Fonts.medium();
-			String text = "No modules found";
-			Render2D.icon(ctx, Icons.SEARCH, x + w / 2f, y + h / 2f - 8f, 12f, Theme.textFaint());
+			boolean favourites = !chips.isEmpty() && chips.get(chip).equals(FAVOURITES);
+			String text = favourites ? "No favourites yet" : "No modules found";
+			Render2D.icon(ctx, favourites ? Icons.STAR : Icons.SEARCH, x + w / 2f, y + h / 2f - 8f, 12f, Theme.textFaint());
 			Render2D.textMiddle(ctx, font, text, x + w / 2f - emptyWidth.width(font, text, Ui.TEXT) / 2f, y + h / 2f + 8f, Ui.TEXT, Theme.textDim());
+			if (favourites) {
+				String hint = "Star a module to pin it here";
+				SdfFont small = Fonts.regular();
+				Render2D.textMiddle(ctx, small, hint, x + w / 2f - hintWidth.width(small, hint, Ui.TINY) / 2f, y + h / 2f + 19f, Ui.TINY, Theme.textFaint());
+			}
 			return;
 		}
 		ctx.enableScissor((int) Math.floor(x - 6f), (int) Math.floor(y), (int) Math.ceil(x + w + 6f), (int) Math.ceil(y + h));
@@ -213,6 +241,7 @@ final class ModuleGrid {
 			}
 			float rise = (1f - a) * 7f;
 			Render2D.setAlpha(alpha * a * Ui.edgeFade(cy + rise, cy + rise + Ui.CARD_HEIGHT, y, y + h));
+			card.focused = card == focus;
 			card.render(ctx, cx, cy + rise, cardW, cmx, cmy, card.module == drawerModule);
 		}
 		Render2D.setAlpha(alpha);
@@ -227,10 +256,31 @@ final class ModuleGrid {
 		return null;
 	}
 
+	/** The card under the mouse this frame, for the tooltip. */
 	@Nullable
-	Module hovered() {
-		for (ModuleCard card : visible) if (card.isHovered()) return card.module;
+	ModuleCard hovered() {
+		for (ModuleCard card : visible) if (card.isHovered()) return card;
 		return null;
+	}
+
+	/** Moves the keyboard focus by dx cards and dy rows (the first arrow press lands on the first card) and scrolls it into view. */
+	void moveFocus(int dx, int dy) {
+		if (visible.isEmpty()) return;
+		int i = focus == null ? -1 : visible.indexOf(focus);
+		i = i < 0 ? 0 : Math.max(0, Math.min(visible.size() - 1, i + dx + dy * columns));
+		focus = visible.get(i);
+		float top = 2f + (i / columns) * (Ui.CARD_HEIGHT + Ui.CARD_GAP);
+		scroller.reveal(top - 4f, top + Ui.CARD_HEIGHT + 4f, viewH);
+	}
+
+	/** The card with the keyboard focus, if it is still listed. */
+	@Nullable
+	ModuleCard focused() {
+		return focus != null && visible.contains(focus) ? focus : null;
+	}
+
+	void clearFocus() {
+		focus = null;
 	}
 
 	boolean over(double mx, double my) {

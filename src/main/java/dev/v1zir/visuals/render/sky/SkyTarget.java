@@ -64,9 +64,11 @@ public final class SkyTarget {
 
 	/** Runs the sky shader over the whole texture. */
 	public void render(GpuBufferSlice skyParams) {
+		GpuTextureView noise = CloudNoise.view();
 		try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(() -> label, view, OptionalInt.empty())) {
 			pass.setPipeline(V1zirPipelines.SKY);
 			pass.setUniform("SkyParams", skyParams);
+			CloudNoise.bind(pass, noise);
 			pass.setVertexBuffer(0, Fullscreen.buffer());
 			pass.draw(0, 3);
 		}

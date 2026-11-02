@@ -5,10 +5,13 @@ import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import com.llamalad7.mixinextras.sugar.Local;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.visuals.AspectRatioModule;
+import dev.v1zir.visuals.module.impl.visuals.BloomModule;
 import dev.v1zir.visuals.module.impl.visuals.CameraTweaksModule;
 import dev.v1zir.visuals.module.impl.visuals.ColorGradingModule;
+import dev.v1zir.visuals.module.impl.visuals.MotionBlurModule;
 import dev.v1zir.visuals.module.impl.visuals.NoRenderModule;
 import dev.v1zir.visuals.module.impl.visuals.ZoomModule;
+import dev.v1zir.visuals.render.world.WorldText;
 import net.minecraft.client.render.GameRenderer;
 import net.minecraft.client.util.math.MatrixStack;
 import org.joml.Matrix4f;
@@ -24,8 +27,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * renderWorld builds three projections: the one the world is drawn with (getBasicProjectionMatrix),
  * a plain one for frustum culling (getProjectionMatrix) and the hand's (ProjectionMatrix3.set). They
  * are changed at those call sites only, so nothing else that asks for a projection is affected.
- * No Render takes the nausea and portal wobble out of the world projection; Color Grading runs
- * once the world and the hand are drawn, before any GUI.
+ * No Render takes the nausea and portal wobble out of the world projection; Motion Blur runs once the
+ * world is drawn, before the hand; Bloom and then Color Grading once the world and the hand are drawn,
+ * before any GUI, and overlay world text (3D lyrics) last of all.
  */
 @Mixin(GameRenderer.class)
 public abstract class GameRendererMixin {
@@ -33,6 +37,7 @@ public abstract class GameRendererMixin {
 	private static final String BASIC_PROJECTION = "Lnet/minecraft/client/render/GameRenderer;getBasicProjectionMatrix(F)Lorg/joml/Matrix4f;";
 	private static final String CULLING_PROJECTION = "Lnet/minecraft/client/render/GameRenderer;getProjectionMatrix(F)Lorg/joml/Matrix4f;";
 	private static final String HAND_PROJECTION = "Lnet/minecraft/client/render/ProjectionMatrix3;set(IIF)Lcom/mojang/blaze3d/buffers/GpuBufferSlice;";
+	private static final String WORLD_RENDER = "Lnet/minecraft/client/render/WorldRenderer;render(Lnet/minecraft/client/util/ObjectAllocator;Lnet/minecraft/client/render/RenderTickCounter;ZLnet/minecraft/client/render/Camera;Lorg/joml/Matrix4f;Lorg/joml/Matrix4f;Lorg/joml/Matrix4f;Lcom/mojang/blaze3d/buffers/GpuBufferSlice;Lorg/joml/Vector4f;Z)V";
 
 	/** Only the world FOV zooms (changingFov); the hand keeps its own FOV. */
 	@ModifyReturnValue(method = "getFov", at = @At("RETURN"))
@@ -92,8 +97,20 @@ public abstract class GameRendererMixin {
 		if (zoom != null && zoom.isEnabled() && zoom.handHidden() || tweaks != null && tweaks.isEnabled() && tweaks.hidesHand()) ci.cancel();
 	}
 
+	@Inject(method = RENDER_WORLD, at = @At(value = "INVOKE", target = WORLD_RENDER, shift = At.Shift.AFTER))
+	private void v1zir$motionBlur(CallbackInfo ci) {
+		MotionBlurModule.renderIfEnabled();
+	}
+
 	@Inject(method = RENDER_WORLD, at = @At("RETURN"))
 	private void v1zir$colorGrade(CallbackInfo ci) {
+		BloomModule.renderIfEnabled();
 		ColorGradingModule.renderIfEnabled();
+	}
+
+	/** World text on the overlay layer (3D lyrics) goes on top of everything once the world and the hand are drawn. */
+	@Inject(method = RENDER_WORLD, at = @At("RETURN"))
+	private void v1zir$overlayText(CallbackInfo ci) {
+		WorldText.flushOverlay();
 	}
 }

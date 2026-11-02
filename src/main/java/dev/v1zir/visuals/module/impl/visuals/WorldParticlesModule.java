@@ -15,22 +15,26 @@ import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Ambient glowing particles around you. They live in the world, so you walk through them with
- * parallax; the ones that drift out of range respawn at the edge of the radius.
+ * parallax; the ones that drift out of range respawn at the edge of the radius. Cubes are small
+ * translucent glass cubes with glowing edges that float and turn slowly.
  */
 public final class WorldParticlesModule extends Module implements WorldEffect {
 	private static final int FIREFLIES = 0;
 	private static final int SNOW = 1;
 	private static final int STARS = 2;
 	private static final int EMBERS = 3;
+	private static final int CUBES = 4;
 	/** Per particle: position relative to the anchor (3), velocity (3), phase, variety. */
 	private static final int STRIDE = 8;
 
-	public final ModeSetting mode = add(new ModeSetting("Mode", "Fireflies", "Fireflies", "Snow", "Stars", "Embers"));
+	public final ModeSetting mode = add(new ModeSetting("Mode", "Fireflies", "Fireflies", "Snow", "Stars", "Embers", "Cubes"));
 	public final NumberSetting count = add(new NumberSetting("Count", 140, 20, 600, 10));
 	public final NumberSetting radius = add(new NumberSetting("Radius", 18, 6, 40, 1));
 	public final NumberSetting particleSize = add(new NumberSetting("Size", 1.0, 0.3, 3.0, 0.05).suffix("x"));
 
 	private float[] data = new float[0];
+	/** Rotation of the cube being drawn, reused. */
+	private final float[] basis = new float[9];
 	private long lastFrame = System.nanoTime();
 	private int shownMode = -1;
 	// World position the particle offsets are stored against (floats stay precise near it).
@@ -42,7 +46,7 @@ public final class WorldParticlesModule extends Module implements WorldEffect {
 	private double lastCamZ;
 
 	public WorldParticlesModule() {
-		super("World Particles", "Fireflies, snow, stars or embers around you", Category.SHADERS);
+		super("World Particles", "Fireflies, snow, stars, embers or cubes around you", Category.SHADERS);
 		setSubCategory("World");
 	}
 
@@ -105,6 +109,7 @@ public final class WorldParticlesModule extends Module implements WorldEffect {
 		int a2 = Theme.accent2();
 		float scale = particleSize.f();
 		WorldEffectRenderer.Mesh mesh = WorldEffectRenderer.glow();
+		WorldEffectRenderer.Mesh body = WorldEffectRenderer.translucent();
 		for (int i = 0; i < n; i++) {
 			int o = i * STRIDE;
 			float phase = data[o + 6];
@@ -156,12 +161,39 @@ public final class WorldParticlesModule extends Module implements WorldEffect {
 						ColorUtil.withAlpha(color, Math.round(230 * flicker)), ColorUtil.withAlpha(color, 0));
 					mesh.orb(x, y, z, size * 2.4f, ColorUtil.withAlpha(color, Math.round(110 * flicker)));
 				}
+				case CUBES -> {
+					// Each cube turns about its own axis, picked from its phase, at its own slow pace.
+					float ax = (float) Math.sin(phase), ay = (float) Math.cos(phase * 1.3f), az = (float) Math.sin(phase * 0.7f + 1f);
+					float al = (float) Math.sqrt(ax * ax + ay * ay + az * az);
+					Draw3D.rotation(basis, ax / al, ay / al, az / al, phase + t * (0.25f + variety * 0.45f));
+					float half = (0.07f + variety * 0.08f) * scale;
+					int color = ColorUtil.lerp(a1, a2, variety);
+					Draw3D.cube(mesh, x, y, z, half, basis, ColorUtil.withAlpha(color, Math.round(200 * alpha)));
+					cubeFill(body, x, y, z, half, ColorUtil.withAlpha(color, Math.round(46 * alpha)));
+				}
 				default -> {
 					int color = m == STARS ? ColorUtil.lerp(a1, 0xFFFFFFFF, variety) : ColorUtil.lerp(0xFFD6FF7A, a2, variety * 0.4f);
 					float glow = alpha * twinkle;
 					mesh.orb(x, y, z, size * 3f, ColorUtil.withAlpha(color, Math.round(150 * glow)));
 					mesh.orb(x, y, z, size, ColorUtil.withAlpha(0xFFFFFFFF, Math.round(200 * glow)));
 				}
+			}
+		}
+	}
+
+	/** The cube's faces as faint translucent fills (u > 2: solid), so it reads as glass between its glowing edges. */
+	private void cubeFill(WorldEffectRenderer.Mesh mesh, double x, double y, double z, float half, int color) {
+		float[] b = basis;
+		for (int axis = 0; axis < 3; axis++) {
+			int n = axis * 3, a = (axis + 1) % 3 * 3, c = (axis + 2) % 3 * 3;
+			float ax = b[a] * half, ay = b[a + 1] * half, az = b[a + 2] * half;
+			float cx = b[c] * half, cy = b[c + 1] * half, cz = b[c + 2] * half;
+			for (int side = -1; side <= 1; side += 2) {
+				double fx = x + b[n] * half * side, fy = y + b[n + 1] * half * side, fz = z + b[n + 2] * half * side;
+				mesh.vertex(fx - ax - cx, fy - ay - cy, fz - az - cz, 3f, 0f, color);
+				mesh.vertex(fx + ax - cx, fy + ay - cy, fz + az - cz, 3f, 0f, color);
+				mesh.vertex(fx + ax + cx, fy + ay + cy, fz + az + cz, 3f, 0f, color);
+				mesh.vertex(fx - ax + cx, fy - ay + cy, fz - az + cz, 3f, 0f, color);
 			}
 		}
 	}

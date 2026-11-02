@@ -13,6 +13,7 @@ import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.client.MainMenuModule;
 import dev.v1zir.visuals.render.Fullscreen;
 import dev.v1zir.visuals.render.V1zirPipelines;
+import dev.v1zir.visuals.render.sky.CloudNoise;
 import dev.v1zir.visuals.render.sky.MenuSky;
 import dev.v1zir.visuals.render.sky.SkyUniforms;
 import net.minecraft.client.gl.DynamicUniformStorage;
@@ -185,9 +186,12 @@ public final class WallpaperRenderer {
 		for (int i = 0; i < jobCount; i++) {
 			Job job = JOBS[i];
 			WallpaperTarget target = job.target;
+			// The sky presets carve their clouds from the cloud noise (baked in a pass of its own).
+			GpuTextureView noise = job.pipeline == V1zirPipelines.SKY ? CloudNoise.view() : null;
 			try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(target.label, target.view(), OptionalInt.empty())) {
 				pass.setPipeline(job.pipeline);
 				pass.setUniform(job.uniform, job.params);
+				if (noise != null) CloudNoise.bind(pass, noise);
 				if (job.image != null) pass.bindTexture("Sampler0", job.image, RenderSystem.getSamplerCache().get(FilterMode.LINEAR));
 				pass.setVertexBuffer(0, Fullscreen.buffer());
 				pass.draw(0, 3);

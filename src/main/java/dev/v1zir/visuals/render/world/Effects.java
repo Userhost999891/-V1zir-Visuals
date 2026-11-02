@@ -1,14 +1,21 @@
 package dev.v1zir.visuals.render.world;
 
 import dev.v1zir.visuals.module.ModuleManager;
+import dev.v1zir.visuals.module.impl.effects.BloodModule;
 import dev.v1zir.visuals.module.impl.effects.HitMarkerModule;
 import dev.v1zir.visuals.module.impl.effects.HitParticlesModule;
 import dev.v1zir.visuals.module.impl.effects.KillEffectsModule;
 import dev.v1zir.visuals.module.impl.effects.PopChamsModule;
+import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.world.ClientWorld;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
+import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.shape.VoxelShape;
 
 import java.util.Arrays;
 
@@ -23,6 +30,7 @@ public final class Effects {
 	// Entities hit recently, watched for their death; a few slots are plenty, fights rarely involve more.
 	private static final LivingEntity[] hit = new LivingEntity[8];
 	private static final long[] hitTime = new long[8];
+	private static final BlockPos.Mutable GROUND = new BlockPos.Mutable();
 
 	private Effects() {
 	}
@@ -37,6 +45,8 @@ public final class Effects {
 		}
 		HitParticlesModule particles = ModuleManager.get(HitParticlesModule.class);
 		if (particles != null && particles.isEnabled()) particles.spawn(entity);
+		BloodModule blood = ModuleManager.get(BloodModule.class);
+		if (blood != null && blood.isEnabled()) blood.spawn(entity);
 		HitMarkerModule marker = ModuleManager.get(HitMarkerModule.class);
 		if (marker != null && marker.isEnabled()) marker.onHit();
 	}
@@ -49,14 +59,37 @@ public final class Effects {
 
 	/** The server reports a death (entity status 3); unlike the health it is sent even where servers hide the health of others. */
 	public static void onDeath(Entity entity) {
+		if (!(entity instanceof LivingEntity dead)) return;
 		for (int i = 0; i < hit.length; i++) {
-			LivingEntity living = hit[i];
-			if (living != null && living == entity) {
+			if (hit[i] == dead) {
 				hit[i] = null;
-				onKill(living);
+				onKill(dead);
 				return;
 			}
 		}
+		// Kill Effects can play for every death nearby, not only for yours.
+		KillEffectsModule effects = ModuleManager.get(KillEffectsModule.class);
+		if (effects != null && effects.isEnabled() && effects.allDeaths()) effects.spawn(dead);
+	}
+
+	/**
+	 * Height of the first surface at or below (x, y, z), looking up to five blocks down; NaN when there is
+	 * none (blood stains and shards land on it).
+	 */
+	public static double groundBelow(double x, double y, double z) {
+		ClientWorld world = MinecraftClient.getInstance().world;
+		if (world == null) return Double.NaN;
+		int bx = MathHelper.floor(x);
+		int bz = MathHelper.floor(z);
+		int top = MathHelper.floor(y);
+		for (int by = top; by >= top - 5; by--) {
+			BlockState state = world.getBlockState(GROUND.set(bx, by, bz));
+			VoxelShape shape = state.getCollisionShape(world, GROUND);
+			if (shape.isEmpty()) continue;
+			double surface = by + shape.getMax(Direction.Axis.Y);
+			if (surface <= y + 0.5) return surface;
+		}
+		return Double.NaN;
 	}
 
 	/** Its own slot if it is already watched, else a free one, else the one hit longest ago. */

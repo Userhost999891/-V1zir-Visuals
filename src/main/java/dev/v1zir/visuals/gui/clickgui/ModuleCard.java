@@ -16,7 +16,8 @@ import org.lwjgl.glfw.GLFW;
  * One module as a card of the grid: name, a one-line description, a toggle switch and a faint key chip.
  * Toggling takes about 0.2 s on a spring with no overshoot: the knob slides, the track and the card's rim
  * and edge line take the accent, and a faint band of light runs across the card from the switch.
- * Hovering brightens the card and lifts it by a pixel.
+ * Hovering brightens the card and lifts it by a pixel. A star beside the switch (shown on hover, lit in the
+ * accent once starred) makes the module a favourite; keyboard focus draws an accent ring.
  */
 final class ModuleCard {
 	private static final float NAME = 7.5f;
@@ -30,6 +31,13 @@ final class ModuleCard {
 	private final Anim press = new Anim(0f, 30f);
 	private final Anim enabled;
 	private final Anim sweep = new Anim(1f, 11f);
+	private final Anim star;
+	private final Anim starHover = new Anim(0f, 22f);
+	/** Snaps to 1 when the star is toggled and springs back: the star pops. */
+	private final Anim starPop = new Anim(0f, 8f);
+	private final Anim focus = new Anim(0f, 18f);
+	/** Keyboard focus, set by the grid before drawing. */
+	boolean focused;
 	private final Label nameWidth = new Label();
 	private final Label keyWidth = new Label();
 	private final boolean hasSettings;
@@ -41,6 +49,8 @@ final class ModuleCard {
 	private float x;
 	private float y;
 	private float w;
+	private float starX;
+	private float starY;
 	/** Description cut to the card width, rebuilt only when the width changes. */
 	private String shownDescription = "";
 	private float descriptionWidth = -1f;
@@ -52,6 +62,7 @@ final class ModuleCard {
 		this.hasSettings = !module.settings().isEmpty();
 		this.shownOn = module.isEnabled();
 		this.enabled = new Anim(shownOn ? 1f : 0f, 17f);
+		this.star = new Anim(module.isFavourite() ? 1f : 0f, 16f);
 	}
 
 	boolean isBinding() {
@@ -92,11 +103,14 @@ final class ModuleCard {
 			ctx.getMatrices().scale(k, k);
 			ctx.getMatrices().translate(-(x + w / 2f), -(cy + ch / 2f));
 		}
+		float f = focus.target(focused ? 1f : 0f).get();
+		if (f > 0.01f) Render2D.shadow(ctx, x, cy, w, ch, r, 7f, ColorUtil.withAlpha(accent, Math.round(70 * f)));
 		int fill = ColorUtil.lerp(ColorUtil.lerp(Theme.raised(), Theme.raisedLit(), 0.6f * h), ColorUtil.brighten(Theme.raisedLit(), 0.03f * h), e);
 		Render2D.matte(ctx, x, cy, w, ch, r, fill, Ui.LIT);
 		int idleRim = ColorUtil.withAlpha(0xFFFFFF, Math.round(18 + 18 * h));
 		int rim = binding ? ColorUtil.withAlpha(accent, 220) : ColorUtil.lerp(idleRim, ColorUtil.withAlpha(accent, Math.round(110 + 40 * h)), e);
 		Render2D.rim(ctx, x, cy, w, ch, r, rim, Ui.LIT);
+		if (f > 0.01f) Render2D.outline(ctx, x - 1.5f, cy - 1.5f, w + 3f, ch + 3f, r + 1.5f, 1.2f, ColorUtil.withAlpha(accent, Math.round(210 * f)));
 		if (e > 0.01f) {
 			// The edge line grows from its middle as the module turns on.
 			float lh = (ch - 24f) * e;
@@ -117,6 +131,7 @@ final class ModuleCard {
 		float top = cy + 14f;
 		if (module.canToggle()) Ui.toggle(ctx, right - Ui.SWITCH_W, top - Ui.SWITCH_H / 2f, e, h);
 		else Render2D.icon(ctx, Icons.SLIDERS_HORIZONTAL, right - 4f, top, 7f, ColorUtil.lerp(Theme.textDim(), Theme.text(), h));
+		renderStar(module.canToggle() ? right - Ui.SWITCH_W - 10f : right - 18f, top, ctx, mx, my, h, accent);
 
 		SdfFont font = Fonts.semibold();
 		String label = binding ? "Press a key..." : module.name();
@@ -144,9 +159,35 @@ final class ModuleCard {
 		if (scaled) ctx.getMatrices().popMatrix();
 	}
 
+	/** The favourite star at (sx, sy): faint while the card is hovered, lit in the accent with a soft glow once starred. */
+	private void renderStar(float sx, float sy, DrawContext ctx, double mx, double my, float hover, int accent) {
+		starX = sx;
+		starY = sy;
+		boolean favourite = module.isFavourite();
+		float over = starHover.target(Ui.inside(mx, my, sx - 6f, sy - 6f, 12f, 12f) ? 1f : 0f).get();
+		float shown = star.target(favourite ? 1f : 0.55f * hover).get();
+		if (shown < 0.01f) return;
+		float size = 7f * (1f + 0.45f * starPop.get() + 0.12f * over);
+		if (favourite) Render2D.glow(ctx, sx - 4f, sy - 4f, 8f, 8f, 4f, 5f, ColorUtil.withAlpha(accent, Math.round(80 * shown)), ColorUtil.withAlpha(accent, 0));
+		int color = favourite ? accent : ColorUtil.lerp(Theme.textFaint(), Theme.text(), over);
+		Render2D.icon(ctx, Icons.STAR, sx, sy, size, ColorUtil.fade(color, Math.min(1f, shown + 0.4f * over)));
+	}
+
+	/** Over the favourite star (it shows while the card is hovered). */
+	boolean overStar(double mx, double my) {
+		return Ui.inside(mx, my, starX - 6f, starY - 6f, 12f, 12f);
+	}
+
+	void toggleFavourite() {
+		module.setFavourite(!module.isFavourite());
+		starPop.snap(1f);
+		starPop.target(0f);
+	}
+
 	/** Not drawn this frame (scrolled away): no hit area, no hover. */
 	void hide() {
 		y = -10000f;
+		starY = -10000f;
 		hovered = false;
 	}
 

@@ -1,5 +1,7 @@
 package dev.v1zir.visuals.gui.hud;
 
+import dev.v1zir.visuals.V1zir;
+import dev.v1zir.visuals.gui.clickgui.ClickGuiScreen;
 import dev.v1zir.visuals.module.Module;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.hud.NotificationsModule;
@@ -15,7 +17,10 @@ import net.minecraft.client.gui.DrawContext;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Toasts in the bottom right corner (module toggles and other messages). */
+/**
+ * Module toggles and other messages: on the {@link DynamicIsland} at the top centre, or as toasts in the bottom
+ * right corner (the Notifications module's style). The island also shows the click GUI opening and closing.
+ */
 public final class Notifications {
 	private static final List<Toast> TOASTS = new ArrayList<>();
 	private static final float DURATION = 2.2f;
@@ -24,20 +29,47 @@ public final class Notifications {
 	}
 
 	public static void moduleToggled(Module module) {
-		push(module.isEnabled() ? Icons.CHECK : Icons.X, module.name(), module.isEnabled() ? "Enabled" : "Disabled", module.isEnabled());
+		NotificationsModule settings = settings();
+		if (settings != null && settings.island()) DynamicIsland.moduleToggled(module);
+		else push(module.isEnabled() ? Icons.CHECK : Icons.X, module.name(), module.isEnabled() ? "Enabled" : "Disabled", module.isEnabled());
 	}
 
 	public static void push(int icon, String title, String text, boolean positive) {
-		if (!ModuleManager.isEnabled(NotificationsModule.class)) return;
+		NotificationsModule settings = settings();
+		if (settings == null) return;
+		if (settings.island()) {
+			DynamicIsland.message(icon, title, text, positive);
+			return;
+		}
 		TOASTS.removeIf(t -> t.title.equals(title));
 		TOASTS.add(new Toast(icon, title, text, positive));
 		while (TOASTS.size() > 6) TOASTS.remove(0);
 	}
 
+	/** The click GUI (or the HUD editor) opened or closed; island only. */
+	public static void menu(boolean opened, boolean editor) {
+		NotificationsModule settings = settings();
+		if (settings == null || !settings.island() || !settings.menu.on()) return;
+		DynamicIsland.message(editor ? Icons.MOVE : Icons.LAYOUT_DASHBOARD, editor ? (opened ? "HUD editor" : "Layout saved")
+			: opened ? "Menu opened" : "Menu closed", "", opened);
+	}
+
+	/** The enabled Notifications module, or null. */
+	private static NotificationsModule settings() {
+		NotificationsModule settings = ModuleManager.get(NotificationsModule.class);
+		return settings != null && settings.isEnabled() ? settings : null;
+	}
+
 	public static void tick() {
 	}
 
+	/** With the HUD: the toasts, or the island unless the click GUI draws it over itself (renderOverMenu). */
 	public static void render(DrawContext ctx, int screenWidth, int screenHeight) {
+		NotificationsModule settings = settings();
+		if (settings != null && settings.island()) {
+			if (!(V1zir.mc().currentScreen instanceof ClickGuiScreen)) DynamicIsland.render(ctx, screenWidth, screenHeight, settings);
+			return;
+		}
 		if (TOASTS.isEmpty()) return;
 		long now = System.nanoTime();
 		SdfFont titleFont = Fonts.semibold();
@@ -68,6 +100,13 @@ public final class Notifications {
 			Render2D.round(ctx, x + 6f, y + h - 2f, (w - 12f) * progress, 1f, 0.5f, ColorUtil.withAlpha(accent, 160));
 			Render2D.setAlpha(1f);
 		}
+	}
+
+	/** After the click GUI is drawn: the island over it, so its events show while the menu is open. */
+	public static void renderOverMenu(DrawContext ctx, int screenWidth, int screenHeight) {
+		NotificationsModule settings = settings();
+		if (settings == null || !settings.island() || V1zir.mc().player == null || V1zir.mc().options.hudHidden) return;
+		DynamicIsland.render(ctx, screenWidth, screenHeight, settings);
 	}
 
 	private static final class Toast {
