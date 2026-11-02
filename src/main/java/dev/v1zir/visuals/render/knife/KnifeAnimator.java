@@ -202,8 +202,14 @@ public final class KnifeAnimator {
 		float ax = fz;
 		float az = -fx;
 		float al = (float) Math.sqrt(ax * ax + az * az);
-		grip.translation(ex, ey, ez)
-			.rotateZ(sum[4] * DEG)
+		// The sweep about the elbow would carry the fist down along its arc; the shoulder lifts it back, so sweeps
+		// travel level across the view while the blade turns with them.
+		float sweep = sum[4] * DEG;
+		float rx = gx - ex;
+		float ry = gy - ey;
+		float drop = rx * (float) Math.sin(sweep) + ry * (float) Math.cos(sweep) - ry;
+		grip.translation(ex, ey - drop, ez)
+			.rotateZ(sweep)
 			.rotate(sum[3] * DEG, ax / al, 0f, az / al)
 			.translate(gx - ex, gy - ey, gz - ez)
 			.rotate(sum[5] * DEG, fx, fy, fz)

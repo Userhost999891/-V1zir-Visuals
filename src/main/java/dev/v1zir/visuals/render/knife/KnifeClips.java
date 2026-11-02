@@ -14,21 +14,27 @@ package dev.v1zir.visuals.render.knife;
 final class KnifeClips {
 	// ------------------------------------------------------------------ attacks
 
-	/** Primary slash: cocked up to the right, then the blade sweeps across the middle of the view to the left. */
+	/**
+	 * Primary slash: cocked up and back to the right, then the whole arm sweeps the blade down across the view to the
+	 * lower left, edge first (the edge faces down, the way the blade travels), and settles back.
+	 */
 	static final KnifeClip SLASH = new KnifeClip(0.85f)
-		.at(0.08f).hand(0.03f, 0.03f, 0.03f).turn(6f, -18f, 8f).spin(0f, 0f, 22f)
-		.at(0.15f).hand(-0.17f, 0.12f, -0.06f).turn(4f, 18f, 14f).spin(0f, 0f, -4f)
-		.at(0.22f).hand(-0.27f, 0.19f, -0.03f).turn(0f, 33f, 16f).spin(0f, 0f, -16f)
-		.at(0.34f).hand(-0.23f, 0.15f, -0.02f).turn(0f, 27f, 12f).spin(0f, 0f, -12f)
-		.at(0.58f).hand(-0.05f, 0.03f, 0f).turn(0f, 6f, 3f).spin(0f, 0f, -3f);
+		.at(0.09f).hand(0.02f, 0.05f, 0.03f).turn(8f, -24f, 6f).spin(0f, 0f, 14f)
+		.at(0.16f).hand(-0.06f, 0.03f, -0.06f).turn(4f, 16f, 8f).spin(0f, 0f, -4f)
+		.at(0.23f).hand(-0.1f, -0.02f, -0.03f).turn(-2f, 40f, 10f).spin(0f, 0f, -14f)
+		.at(0.35f).hand(-0.08f, -0.02f, -0.02f).turn(-2f, 34f, 8f).spin(0f, 0f, -10f)
+		.at(0.58f).hand(-0.02f, 0f, 0f).turn(0f, 8f, 2f).spin(0f, 0f, -2f);
 
-	/** The return slash: wound across to the left, then back-handed out to the right and up. */
+	/**
+	 * The return slash: the forearm rolls the edge up while the arm swings across to the left, then the blade sweeps
+	 * back across the view to the right, edge first, and the forearm rolls back.
+	 */
 	static final KnifeClip SLASH_BACK = new KnifeClip(0.85f)
-		.at(0.08f).hand(-0.16f, 0.12f, -0.02f).turn(6f, 22f, -8f).spin(0f, 0f, 18f)
-		.at(0.15f).hand(-0.02f, 0.05f, -0.08f).turn(4f, 2f, -14f).spin(0f, 0f, -6f)
-		.at(0.22f).hand(0.08f, 0.02f, -0.04f).turn(2f, -16f, -16f).spin(0f, 0f, -18f)
-		.at(0.34f).hand(0.06f, 0.01f, -0.02f).turn(1f, -12f, -12f).spin(0f, 0f, -12f)
-		.at(0.58f).hand(0.015f, 0f, 0f).turn(0f, -3f, -3f).spin(0f, 0f, -3f);
+		.at(0.09f).hand(-0.06f, 0.0f, -0.02f).turn(4f, 34f, 70f).spin(0f, 0f, -8f)
+		.at(0.16f).hand(0.0f, 0.03f, -0.06f).turn(6f, 4f, 80f).spin(0f, 0f, 4f)
+		.at(0.23f).hand(0.05f, 0.05f, -0.03f).turn(8f, -24f, 82f).spin(0f, 0f, 12f)
+		.at(0.35f).hand(0.04f, 0.04f, -0.02f).turn(6f, -20f, 70f).spin(0f, 0f, 8f)
+		.at(0.6f).hand(0.01f, 0.01f, 0f).turn(1f, -4f, 14f).spin(0f, 0f, 2f);
 
 	/** Heavy stab of a critical hit: drawn back and raised, driven deep towards the crosshair, held, withdrawn. */
 	static final KnifeClip HEAVY = new KnifeClip(1.05f)
