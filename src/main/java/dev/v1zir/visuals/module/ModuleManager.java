@@ -57,6 +57,7 @@ import dev.v1zir.visuals.module.impl.visuals.NametagsModule;
 import dev.v1zir.visuals.module.impl.visuals.NoRenderModule;
 import dev.v1zir.visuals.module.impl.visuals.RainEffectsModule;
 import dev.v1zir.visuals.module.impl.visuals.ShaderSkyModule;
+import dev.v1zir.visuals.module.impl.visuals.ShootingStarsModule;
 import dev.v1zir.visuals.module.impl.visuals.SwingAnimationsModule;
 import dev.v1zir.visuals.module.impl.visuals.ViewModelModule;
 import dev.v1zir.visuals.module.impl.visuals.WorldParticlesModule;
@@ -95,6 +96,7 @@ public final class ModuleManager {
 		// impl.visuals
 		register(new ShaderSkyModule());
 		register(new AmbienceModule());
+		register(new ShootingStarsModule());
 		register(new FullBrightModule());
 		register(new ViewModelModule());
 		register(new SwingAnimationsModule());
