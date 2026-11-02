@@ -45,6 +45,7 @@ public final class BloodModule extends Module implements WorldEffect {
 		float pushX = length > 1e-3 ? (float) (dx / length) : 0f;
 		float pushZ = length > 1e-3 ? (float) (dz / length) : 0f;
 		double ground = Effects.groundBelow(entity.getX(), entity.getY() + 0.1, entity.getZ());
+		if (Double.isNaN(ground)) ground = entity.getY();
 		splatter.spawn(entity.getX(), entity.getY() + entity.getHeight() * 0.6, entity.getZ(), ground, amount.i(), 2.4f, dropSize.f(), pushX, pushZ);
 	}
 

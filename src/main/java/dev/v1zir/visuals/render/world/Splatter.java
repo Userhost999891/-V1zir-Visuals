@@ -119,6 +119,8 @@ public final class Splatter {
 		double x = drops[o], z = drops[o + 2];
 		double ground = drops[o + 6];
 		double below = Effects.groundBelow(x, ground + 0.5, z);
+		// Nothing to land on within reach: the droplet is gone.
+		if (Double.isNaN(below)) return false;
 		if (below < ground - 0.05) {
 			// Flew over an edge: fall on to the surface below.
 			drops[o + 6] = below;

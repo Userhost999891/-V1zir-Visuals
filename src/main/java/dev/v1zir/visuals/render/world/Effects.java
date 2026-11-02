@@ -73,12 +73,12 @@ public final class Effects {
 	}
 
 	/**
-	 * Height of the first surface at or below (x, y, z), looking up to five blocks down; y itself when
-	 * there is none (blood stains and shards land on it).
+	 * Height of the first surface at or below (x, y, z), looking up to five blocks down; NaN when there is
+	 * none (blood stains and shards land on it).
 	 */
 	public static double groundBelow(double x, double y, double z) {
 		ClientWorld world = MinecraftClient.getInstance().world;
-		if (world == null) return y;
+		if (world == null) return Double.NaN;
 		int bx = MathHelper.floor(x);
 		int bz = MathHelper.floor(z);
 		int top = MathHelper.floor(y);
@@ -89,7 +89,7 @@ public final class Effects {
 			double surface = by + shape.getMax(Direction.Axis.Y);
 			if (surface <= y + 0.5) return surface;
 		}
-		return y;
+		return Double.NaN;
 	}
 
 	/** Its own slot if it is already watched, else a free one, else the one hit longest ago. */

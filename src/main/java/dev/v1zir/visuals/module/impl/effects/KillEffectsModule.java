@@ -28,6 +28,7 @@ import net.minecraft.client.render.entity.state.PlayerEntityRenderState;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.decoration.ArmorStandEntity;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvent;
 import net.minecraft.sound.SoundEvents;
@@ -135,6 +136,8 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 
 	/** The entity died: your kill (Effects), or any death nearby in All deaths mode. */
 	public void spawn(LivingEntity entity) {
+		// Your own death would play around the camera; armour stands do not die, they break.
+		if (entity == mc.player || entity instanceof ArmorStandEntity) return;
 		for (int i = 0; i < kills.size(); i++) {
 			if (kills.get(i).entity == entity) return;
 		}
@@ -144,6 +147,7 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 		float s = size.f();
 		float h = entity.getHeight();
 		double ground = Effects.groundBelow(entity.getX(), entity.getY() + 0.1, entity.getZ());
+		if (Double.isNaN(ground)) ground = entity.getY();
 		Kill kill = new Kill(type, entity, entity.getX(), entity.getY(), entity.getZ(), ground, entity.getWidth(), h, s,
 			LIFE[type] * duration.f(), random.nextFloat() * 100f, System.nanoTime());
 		switch (type) {
