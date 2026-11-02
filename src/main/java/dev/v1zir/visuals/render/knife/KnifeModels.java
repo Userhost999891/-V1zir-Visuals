@@ -36,6 +36,9 @@ final class KnifeModels {
 	private static final int HORN = 0xFF2E2622;
 	private static final int WHITE = 0xFFFFFFFF;
 
+	/** Straight blades are drawn this much wider than their curves: the bold proportions of a shooter's knives. */
+	private static final float BLADE_WIDTH = 1.2f;
+
 	private KnifeModels() {
 	}
 
@@ -111,9 +114,9 @@ final class KnifeModels {
 			// Denser towards the point, where the shape changes fastest.
 			float x = x0 + (x1 - x0) * (1f - (float) Math.pow(1f - t, 1.45f));
 			ex[i] = x;
-			ey[i] = edge.yAt(x);
+			ey[i] = edge.yAt(x) * BLADE_WIDTH;
 			sx[i] = x;
-			sy[i] = spine.yAt(x);
+			sy[i] = spine.yAt(x) * BLADE_WIDTH;
 		}
 		blade(b, ex, ey, sx, sy, g);
 	}
@@ -512,8 +515,8 @@ final class KnifeModels {
 		MeshBuilder b = new MeshBuilder();
 		float pivot = 6.0f;
 		// Safe handle (+z), fixed in the hand: a skeletonised channel with three windows.
-		float[][] windows = {roundRect(-5.2f, -0.3f, -2.6f, 0.3f, 0.3f), roundRect(-2.1f, -0.3f, 0.6f, 0.3f, 0.3f), roundRect(1.1f, -0.3f, 3.8f, 0.3f, 0.3f)};
-		float[] body = roundRect(-6.6f, -0.68f, pivot + 0.55f, 0.68f, 0.5f);
+		float[][] windows = {roundRect(-5.3f, -0.4f, -2.6f, 0.4f, 0.38f), roundRect(-2.1f, -0.4f, 0.6f, 0.4f, 0.38f), roundRect(1.1f, -0.4f, 3.9f, 0.4f, 0.38f)};
+		float[] body = roundRect(-6.7f, -0.86f, pivot + 0.6f, 0.86f, 0.62f);
 		b.plate(body, windows, 0.2f, 0.84f, 0.12f, STEEL, WHITE);
 		b.pin(pivot, 0f, 0.84f, 0.1f, 0.3f, DARK, WHITE);
 		b.pin(-6.0f, 0f, 0.84f, 0.08f, 0.22f, DARK, WHITE);
@@ -650,8 +653,8 @@ final class KnifeModels {
 		b.pin(pivot, 0f, -0.72f, -0.1f, 0.34f, DARK, WHITE);
 		b.part(pivot, 0f);
 		// A curved blade with a convex edge and a clipped point.
-		Curve spine = Curve.start(pivot + 0.5f, 1.0f).cubic(pivot + 3.5f, 1.25f, pivot + 6f, 1.0f, pivot + 7.4f, 0.6f).cubic(pivot + 8.6f, 0.25f, pivot + 9.3f, 0.6f, pivot + 10.2f, 1.25f);
-		Curve edge = Curve.start(pivot + 0.5f, -1.05f).cubic(pivot + 4f, -1.4f, pivot + 7.6f, -1.2f, pivot + 9.2f, -0.2f).cubic(pivot + 9.7f, 0.2f, pivot + 10f, 0.75f, pivot + 10.2f, 1.25f);
+		Curve spine = Curve.start(pivot + 0.5f, 0.95f).cubic(pivot + 3.5f, 1.05f, pivot + 6.5f, 1.05f, pivot + 8.2f, 0.85f).cubic(pivot + 9.4f, 0.7f, pivot + 10.2f, 0.45f, pivot + 10.8f, 0.2f);
+		Curve edge = Curve.start(pivot + 0.5f, -1.0f).cubic(pivot + 3.5f, -1.55f, pivot + 7.0f, -1.6f, pivot + 9.0f, -0.95f).cubic(pivot + 9.9f, -0.6f, pivot + 10.5f, -0.15f, pivot + 10.8f, 0.2f);
 		Grind g = new Grind().thickness(0.4f, 0.42f).grind(0.5f).plunge(0.04f, 0.1f).swedge(0.66f, 0.3f);
 		straightBlade(b, spine, edge, g, stations(detail, 50));
 		return b.build();
@@ -661,9 +664,9 @@ final class KnifeModels {
 		MeshBuilder b = new MeshBuilder();
 		// T-handle across the palm, wrapped in red cord; the blade comes out between the fingers.
 		b.place.rotationZ((float) (Math.PI / 2));
-		Curve side = Curve.start(-2.7f, 0.8f).cubic(-1.0f, 0.95f, 1.0f, 0.95f, 2.7f, 0.8f);
-		Curve under = Curve.start(-2.7f, -0.8f).cubic(-1.0f, -0.95f, 1.0f, -0.95f, 2.7f, -0.8f);
-		Handle h = new Handle(side, under, -2.7f, 2.7f).width(0.8f, 0.9f, 0.8f).material(KnifeMesh.CORD, CORD_RED);
+		Curve side = Curve.start(-2.35f, 0.66f).cubic(-0.9f, 0.8f, 0.9f, 0.8f, 2.35f, 0.66f);
+		Curve under = Curve.start(-2.35f, -0.66f).cubic(-0.9f, -0.8f, 0.9f, -0.8f, 2.35f, -0.66f);
+		Handle h = new Handle(side, under, -2.35f, 2.35f).width(0.68f, 0.76f, 0.68f).material(KnifeMesh.CORD, CORD_RED);
 		h.ridges = 0.06f;
 		h.ridgeSpacing = 0.3f;
 		h.roundness = 2.2f;
