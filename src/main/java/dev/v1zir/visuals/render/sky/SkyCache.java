@@ -43,11 +43,11 @@ public final class SkyCache {
 	 */
 	private static final float ACCUMULATE = 0.35f;
 	/**
-	 * Presets with volumetric clouds cost several times more per texel than the others: they build
-	 * this fraction of the texels per frame (a slower refresh, about two seconds, instead of slower
-	 * frames; the clouds drift slowly and the crossfade hides it).
+	 * Presets with volumetric clouds cost a few times more per texel than the others: they build
+	 * this fraction of the texels per frame (a slower refresh, about a second and a half, instead of
+	 * slower frames; the clouds drift slowly and the crossfade hides it).
 	 */
-	private static final float CLOUD_WEIGHT = 0.18f;
+	private static final float CLOUD_WEIGHT = 0.25f;
 	private static final float AURORA_WEIGHT = 0.85f;
 	/**
 	 * A rebuild after a settings change or time jump runs this many times faster than a refresh,
@@ -256,11 +256,13 @@ public final class SkyCache {
 		/** Runs the sky shader over rows [from, to) of this panorama, blended into the history panorama. */
 		void render(Panorama history, GpuBufferSlice snapshot, float hemisphere, int from, int to) {
 			GpuBufferSlice cache = storage.write(new CacheData(buildWeight, hemisphere, jitterX, jitterY));
+			GpuTextureView noise = CloudNoise.view();
 			try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(() -> "V1zir sky cache build", view, OptionalInt.empty())) {
 				pass.setPipeline(V1zirPipelines.SKY_PANORAMA);
 				pass.setUniform("SkyParams", snapshot);
 				pass.setUniform("SkyCache", cache);
 				pass.bindTexture("Sampler0", history.view, RenderSystem.getSamplerCache().get(FilterMode.NEAREST));
+				CloudNoise.bind(pass, noise);
 				pass.enableScissor(0, from, size, to - from);
 				pass.setVertexBuffer(0, Fullscreen.buffer());
 				pass.draw(0, 3);

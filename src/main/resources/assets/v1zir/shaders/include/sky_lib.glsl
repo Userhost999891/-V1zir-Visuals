@@ -668,26 +668,58 @@ vec3 vMoon(vec3 rd, vec3 moonDir, float phase, vec3 tint, float size, out float 
 }
 
 // ---------------------------------------------------------------------------
-//  Volumetric clouds: fair-weather cumulus in a layer between V_CLOUD_BASE and V_CLOUD_TOP km
-//  above the observer, on a curved Earth, so towards the horizon the clouds get smaller, flatter
-//  and denser and fade into the haze.
+//  Volumetric clouds: cumulus in a layer between V_CLOUD_BASE and V_CLOUD_TOP km above the
+//  observer, on a curved Earth, so towards the horizon they get smaller and denser and fade into
+//  the haze, with thin cirrus far above them.
 //
-//  Shape: every cloud is a cell of a jittered grid (big cumulus, and smaller ones in the gaps),
-//  its outline broken up by a domain-warped fbm. The higher a point sits in the layer, the
-//  stronger the column under it has to be, so every cloud gets a flat base and a rounded dome
-//  that rises with its strength. A billowy 3D noise then carves the surface into round puffs
-//  between sharp creases (cauliflower tops and sides) and softer wisps at the base, with a finer
-//  octave of puffs on the clouds close overhead.
+//  Shape: a slow weather field sets how much of the sky is covered where (large patches of clear
+//  and cloudy sky, nothing on a grid) and how tall the clouds grow there. A tileable Perlin-Worley
+//  volume (CloudNoise, baked once by core/cloud_noise.fsh), cut at the level the cover asks for,
+//  gives the round, connected cloud masses; each one rises from a nearly flat base into a dome as
+//  high as its core is strong. Smaller Worley octaves then erode the outline: soft wisps at the
+//  base, cauliflower billows above.
 //
-//  March: long steps through clear air test only the cheap column shape; near a cloud the march
-//  backs up and goes on in short steps (shorter up close, where a texel covers only metres) that
-//  integrate density and light. A few samples towards the light give the self shadowing: tops
-//  facing the light are bright, bases dark, thin edges let the light through and glow when it is
-//  behind them; skylight dims with the depth of cloud above a point.
+//  Light: a cone of samples towards the sun or moon gives the optical depth to the light. Beer-
+//  Lambert with a powder term (darker creases between the billows facing the light) and a strong
+//  forward lobe (the silver lining towards the sun), a second, wider octave of multiple scattering
+//  and the light that diffuses through the whole cloud (soft, glowing interiors and grey, never
+//  black bases), skylight dimmed by the cloud above a point and light from the ground below.
+//
+//  March: long steps through clear air test the cheap shape only; at a cloud the march backs up
+//  and goes on in short steps that add the billows and the light. The steps grow with distance
+//  (far clouds are small) and the march stops once the cloud is opaque.
 // ---------------------------------------------------------------------------
 
 const float V_CLOUD_BASE = 1.5;
 const float V_CLOUD_TOP = 3.4;
+const float V_CIRRUS = 8.0;
+// Frequencies (1/km) of the cloud masses and of the billows on them.
+const float V_CLOUD_SHAPE = 1.0 / 7.0;
+const float V_CLOUD_DETAIL = 1.0 / 1.3;
+// Extinction (1/km) of the densest cloud.
+const float V_CLOUD_EXT = 42.0;
+
+// Tileable 3D noise (period 1) from the CloudNoise atlas: 64 slices of 64 x 64 texels, each with a
+// wrapped border, so a lookup is two linear samples (the slices either side) blended.
+uniform sampler2D CloudNoise;
+
+vec4 vCloudNoise(vec3 p) {
+	vec3 q = fract(p) * 64.0;
+	float z = q.z - 0.5;
+	float s0 = floor(z);
+	float f = z - s0;
+	s0 = mod(s0, 64.0);
+	float s1 = mod(s0 + 1.0, 64.0);
+	vec2 a = vec2(mod(s0, 8.0), floor(s0 * 0.125)) * 66.0 + 1.0 + q.xy;
+	vec2 b = vec2(mod(s1, 8.0), floor(s1 * 0.125)) * 66.0 + 1.0 + q.xy;
+	return mix(textureLod(CloudNoise, a / 528.0, 0.0), textureLod(CloudNoise, b / 528.0, 0.0), f);
+}
+
+// One slice of the atlas as tileable 2D noise (period 1): a single lookup.
+vec4 vCloudNoise2(vec2 p, float slice) {
+	vec2 a = vec2(mod(slice, 8.0), floor(slice * 0.125)) * 66.0 + 1.0 + fract(p) * 64.0;
+	return textureLod(CloudNoise, a / 528.0, 0.0);
+}
 
 // Lighting of the cloud layer.
 struct VCloudLight {
@@ -704,84 +736,52 @@ float vShellDistance(float mu, float h) {
 	return -r0 * mu + sqrt(max(r0 * r0 * (mu * mu - 1.0) + r * r, 0.0));
 }
 
-// Local cloud cover (0..1): the coverage setting, varied by slow weather patches so some parts
-// of the sky are clearer than others.
-float vCloudWeather(vec2 xz, float coverage) {
-	float w = vNoise2(xz * 0.04 + 3.7);
-	return clamp(coverage + (w - 0.5) * 0.55, 0.0, 1.0);
+// The cloud field over xz (km): x = how much of the sky is covered there (the coverage setting,
+// varied by slow patches of clearer and cloudier sky), y = how tall the clouds grow there.
+vec2 vCloudWeather(vec2 xz, float coverage) {
+	float n1 = vNoise2(xz * 0.045 + 3.7);
+	float n2 = vNoise2(xz * 0.13 + vec2(8.1, 1.3));
+	float cover = clamp(coverage + (n1 * 0.65 + n2 * 0.35 - 0.5) * 0.9, 0.0, 1.0);
+	float tall = clamp(cover * 1.3 - 0.2 + (n2 - 0.5) * 0.6, 0.0, 1.0);
+	return vec2(cover, tall);
 }
 
-// Round cloud cells: every cell of a jittered grid holds one cumulus, a paraboloid of random
-// size and strength around its point; the strongest one at p wins (so neighbours stay separate).
-// Values reach 1 at the centre of the strongest cells and turn negative outside the clouds.
-// Only the 2x2 cells around the nearest corner are searched: the points sit in the middle of
-// their cells and no cloud is wider than 0.6 cells, so farther cells stay below -0.36 at p, and
-// the result is floored at -0.3, which keeps it seamless.
-float vCloudCells(vec2 p) {
-	vec2 n = floor(p - 0.5);
-	vec2 f = p - n;
-	float best = -4.0;
-	for (int j = 0; j <= 1; j++) {
-		for (int i = 0; i <= 1; i++) {
-			vec2 g = vec2(float(i), float(j));
-			vec2 id = n + g;
-			vec3 h = vHash33(vec3(id, 7.7));
-			vec2 r = g + 0.2 + 0.6 * h.xy - f;
-			float radius = 0.4 + 0.2 * h.z;
-			best = max(best, 0.3 + 0.7 * vHash12(id + 7.7) - dot(r, r) / (radius * radius));
-		}
-	}
-	return max(best, -0.3);
+// Strength of the cloud mass at a point from its Perlin-Worley value r, cut where the cover asks:
+// 0 at the edge of a cloud, 1 in its core, negative in clear air.
+float vCloudStrength(float r, vec2 weather) {
+	float thr = 0.98 - 0.45 * weather.x;
+	return (r - thr) / (1.0 - thr);
 }
 
-// Strength of the cloud column over xz (km): 1 = the core of a big cloud, 0 = its edge, negative
-// in clear sky. Big cells (about 2.2 km apart) and small, flatter ones (0.9 km apart) between
-// them, so the field never repeats one cloud size, with outlines broken up by a warped fbm.
-// full = false leaves out the small clouds and the turrets: the cheap shape the light samples see.
-float vCloudColumn(vec2 xz, float cover, int octaves, bool full) {
-	vec2 warp = vec2(vNoise2(xz * 0.21 + 7.3), vNoise2(xz * 0.21 + vec2(2.9, 11.1))) - 0.5;
-	vec2 w = xz + warp * 1.1;
-	float n = vFbm2(w * 0.9, octaves);
-	float cells = vCloudCells(w * 0.45);
-	if (full) cells = max(cells, vCloudCells(w * 1.1 + 31.7) * 0.8 - 0.4);
-	// Turrets: round towers of a few hundred metres that make up each cloud, so its top is
-	// lumpy and its base, seen from below, mottled by the different depths of cloud above.
-	// They only shape the inside, so the outline stays round.
-	float turrets = full ? abs(vNoise2(w * 2.2 + 5.1) * 2.0 - 1.0) : 0.45;
-	float c = cells + (n - 0.5) * 0.8;
-	// More cover lowers the level a column has to clear (below zero the cells spread and merge).
-	float threshold = mix(1.0, -0.6, cover);
-	// A fixed scale (not one that stretches thin cover), so a few clouds on a clear day stay
-	// small, low domes and only heavy cover builds tall ones that merge.
-	c = (c - threshold) * 1.25;
-	return full ? c + (turrets - 0.45) * 0.4 * smoothstep(0.0, 0.5, c) : c;
+// Height (fraction of the layer) a cloud of this strength reaches: tall where the weather says so.
+float vCloudTop(float strength, vec2 weather) {
+	return mix(0.3, 1.0, weather.y) * sqrt(max(strength, 0.0));
 }
 
-// Shape of the cloud at height fraction hf (0 = cloud base, 1 = top of the layer) over a column
-// of strength c: positive inside, negative outside, roughly in km. A flat base and a dome that
-// rises with the strength of the column.
-float vCloudShape(float c, float hf) {
-	return min(c - hf * hf * 1.1, (hf - 0.02) * 3.0);
+// Cloud level (positive inside, about the density) of a mass of the given strength at height hf
+// in the layer (0 = base, 1 = top): a dome as high as the core is strong (an ellipsoid over a
+// round core), on a base that sags a little under the strongest cores instead of being flat.
+float vCloudShape(float strength, float hf, vec2 weather) {
+	float top = mix(0.3, 1.0, weather.y);
+	return min(strength - hf * hf / (top * top), (hf + strength * 0.05) * 8.0);
 }
 
-// Density (0..1) of a shape value; soft = depth of the outline (km): crisp up close, softer far
-// away where a texel covers more than the outline.
-float vCloudDensity(float shape, float soft) {
-	return smoothstep(0.0, soft, shape);
+// Erodes a cloud level d with the billows (m = gba of the detail noise): wisps at the base,
+// rounded cauliflower billows above; amount fades the erosion out on far clouds. dt = length of
+// the march step there: billows smaller than about a step fade to their mean, so far clouds
+// keep a steady outline instead of a noisy one.
+float vCloudErode(float d, vec3 m, float hf, float amount, float dt) {
+	m.yz = mix(m.yz, vec2(0.48), smoothstep(vec2(0.1, 0.05), vec2(0.25, 0.12), vec2(dt)));
+	float fbm = dot(m, vec3(0.625, 0.25, 0.125));
+	float e = clamp((mix(fbm, 1.0 - fbm, smoothstep(0.02, 0.2, hf)) - 0.25) * 2.0, 0.0, 1.0) * amount;
+	return (d - e) / (1.0 - e);
 }
 
-// Billowy detail: a 3D noise pushes the surface in and out, rounded lobes between sharp creases
-// (cauliflower puffs) on the sides and tops and softer, smoother wisps at the base. detail fades
-// the smaller puffs out with distance instead of turning them into noise; fine adds an octave
-// of small puffs on the clouds close overhead.
-float vCloudDetail(vec3 p, float hf, float detail, float fine) {
-	float n1 = vNoise3(p * 2.1);
-	float n2 = vNoise3(p * 5.3 + 7.0);
-	float n3 = fine > 0.0 ? vNoise3(p * 12.7 + 3.0) : 0.5;
-	float billow = abs(n1 * 2.0 - 1.0) * 0.6 + abs(n2 * 2.0 - 1.0) * 0.3 * detail + abs(n3 * 2.0 - 1.0) * 0.16 * fine;
-	float wisp = n1 * 0.6 + n2 * 0.3 + n3 * 0.1;
-	float e = mix(wisp, billow, 0.15 + 0.85 * smoothstep(0.04, 0.3, hf));
-	return (e - 0.45) * mix(0.3, 0.62, detail);
+// Density (0..1) of a cloud level: a soft, translucent skin easing into dense cloud, so the
+// outlines stay defined without hard cut-out edges.
+float vCloudDensity(float level) {
+	float d = clamp(level * 1.7, 0.0, 1.0);
+	return d * d * (3.0 - 2.0 * d);
 }
 
 float vHG(float mu, float g) {
@@ -789,150 +789,178 @@ float vHG(float mu, float g) {
 	return (1.0 - g2) / (4.0 * V_PI * pow(max(1.0 + g2 - 2.0 * g * mu, 1e-4), 1.5));
 }
 
+// Cirrus: a thin veil of ice cloud far above the cumulus, one 2D layer of soft fibrous wisps
+// stretched along the wind in slow patches, lit with a strong forward glow towards the light.
+// rgb = colour, a = opacity.
+vec4 vCirrus(vec3 rd, VCloudLight light, float coverage, vec2 wind) {
+	if (rd.y < 0.0) return vec4(0.0);
+	float s = vShellDistance(rd.y, V_CIRRUS);
+	vec2 p = rd.xz * s + wind * 2.5;
+	// Patches where the cirrus forms.
+	float amount = smoothstep(0.66, 0.95, vCloudNoise2(p * 0.006 + 0.37, 3.0).r + coverage * 0.2);
+	if (amount <= 0.0) return vec4(0.0);
+	// Soft wisps stretched along the wind and bent by a slow flow, streaked with finer fibres.
+	vec2 warp = vCloudNoise2(p * 0.02 + 0.71, 11.0).rg - 0.5;
+	vec2 q = mat2(0.94, 0.34, -0.34, 0.94) * (p + warp * 8.0);
+	float body = vCloudNoise2(vec2(q.x * 0.01, q.y * 0.03), 27.0).r;
+	float fibres = vCloudNoise2(vec2(q.x * 0.02, q.y * 0.09) + 0.5, 41.0).a;
+	float density = smoothstep(0.6, 0.9, body) * (0.35 + 0.65 * fibres) * amount;
+	if (density <= 0.0) return vec4(0.0);
+	float mu = dot(rd, light.dir);
+	vec3 col = light.color * (vHG(mu, 0.6) * 0.5 + 0.05) + light.top * 0.5;
+	return vec4(col, density * 0.25 * exp(-s / 110.0) * smoothstep(0.0, 0.03, rd.y));
+}
+
 // rgb = cloud colour, a = coverage of the sky behind (lay it over the sky with vOver).
 vec4 vClouds(vec3 rd, VCloudLight light, float coverage, float t, vec3 camPos, int quality) {
 	if (rd.y < -0.01 || coverage <= 0.0) return vec4(0.0);
+	// The setting maps to the sky cover on a curve: the default (0.45) gives fair-weather cumulus
+	// over about a third of the sky with plenty of blue between them, 0.8 a mostly cloudy sky and
+	// 1.0 (or rain) an overcast one.
+	coverage = pow(coverage, 2.3);
+	// Wind (km): a slow drift, and the camera moves the layer with real parallax (at half the
+	// strength, which keeps fast flight from smearing it in the cache). The billows drift a little
+	// faster than the masses, so the clouds slowly boil and change.
+	vec2 wind = vec2(t * 0.0045, t * 0.0018) + camPos.xz * 0.0005;
+	vec3 boil = vec3(t * 0.0025, -t * 0.0008, t * 0.0012);
+	vec4 cirrus = vCirrus(rd, light, coverage, wind);
 	float t0 = vShellDistance(rd.y, V_CLOUD_BASE);
 	float t1 = vShellDistance(rd.y, V_CLOUD_TOP);
-	// Beyond ~120 km the layer is lost in the haze.
-	if (t0 > 120.0) return vec4(0.0);
-	// March at most 14 km through the layer: further on the clouds are hidden anyway.
-	float tEnd = t0 + min(t1 - t0, 14.0);
+	// Beyond ~120 km the layer is lost in the haze, and 24 km into it the clouds hide the rest.
+	if (t0 > 120.0) return cirrus;
+	float tEnd = min(t1, t0 + 24.0);
 	int maxSteps = quality == 0 ? 24 : (quality == 1 ? 36 : 52);
-	float coarse = clamp((tEnd - t0) / 12.0, 0.12, 1.0);
+	int lightSteps = quality == 0 ? 3 : (quality == 1 ? 4 : 5);
 	// Per-direction jitter of the steps: the sky cache jitters the direction every build, so the
 	// slicing averages out into smooth density over a few builds.
 	float jitter = vHash13(rd * 4096.0);
-	// Wind (km): a slow drift, and the camera moves the layer with real parallax (at half the
-	// strength, which keeps fast flight from smearing it in the cache). The detail noise drifts
-	// a little faster than the shapes, so the clouds slowly boil and change.
-	vec2 wind = vec2(t * 0.0045, t * 0.0018) + camPos.xz * 0.0005;
-	vec3 windDetail = vec3(t * 0.0025, -t * 0.0008, t * 0.0012);
-	// Fine detail fades out with distance instead of aliasing into noise.
-	float detail = 1.0 - smoothstep(12.0, 50.0, t0);
-	float fine = 1.0 - smoothstep(3.0, 8.0, t0);
-	float soft = clamp(t0 * 0.006, 0.01, 0.2);
-	int octaves = t0 < 25.0 ? 5 : (t0 < 60.0 ? 4 : 3);
-	int lightSteps = quality == 0 ? 2 : (quality == 1 ? 3 : 4);
+	// The billows fade out on far clouds, where they would be smaller than a texel.
+	float erode = 0.6 * (1.0 - smoothstep(12.0, 50.0, t0));
 
 	float mu = dot(rd, light.dir);
 	// Phase: a strong forward lobe (silver lining) and a soft backward one; the lobes of the
-	// multiple scattering get wider and wider (Wrenninge).
-	float ph0 = mix(vHG(mu, 0.8), vHG(mu, -0.2), 0.3);
-	float ph1 = mix(vHG(mu, 0.45), vHG(mu, -0.1), 0.3);
-	float ph2 = 0.08;
+	// multiple scattering get wider and weaker (Wrenninge). Far clouds are smaller than a texel
+	// and get a softer lobe, so their thin edges near the sun do not sparkle.
+	float ph0 = mix(vHG(mu, mix(0.8, 0.55, smoothstep(15.0, 60.0, t0))), vHG(mu, -0.25), 0.3);
+	float ph1 = mix(vHG(mu, 0.4), vHG(mu, -0.12), 0.3);
+	float ph2 = mix(vHG(mu, 0.2), vHG(mu, -0.06), 0.3);
+	// Powder darkens the billows' skin facing the light; looking into the light the fringes glow.
+	float powder = 1.0 - smoothstep(0.2, 0.9, mu);
 	float thick = V_CLOUD_TOP - V_CLOUD_BASE;
 
 	vec3 scattered = vec3(0.0);
 	float trans = 1.0;
 	float depthSum = 0.0;
 	float weightSum = 0.0;
-	// Sphere tracing: the shape is roughly a distance in km, so the march steps by the distance to
-	// the cloud surface: far from any cloud long steps on the cheap column alone, close to one
-	// shorter ones that include the detail, so every ray finds the surface to within a few metres
-	// (a crisp outline instead of a noisy one). Inside, short steps integrate density and light.
-	float s = t0 + (0.008 + 0.004 * t0) * jitter;
-	// The last sample outside a cloud that saw the detail (its position and shape value): on
-	// entering, the surface is placed between it and the first sample inside.
-	float outS = -1.0;
-	float outCarved = 0.0;
+	// Coarse steps through clear air, fine ones near and in a cloud. The last fine sample outside
+	// a cloud (where, and its level) places the surface on entering, so outlines stay crisp.
+	bool fine = false;
 	bool inside = false;
-	float depthIn = 0.0;
+	int empty = 0;
+	float outS = -1.0;
+	float outLevel = 0.0;
+	float s = t0 + (0.03 + 0.011 * t0) * jitter;
 	for (int i = 0; i < 64; i++) {
 		if (i >= maxSteps || s > tEnd || trans < 0.03) break;
+		// Short steps up close, longer far away where a texel covers more cloud.
+		float dt = 0.03 + 0.011 * s;
 		vec3 p = rd * s;
 		// Height above the observer's ground, with the Earth's curvature.
 		float h = p.y + dot(p.xz, p.xz) / (2.0 * V_RG);
 		float hf = (h - V_CLOUD_BASE) / thick;
 		vec2 xz = p.xz + wind;
-		float cover = vCloudWeather(xz, coverage);
-		float c = vCloudColumn(xz, cover, octaves, true);
-		float shape = vCloudShape(c, hf);
-		// Shortest step: metres up close, longer far away where a texel is wider.
-		float minStep = 0.008 + 0.004 * s;
-		// The detail moves the surface by at most ~0.4: further out the column alone decides.
-		if (shape < -0.42) {
-			s += clamp(-(shape + 0.42) * 0.55, minStep, coarse);
-			outS = -1.0;
+		vec2 weather = vCloudWeather(xz, coverage);
+		vec3 q = vec3(xz.x, h, xz.y);
+		float strength = vCloudStrength(vCloudNoise(q * V_CLOUD_SHAPE).r, weather);
+		float level = vCloudShape(strength, hf, weather);
+		if (level <= 0.0) {
+			// Clear air: a few fine steps after a cloud in case another one is close, then coarse.
+			empty++;
+			if (empty > 3) fine = false;
+			outS = fine ? s : -1.0;
+			outLevel = level;
 			inside = false;
-			depthIn = 0.0;
+			s += fine ? dt : dt * 3.0;
 			continue;
 		}
-		vec3 q = vec3(xz.x, h, xz.y) + windDetail;
-		float carved = shape + vCloudDetail(q, hf, detail, fine);
-		if (carved <= 0.0) {
+		if (!fine) {
+			// A coarse step landed in a cloud: back up and come in with fine steps.
+			fine = true;
+			empty = 0;
+			s -= dt * 2.0;
+			continue;
+		}
+		empty = 0;
+		if (erode > 0.0) level = vCloudErode(level, vCloudNoise(q * V_CLOUD_DETAIL + boil).gba, hf, erode, dt);
+		if (level <= 0.0) {
+			// In a gap between the billows.
 			outS = s;
-			outCarved = carved;
-			s += clamp(-carved * 0.5, minStep, coarse);
+			outLevel = level;
 			inside = false;
-			depthIn = 0.0;
+			s += dt;
 			continue;
 		}
 		if (!inside) {
 			inside = true;
 			if (outS >= 0.0) {
-				// Just entered: start integrating at the surface (plus the jitter), so the outline
-				// and the lit side do not show the step pattern as contour lines.
-				s = mix(outS, s, outCarved / (outCarved - carved)) + minStep * jitter;
+				// Just entered: start at the surface, between the last sample outside and this one.
+				s = mix(outS, s, outLevel / (outLevel - level)) + dt * 0.5 * jitter;
+				outS = -1.0;
 				continue;
 			}
 		}
-		float d = vCloudDensity(carved, soft);
-		// Inside: thin parts take longer steps.
-		// Steps lengthen deeper in, where little light still gets out.
-		float dt = minStep * mix(2.5, 1.0, d) * (1.0 + 0.6 * depthIn);
-		depthIn += 1.0;
 		s += dt;
+		float d = vCloudDensity(level);
 
-		float sigma = d * 40.0;
-		// Optical depth towards the light: samples of the cloud shape at growing distances.
+		// Optical depth towards the light: the cloud at growing distances along the ray, the
+		// nearest sample with its billows (so each one shades the next), the others without.
 		float od = 0.0;
 		float ls = 0.0;
-		for (int k = 0; k < 4; k++) {
+		float lstep = 0.04;
+		for (int k = 0; k < 5; k++) {
 			if (k >= lightSteps) break;
-			float lstep = 0.05 * exp2(float(k) * 1.5);
 			vec3 lp = p + light.dir * (ls + lstep * 0.5);
 			ls += lstep;
 			float lh = lp.y + dot(lp.xz, lp.xz) / (2.0 * V_RG);
 			float lhf = (lh - V_CLOUD_BASE) / thick;
 			if (lhf > 1.0) break;
-			vec2 lxz = lp.xz + wind;
-			float lshape = vCloudShape(vCloudColumn(lxz, cover, 2, true), lhf);
-			// The nearest sample sees the puffs, so each one is shaded on its own.
-			if (k == 0) lshape += vCloudDetail(vec3(lxz.x, lh, lxz.y) + windDetail, lhf, detail, 0.0);
-			od += vCloudDensity(lshape, 0.12) * lstep * 40.0;
+			vec3 lq = vec3(lp.x + wind.x, lh, lp.z + wind.y);
+			float l = vCloudShape(vCloudStrength(vCloudNoise(lq * V_CLOUD_SHAPE).r, weather), lhf, weather);
+			if (k == 0 && quality > 0 && erode > 0.0 && l > 0.0) l = vCloudErode(l, vCloudNoise(lq * V_CLOUD_DETAIL + boil).gba, lhf, erode, lstep);
+			od += vCloudDensity(l) * lstep;
+			lstep *= 2.3;
 		}
-		od += sigma * 0.02;
-		// Depth of cloud above the point (up to the column's dome, with the puffs).
-		float above = max(sqrt(max(c + carved - shape, 0.0) / 1.1) - hf, 0.0) * thick;
-		// Beer's law plus a wider, fainter multiple scattering lobe that reaches deeper, and the
-		// light that diffuses through the whole cloud (two-stream: it falls off slowly with the
-		// optical depth), so thin parts of a base glow and thick ones stay dark.
-		float diffuse = 1.0 / (1.0 + 0.2 * max(od, above * 40.0));
-		vec3 sun = light.color * (exp(-od) * ph0 + exp(-od * 0.3) * 0.45 * ph1 + diffuse * 0.5 * ph2) * 2.2;
-		// Powder: light scattered back towards the viewer has to be scattered in first, which the
-		// outermost skin of a puff facing the light does less than the cloud just below it, so
-		// every puff gets a soft darker rim and reads as round; it fades when looking into the
-		// light, where the fringes glow instead.
-		float powder = 1.0 - exp(-(od + 0.12) * 2.5);
-		sun *= mix(powder, 1.0, 0.3 + 0.7 * smoothstep(0.2, 0.95, mu));
-		// Skylight from above, dimmed by the cloud above the point, and ground light from below,
-		// strongest at the base.
-		vec3 amb = light.top * (0.15 + 0.85 * exp(-above * 1.8)) * (0.6 + 0.4 * hf) + light.bottom * (1.0 - 0.6 * hf);
-		float st = exp(-sigma * dt);
+		od *= V_CLOUD_EXT;
+		// Beer-Lambert single scattering (with the silver lining), a wider second octave, and the
+		// light that diffuses through the whole cloud: it falls off slowly with the optical depth
+		// (two-stream), so thick bases stay a soft grey and thin parts glow.
+		float diffuse = 1.0 / (1.0 + 0.2 * od);
+		vec3 sun = light.color * (exp(-od) * ph0 + exp(-od * 0.4) * 0.4 * ph1 + diffuse * 0.3 * ph2) * 2.2;
+		// Powder: light scattered back towards the viewer has to get into the cloud first, which the
+		// outermost skin of a billow facing the light does less than the cloud just below it.
+		sun *= 1.0 - 0.3 * powder * exp(-od * 3.0);
+		// Skylight from above, dimmed by the cloud over the point (up to the top of its dome), and
+		// ground light from below.
+		float above = max(vCloudTop(strength, weather) - hf, 0.0) * thick;
+		vec3 amb = light.top * (0.2 + 0.8 * exp(-above * 2.5)) + light.bottom * (1.0 - hf);
+		float st = exp(-d * V_CLOUD_EXT * dt);
 		float absorbed = trans * (1.0 - st);
 		scattered += (sun + amb) * absorbed;
 		depthSum += s * absorbed;
 		weightSum += absorbed;
 		trans *= st;
 	}
+	vec4 cumulus = vec4(0.0);
 	float alpha = 1.0 - trans;
-	if (alpha < 0.002) return vec4(0.0);
-	// Aerial perspective: distant clouds fade into the haze of the sky behind them.
-	float dist = depthSum / max(weightSum, 1e-4);
-	float haze = exp(-dist / 60.0);
-	vec3 col = scattered / alpha;
-	return vec4(col, alpha * haze * smoothstep(-0.01, 0.015, rd.y));
+	if (alpha > 0.002) {
+		// Aerial perspective: distant clouds fade into the haze of the sky behind them.
+		float dist = depthSum / max(weightSum, 1e-4);
+		cumulus = vec4(scattered / alpha, alpha * exp(-dist / 55.0) * smoothstep(-0.01, 0.015, rd.y));
+	}
+	// The cumulus in front of the cirrus.
+	float a = cumulus.a + cirrus.a * (1.0 - cumulus.a);
+	if (a < 0.002) return vec4(0.0);
+	return vec4((cumulus.rgb * cumulus.a + cirrus.rgb * cirrus.a * (1.0 - cumulus.a)) / a, a);
 }
 
 // ---------------------------------------------------------------------------
