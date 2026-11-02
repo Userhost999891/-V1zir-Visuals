@@ -21,7 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-/** Saves modules, settings, keybinds, HUD positions, GUI layout, wallpapers and the last world played to config/v1zir/config.json. */
+/** Saves modules, settings, keybinds, favourites, HUD positions, GUI layout, wallpapers and the last world played to config/v1zir/config.json. */
 public final class ConfigManager {
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
@@ -45,6 +45,7 @@ public final class ConfigManager {
 				if (!modules.has(module.name())) continue;
 				JsonObject obj = modules.getAsJsonObject(module.name());
 				if (obj.has("key")) module.setKey(obj.get("key").getAsInt());
+				if (obj.has("favourite")) module.setFavourite(obj.get("favourite").getAsBoolean());
 				if (obj.has("settings")) {
 					JsonObject settings = obj.getAsJsonObject("settings");
 					for (Setting<?> setting : module.settings()) {
@@ -87,6 +88,7 @@ public final class ConfigManager {
 			JsonObject obj = new JsonObject();
 			obj.addProperty("enabled", module.isEnabled());
 			obj.addProperty("key", module.key());
+			if (module.isFavourite()) obj.addProperty("favourite", true);
 			JsonObject settings = new JsonObject();
 			for (Setting<?> setting : module.settings()) settings.add(setting.name(), setting.toJson());
 			obj.add("settings", settings);

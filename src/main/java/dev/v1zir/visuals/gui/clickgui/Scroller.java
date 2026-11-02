@@ -22,6 +22,13 @@ final class Scroller {
 		offset.snap(0f);
 	}
 
+	/** Scrolls just far enough that the content from top to bottom shows in a viewport this high. */
+	void reveal(float top, float bottom, float viewport) {
+		if (top < target) target = top;
+		else if (bottom > target + viewport) target = bottom - viewport;
+		target = Math.max(0f, Math.min(max, target));
+	}
+
 	/** Sets the content and viewport heights of this frame; returns the smoothed offset. */
 	float update(float content, float viewport) {
 		max = Math.max(0f, content - viewport);

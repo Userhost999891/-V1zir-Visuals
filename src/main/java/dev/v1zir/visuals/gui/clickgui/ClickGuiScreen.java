@@ -36,6 +36,11 @@ import java.util.Map;
  * tabs on the left, and the selected tab's modules as a grid of cards; a card's settings slide in as
  * a column on the right. The Settings tab holds the theme editor and the GUI's own options, and the
  * HUD editor is reached from the Hud tab or the top bar.
+ * <p>
+ * Switching tabs slides the content in from the side the new tab lies on. Resting on a card brings up
+ * a tooltip; its star makes it a favourite. Keys: arrows move a focus ring over the cards (also through
+ * search results), Enter toggles the focused module (Shift+Enter opens its settings), Tab and Shift+Tab
+ * switch tabs, Escape closes what is open.
  */
 public final class ClickGuiScreen extends Screen {
 	private static final Category[] TABS = Category.values();
@@ -56,6 +61,9 @@ public final class ClickGuiScreen extends Screen {
 	private final Anim editor = new Anim(0f, 12f);
 	private final Anim editButtonHover = new Anim(0f, 22f);
 	private final Anim doneHover = new Anim(0f, 22f);
+	/** 1 or -1 right after a tab switch (the side the new tab lies on), springing to 0: the content slides in. */
+	private final Anim tabSlide = new Anim(0f, 12f);
+	private final CardTooltip tooltip = new CardTooltip();
 	private final Label titleWidth = new Label();
 	private final Label editWidth = new Label();
 	private final Label toolbarWidth = new Label();
@@ -213,6 +221,11 @@ public final class ClickGuiScreen extends Screen {
 		if (!animations) open.snap(1f);
 		float t = open.target(1f).get();
 		float edit = editor.target(hudEditor ? 1f : 0f).get();
+		// The keyboard focus goes as soon as the mouse moves.
+		if (mouseX != lastMouseX || mouseY != lastMouseY) {
+			ModuleGrid grid = activeGrid();
+			if (grid != null) grid.clearFocus();
+		}
 		lastMouseX = mouseX;
 		lastMouseY = mouseY;
 		if (edit < 0.999f) FrameUniforms.cursor(mouseX, mouseY);
@@ -274,9 +287,16 @@ public final class ClickGuiScreen extends Screen {
 		float bodyY = contentY + HEADER + 8f;
 		float bodyH = contentH - HEADER - 8f;
 		Module drawerModule = drawer.module();
+		float slide = tabSlide.get();
+		float windowAlpha = Render2D.alpha();
+		ctx.getMatrices().pushMatrix();
+		ctx.getMatrices().translate(0f, slide * 18f);
+		Render2D.setAlpha(windowAlpha * (1f - 0.85f * Math.abs(slide)));
 		if (searching()) searchGrid.render(ctx, contentX, bodyY, contentW, bodyH, mx, my, drawerModule, mouseFree);
 		else if (category() == Category.SETTINGS) settingsPage.render(ctx, contentX, bodyY, contentW, bodyH, mx, my, drawerModule, mouseFree);
 		else grids[tab].render(ctx, contentX, bodyY, contentW, bodyH, mx, my, drawerModule, mouseFree);
+		Render2D.setAlpha(windowAlpha);
+		ctx.getMatrices().popMatrix();
 		if (drawer.visible()) {
 			// Clipped to the window below the top bar, so the column and its shadow emerge from the window edge.
 			ctx.enableScissor((int) Math.floor(winX + 1f), (int) Math.floor(winY + Ui.BAR + 1f), (int) Math.ceil(winX + winW - 1f),
@@ -284,7 +304,15 @@ public final class ClickGuiScreen extends Screen {
 			drawer.render(ctx, contentX, contentY, contentW + 2f, contentH, mx, my);
 			ctx.disableScissor();
 		}
+		ModuleGrid grid = activeGrid();
+		tooltip.render(ctx, grid != null ? grid.hovered() : null, mx, my, winX, winY, winX + winW, winY + winH);
 		ctx.getMatrices().popMatrix();
+	}
+
+	/** The grid of cards being shown (the search results or the tab's), null on the Settings tab. */
+	@Nullable
+	private ModuleGrid activeGrid() {
+		return searching() ? searchGrid : grids[tab];
 	}
 
 	/** Content title with its module count on the left; sub-category chips (and Edit layout on the Hud tab) on the right. */
@@ -391,6 +419,8 @@ public final class ClickGuiScreen extends Screen {
 		searchFocused = false;
 		drawer.close();
 		if (index == tab) return;
+		tabSlide.snap(index > tab ? 1f : -1f);
+		tabSlide.target(0f);
 		tab = index;
 		if (grids[tab] != null) grids[tab].show(true);
 		else settingsPage.reset();
@@ -506,7 +536,8 @@ public final class ClickGuiScreen extends Screen {
 			ModuleCard card = pressedCard;
 			pressedCard = null;
 			if (card.release(mx, my)) {
-				if (card.module.canToggle() && !card.overChevron(mx, my)) card.module.toggle();
+				if (card.overStar(mx, my)) card.toggleFavourite();
+				else if (card.module.canToggle() && !card.overChevron(mx, my)) card.module.toggle();
 				else drawer.show(card.module);
 			}
 		}
@@ -545,6 +576,7 @@ public final class ClickGuiScreen extends Screen {
 		}
 		for (ModuleCard card : cards) if (card.keyPressed(key)) return true;
 		if (drawer.keyPressed(key) || settingsPage.keyPressed(key)) return true;
+		if (navigate(key, (input.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0)) return true;
 		if (key == GLFW.GLFW_KEY_F && (input.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0) {
 			searchFocused = true;
 			return true;
@@ -586,6 +618,32 @@ public final class ClickGuiScreen extends Screen {
 		if (anyBinding()) return true;
 		searchFocused = true;
 		if (search.length() < 32) setSearch(search + input.asString());
+		return true;
+	}
+
+	/** Keyboard navigation over the cards and tabs; returns whether the key was used. */
+	private boolean navigate(int key, boolean shift) {
+		if (key == GLFW.GLFW_KEY_TAB) {
+			selectTab(Math.floorMod(tab + (shift ? -1 : 1), TABS.length));
+			return true;
+		}
+		ModuleGrid grid = activeGrid();
+		if (grid == null) return false;
+		switch (key) {
+			case GLFW.GLFW_KEY_LEFT -> grid.moveFocus(-1, 0);
+			case GLFW.GLFW_KEY_RIGHT -> grid.moveFocus(1, 0);
+			case GLFW.GLFW_KEY_UP -> grid.moveFocus(0, -1);
+			case GLFW.GLFW_KEY_DOWN -> grid.moveFocus(0, 1);
+			case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER -> {
+				ModuleCard card = grid.focused();
+				if (card == null) return false;
+				if (!shift && card.module.canToggle()) card.module.toggle();
+				else if (card.hasSettings()) drawer.show(card.module);
+			}
+			default -> {
+				return false;
+			}
+		}
 		return true;
 	}
 
