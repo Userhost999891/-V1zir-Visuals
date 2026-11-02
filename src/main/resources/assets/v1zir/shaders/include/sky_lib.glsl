@@ -697,7 +697,7 @@ const float V_CIRRUS = 8.0;
 const float V_CLOUD_SHAPE = 1.0 / 7.0;
 const float V_CLOUD_DETAIL = 1.0 / 1.3;
 // Extinction (1/km) of the densest cloud.
-const float V_CLOUD_EXT = 55.0;
+const float V_CLOUD_EXT = 42.0;
 
 // Tileable 3D noise (period 1) from the CloudNoise atlas: 64 slices of 64 x 64 texels, each with a
 // wrapped border, so a lookup is two linear samples (the slices either side) blended.
@@ -777,9 +777,11 @@ float vCloudErode(float d, vec3 m, float hf, float amount, float dt) {
 	return (d - e) / (1.0 - e);
 }
 
-// Density (0..1) of a cloud level: a thin skin and then dense cloud, so outlines stay crisp.
+// Density (0..1) of a cloud level: a soft, translucent skin easing into dense cloud, so the
+// outlines stay defined without hard cut-out edges.
 float vCloudDensity(float level) {
-	return clamp(level * 3.0, 0.0, 1.0);
+	float d = clamp(level * 1.7, 0.0, 1.0);
+	return d * d * (3.0 - 2.0 * d);
 }
 
 float vHG(float mu, float g) {
@@ -812,6 +814,10 @@ vec4 vCirrus(vec3 rd, VCloudLight light, float coverage, vec2 wind) {
 // rgb = cloud colour, a = coverage of the sky behind (lay it over the sky with vOver).
 vec4 vClouds(vec3 rd, VCloudLight light, float coverage, float t, vec3 camPos, int quality) {
 	if (rd.y < -0.01 || coverage <= 0.0) return vec4(0.0);
+	// The setting maps to the sky cover on a curve: the default (0.45) gives fair-weather cumulus
+	// over about a third of the sky with plenty of blue between them, 0.8 a mostly cloudy sky and
+	// 1.0 (or rain) an overcast one.
+	coverage = pow(coverage, 2.3);
 	// Wind (km): a slow drift, and the camera moves the layer with real parallax (at half the
 	// strength, which keeps fast flight from smearing it in the cache). The billows drift a little
 	// faster than the masses, so the clouds slowly boil and change.
