@@ -21,7 +21,6 @@ public final class CloudNoise {
 	/** 8 x 8 slices of 64 x 64 texels, each with a one texel wrapped border. */
 	private static final int SIZE = 528;
 
-	private static GpuTexture texture;
 	private static GpuTextureView view;
 
 	private CloudNoise() {
@@ -30,7 +29,7 @@ public final class CloudNoise {
 	/** The noise atlas, baked the first time: call it before opening the pass that binds it (the bake is a pass of its own). */
 	public static GpuTextureView view() {
 		if (view == null) {
-			texture = RenderSystem.getDevice().createTexture("V1zir cloud noise", 15, TextureFormat.RGBA8, SIZE, SIZE, 1, 1);
+			GpuTexture texture = RenderSystem.getDevice().createTexture("V1zir cloud noise", 15, TextureFormat.RGBA8, SIZE, SIZE, 1, 1);
 			view = RenderSystem.getDevice().createTextureView(texture);
 			try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(() -> "V1zir cloud noise bake", view, OptionalInt.empty())) {
 				pass.setPipeline(V1zirPipelines.CLOUD_NOISE);
