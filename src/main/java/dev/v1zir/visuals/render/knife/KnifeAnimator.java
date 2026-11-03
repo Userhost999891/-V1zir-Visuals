@@ -18,8 +18,14 @@ public final class KnifeAnimator {
 	private static final float DEG = (float) (Math.PI / 180.0);
 	/** Fist to elbow, blocks: the elbow sits below the bottom right corner of the view, the pivot of arm swings. */
 	private static final float FOREARM = 0.62f;
+	/** The shoulder the arm swings from (view space, blocks): right of, below and a little behind the eye. */
+	private static final float SHOULDER_X = 0.32f;
+	private static final float SHOULDER_Y = -0.5f;
+	private static final float SHOULDER_Z = 0.22f;
 	/** Inspect fades out over this when an attack or a switch interrupts it, seconds. */
 	private static final float CANCEL = 0.16f;
+	/** A slash this soon after the last attack is a follow-up and comes back the other way, seconds. */
+	private static final float FOLLOW_UP = 0.7f;
 	/** A new attack cross-fades from the previous one over this, seconds. */
 	private static final float BLEND = 0.09f;
 
@@ -35,6 +41,8 @@ public final class KnifeAnimator {
 	private final Matrix4f gripToArm = new Matrix4f();
 	private final Matrix3f restTurn = new Matrix3f();
 	private final Matrix4f restTurn4 = new Matrix4f();
+	private final Matrix4f outer = new Matrix4f();
+	private final Vector3f fist = new Vector3f();
 	private final Vector3f elbow = new Vector3f();
 	private final Vector3f palm = new Vector3f();
 	private KnifeType type = KnifeType.KARAMBIT;
@@ -121,10 +129,11 @@ public final class KnifeAnimator {
 		}
 		if (inspecting() && inspectCancelAt == Float.MAX_VALUE) inspectCancelAt = clock;
 		if (heavy) {
-			attack = KnifeClips.HEAVY;
+			attack = KnifeClips.heavy(type);
 		} else {
-			// Like the slashes of a knife's primary attack: across from the right, then back from the left.
-			attack = slash ? KnifeClips.SLASH_BACK : KnifeClips.SLASH;
+			// Slashes alternate while they follow each other; after a pause the next one is the forehand again.
+			if (clock - attackAt > FOLLOW_UP) slash = false;
+			attack = KnifeClips.slash(type, slash);
 			slash = !slash;
 		}
 		attackAt = clock;
@@ -214,6 +223,21 @@ public final class KnifeAnimator {
 			.translate(gx - ex, gy - ey, gz - ez)
 			.rotate(sum[5] * DEG, fx, fy, fz)
 			.mul(restTurn4.set(restTurn));
+		// Outside that: arm and knife aimed together about the fist (a stab points the blade at the crosshair), and the
+		// whole arm swung from the shoulder behind the view (slashes sweep across it, draws rise into it).
+		grip.getTranslation(fist);
+		float sx = SHOULDER_X + offsetX;
+		float sy = SHOULDER_Y + offsetY;
+		float sz = SHOULDER_Z + offsetZ;
+		outer.translation(sx, sy, sz)
+			.rotateZ(sum[KnifeClip.SWING + 2] * DEG)
+			.rotateY(sum[KnifeClip.SWING] * DEG)
+			.rotateX(sum[KnifeClip.SWING + 1] * DEG)
+			.translate(fist.x - sx, fist.y - sy, fist.z - sz)
+			.rotateY(sum[KnifeClip.AIM] * DEG)
+			.rotateX(sum[KnifeClip.AIM + 1] * DEG)
+			.translate(-fist.x, -fist.y, -fist.z);
+		grip.mulLocal(outer);
 		// Forward grips hold the handle nearer its butt, so guard and bolster show in front of the fist.
 		float hold = type.grip == KnifeType.Grip.FORWARD ? 1.3f : 0f;
 		// The shift is in the hand's frame (a toss rises, whichever way the knife is turning), the spin about the pivot.
@@ -352,8 +376,9 @@ public final class KnifeAnimator {
 		// Reverse grip: the ring or butt on top of the fist, the blade below it curving forward and left.
 		private static final Rest REVERSE = new Rest(0.48f, -0.27f, -0.85f, -0.55f, -0.6f, -0.5f, 0.75f, -0.1f, 0.65f,
 			0.55f, -0.75f, 0.38f, -0.6f, 0.1f, -0.5f);
-		// Push dagger: the T-handle across the palm, the blade out between the fingers pointing forward and left.
-		private static final Rest PUSH = new Rest(0.45f, -0.38f, -0.86f, -0.7f, 0.2f, -0.68f, 0.1f, 0.98f, 0.1f,
+		// Push dagger: the T-handle across the palm, the blade out between the fingers pointing left and up, its flat
+		// turned to the eye.
+		private static final Rest PUSH = new Rest(0.45f, -0.4f, -0.86f, -0.75f, 0.45f, -0.48f, 0.4f, 0.85f, -0.2f,
 			0.55f, -0.75f, 0.38f, -0.5f, 0.2f, -0.6f);
 
 		static Rest of(KnifeType.Grip grip) {

@@ -7,41 +7,141 @@ package dev.v1zir.visuals.render.knife;
  * <p>
  * Channels (see {@link KnifeClip}): hand = the shoulder carrying the arm (view space, blocks: x right, y up, z towards
  * the viewer); turn = pitch about the elbow (lifts the fist), yaw about the elbow (swings it left) and the forearm's
- * roll about its own axis (shows the flats); spin and shift = the knife in the fingers about the clip's pivot (degrees
- * about the knife's axes: x along the blade, y towards the spine, z through the flat; a negative z spin tips the point
- * forward and down). Spins and part angles end on whole turns so a finished clip hands over to rest without a jump.
+ * roll about its own axis (shows the flats); swing = the whole arm swung from the shoulder behind the view (yaw left,
+ * pitch up); aim = arm and knife turned together about the fist (yaw left, pitch up); spin and shift = the knife in the
+ * fingers about the clip's pivot (degrees about the knife's axes: x along the blade, y towards the spine, z through the
+ * flat; a negative z spin tips the point forward and down). Spins and part angles end on whole turns so a finished clip
+ * hands over to rest without a jump.
+ * <p>
+ * Directions are kept consistent per knife: a knife that whirls round a finger does so the same way in its draw, its
+ * inspect and its attacks (a karambit's claw goes forward and up over the top), and every slash leads with the edge
+ * (a karambit's with the point of the claw, so the inner edge draws through).
  */
 final class KnifeClips {
 	// ------------------------------------------------------------------ attacks
+	// Slashes swing the whole arm from the shoulder diagonally across the view, edge first, fast at first and easing
+	// out, then rebound and settle; the first one after a pause always comes from the right, a quick follow-up comes
+	// back from the left. Heavy stabs drive the point at the crosshair.
 
 	/**
-	 * Primary slash: cocked up and back to the right, then the whole arm sweeps the blade down across the view to the
-	 * lower left, edge first (the edge faces down, the way the blade travels), and settles back.
+	 * Forward grips, forehand: the wrist cocks the point up as the hand rises to the right, then hand, forearm and
+	 * wrist whip the blade over the top and across to the left, edge first, fast at first and easing out; a short
+	 * rebound, then it settles.
 	 */
-	static final KnifeClip SLASH = new KnifeClip(0.85f)
-		.at(0.09f).hand(0.02f, 0.05f, 0.03f).turn(8f, -24f, 6f).spin(0f, 0f, 14f)
-		.at(0.16f).hand(-0.06f, 0.03f, -0.06f).turn(4f, 16f, 8f).spin(0f, 0f, -4f)
-		.at(0.23f).hand(-0.1f, -0.02f, -0.03f).turn(-2f, 40f, 10f).spin(0f, 0f, -14f)
-		.at(0.35f).hand(-0.08f, -0.02f, -0.02f).turn(-2f, 34f, 8f).spin(0f, 0f, -10f)
-		.at(0.58f).hand(-0.02f, 0f, 0f).turn(0f, 8f, 2f).spin(0f, 0f, -2f);
+	private static final KnifeClip SLASH = new KnifeClip(0.85f)
+		.at(0.055f).hand(0f, 0.04f, 0f).swing(-18f, 3f, 0f).aim(14f, 3f).spin(0f, 0f, 26f)
+		.at(0.1f).hand(0f, 0.06f, 0f).swing(-3f, 2f, 0f).aim(2f, 2f).spin(0f, 0f, 20f)
+		.at(0.15f).hand(0f, 0.08f, 0f).swing(14f, 1f, 0f).aim(-11f, 1f).spin(0f, 0f, 10f)
+		.at(0.2f).hand(0f, 0.1f, 0f).swing(29f, -1f, 0f).aim(-23f, 0f).spin(0f, 0f, -2f)
+		.at(0.26f).hand(0f, 0.1f, 0f).swing(38f, -3f, 0f).aim(-30f, -1f).spin(0f, 0f, -10f)
+		.at(0.34f).hand(0f, 0.08f, 0f).swing(41f, -5f, 0f).aim(-33f, -2f).spin(0f, 0f, -14f)
+		.at(0.46f).hand(0f, 0.03f, 0f).swing(25f, -6f, 0f).aim(-20f, -2f).spin(0f, 0f, -9f)
+		.at(0.62f).hand(0f, 0f, 0f).swing(6f, -2f, 0f).aim(-5f, -1f).spin(0f, 0f, -2f);
 
 	/**
-	 * The return slash: the forearm rolls the edge up while the arm swings across to the left, then the blade sweeps
-	 * back across the view to the right, edge first, and the forearm rolls back.
+	 * Forward grips, backhand: the wrist turns the knife over (edge up) as the hand cocks to the left, then the blade
+	 * sweeps back up across the view to the right, edge first, and the wrist turns it back on the way to rest.
 	 */
-	static final KnifeClip SLASH_BACK = new KnifeClip(0.85f)
-		.at(0.09f).hand(-0.06f, 0.0f, -0.02f).turn(4f, 34f, 70f).spin(0f, 0f, -8f)
-		.at(0.16f).hand(0.0f, 0.03f, -0.06f).turn(6f, 4f, 80f).spin(0f, 0f, 4f)
-		.at(0.23f).hand(0.05f, 0.05f, -0.03f).turn(8f, -24f, 82f).spin(0f, 0f, 12f)
-		.at(0.35f).hand(0.04f, 0.04f, -0.02f).turn(6f, -20f, 70f).spin(0f, 0f, 8f)
-		.at(0.6f).hand(0.01f, 0.01f, 0f).turn(1f, -4f, 14f).spin(0f, 0f, 2f);
+	private static final KnifeClip SLASH_BACK = new KnifeClip(0.85f)
+		.at(0.07f).hand(-0.02f, -0.02f, 0f).swing(24f, -3f, 0f).aim(-18f, -2f).spin(160f, 0f, 12f)
+		.at(0.11f).hand(-0.01f, -0.01f, 0f).swing(13f, -1f, 0f).aim(-10f, -1f).spin(168f, 0f, 6f)
+		.at(0.16f).hand(0f, 0.02f, 0f).swing(0f, 2f, 0f).aim(0f, 1f).spin(172f, 0f, -3f)
+		.at(0.21f).hand(0f, 0.05f, 0f).swing(-11f, 5f, 0f).aim(9f, 3f).spin(174f, 0f, -11f)
+		.at(0.27f).hand(0f, 0.07f, 0f).swing(-17f, 7f, 0f).aim(13f, 4f).spin(175f, 0f, -16f)
+		.at(0.35f).hand(0f, 0.07f, 0f).swing(-19f, 8f, 0f).aim(15f, 4f).spin(172f, 0f, -18f)
+		.at(0.5f).hand(0f, 0.03f, 0f).swing(-10f, 4f, 0f).aim(8f, 2f).spin(110f, 0f, -9f)
+		.at(0.66f).hand(0f, 0f, 0f).swing(-2f, 1f, 0f).aim(2f, 0f).spin(24f, 0f, -2f);
 
-	/** Heavy stab of a critical hit: drawn back and raised, driven deep towards the crosshair, held, withdrawn. */
-	static final KnifeClip HEAVY = new KnifeClip(1.05f)
-		.at(0.14f).hand(0.04f, 0.1f, 0.2f).turn(22f, -6f, 8f).spin(0f, 0f, 18f)
-		.at(0.26f).hand(-0.24f, 0.06f, -0.5f).turn(6f, 16f, 0f).spin(0f, 0f, -6f)
-		.at(0.36f).hand(-0.23f, 0.05f, -0.47f).turn(5f, 15f, 0f).spin(0f, 0f, -5f)
-		.at(0.52f).hand(-0.12f, 0f, -0.2f).turn(4f, 8f, 0f).spin(0f, 0f, -2f);
+	/**
+	 * Forward grips, heavy stab: drawn back and up beside the head, then driven point first down at the crosshair,
+	 * held there a moment, withdrawn.
+	 */
+	private static final KnifeClip HEAVY = new KnifeClip(1.0f)
+		.at(0.15f).hand(0.06f, 0.05f, 0.22f).swing(-8f, 10f, 0f).aim(-38f, 18f).spin(0f, 0f, 10f)
+		.at(0.21f).hand(0.03f, 0.04f, 0.07f).swing(-3f, 5f, 0f).aim(-40f, 7f).spin(0f, 0f, 4f)
+		.at(0.26f).hand(-0.04f, 0.02f, -0.3f).swing(4f, -1f, 0f).aim(-42f, -3f).spin(0f, 0f, -2f)
+		.at(0.37f).hand(-0.05f, 0.01f, -0.33f).swing(5f, -2f, 0f).aim(-43f, -4f).spin(0f, 0f, -3f)
+		.at(0.56f).hand(-0.02f, 0f, -0.12f).swing(2f, -1f, 0f).aim(-22f, -2f).spin(0f, 0f, -1f)
+		.at(0.76f).hand(0f, 0f, 0f).swing(0f, 0f, 0f).aim(-4f, 0f).spin(0f, 0f, 0f);
+
+	/**
+	 * Karambit and talon, forehand: a hooking rake from the right across to the lower left, the claw leading so its
+	 * point bites first and the inner edge draws through.
+	 */
+	private static final KnifeClip SLASH_RING = new KnifeClip(0.85f)
+		.at(0.055f).hand(0f, 0.05f, 0f).swing(-18f, 4f, 0f).aim(14f, 4f).spin(0f, 0f, 14f)
+		.at(0.1f).hand(0f, 0.07f, 0f).swing(-3f, 3f, 0f).aim(2f, 3f).spin(0f, 0f, 8f)
+		.at(0.15f).hand(0f, 0.09f, 0f).swing(14f, 1f, 0f).aim(-11f, 1f).spin(0f, 0f, 0f)
+		.at(0.2f).hand(0f, 0.1f, 0f).swing(29f, -1f, 0f).aim(-23f, 0f).spin(0f, 0f, -8f)
+		.at(0.26f).hand(0f, 0.1f, 0f).swing(38f, -3f, 0f).aim(-30f, -1f).spin(0f, 0f, -14f)
+		.at(0.34f).hand(0f, 0.08f, 0f).swing(41f, -5f, 0f).aim(-33f, -2f).spin(0f, 0f, -17f)
+		.at(0.46f).hand(0f, 0.03f, 0f).swing(25f, -6f, 0f).aim(-20f, -2f).spin(0f, 0f, -10f)
+		.at(0.62f).hand(0f, 0f, 0f).swing(6f, -2f, 0f).aim(-5f, -1f).spin(0f, 0f, -2f);
+
+	/**
+	 * Karambit and talon, backhand: flicked a third of a turn round the finger in its ring so the claw stands up and
+	 * points right, raked back across to the right, then let run on round the finger to rest.
+	 */
+	private static final KnifeClip SLASH_RING_BACK = new KnifeClip(0.85f, -5.45f, 0.1f)
+		.at(0.07f).hand(-0.02f, 0.02f, 0f).swing(20f, -2f, 0f).aim(-15f, -1f).spin(0f, 0f, -100f)
+		.at(0.11f).hand(-0.01f, 0.03f, 0f).swing(10f, 0f, 0f).aim(-8f, 0f).spin(0f, 0f, -110f)
+		.at(0.16f).hand(0f, 0.05f, 0f).swing(-1f, 2f, 0f).aim(1f, 1f).spin(0f, 0f, -118f)
+		.at(0.21f).hand(0f, 0.06f, 0f).swing(-9f, 3f, 0f).aim(7f, 2f).spin(0f, 0f, -125f)
+		.at(0.27f).hand(0f, 0.06f, 0f).swing(-13f, 4f, 0f).aim(10f, 2f).spin(0f, 0f, -130f)
+		.at(0.35f).hand(0f, 0.05f, 0f).swing(-14f, 4f, 0f).aim(11f, 2f).spin(0f, 0f, -134f)
+		.at(0.5f).hand(0f, 0.02f, 0f).swing(-7f, 2f, 0f).aim(5f, 1f).spin(0f, 0f, -250f)
+		.at(0.66f).hand(0f, 0f, 0f).swing(-1f, 0f, 0f).aim(1f, 0f).spin(0f, 0f, -345f)
+		.at(0.85f).swing(0f, 0f, 0f).aim(0f, 0f).spin(0f, 0f, -360f).hold();
+
+	/** Karambit and talon, heavy: raised high, then the claw hooked down and forward through the crosshair. */
+	private static final KnifeClip HEAVY_RING = new KnifeClip(1.0f)
+		.at(0.16f).hand(0.02f, 0.14f, 0.12f).swing(-4f, 16f, 0f).aim(-20f, 10f).spin(0f, 0f, 20f)
+		.at(0.22f).hand(0f, 0.1f, 0f).swing(2f, 8f, 0f).aim(-24f, 0f).spin(0f, 0f, 6f)
+		.at(0.28f).hand(-0.06f, -0.02f, -0.26f).swing(8f, -6f, 0f).aim(-28f, -12f).spin(0f, 0f, -14f)
+		.at(0.37f).hand(-0.06f, -0.03f, -0.28f).swing(8f, -7f, 0f).aim(-28f, -13f).spin(0f, 0f, -16f)
+		.at(0.56f).hand(-0.02f, -0.01f, -0.1f).swing(3f, -3f, 0f).aim(-12f, -5f).spin(0f, 0f, -6f)
+		.at(0.76f).hand(0f, 0f, 0f).swing(1f, 0f, 0f).aim(-2f, 0f).spin(0f, 0f, 0f);
+
+	/** Push dagger: a jab that rakes the blade across to the left. */
+	private static final KnifeClip SLASH_PUSH = new KnifeClip(0.7f)
+		.at(0.08f).hand(0.04f, 0.03f, 0.1f).swing(-10f, 4f, 0f).aim(-20f, 4f)
+		.at(0.15f).hand(-0.04f, 0.02f, -0.24f).swing(10f, 0f, 0f).aim(-26f, 0f)
+		.at(0.2f).hand(-0.05f, 0.01f, -0.25f).swing(20f, -3f, 0f).aim(-24f, -2f)
+		.at(0.28f).hand(-0.03f, 0f, -0.16f).swing(22f, -5f, 0f).aim(-18f, -2f)
+		.at(0.46f).hand(0f, 0f, -0.03f).swing(8f, -3f, 0f).aim(-5f, 0f);
+
+	/** Push dagger: a hooked jab that rakes the blade back to the right. */
+	private static final KnifeClip SLASH_PUSH_BACK = new KnifeClip(0.7f)
+		.at(0.08f).hand(-0.02f, 0.03f, 0.08f).swing(16f, 3f, 0f).aim(-30f, 4f).turn(0f, 0f, 30f)
+		.at(0.15f).hand(-0.03f, 0.03f, -0.22f).swing(0f, 2f, 0f).aim(-32f, 2f)
+		.at(0.2f).hand(-0.03f, 0.02f, -0.24f).swing(-10f, 1f, 0f).aim(-30f, 0f)
+		.at(0.28f).hand(-0.02f, 0.01f, -0.16f).swing(-12f, 0f, 0f).aim(-22f, 0f).turn(0f, 0f, 24f)
+		.at(0.46f).hand(0f, 0f, -0.03f).swing(-4f, 0f, 0f).aim(-6f, 0f).turn(0f, 0f, 6f);
+
+	/** Push dagger, heavy: wound back, then a straight punch that drives the blade at the crosshair. */
+	private static final KnifeClip HEAVY_PUSH = new KnifeClip(0.95f)
+		.at(0.15f).hand(0.06f, 0.02f, 0.22f).swing(-8f, 4f, 0f).aim(-30f, 8f)
+		.at(0.21f).hand(0.02f, 0.02f, 0.05f).swing(-2f, 2f, 0f).aim(-36f, 2f)
+		.at(0.26f).hand(-0.08f, 0.03f, -0.34f).swing(6f, 0f, 0f).aim(-40f, -2f)
+		.at(0.35f).hand(-0.08f, 0.03f, -0.36f).swing(6f, -1f, 0f).aim(-40f, -3f)
+		.at(0.54f).hand(-0.02f, 0.01f, -0.1f).swing(2f, 0f, 0f).aim(-14f, -1f)
+		.at(0.74f).hand(0f, 0f, 0f).swing(0f, 0f, 0f).aim(-2f, 0f);
+
+	static KnifeClip slash(KnifeType type, boolean back) {
+		return switch (type.grip) {
+			case REVERSE -> back ? SLASH_RING_BACK : SLASH_RING;
+			case PUSH -> back ? SLASH_PUSH_BACK : SLASH_PUSH;
+			case FORWARD -> back ? SLASH_BACK : SLASH;
+		};
+	}
+
+	static KnifeClip heavy(KnifeType type) {
+		return switch (type.grip) {
+			case REVERSE -> HEAVY_RING;
+			case PUSH -> HEAVY_PUSH;
+			case FORWARD -> HEAVY;
+		};
+	}
 
 	// ------------------------------------------------------------------ deploys
 
@@ -52,12 +152,22 @@ final class KnifeClips {
 		.at(0.48f).hand(-0.01f, 0.03f, -0.01f).turn(6f, 3f, 8f).spin(0f, 0f, -8f)
 		.at(0.66f).hand(0f, 0f, 0f).turn(-1f, 0f, -1f).spin(0f, 0f, 2f);
 
-	/** Karambit and talon: rising while the knife whirls once round the finger in its ring. */
+	/**
+	 * Karambit and talon: rising while the knife whirls once round the finger in its ring, the claw going forward and
+	 * up over the top the same way as the spins of the inspect.
+	 */
 	private static final KnifeClip DRAW_RING = new KnifeClip(0.96f, -5.5f, 0.1f)
-		.at(0f).hand(0.08f, -0.4f, 0.08f).turn(-30f, -8f, 30f).spin(0f, 0f, -360f)
-		.at(0.24f).hand(0.03f, -0.12f, 0.02f).turn(-8f, -2f, 8f).spin(0f, 0f, -120f)
-		.at(0.52f).hand(-0.01f, 0.02f, 0f).turn(4f, 1f, -4f).spin(0f, 0f, 10f)
+		.at(0f).hand(0.08f, -0.4f, 0.08f).turn(-30f, -8f, 30f).spin(0f, 0f, 360f)
+		.at(0.24f).hand(0.03f, -0.12f, 0.02f).turn(-8f, -2f, 8f).spin(0f, 0f, 120f)
+		.at(0.52f).hand(-0.01f, 0.02f, 0f).turn(4f, 1f, -4f).spin(0f, 0f, -10f)
 		.at(0.7f).hand(0f, 0f, 0f).turn(0f, 0f, 0f).spin(0f, 0f, 0f);
+
+	/** Skeleton: rising with the knife whirled once round the finger in the ring at its butt, like its inspect. */
+	private static final KnifeClip DRAW_SKELETON = new KnifeClip(0.96f, -6.5f, 0f)
+		.at(0f).hand(0.08f, -0.4f, 0.08f).turn(-35f, -10f, -40f).spin(0f, 0f, 360f)
+		.at(0.24f).hand(0.04f, -0.12f, 0.03f).turn(-10f, -4f, -10f).spin(0f, 0f, 110f)
+		.at(0.5f).hand(-0.01f, 0.03f, -0.01f).turn(6f, 3f, 8f).spin(0f, 0f, -8f)
+		.at(0.68f).hand(0f, 0f, 0f).turn(-1f, 0f, -1f).spin(0f, 0f, 2f);
 
 	/** Balisong: comes up closed, the bite handle swings round, then the blade flies open. */
 	private static final KnifeClip DRAW_BALISONG = new KnifeClip(0.96f)
@@ -89,11 +199,11 @@ final class KnifeClips {
 	 */
 	private static KnifeClip present(KnifeClip clip, float t, float spinX, float spinZ, float partA, float partB) {
 		return clip
-			.at(t).hand(-0.1f, 0.12f, 0f).turn(15f, 10f, -40f).spin(spinX, 0f, spinZ).shift(0f, 0f, 0f).parts(partA, partB)
-			.at(t + 0.8f).hand(-0.11f, 0.13f, -0.01f).turn(17f, 11f, -46f)
-			.at(t + 1.4f).turn(17f, 11f, -40f).spin(spinX - 180f, 0f, spinZ)
-			.at(t + 2.1f).hand(-0.11f, 0.12f, -0.01f).turn(18f, 12f, -34f)
-			.at(t + 2.6f).hand(-0.03f, 0.03f, 0f).turn(4f, 3f, -8f).spin(spinX - 330f, 0f, spinZ)
+			.at(t).hand(-0.1f, 0.07f, 0f).turn(10f, 10f, -40f).spin(spinX, 0f, spinZ).shift(0f, 0f, 0f).parts(partA, partB)
+			.at(t + 0.8f).hand(-0.11f, 0.08f, -0.01f).turn(12f, 11f, -46f)
+			.at(t + 1.4f).turn(12f, 11f, -40f).spin(spinX - 180f, 0f, spinZ)
+			.at(t + 2.1f).hand(-0.11f, 0.07f, -0.01f).turn(13f, 12f, -34f)
+			.at(t + 2.6f).hand(-0.03f, 0.02f, 0f).turn(3f, 3f, -8f).spin(spinX - 330f, 0f, spinZ)
 			.at(t + 3.1f).hand(0f, 0f, 0f).turn(0f, 0f, 0f).spin(spinX - 360f, 0f, spinZ).hold();
 	}
 
@@ -108,12 +218,12 @@ final class KnifeClips {
 			.at(1.0f).hand(-0.21f, 0.08f, -0.4f).spin(0f, 0f, -360f)
 			.at(1.4f).hand(-0.2f, 0.06f, -0.4f).spin(0f, 0f, -720f)
 			.at(1.8f).hand(-0.21f, 0.08f, -0.38f).spin(0f, 0f, -1050f)
-			.at(1.95f).hand(-0.14f, 0.1f, -0.12f).spin(0f, 0f, -1080f).shift(0f, 0f, 0f)
-			.at(2.4f).hand(-0.1f, 0.12f, 0f).turn(15f, 10f, -80f)
-			.at(3.1f).hand(-0.11f, 0.13f, -0.01f).turn(17f, 11f, -88f)
-			.at(3.65f).turn(17f, 11f, -160f)
-			.at(4.2f).turn(18f, 12f, -166f)
-			.at(4.6f).hand(-0.03f, 0.03f, 0f).turn(4f, 3f, -30f)
+			.at(1.95f).hand(-0.14f, 0.08f, -0.12f).spin(0f, 0f, -1080f).shift(0f, 0f, 0f)
+			.at(2.4f).hand(-0.1f, 0.07f, 0f).turn(9f, 10f, -80f)
+			.at(3.1f).hand(-0.11f, 0.08f, -0.01f).turn(11f, 11f, -88f)
+			.at(3.65f).hand(-0.16f, 0.02f, -0.02f).turn(6f, 11f, -150f)
+			.at(4.2f).hand(-0.17f, 0.02f, -0.02f).turn(7f, 12f, -156f)
+			.at(4.6f).hand(-0.04f, 0.01f, 0f).turn(2f, 3f, -30f)
 			.at(5.0f).hand(0f, 0f, 0f).turn(0f, 0f, 0f).spin(0f, 0f, -1080f).hold();
 	}
 
@@ -122,11 +232,11 @@ final class KnifeClips {
 
 	/** Skeleton: spun once round the finger in the ring at its butt, in front of the fist, then shown. */
 	private static final KnifeClip INSPECT_SKELETON = present(new KnifeClip(5.0f, -6.5f, 0f)
-		.at(0.35f).hand(-0.1f, 0.12f, 0f).turn(12f, 8f, -30f).shift(0f, 0f, 2.5f)
-		.at(0.7f).spin(0f, 0f, -120f)
-		.at(1.1f).spin(0f, 0f, -360f)
-		.at(1.5f).spin(0f, 0f, -600f)
-		.at(1.8f).spin(0f, 0f, -720f).shift(0f, 0f, 0f), 2.1f, 0f, -720f, 0f, 0f);
+		.at(0.35f).hand(-0.12f, 0.1f, -0.1f).turn(10f, 8f, -30f).shift(0f, 0f, 2.5f)
+		.at(0.6f).hand(-0.2f, 0.16f, -0.4f).spin(0f, 0f, -90f)
+		.at(1.0f).hand(-0.21f, 0.17f, -0.42f).spin(0f, 0f, -360f)
+		.at(1.4f).hand(-0.2f, 0.16f, -0.42f).spin(0f, 0f, -630f)
+		.at(1.75f).hand(-0.15f, 0.1f, -0.15f).spin(0f, 0f, -720f).shift(0f, 0f, 0f), 2.1f, 0f, -720f, 0f, 0f);
 
 	/** Bayonet: tossed up end over end in front of the view, caught, then both flats shown. */
 	private static final KnifeClip INSPECT_BAYONET = present(new KnifeClip(5.2f, 4f, 0f)
@@ -205,7 +315,8 @@ final class KnifeClips {
 
 	static KnifeClip draw(KnifeType type) {
 		return switch (type) {
-			case KARAMBIT, TALON, SKELETON -> DRAW_RING;
+			case KARAMBIT, TALON -> DRAW_RING;
+			case SKELETON -> DRAW_SKELETON;
 			case BUTTERFLY -> DRAW_BALISONG;
 			case FLIP, FALCHION, STILETTO -> DRAW_FOLDER;
 			case PUSH_DAGGER -> DRAW_PUSH;

@@ -4,12 +4,12 @@ import java.util.Arrays;
 
 /**
  * One first-person animation: keyframes of offsets from the resting pose, played additively. Channels are the
- * hand's position and turn about the grip (view space: blocks, and degrees of pitch, yaw and roll in the screen plane),
- * the knife's shift and spin relative to the hand (centimetres and degrees about the knife's own axes: x along the
- * blade, y towards the spine, z through the flat; the spin about the clip's pivot) and the angles of the moving parts.
- * Keys are joined by cubic Hermite curves whose tangents
- * follow the neighbouring keys (Catmull-Rom over uneven spacing), so motion flows through every key; the clip eases
- * in from and out to its first and last key.
+ * hand's position and turn (view space: blocks; degrees of pitch and yaw about the elbow and roll of the forearm), the
+ * arm's swing from the shoulder and its aim about the fist (degrees), the knife's shift and spin relative to the hand
+ * (centimetres and degrees about the knife's own axes: x along the blade, y towards the spine, z through the flat; the
+ * spin about the clip's pivot) and the angles of the moving parts. Keys are joined by cubic Hermite curves whose
+ * tangents follow the neighbouring keys (Catmull-Rom over uneven spacing), so motion flows through every key; the clip
+ * eases in from and out to its first and last key.
  * <p>
  * Built with a small fluent API: at(time) starts a key as a copy of the previous one and the setters change it.
  * Unless a clip says otherwise, it starts and ends at rest (all zero).
@@ -21,7 +21,9 @@ final class KnifeClip {
 	static final int KNIFE_RX = 9;
 	static final int PART_A = 12;
 	static final int PART_B = 13;
-	static final int CHANNELS = 14;
+	static final int SWING = 14;
+	static final int AIM = 17;
+	static final int CHANNELS = 19;
 
 	final float duration;
 	/** The knife spins about this point (centimetres, knife space): the grip, a finger ring, the balance point. */
@@ -84,6 +86,25 @@ final class KnifeClip {
 	/** Knife rotation relative to the hand about the pivot, degrees about the knife's axes. */
 	KnifeClip spin(float rx, float ry, float rz) {
 		return set(KNIFE_RX, rx, ry, rz);
+	}
+
+	/**
+	 * The whole arm swung from the shoulder (behind and below the view), degrees: yaw to the left about the vertical,
+	 * pitch up, roll of the swing plane anticlockwise on screen. Slashes sweep with it, draws rise with it.
+	 */
+	KnifeClip swing(float yaw, float pitch, float roll) {
+		return set(SWING, yaw, pitch, roll);
+	}
+
+	/**
+	 * Arm and knife turned together about the fist, degrees in view space: yaw to the left about the vertical, pitch up.
+	 * Points the knife (forward for a stab or a slash) with the forearm following, as a wrist and elbow would.
+	 */
+	KnifeClip aim(float yaw, float pitch) {
+		float[] k = keys[count - 1];
+		k[AIM] = yaw;
+		k[AIM + 1] = pitch;
+		return this;
 	}
 
 	/** Angles of the moving parts (a folding blade; a balisong's blade and bite handle), degrees. */
