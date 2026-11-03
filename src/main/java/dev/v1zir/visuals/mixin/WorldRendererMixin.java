@@ -1,0 +1,66 @@
+package dev.v1zir.visuals.mixin;
+
+import com.llamalad7.mixinextras.sugar.Local;
+import dev.v1zir.visuals.module.impl.world.BlockHighlightModule;
+import dev.v1zir.visuals.module.impl.world.BreakEffectsModule;
+import dev.v1zir.visuals.render.Reflections;
+import dev.v1zir.visuals.render.sky.SkyRenderer;
+import dev.v1zir.visuals.render.world.WorldEffectRenderer;
+import net.minecraft.client.render.RenderTickCounter;
+import net.minecraft.client.render.WorldRenderer;
+import org.joml.Matrix4f;
+import org.joml.Vector4f;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+@Mixin(WorldRenderer.class)
+public abstract class WorldRendererMixin {
+	/**
+	 * Captures the view and projection matrices of the frame (shader sky and 3D effects). The
+	 * second Matrix4f argument is the projection the world is drawn with, which includes view
+	 * bobbing, the hurt tilt and nausea; the third is a plain one vanilla only uses for frustum
+	 * culling, so a sky drawn with it would swim against the terrain while walking.
+	 */
+	@Inject(method = "render", at = @At("HEAD"))
+	private void v1zir$captureMatrices(CallbackInfo ci,
+									   @Local(argsOnly = true, ordinal = 0) Matrix4f positionMatrix,
+									   @Local(argsOnly = true, ordinal = 1) Matrix4f projectionMatrix) {
+		SkyRenderer.captureMatrices(positionMatrix, projectionMatrix);
+		WorldEffectRenderer.captureMatrices(positionMatrix, projectionMatrix);
+	}
+
+	/** Reflections reconstruct positions with the same matrices and fall back to the fog colour (the Vector4f argument). */
+	@Inject(method = "render", at = @At("HEAD"))
+	private void v1zir$captureReflections(CallbackInfo ci,
+										  @Local(argsOnly = true, ordinal = 0) Matrix4f positionMatrix,
+										  @Local(argsOnly = true, ordinal = 1) Matrix4f projectionMatrix,
+										  @Local(argsOnly = true) Vector4f fogColor) {
+		Reflections.captureFrame(positionMatrix, projectionMatrix, fogColor);
+	}
+
+	/** The world is fully rendered: reflections and wetness first, then the 3D effects on top, depth tested. */
+	@Inject(method = "render", at = @At("TAIL"))
+	private void v1zir$renderEffects(CallbackInfo ci, @Local(argsOnly = true) RenderTickCounter tickCounter) {
+		float tickDelta = tickCounter.getTickProgress(false);
+		Reflections.render(tickDelta);
+		WorldEffectRenderer.render(tickDelta);
+	}
+
+	@Inject(method = "renderClouds", at = @At("HEAD"), cancellable = true)
+	private void v1zir$renderClouds(CallbackInfo ci) {
+		if (SkyRenderer.active() && SkyRenderer.hideVanillaClouds()) ci.cancel();
+	}
+
+	/** Block Highlight draws its own outline; it is only told here that vanilla wanted one this frame. */
+	@Inject(method = "drawBlockOutline", at = @At("HEAD"), cancellable = true)
+	private void v1zir$blockOutline(CallbackInfo ci) {
+		if (BlockHighlightModule.replacesOutline()) ci.cancel();
+	}
+
+	@Inject(method = "renderBlockDamage", at = @At("HEAD"), cancellable = true)
+	private void v1zir$blockDamage(CallbackInfo ci) {
+		if (BreakEffectsModule.hidesCracks()) ci.cancel();
+	}
+}
