@@ -24,9 +24,9 @@ final class KnifeClips {
 	// back from the left. Heavy stabs drive the point at the crosshair.
 
 	/**
-	 * Forward grips, forehand: the wrist cocks the point up as the hand rises to the right, then hand, forearm and
-	 * wrist whip the blade over the top and across to the left, edge first, fast at first and easing out; a short
-	 * rebound, then it settles.
+	 * Forward grips, forehand: the hand cocks up to the right with the point raised, then the arm swings the blade
+	 * diagonally down across the view through the crosshair to the lower left, edge first, fast at first and easing
+	 * out; a short rebound, then it settles.
 	 */
 	private static final KnifeClip SLASH = new KnifeClip(0.85f)
 		.at(0.055f).hand(0f, 0.04f, 0f).swing(-18f, 3f, 0f).aim(14f, 3f).spin(0f, 0f, 26f)
