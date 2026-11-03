@@ -173,8 +173,14 @@ public final class KnifeAnimator {
 		}
 		if (attack != null) {
 			float since = clock - attackAt;
-			if (since < attack.duration) add(attack, since, previous != null ? smooth((clock - previousEnd) / BLEND) : 1f);
-			else attack = null;
+			if (since < attack.duration) {
+				add(attack, since, previous != null ? smooth((clock - previousEnd) / BLEND) : 1f);
+				// A karambit's attacks turn it about the finger in its ring, like its draw and inspect.
+				pivotX = attack.pivotX;
+				pivotY = attack.pivotY;
+			} else {
+				attack = null;
+			}
 		}
 		// Breathing, and the knife trailing the camera as it turns (springs, so it settles without a jolt).
 		float breath = (float) Math.sin(clock * 1.7f);
