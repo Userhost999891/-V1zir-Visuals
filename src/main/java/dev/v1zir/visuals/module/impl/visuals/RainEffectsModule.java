@@ -20,27 +20,23 @@ import net.minecraft.world.biome.Biome;
 
 /**
  * While it rains, surfaces under the open sky soak through: they darken, gain a glossy sheen and
- * weak reflections, and raindrops ring on water (render/Reflections). The wetness builds up over the
- * rain and dries slowly after; nothing is drawn while everything is dry.
+ * weak reflections, and puddles collect on open flat ground, more of them the longer it rains, each a
+ * dark mirror with raindrops ringing on it (render/Reflections). The wetness builds up over the rain
+ * and dries slowly after, the puddles shrinking with it; nothing is drawn while everything is dry.
  * <p>
- * Jumping or landing on wet ground in the open (or in shallow water) splashes as if into a puddle:
- * a dark glossy patch of water appears underfoot for a moment, ripple rings spread from it and
- * droplets fly up and out, bigger after a fall.
+ * Jumping or landing on wet ground in the open (or in shallow water) splashes: ripples run out over
+ * the water underfoot and droplets fly up and out, bigger after a fall.
  */
 public final class RainEffectsModule extends Module implements WorldEffect {
 	private static final float TICK = 0.05f;
 	private static final float SOAK_SECONDS = 20f;
 	private static final float DRY_SECONDS = 60f;
-	private static final float RING_SECONDS = 0.6f;
-	/** The puddle patch holds, then fades out by the end of the splash. */
-	private static final float PATCH_HOLD = 0.45f;
-	private static final float SPLASH_SECONDS = 1.0f;
+	/** The ripples run out and settle over this long; droplets land well before. */
+	private static final float SPLASH_SECONDS = 1.4f;
+	private static final float DROP_SECONDS = 1.0f;
 	private static final float GRAVITY = 12f;
-	private static final int SEGMENTS = 40;
-	private static final int PATCH_SEGMENTS = 28;
-	private static final int PUDDLE_COLOR = 0x0E1A22;
-	private static final int SHEEN_COLOR = 0xB4D2E6;
-	private static final int WATER_COLOR = 0xFFA8CCE0;
+	private static final int RIPPLE_LIGHT = 0xE8F4FC;
+	private static final int RIPPLE_SHADE = 0x0A1620;
 	private static final int DROP_COLOR = 0xFFE8F4FC;
 
 	public final NumberSetting wetness = add(new NumberSetting("Wetness", 1.0, 0.1, 1.5, 0.05));
@@ -51,8 +47,6 @@ public final class RainEffectsModule extends Module implements WorldEffect {
 	private final BlockPos.Mutable pos = new BlockPos.Mutable();
 	/** Reused slots, oldest overwritten first: splashing allocates nothing. */
 	private final Splash[] splashList = {new Splash(), new Splash(), new Splash(), new Splash(), new Splash(), new Splash()};
-	private final Draw3D.Wave ringColor = new Draw3D.Wave();
-	private final Draw3D.Wave rimColor = new Draw3D.Wave();
 	private int nextSplash;
 	private boolean wasOnGround = true;
 	private double airTop;
@@ -112,7 +106,7 @@ public final class RainEffectsModule extends Module implements WorldEffect {
 		size *= splashSize.f();
 		Splash s = splashList[nextSplash];
 		nextSplash = (nextSplash + 1) % splashList.length;
-		s.set(x, y + 0.015, z, size, System.nanoTime(), water);
+		s.set(x, y + 0.015, z, size, System.nanoTime());
 		if (splashSound.on()) {
 			world.playSoundClient(x, y, z, SoundEvents.ENTITY_PLAYER_SPLASH, SoundCategory.PLAYERS, 0.05f + 0.05f * size, 1.35f + hash(s.seed, 0, 0) * 0.3f, false);
 		}
@@ -130,69 +124,19 @@ public final class RainEffectsModule extends Module implements WorldEffect {
 				s.live = false;
 				continue;
 			}
-			if (!s.inWater) patch(water, glow, s, age);
-			ring(water, glow, s, age, 1f);
-			ring(water, glow, s, age - 0.12f, 0.65f);
-			ring(water, glow, s, age - 0.24f, 0.4f);
-			drops(water, glow, s, age);
+			// The ripples settle by themselves; the last moments only fade what is left.
+			float p = age / SPLASH_SECONDS;
+			int alpha = Math.round(255f * (1f - Anim.easeInOutCubic(Math.max(0f, (p - 0.75f) / 0.25f))));
+			Draw3D.ripple(glow, water, s.x, s.y, s.z, 1.4 * s.size, p, 0.15f, ColorUtil.withAlpha(RIPPLE_LIGHT, alpha),
+				ColorUtil.withAlpha(RIPPLE_SHADE, alpha));
+			if (age < DROP_SECONDS) drops(water, glow, s, age);
 		}
-	}
-
-	/**
-	 * The puddle the feet land in: a dark patch of water with a slightly irregular edge, a glossy
-	 * sheen towards its rim, spreading fast and drying away after the ripples.
-	 */
-	private static void patch(WorldEffectRenderer.Mesh water, WorldEffectRenderer.Mesh glow, Splash s, float age) {
-		float fade = age < PATCH_HOLD ? 1f : 1f - Anim.easeInOutCubic((age - PATCH_HOLD) / (SPLASH_SECONDS - PATCH_HOLD));
-		double radius = (0.3 + 0.25 * Anim.easeOutCubic(Math.min(age / 0.15f, 1f))) * s.size;
-		float phase = hash(s.seed, 0, 4) * 6.283f;
-		int dark = ColorUtil.withAlpha(PUDDLE_COLOR, Math.round(150f * fade));
-		int sheenIn = ColorUtil.withAlpha(SHEEN_COLOR, Math.round(12f * fade));
-		int sheenRim = ColorUtil.withAlpha(SHEEN_COLOR, Math.round(70f * fade));
-		for (int i = 0; i < PATCH_SEGMENTS; i++) {
-			double a0 = Math.PI * 2 * i / PATCH_SEGMENTS;
-			double a1 = Math.PI * 2 * (i + 1) / PATCH_SEGMENTS;
-			double r0 = radius * (1.0 + 0.14 * Math.sin(3 * a0 + phase) + 0.07 * Math.sin(5 * a0 - phase));
-			double r1 = radius * (1.0 + 0.14 * Math.sin(3 * a1 + phase) + 0.07 * Math.sin(5 * a1 - phase));
-			double c0 = Math.cos(a0), s0 = Math.sin(a0), c1 = Math.cos(a1), s1 = Math.sin(a1);
-			wedge(water, s, c0, s0, c1, s1, r0, r1, dark, dark);
-			wedge(glow, s, c0, s0, c1, s1, r0, r1, sheenIn, sheenRim);
-		}
-	}
-
-	/**
-	 * One slice of a flat disc: solid inside 80% of its radius, fading out to the edge. U = 3 selects
-	 * plain quads in world_effect.fsh, so the vertex alpha alone draws the soft edge.
-	 */
-	private static void wedge(WorldEffectRenderer.Mesh mesh, Splash s, double c0, double s0, double c1, double s1,
-							  double r0, double r1, int center, int rim) {
-		double i0 = r0 * 0.8;
-		double i1 = r1 * 0.8;
-		int clear = rim & 0xFFFFFF;
-		mesh.vertex(s.x, s.y, s.z, 3f, 0f, center);
-		mesh.vertex(s.x + c0 * i0, s.y, s.z + s0 * i0, 3f, 0f, rim);
-		mesh.vertex(s.x + c1 * i1, s.y, s.z + s1 * i1, 3f, 0f, rim);
-		mesh.vertex(s.x, s.y, s.z, 3f, 0f, center);
-		mesh.vertex(s.x + c0 * i0, s.y, s.z + s0 * i0, 3f, 0f, rim);
-		mesh.vertex(s.x + c0 * r0, s.y, s.z + s0 * r0, 3f, 0f, clear);
-		mesh.vertex(s.x + c1 * r1, s.y, s.z + s1 * r1, 3f, 0f, clear);
-		mesh.vertex(s.x + c1 * i1, s.y, s.z + s1 * i1, 3f, 0f, rim);
-	}
-
-	/** A ripple spreading on the ground: a water-coloured band with a bright, thin rim. */
-	private void ring(WorldEffectRenderer.Mesh water, WorldEffectRenderer.Mesh glow, Splash s, float age, float scale) {
-		if (age <= 0f || age >= RING_SECONDS) return;
-		float p = age / RING_SECONDS;
-		float fade = (1f - p) * (1f - p);
-		double r = (0.25 + Anim.easeOutCubic(p) * 1.0) * s.size * scale;
-		Draw3D.flatRing(water, s.x, s.y + 0.005, s.z, r, 0.09 * s.size * scale, SEGMENTS, ringColor.set(WATER_COLOR, WATER_COLOR, 0f, 0.55f * fade, SEGMENTS));
-		Draw3D.flatRing(glow, s.x, s.y + 0.01, s.z, r + 0.03 * s.size, 0.03, SEGMENTS, rimColor.set(DROP_COLOR, DROP_COLOR, 0f, 0.8f * fade, SEGMENTS));
 	}
 
 	/** Droplets thrown up and out, each a streak along its flight with a glint at its head, gone once back down. */
 	private static void drops(WorldEffectRenderer.Mesh mesh, WorldEffectRenderer.Mesh glow, Splash s, float age) {
 		int count = 10 + Math.round(10f * s.size);
-		int alpha = Math.round(235f * (1f - age / SPLASH_SECONDS));
+		int alpha = Math.round(235f * (1f - age / DROP_SECONDS));
 		int head = ColorUtil.withAlpha(DROP_COLOR, alpha);
 		int tail = ColorUtil.withAlpha(DROP_COLOR, alpha / 5);
 		int glint = ColorUtil.withAlpha(DROP_COLOR, alpha / 2);
@@ -253,17 +197,15 @@ public final class RainEffectsModule extends Module implements WorldEffect {
 		float size;
 		long born;
 		int seed;
-		boolean inWater;
 		boolean live;
 
-		void set(double x, double y, double z, float size, long born, boolean inWater) {
+		void set(double x, double y, double z, float size, long born) {
 			this.x = x;
 			this.y = y;
 			this.z = z;
 			this.size = size;
 			this.born = born;
 			this.seed = (int) (born ^ born >>> 32);
-			this.inWater = inWater;
 			this.live = true;
 		}
 	}

@@ -459,6 +459,19 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.takeScreenshot("hud-effects");
 		bench(context, "world-hud-effects");
 
+		// Jump Circles in the Water style, looking down at the ripples while they spread and settle.
+		context.runOnClient(client -> ModuleManager.get(JumpCirclesModule.class).style.set("Water"));
+		look(singleplayer, 0, 50);
+		context.waitTicks(10);
+		context.getInput().holdKeyFor(options -> options.jumpKey, 2);
+		context.waitTicks(8);
+		context.takeScreenshot("jump-circles-water");
+		context.waitTicks(12);
+		context.takeScreenshot("jump-circles-water-late");
+		context.runOnClient(client -> ModuleManager.get(JumpCirclesModule.class).style.set("Glow"));
+		look(singleplayer, 0, 20);
+		context.waitTicks(5);
+
 		// Custom UI: the restyled survival inventory, in every Theme style.
 		context.setScreen(() -> new InventoryScreen(MinecraftClient.getInstance().player));
 		for (Theme.Style style : new Theme.Style[]{Theme.Style.BLUR, Theme.Style.NORMAL}) {

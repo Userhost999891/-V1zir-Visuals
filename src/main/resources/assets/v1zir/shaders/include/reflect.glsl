@@ -40,7 +40,7 @@ struct SurfaceInfo {
 	vec3 normal;     // shading normal, waves and ripples included
 	vec3 tint;       // reflection weight per channel: Fresnel, metal tint and strength
 	float diffuse;   // how much of the surface's own colour stays
-	float wet;       // darkening by a water film
+	float wet;       // darkening by a water film, over 1 under standing water
 	float metallic;  // 1 where the reflection takes the surface's colour (metal blocks)
 	float satin;     // how much the surface turns into polished satin metal (Metal mode)
 	float roughness;
@@ -172,6 +172,34 @@ vec2 rRipples(vec2 xz) {
 		slope += d / max(dist, 0.001) * (cos(e * 45.0) * exp(-e * e * 350.0) * fade);
 	}
 	return slope * 0.4 * Weather.y;
+}
+
+// Raindrops on puddles: three offset grids of small rings, denser than on open water, each drop
+// landing somewhere new every time it comes round.
+vec2 rDrops(vec2 xz) {
+	vec2 slope = vec2(0.0);
+	for (int i = 0; i < 3; i++) {
+		vec2 q = xz * 2.6 + float(i) * vec2(0.37, 0.61);
+		vec2 cell = floor(q);
+		float t = CameraFrac.w * 1.4 + rHash(cell + float(i) * 31.0) * 9.0;
+		float turn = floor(t);
+		float phase = t - turn;
+		vec2 d = q - cell - 0.3 - 0.4 * vec2(rHash(cell + turn * 1.37), rHash(cell.yx + turn * 2.11 + float(i)));
+		float dist = length(d);
+		float e = dist - 0.3 * phase;
+		float fade = (1.0 - phase) * (1.0 - phase);
+		slope += d / max(dist, 0.001) * (cos(e * 40.0) * exp(-e * e * 300.0) * fade);
+	}
+	return slope * 0.35 * Weather.y;
+}
+
+// Standing water on open flat ground: 0 dry, 1 inside a puddle, soft at its shore. Soft noise over a
+// few blocks floods above a level that sinks as everything gets wetter, so the puddles collect in
+// the same places every rain, grow while it pours and shrink again as it dries.
+float rPuddle(vec2 xz) {
+	float level = mix(0.86, 0.64, clamp((Weather.x - 0.25) / 0.75, 0.0, 1.0)) - 0.12 * max(Weather.x - 1.0, 0.0);
+	float shape = 0.62 * rNoise(xz * 0.16) + 0.28 * rNoise(xz * 0.45 + 17.3) + 0.1 * rNoise(xz * 1.6 + 5.7);
+	return smoothstep(level, level + 0.035, shape);
 }
 
 float rSchlick(float f0, float cosTheta) {
@@ -312,17 +340,29 @@ bool rSurface(ivec2 p, out SurfaceInfo s) {
 	if (rain) {
 		// A thin film of water: darker, more saturated, glossy with fairly sharp reflections like a
 		// wet road; tops soak through, walls only get damp, and the gloss varies a little over the
-		// ground in large soft patches (never pools).
+		// ground in large soft patches.
 		float wet = clamp(Weather.x * open * (n.y > 0.5 ? 1.0 : 0.45), 0.0, 1.0) * (material == FOLIAGE ? 0.5 : 1.0);
 		float gloss = 0.55 + 0.45 * rNoise(xz * 0.3);
 		float f = rSchlick(0.04, cosV) * 0.65 * wet * gloss;
+		float roughness = 0.15;
+		// Puddles on open flat ground: a dark mirror, rippled by the raindrops falling into it. Seen
+		// from above it still shows some of the sky, more than water's Fresnel alone would give.
+		float pool = n.y > 0.5 && material != FOLIAGE ? rPuddle(xz) * open : 0.0;
+		if (pool > 0.001) {
+			vec2 slope = (rDrops(xz) + rWaves(xz) * 0.25) * pool;
+			s.normal = normalize(vec3(-slope.x, 1.0, -slope.y));
+			float m = 1.0 - clamp(dot(-view, s.normal), 0.0, 1.0);
+			f = mix(f, 0.16 + 0.84 * m * m * m * m * m, pool);
+			roughness = mix(roughness, 0.0, pool);
+		}
 		if (f > max(s.tint.r, max(s.tint.g, s.tint.b))) {
 			s.tint = vec3(f);
-			s.roughness = metal || glossy ? min(s.roughness, 0.15) : 0.15;
+			s.roughness = metal || glossy ? min(s.roughness, roughness) : roughness;
 		}
 		s.diffuse = min(s.diffuse, 1.0 - f);
-		s.wet = wet;
-		s.glint = max(s.glint, open * 0.3 * wet);
+		// Over 1 where water stands: what is under it darkens further (reflect_composite).
+		s.wet = wet + pool;
+		s.glint = max(s.glint, open * mix(0.3 * wet, 1.0, pool));
 	}
 	return max(s.tint.r, max(s.tint.g, s.tint.b)) > 0.002 || s.wet > 0.002;
 }

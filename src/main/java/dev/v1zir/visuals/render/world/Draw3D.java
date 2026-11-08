@@ -151,6 +151,31 @@ public final class Draw3D {
 		mesh.vertex(x + ux - vx, y, z + uz - vz, 1f, 2f, argb);
 	}
 
+	/**
+	 * Water ripple lying flat at height y, rings running out from (x, z) to {@code radius} as
+	 * {@code progress} goes from 0 to 1 (world_effect.fsh shades the waves). The light the waves
+	 * catch goes into {@code glow} in the colour {@code light}, their shade into {@code shade} in the
+	 * colour {@code dark}; flat water adds nothing, so the disc blends into whatever it lies on.
+	 * {@code shine} (0..1.5) adds a soft glow along the crests on top of the reflections.
+	 */
+	public static void ripple(WorldEffectRenderer.Mesh glow, WorldEffectRenderer.Mesh shade, double x, double y, double z, double radius,
+							  float progress, float shine, int light, int dark) {
+		int b = Math.round(Math.max(0f, Math.min(1f, progress)) * 1000f);
+		int g = Math.round(Math.max(0f, Math.min(1.5f, shine)) * 10f);
+		disc(glow, x, y, z, radius, 2 * g, b, light);
+		disc(shade, x, y, z, radius, 2 * g + 1, b, dark);
+	}
+
+	/** One ripple quad: the disc position in [-1, 1] next to the packed pass, shine and progress (see world_effect.fsh). */
+	private static void disc(WorldEffectRenderer.Mesh mesh, double x, double y, double z, double r, int k, int b, int argb) {
+		float u = 4f * k;
+		float v = 16f + 4f * b;
+		mesh.vertex(x - r, y, z - r, u - 1f, v - 1f, argb);
+		mesh.vertex(x + r, y, z - r, u + 1f, v - 1f, argb);
+		mesh.vertex(x + r, y, z + r, u + 1f, v + 1f, argb);
+		mesh.vertex(x - r, y, z + r, u - 1f, v + 1f, argb);
+	}
+
 	private static float quantize(float half) {
 		return Math.max(1, Math.min(480, Math.round(half * 64f)));
 	}

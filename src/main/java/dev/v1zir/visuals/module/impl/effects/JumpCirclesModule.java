@@ -2,22 +2,34 @@ package dev.v1zir.visuals.module.impl.effects;
 
 import dev.v1zir.visuals.module.Category;
 import dev.v1zir.visuals.module.Module;
+import dev.v1zir.visuals.module.setting.ModeSetting;
 import dev.v1zir.visuals.module.setting.NumberSetting;
 import dev.v1zir.visuals.render.world.Draw3D;
 import dev.v1zir.visuals.render.world.WorldEffect;
 import dev.v1zir.visuals.render.world.WorldEffectRenderer;
 import dev.v1zir.visuals.util.Anim;
+import dev.v1zir.visuals.util.ColorUtil;
 import dev.v1zir.visuals.util.Theme;
 
 import java.util.ArrayList;
 import java.util.List;
 
-/** Expanding shockwave rings where you jump: a crisp rotating rim inside a soft halo. */
+/**
+ * Rings where you jump. Glow: an expanding shockwave, a crisp rotating rim inside a soft halo.
+ * Water: the ground ripples as if a drop fell into still water, a train of rings that catch the sky
+ * on their crests and darken in their troughs, spreading out and settling.
+ */
 public final class JumpCirclesModule extends Module implements WorldEffect {
 	private static final int SEGMENTS = 56;
+	/** Water rings spread wider and settle slower than the shockwave. */
+	private static final float WATER_REACH = 1.8f;
+	private static final float WATER_TIME = 1.6f;
+	private static final int WATER_SHADE = 0x08121C;
 
+	public final ModeSetting style = add(new ModeSetting("Style", "Glow", "Glow", "Water"));
 	public final NumberSetting radius = add(new NumberSetting("Radius", 1.4, 0.5, 3.0, 0.05));
 	public final NumberSetting duration = add(new NumberSetting("Duration", 1.1, 0.4, 3.0, 0.05).suffix("s"));
+	public final NumberSetting shine = add(new NumberSetting("Shine", 0.8, 0.0, 1.5, 0.05).visibleIf(() -> style.is("Water")));
 
 	private final List<Circle> circles = new ArrayList<>();
 	private final Draw3D.Wave wave = new Draw3D.Wave();
@@ -44,7 +56,8 @@ public final class JumpCirclesModule extends Module implements WorldEffect {
 	@Override
 	public void render3D(float tickDelta) {
 		long now = System.nanoTime();
-		float life = duration.f();
+		boolean water = style.is("Water");
+		float life = duration.f() * (water ? WATER_TIME : 1f);
 		int a1 = Theme.accent();
 		int a2 = Theme.accent2();
 		WorldEffectRenderer.Mesh mesh = WorldEffectRenderer.glow();
@@ -56,6 +69,14 @@ public final class JumpCirclesModule extends Module implements WorldEffect {
 				continue;
 			}
 			float p = age / life;
+			if (water) {
+				// The waves settle by themselves; the last moments only fade what is left.
+				int alpha = Math.round(255f * (1f - Anim.easeInOutCubic(Math.max(0f, (p - 0.7f) / 0.3f))));
+				int light = ColorUtil.withAlpha(ColorUtil.lerp(0xFFFFFFFF, a1, 0.25f), alpha);
+				Draw3D.ripple(mesh, WorldEffectRenderer.translucent(), c.x, c.y, c.z, radius.f() * WATER_REACH, p, shine.f(), light,
+					ColorUtil.withAlpha(WATER_SHADE, alpha));
+				continue;
+			}
 			double r = Anim.easeOutCubic(p) * radius.f();
 			// Holds its brightness while it spreads, then fades out as it slows down.
 			float fade = 1f - Anim.easeInOutCubic(Math.max(0f, (p - 0.25f) / 0.75f));
