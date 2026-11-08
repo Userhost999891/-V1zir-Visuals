@@ -64,7 +64,8 @@ public final class SpotifyModule extends HudModule {
 	}
 
 	private boolean visible() {
-		return Media.now().track() != null || !hideIdle.on() || editing();
+		// A problem reading the player shows even when idle cards hide, so it is not mistaken for silence.
+		return Media.now().track() != null || !hideIdle.on() || editing() || Media.status() != null;
 	}
 
 	/** The pointer can only reach the widget with the chat or the HUD editor open. */

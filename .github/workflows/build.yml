@@ -108,3 +108,31 @@ jobs:
             base64 -w 4000 /tmp/preview.jpg
             echo "V1ZIR-PREVIEW-END"
           done
+
+  media-bridge:
+    name: Windows media bridge
+    runs-on: windows-latest
+    # Informative only (always passes): the log shows whether the now playing script loads the media controls on a
+    # stock Windows PowerShell; "BRIDGE OK" or "BRIDGE FAILED" with the reason.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run now_playing.ps1 for a few seconds
+        shell: pwsh
+        run: |
+          $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+          $info = New-Object System.Diagnostics.ProcessStartInfo $ps
+          $info.Arguments = '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File src\main\resources\assets\v1zir\media\now_playing.ps1'
+          $info.RedirectStandardInput = $true
+          $info.RedirectStandardOutput = $true
+          $info.RedirectStandardError = $true
+          $info.UseShellExecute = $false
+          $p = [System.Diagnostics.Process]::Start($info)
+          $out = $p.StandardOutput.ReadLineAsync()
+          if (-not $out.Wait(15000)) { Write-Host 'BRIDGE FAILED: no report within 15 s'; $p.Kill(); Write-Host ('stderr: ' + $p.StandardError.ReadToEnd()); exit 0 }
+          Write-Host ('First report: ' + $out.Result)
+          $p.StandardInput.Close()
+          if (-not $p.WaitForExit(5000)) { $p.Kill() }
+          $err = $p.StandardError.ReadToEnd()
+          if ($err) { Write-Host ('stderr: ' + $err) }
+          if ($null -eq $out.Result -or -not $out.Result.StartsWith('{')) { Write-Host 'BRIDGE FAILED' } else { Write-Host 'BRIDGE OK' }
+          exit 0
