@@ -41,6 +41,10 @@ public abstract class PlayerEntityRendererMixin {
 	private void v1zir$tintArm(OrderedRenderCommandQueue queue, ModelPart part, MatrixStack matrices, RenderLayer layer, int light, int overlay, Sprite sprite,
 							   Operation<Void> original) {
 		HandChamsModule chams = ModuleManager.get(HandChamsModule.class);
+		if (chams != null && chams.crystalHand()) {
+			chams.crystalArm(part, matrices, queue);
+			return;
+		}
 		if (chams == null || !chams.tintsHand()) {
 			original.call(queue, part, matrices, layer, light, overlay, sprite);
 			if (chams != null && chams.outlinesHand()) chams.outlineArm(part, matrices, queue);

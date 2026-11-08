@@ -25,22 +25,25 @@ import java.util.Arrays;
 
 /**
  * Players (and optionally mobs) as tinted translucent silhouettes. Glass keeps the body visible under
- * a tinted shell with a bright fresnel rim and softly glowing edges on every face; Glow replaces the
- * body by a bright self-lit silhouette with a halo; Flat by one solid colour. The quads of the model
+ * a tinted shell with a bright fresnel rim and softly glowing edges on every face; Crystal turns the
+ * body itself into tinted see-through crystal whose every box is drawn with bright glowing edges, the
+ * far ones seen through it; Glow replaces the body by a bright self-lit silhouette with a halo; Flat by
+ * one solid colour. The quads of the model
  * are captured while vanilla submits it (LivingEntityRendererMixin) and drawn as a shell after the
  * world in the effect batches, depth tested or through walls, so chams add no render pass of their
  * own. Back faces are dropped on the CPU. Never for yourself in first person.
  */
 public final class ChamsModule extends Module implements WorldEffect {
 	private static final int GLASS = 0;
-	private static final int GLOW = 1;
+	private static final int CRYSTAL = 1;
+	private static final int GLOW = 2;
 	/** How far the shell sits outside the model per style: Glass clears the outer skin layer. */
-	private static final float[] INFLATE = {0.04f, 0.012f, 0.006f};
+	private static final float[] INFLATE = {0.04f, 0.008f, 0.012f, 0.006f};
 	private static final float HALO = 0.07f;
 	/** Per captured entity: first quad, quad count, colour. */
 	private static final int SPAN = 3;
 
-	public final ModeSetting style = add(new ModeSetting("Style", "Glass", "Glass", "Glow", "Flat"));
+	public final ModeSetting style = add(new ModeSetting("Style", "Glass", "Glass", "Crystal", "Glow", "Flat"));
 	public final BoolSetting throughWalls = add(new BoolSetting("Through walls", true));
 	public final NumberSetting opacity = add(new NumberSetting("Opacity", 0.75, 0.1, 1.0, 0.05));
 	public final BoolSetting mobs = add(new BoolSetting("Mobs", false));
@@ -58,7 +61,7 @@ public final class ChamsModule extends Module implements WorldEffect {
 	private int frame = -1;
 
 	public ChamsModule() {
-		super("Chams", "Players as glass, glowing or flat silhouettes", Category.COMBAT);
+		super("Chams", "Players as glass, crystal, glowing or flat silhouettes", Category.COMBAT);
 		setSubCategory("Target");
 	}
 
@@ -169,19 +172,37 @@ public final class ChamsModule extends Module implements WorldEffect {
 						shell(fill, q, o, INFLATE[GLASS], c, a * 0.1f, a * 0.55f, 0.15f, false);
 						shell(glow, q, o, INFLATE[GLASS], light, a * 0.55f, a * 0.45f, 0f, true);
 					}
+					case CRYSTAL -> crystal(fill, glow, q, o, c, a);
 					case GLOW -> {
 						shell(fill, q, o, INFLATE[GLOW], dark, a * 0.55f, 0f, 0f, false);
 						shell(glow, q, o, INFLATE[GLOW], light, a * 0.35f, a * 0.55f, 0.1f, false);
 						shell(glow, q, o, INFLATE[GLOW], lighter, a * 0.5f, 0f, 0f, true);
 						halo(glow, q, o, c, a * 0.5f);
 					}
-					default -> flat(fill, q, o, INFLATE[2], c, a);
+					default -> flat(fill, q, o, INFLATE[3], c, a);
 				}
 			}
 		}
 		// Drawn once: the next frame captures afresh.
 		spanCount = 0;
 		capture.clear();
+	}
+
+	/**
+	 * Crystal: every face of the model, the far ones too, as tinted see-through glass (a touch lighter at the top of
+	 * each box and towards its rim) with a bright glowing border, the far borders fainter, so the boxes read as
+	 * crystal blocks with light caught in their edges.
+	 */
+	private static void crystal(WorldEffectRenderer.Mesh fill, WorldEffectRenderer.Mesh glow, float[] q, int o, int color, float a) {
+		float nx = q[o + 12], ny = q[o + 13], nz = q[o + 14];
+		float cx = (q[o] + q[o + 3] + q[o + 6] + q[o + 9]) * 0.25f;
+		float cy = (q[o + 1] + q[o + 4] + q[o + 7] + q[o + 10]) * 0.25f;
+		float cz = (q[o + 2] + q[o + 5] + q[o + 8] + q[o + 11]) * 0.25f;
+		boolean front = nx * cx + ny * cy + nz * cz < 0f;
+		int body = ColorUtil.lerp(color, 0xFFFFFFFF, 0.18f + 0.12f * Math.max(0f, ny));
+		int edge = ColorUtil.lerp(color, 0xFFFFFFFF, 0.8f);
+		face(fill, q, o, INFLATE[CRYSTAL], body, front ? a * 0.36f : a * 0.18f, front ? a * 0.22f : 0f, 0.3f, false);
+		face(glow, q, o, INFLATE[CRYSTAL] + 0.002f, edge, front ? a : a * 0.45f, 0f, 0f, true);
 	}
 
 	/**
@@ -197,6 +218,13 @@ public final class ChamsModule extends Module implements WorldEffect {
 		float cz = (q[o + 2] + q[o + 5] + q[o + 8] + q[o + 11]) * 0.25f;
 		// The camera is at the origin of the captured space.
 		if (nx * cx + ny * cy + nz * cz >= 0f) return;
+		face(mesh, q, o, inflate, color, base, rim, white, edges);
+	}
+
+	/** A face of the shell whichever way it faces (see shell). */
+	private static void face(WorldEffectRenderer.Mesh mesh, float[] q, int o, float inflate, int color, float base, float rim, float white,
+							 boolean edges) {
+		float nx = q[o + 12], ny = q[o + 13], nz = q[o + 14];
 		float u0 = 3f, u1 = 3f, v0 = 0f, v1 = 0f;
 		if (edges) {
 			// The rounded border encoding of Draw3D.roundedBox: half sizes packed next to the position.

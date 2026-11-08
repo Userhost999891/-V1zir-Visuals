@@ -613,7 +613,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			esp.setEnabled(true, false);
 		});
 		context.waitTicks(20);
-		for (String[] look : new String[][]{{"Glass", "Box 2D"}, {"Glow", "Corners"}, {"Flat", "Box 3D"}}) {
+		for (String[] look : new String[][]{{"Glass", "Box 2D"}, {"Crystal", "Corners"}, {"Glow", "Corners"}, {"Flat", "Box 3D"}}) {
 			context.runOnClient(client -> {
 				ModuleManager.get(ChamsModule.class).style.set(look[0]);
 				ModuleManager.get(EspModule.class).mode.set(look[1]);
@@ -716,6 +716,9 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		});
 		context.waitTicks(10);
 		context.takeScreenshot("hand-chams-outline");
+		context.runOnClient(client -> ModuleManager.get(HandChamsModule.class).style.set("Crystal"));
+		context.waitTicks(5);
+		context.takeScreenshot("hand-chams-crystal");
 		context.runOnClient(client -> {
 			HandChamsModule chams = ModuleManager.get(HandChamsModule.class);
 			chams.setEnabled(wasOn, false);

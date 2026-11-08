@@ -47,12 +47,12 @@ public final class HandChamsModule extends Module {
 	private static final float RIM = 0.006f;
 	private static final float HALO = 0.02f;
 
-	public final ModeSetting style = add(new ModeSetting("Style", "Tint", "Tint", "Outline"));
+	public final ModeSetting style = add(new ModeSetting("Style", "Tint", "Tint", "Outline", "Crystal"));
 	public final BoolSetting items = add(new BoolSetting("Items", true));
 	public final BoolSetting hand = add(new BoolSetting("Hand", true));
 	public final BoolSetting themeColor = add(new BoolSetting("Theme color", true));
 	public final ColorSetting color = add(new ColorSetting("Color", 0xFF8FB4FF, false).visibleIf(() -> !themeColor.on()));
-	public final NumberSetting opacity = add(new NumberSetting("Opacity", 0.8, 0.15, 1.0, 0.05).visibleIf(() -> style.is("Tint")));
+	public final NumberSetting opacity = add(new NumberSetting("Opacity", 0.8, 0.15, 1.0, 0.05).visibleIf(() -> !style.is("Outline")));
 	public final BoolSetting glow = add(new BoolSetting("Glow", true).visibleIf(() -> style.is("Tint")));
 	public final NumberSetting outlineWidth = add(new NumberSetting("Outline width", 1.0, 0.4, 3.0, 0.05).suffix("x").visibleIf(() -> style.is("Outline")));
 
@@ -69,10 +69,15 @@ public final class HandChamsModule extends Module {
 	/** World frame the captured arm belongs to; a frame whose hand was never drawn leaves nothing behind. */
 	private int armFrame = -1;
 	private final OrderedRenderCommandQueue.Custom armOutline = this::drawArmOutline;
+	private final ModelCapture crystalCapture = new ModelCapture();
+	private int crystalFrame = -1;
+	private final OrderedRenderCommandQueue.Custom crystalFill = this::drawCrystalFill;
+	private final OrderedRenderCommandQueue.Custom crystalEdges = this::drawCrystalEdges;
 	private RenderLayer outlineLayer;
+	private RenderLayer fillLayer;
 
 	public HandChamsModule() {
-		super("Hand Chams", "Tint or outline your hand and held items", Category.VISUALS);
+		super("Hand Chams", "Tint, outline or crystal your hand and held items", Category.VISUALS);
 		setSubCategory("Render");
 	}
 
@@ -85,12 +90,16 @@ public final class HandChamsModule extends Module {
 		return style.is("Outline");
 	}
 
+	private boolean crystal() {
+		return style.is("Crystal");
+	}
+
 	/** Start of an item draw; only first-person items are tinted. */
 	public static void beginItem(boolean firstPerson) {
 		tinting = false;
 		if (!firstPerson) return;
 		HandChamsModule module = ModuleManager.get(HandChamsModule.class);
-		if (module == null || !module.isEnabled() || !module.items.on() || module.outline()) return;
+		if (module == null || !module.isEnabled() || !module.items.on() || !module.style.is("Tint")) return;
 		int c = module.argb();
 		red = ColorUtil.red(c) / 255f;
 		green = ColorUtil.green(c) / 255f;
@@ -125,7 +134,12 @@ public final class HandChamsModule extends Module {
 	}
 
 	public boolean tintsHand() {
-		return isEnabled() && hand.on() && !outline();
+		return isEnabled() && hand.on() && style.is("Tint");
+	}
+
+	/** The arm drawn as tinted see-through crystal with glowing edges instead of its skin. */
+	public boolean crystalHand() {
+		return isEnabled() && hand.on() && crystal();
 	}
 
 	public boolean outlinesHand() {
@@ -161,6 +175,95 @@ public final class HandChamsModule extends Module {
 		}
 		part.render(matrices, armCapture, FULL_BRIGHT, OverlayTexture.DEFAULT_UV);
 		queue.submitCustom(matrices, outlineLayer(), armOutline);
+	}
+
+	private RenderLayer fillLayer() {
+		if (fillLayer == null) fillLayer = RenderLayers.entityTranslucentEmissive(WHITE);
+		return fillLayer;
+	}
+
+	/** The arm as vanilla submits it, in Crystal: captured instead of drawn, then drawn as crystal with the hand. */
+	public void crystalArm(ModelPart part, MatrixStack matrices, OrderedRenderCommandQueue queue) {
+		int frame = WorldEffectRenderer.frame();
+		if (crystalFrame != frame) {
+			crystalFrame = frame;
+			crystalCapture.clear();
+		}
+		part.render(matrices, crystalCapture, FULL_BRIGHT, OverlayTexture.DEFAULT_UV);
+		queue.submitCustom(matrices, fillLayer(), crystalFill);
+		queue.submitCustom(matrices, outlineLayer(), crystalEdges);
+	}
+
+	/**
+	 * The crystal's body: every face, the far ones too and fainter, in the tint (lighter at the top), more opaque
+	 * towards the rim where glass is seen edge on.
+	 */
+	private void drawCrystalFill(MatrixStack.Entry entry, VertexConsumer consumer) {
+		int c = themeColor.on() ? Theme.accent() : color.argb();
+		float a = opacity.f();
+		float[] q = crystalCapture.quads();
+		for (int i = 0; i < crystalCapture.count(); i++) {
+			int o = i * ModelCapture.STRIDE;
+			float nx = q[o + 12], ny = q[o + 13], nz = q[o + 14];
+			boolean front = nx * (q[o] + q[o + 6]) + ny * (q[o + 1] + q[o + 7]) + nz * (q[o + 2] + q[o + 8]) < 0f;
+			int body = ColorUtil.lerp(c, 0xFFFFFFFF, 0.18f + 0.12f * Math.max(0f, ny));
+			for (int k = 0; k < 4; k++) {
+				// Far faces are wound the other way so they face the camera too.
+				int corner = (front ? k : 3 - k) * 3;
+				float x = q[o + corner] + nx * 0.002f, y = q[o + corner + 1] + ny * 0.002f, z = q[o + corner + 2] + nz * 0.002f;
+				float facing = -(nx * x + ny * y + nz * z) / Math.max(1e-4f, (float) Math.sqrt(x * x + y * y + z * z));
+				float rim = 1f - Math.max(0f, facing);
+				float alpha = front ? a * (0.34f + 0.3f * rim * rim) : a * 0.16f;
+				consumer.vertex(x, y, z, ColorUtil.withAlpha(body, Math.round(255f * Math.min(1f, alpha))), 0.5f, 0.5f, OverlayTexture.DEFAULT_UV,
+					FULL_BRIGHT, nx, ny, nz);
+			}
+		}
+	}
+
+	/** The crystal's edges: a bright thin border round every face and a soft glow beside it, the far borders fainter. */
+	private void drawCrystalEdges(MatrixStack.Entry entry, VertexConsumer consumer) {
+		int c = themeColor.on() ? Theme.accent() : color.argb();
+		int line = ColorUtil.lerp(c, 0xFFFFFFFF, 0.8f);
+		float a = opacity.f();
+		float[] q = crystalCapture.quads();
+		for (int i = 0; i < crystalCapture.count(); i++) {
+			int o = i * ModelCapture.STRIDE;
+			float nx = q[o + 12], ny = q[o + 13], nz = q[o + 14];
+			boolean front = nx * (q[o] + q[o + 6]) + ny * (q[o + 1] + q[o + 7]) + nz * (q[o + 2] + q[o + 8]) < 0f;
+			float strength = front ? Math.min(1f, a * 1.15f) : a * 0.5f;
+			border(consumer, q, o, front, 0.0045f, line, strength);
+			border(consumer, q, o, front, 0.013f, c, strength * 0.35f);
+		}
+		crystalCapture.clear();
+	}
+
+	/** A border of the given width inside a face: a thin quad along each of its four edges. */
+	private static void border(VertexConsumer consumer, float[] q, int o, boolean front, float width, int color, float alpha) {
+		float nx = q[o + 12], ny = q[o + 13], nz = q[o + 14];
+		float cx = (q[o] + q[o + 3] + q[o + 6] + q[o + 9]) * 0.25f;
+		float cy = (q[o + 1] + q[o + 4] + q[o + 7] + q[o + 10]) * 0.25f;
+		float cz = (q[o + 2] + q[o + 5] + q[o + 8] + q[o + 11]) * 0.25f;
+		int argb = ColorUtil.withAlpha(color, Math.round(255f * Math.min(1f, alpha)));
+		float lift = 0.004f;
+		for (int e = 0; e < 4; e++) {
+			int a0 = e * 3, a1 = ((e + 1) % 4) * 3;
+			float ax = q[o + a0] + nx * lift, ay = q[o + a0 + 1] + ny * lift, az = q[o + a0 + 2] + nz * lift;
+			float bx = q[o + a1] + nx * lift, by = q[o + a1 + 1] + ny * lift, bz = q[o + a1 + 2] + nz * lift;
+			// Towards the face's centre from the middle of this edge.
+			float mx = (ax + bx) * 0.5f, my = (ay + by) * 0.5f, mz = (az + bz) * 0.5f;
+			float ix = cx + nx * lift - mx, iy = cy + ny * lift - my, iz = cz + nz * lift - mz;
+			float il = (float) Math.sqrt(ix * ix + iy * iy + iz * iz);
+			if (il < 1e-5f) continue;
+			float w = Math.min(width, il * 0.5f) / il;
+			ix *= w;
+			iy *= w;
+			iz *= w;
+			float[] p = front ? new float[]{ax, ay, az, bx, by, bz, bx + ix, by + iy, bz + iz, ax + ix, ay + iy, az + iz}
+				: new float[]{ax + ix, ay + iy, az + iz, bx + ix, by + iy, bz + iz, bx, by, bz, ax, ay, az};
+			for (int k = 0; k < 12; k += 3) {
+				consumer.vertex(p[k], p[k + 1], p[k + 2], argb, 0.5f, 0.5f, OverlayTexture.DEFAULT_UV, FULL_BRIGHT, nx, ny, nz);
+			}
+		}
 	}
 
 	/** Every arm captured this frame, drawn once (both arms may be submitted). */
