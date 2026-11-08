@@ -23,7 +23,7 @@ import java.util.OptionalInt;
  * the end of renderWorld (GameRendererMixin), so the GUI drawn afterwards is never graded.
  */
 public final class ColorGrade {
-	private static final int SIZE = new Std140SizeCalculator().putVec4().putVec4().putVec4().get();
+	private static final int SIZE = new Std140SizeCalculator().putVec4().putVec4().putVec4().putVec4().putVec4().putVec4().get();
 	private static final Params PARAMS = new Params();
 	private static DynamicUniformStorage<Params> storage;
 	private static GpuTexture copy;
@@ -40,9 +40,12 @@ public final class ColorGrade {
 
 	/**
 	 * Grades the frame. Gains are the per channel multipliers (white balance and brightness),
-	 * vignette 0 turns the vignette off.
+	 * vignette 0 turns the vignette off. A look recolours the picture by its brightness in a gradient
+	 * from the {@code shadow} through the {@code mid} to the {@code light} colour (RGB), {@code look}
+	 * of it (0 for none).
 	 */
-	public static void render(float red, float green, float blue, float contrast, float saturation, float vibrance, float vignette) {
+	public static void render(float red, float green, float blue, float contrast, float saturation, float vibrance, float vignette,
+							  int shadow, int mid, int light, float look) {
 		// Vanilla renders into other targets for special frames (panorama screenshots): leave those alone.
 		if (RenderSystem.outputColorTextureOverride != null) return;
 		Framebuffer fb = V1zir.mc().getFramebuffer();
@@ -53,6 +56,7 @@ public final class ColorGrade {
 		if (storage == null) storage = new DynamicUniformStorage<>("V1zir color grading UBO", SIZE, 2);
 
 		PARAMS.set(red, green, blue, contrast, saturation, vibrance, vignette, w, h);
+		PARAMS.look(shadow, mid, light, look);
 		GpuBufferSlice params = storage.write(PARAMS);
 		CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
 		encoder.copyTextureToTexture(fb.getColorAttachment(), copy, 0, 0, 0, 0, 0, w, h);
@@ -77,8 +81,8 @@ public final class ColorGrade {
 
 	/** One instance, refilled every frame: the storage copies it into the buffer on write. */
 	private static final class Params implements DynamicUniformStorage.Uploadable {
-		private float red, green, blue, contrast, saturation, vibrance, vignette;
-		private int width, height;
+		private float red, green, blue, contrast, saturation, vibrance, vignette, look;
+		private int width, height, shadow, mid, light;
 
 		void set(float red, float green, float blue, float contrast, float saturation, float vibrance, float vignette, int width, int height) {
 			this.red = red;
@@ -92,6 +96,17 @@ public final class ColorGrade {
 			this.height = height;
 		}
 
+		void look(int shadow, int mid, int light, float look) {
+			this.shadow = shadow;
+			this.mid = mid;
+			this.light = light;
+			this.look = look;
+		}
+
+		private static float channel(int rgb, int shift) {
+			return (rgb >> shift & 0xFF) / 255f;
+		}
+
 		@Override
 		public void write(ByteBuffer buffer) {
 			float aspect = width / (float) height;
@@ -99,7 +114,10 @@ public final class ColorGrade {
 			Std140Builder.intoBuffer(buffer)
 				.putVec4(red, green, blue, 1f)
 				.putVec4(contrast, saturation, vibrance, vignette)
-				.putVec4(1f / width, 1f / height, aspect, 1f / corner);
+				.putVec4(1f / width, 1f / height, aspect, 1f / corner)
+				.putVec4(channel(shadow, 16), channel(shadow, 8), channel(shadow, 0), 1f)
+				.putVec4(channel(mid, 16), channel(mid, 8), channel(mid, 0), 1f)
+				.putVec4(channel(light, 16), channel(light, 8), channel(light, 0), look);
 		}
 
 		@Override

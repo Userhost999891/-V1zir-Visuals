@@ -36,6 +36,7 @@ import dev.v1zir.visuals.module.impl.hud.SpeedModule;
 import dev.v1zir.visuals.module.impl.hud.TargetHudModule;
 import dev.v1zir.visuals.module.impl.hud.WatermarkModule;
 import dev.v1zir.visuals.module.impl.visuals.BlockReflectionModule;
+import dev.v1zir.visuals.module.impl.visuals.ColorGradingModule;
 import dev.v1zir.visuals.module.impl.visuals.FreeLookModule;
 import dev.v1zir.visuals.module.impl.visuals.HandChamsModule;
 import dev.v1zir.visuals.module.impl.visuals.MotionBlurModule;
@@ -471,6 +472,25 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.runOnClient(client -> ModuleManager.get(JumpCirclesModule.class).style.set("Glow"));
 		look(singleplayer, 0, 20);
 		context.waitTicks(5);
+
+		// Color Grading looks over the same view.
+		boolean gradingWasOn = context.computeOnClient(client -> {
+			ColorGradingModule grading = ModuleManager.get(ColorGradingModule.class);
+			boolean on = grading.isEnabled();
+			grading.look.set("Amethyst");
+			grading.setEnabled(true, false);
+			return on;
+		});
+		context.waitTicks(3);
+		context.takeScreenshot("color-grading-amethyst");
+		context.runOnClient(client -> ModuleManager.get(ColorGradingModule.class).look.set("Frost"));
+		context.waitTicks(3);
+		context.takeScreenshot("color-grading-frost");
+		context.runOnClient(client -> {
+			ColorGradingModule grading = ModuleManager.get(ColorGradingModule.class);
+			grading.look.reset();
+			grading.setEnabled(gradingWasOn, false);
+		});
 
 		// Custom UI: the restyled survival inventory, in every Theme style.
 		context.setScreen(() -> new InventoryScreen(MinecraftClient.getInstance().player));
