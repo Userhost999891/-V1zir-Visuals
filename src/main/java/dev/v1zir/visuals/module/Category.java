@@ -12,6 +12,8 @@ public enum Category {
 	HUD("Hud", Icons.LAYOUT_DASHBOARD, "Info", "Widgets", "Media"),
 	KNIVES("Knives", Icons.SWORD),
 	COSMETICS("Cosmetics", Icons.SHIRT),
+	/** The Pack Mixer: which resource pack each texture comes from. */
+	PACKS("Packs", Icons.LAYERS),
 	/** Pinned to the bottom of the sidebar, above the profile footer. */
 	SETTINGS("Settings", Icons.SETTINGS);
 

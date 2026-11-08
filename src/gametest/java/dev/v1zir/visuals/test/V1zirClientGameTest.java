@@ -118,6 +118,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			handOutline(context, singleplayer);
 			knives(context, singleplayer);
 			cosmetics(context, singleplayer);
+			packs(context);
 			reflections(context, singleplayer);
 			clickGui(context);
 			clickGuiFavourites(context);
@@ -790,6 +791,15 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 	 * Cosmetics: a top hat, angel wings and the galaxy cape on the player, seen from the front and from behind in third
 	 * person, then the Cosmetics tab with the player preview.
 	 */
+	/** The Packs tab: every texture of the loaded packs as tiles with their previews. */
+	private static void packs(ClientGameTestContext context) {
+		context.runOnClient(client -> setStatic(ClickGuiScreen.class, "tab", Category.PACKS.ordinal()));
+		context.setScreen(ClickGuiScreen::new);
+		context.waitTicks(40);
+		context.takeScreenshot("clickgui-tab-packs");
+		context.setScreen(() -> null);
+	}
+
 	private static void cosmetics(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
 		look(singleplayer, 30f, 8f);
 		boolean wasOn = context.computeOnClient(client -> {

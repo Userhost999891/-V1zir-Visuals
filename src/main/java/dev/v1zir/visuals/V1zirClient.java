@@ -9,6 +9,7 @@ import dev.v1zir.visuals.gui.clickgui.ClickGuiScreen;
 import dev.v1zir.visuals.gui.hud.HudRenderer;
 import dev.v1zir.visuals.gui.menu.V1zirMainMenu;
 import dev.v1zir.visuals.module.ModuleManager;
+import dev.v1zir.visuals.pack.PackMixer;
 import dev.v1zir.visuals.module.impl.client.ClickGuiModule;
 import dev.v1zir.visuals.module.impl.client.MainMenuModule;
 import dev.v1zir.visuals.optimize.Optimizations;
@@ -28,6 +29,8 @@ public final class V1zirClient implements ClientModInitializer {
 		V1zirPipelines.register();
 		ModuleManager.init();
 		ConfigManager.load();
+		// Before the first resource load, so the textures picked in the Packs tab show from the start.
+		PackMixer.load();
 		Optimizations.logCompatibility();
 		HudRenderer.register();
 		// Cosmetics ride on the player model as one more feature of the player renderers.

@@ -56,6 +56,7 @@ public final class ClickGuiScreen extends Screen {
 	private final SettingsPage settingsPage;
 	private final KnivesPage knivesPage;
 	private final CosmeticsPage cosmeticsPage;
+	private final PacksPage packsPage;
 	private final Sidebar sidebar = new Sidebar(tab);
 	private final TopBar topBar = new TopBar();
 	private final SettingsDrawer drawer = new SettingsDrawer();
@@ -121,6 +122,7 @@ public final class ClickGuiScreen extends Screen {
 		settingsPage = new SettingsPage(clientCards);
 		knivesPage = new KnivesPage(drawer::show);
 		cosmeticsPage = new CosmeticsPage(drawer::show);
+		packsPage = new PacksPage();
 		boolean animate = gui == null || gui.animations.on();
 		for (ModuleGrid grid : grids) if (grid != null) grid.show(animate);
 	}
@@ -148,8 +150,9 @@ public final class ClickGuiScreen extends Screen {
 		return TABS[Math.max(0, Math.min(TABS.length - 1, tab))];
 	}
 
+	/** A search over all modules; on the Packs tab the query filters its textures instead. */
 	private boolean searching() {
-		return !search.isEmpty();
+		return !search.isEmpty() && category() != Category.PACKS;
 	}
 
 	// ------------------------------------------------------------------ layout & transforms
@@ -300,6 +303,7 @@ public final class ClickGuiScreen extends Screen {
 		else if (category() == Category.SETTINGS) settingsPage.render(ctx, contentX, bodyY, contentW, bodyH, mx, my, drawerModule, mouseFree);
 		else if (category() == Category.KNIVES) knivesPage.render(ctx, contentX, bodyY, contentW, bodyH, mx, my, mouseFree);
 		else if (category() == Category.COSMETICS) cosmeticsPage.render(ctx, contentX, bodyY, contentW, bodyH, mx, my, mouseFree);
+		else if (category() == Category.PACKS) packsPage.render(ctx, contentX, bodyY, contentW, bodyH, mx, my, mouseFree);
 		else grids[tab].render(ctx, contentX, bodyY, contentW, bodyH, mx, my, drawerModule, mouseFree);
 		Render2D.setAlpha(windowAlpha);
 		ctx.getMatrices().popMatrix();
@@ -319,7 +323,7 @@ public final class ClickGuiScreen extends Screen {
 	/** The grid of cards being shown (the search results or the tab's), null on the Settings tab. */
 	@Nullable
 	private ModuleGrid activeGrid() {
-		return searching() ? searchGrid : category() == Category.KNIVES || category() == Category.COSMETICS ? null : grids[tab];
+		return searching() ? searchGrid : category() == Category.KNIVES || category() == Category.COSMETICS || category() == Category.PACKS ? null : grids[tab];
 	}
 
 	/** Content title with its module count on the left; sub-category chips (and Edit layout on the Hud tab) on the right. */
@@ -339,6 +343,10 @@ public final class ClickGuiScreen extends Screen {
 		}
 		if (category() == Category.COSMETICS && !searching()) {
 			cosmeticsPage.renderHeader(ctx, contentX + titleWidth.width(bold, title, 10f) + 8f, right, mid, mouseFree ? mx : -1000, mouseFree ? my : -1000);
+			return;
+		}
+		if (category() == Category.PACKS) {
+			packsPage.renderHeader(ctx, contentX + titleWidth.width(bold, title, 10f) + 8f, right, mid, mouseFree ? mx : -1000, mouseFree ? my : -1000);
 			return;
 		}
 		ModuleGrid grid = searching() ? searchGrid : grids[tab];
@@ -486,6 +494,10 @@ public final class ClickGuiScreen extends Screen {
 				if (cosmeticsPage.mouseClicked(mx, my, button)) return true;
 				return super.mouseClicked(click, doubled);
 			}
+			if (category() == Category.PACKS) {
+				if (packsPage.mouseClicked(mx, my, button)) return true;
+				return super.mouseClicked(click, doubled);
+			}
 			if (grids[tab] != null && grids[tab].clickChip(mx, my)) return true;
 			if (category() == Category.SETTINGS && settingsPage.mouseClicked(mx, my, button)) return true;
 		}
@@ -584,6 +596,7 @@ public final class ClickGuiScreen extends Screen {
 		else if (category() == Category.SETTINGS) settingsPage.scroll(verticalAmount);
 		else if (category() == Category.KNIVES) knivesPage.scroll(verticalAmount);
 		else if (category() == Category.COSMETICS) cosmeticsPage.scroll(verticalAmount);
+		else if (category() == Category.PACKS) packsPage.scroll(mx, my, verticalAmount);
 		else grids[tab].scroll(verticalAmount);
 		return true;
 	}
@@ -631,7 +644,7 @@ public final class ClickGuiScreen extends Screen {
 			drawer.close();
 			return true;
 		}
-		if (key == GLFW.GLFW_KEY_ESCAPE && searching()) {
+		if (key == GLFW.GLFW_KEY_ESCAPE && !search.isEmpty()) {
 			setSearch("");
 			return true;
 		}
@@ -684,6 +697,7 @@ public final class ClickGuiScreen extends Screen {
 		search = text;
 		drawer.close();
 		searchGrid.search(text);
+		packsPage.search(text);
 	}
 
 	/** Closes at once (the game takes input again); the close animation plays from a snapshot of the window. */
