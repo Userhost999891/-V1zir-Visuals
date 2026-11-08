@@ -27,11 +27,11 @@ import java.util.Arrays;
  * Players (and optionally mobs) as tinted translucent silhouettes. Glass keeps the body visible under
  * a tinted shell with a bright fresnel rim and softly glowing edges on every face; Crystal turns the
  * body itself into tinted see-through crystal whose every box is drawn with bright glowing edges, the
- * far ones seen through it; Glow replaces the body by a bright self-lit silhouette with a halo; Flat by
- * one solid colour. The quads of the model
- * are captured while vanilla submits it (LivingEntityRendererMixin) and drawn as a shell after the
- * world in the effect batches, depth tested or through walls, so chams add no render pass of their
- * own. Back faces are dropped on the CPU. Never for yourself in first person.
+ * far ones seen through it, in a soft aura of its colour (Aura); Glow replaces the body by a bright
+ * self-lit silhouette with a halo; Flat by one solid colour. The quads of the model are captured
+ * while vanilla submits it (LivingEntityRendererMixin) and drawn as a shell after the world in the
+ * effect batches, depth tested or through walls, so chams add no render pass of their own. Back
+ * faces are dropped on the CPU. Never for yourself in first person.
  */
 public final class ChamsModule extends Module implements WorldEffect {
 	private static final int GLASS = 0;
@@ -50,6 +50,7 @@ public final class ChamsModule extends Module implements WorldEffect {
 	public final ModeSetting style = add(new ModeSetting("Style", "Glass", "Glass", "Crystal", "Glow", "Flat"));
 	public final BoolSetting throughWalls = add(new BoolSetting("Through walls", true));
 	public final NumberSetting opacity = add(new NumberSetting("Opacity", 0.75, 0.1, 1.0, 0.05));
+	public final BoolSetting aura = add(new BoolSetting("Aura", true).visibleIf(() -> style.is("Crystal")));
 	public final BoolSetting mobs = add(new BoolSetting("Mobs", false));
 	public final BoolSetting self = add(new BoolSetting("Self", false));
 	public final BoolSetting teamColor = add(new BoolSetting("Team color", true));
@@ -176,7 +177,10 @@ public final class ChamsModule extends Module implements WorldEffect {
 						shell(fill, q, o, INFLATE[GLASS], c, a * 0.1f, a * 0.55f, 0.15f, NONE);
 						shell(glow, q, o, INFLATE[GLASS], light, a * 0.55f, a * 0.45f, 0f, BORDER);
 					}
-					case CRYSTAL -> crystal(fill, glow, q, o, c, a);
+					case CRYSTAL -> {
+						crystal(fill, glow, q, o, c, a);
+						if (aura.on()) halo(glow, q, o, c, a * 0.4f);
+					}
 					case GLOW -> {
 						shell(fill, q, o, INFLATE[GLOW], dark, a * 0.55f, 0f, 0f, NONE);
 						shell(glow, q, o, INFLATE[GLOW], light, a * 0.35f, a * 0.55f, 0.1f, NONE);

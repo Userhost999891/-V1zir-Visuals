@@ -30,7 +30,7 @@ void main() {
 	// A water film darkens what is under it and deepens its colour; standing water more.
 	vec3 soaked = pow(base, vec3(1.2)) * 0.85;
 	soaked = max(mix(vec3(dot(soaked, vec3(0.2126, 0.7152, 0.0722))), soaked, 1.25), 0.0);
-	base = mix(base, soaked, min(s.wet, 1.0)) * (1.0 - 0.35 * clamp(s.wet - 1.0, 0.0, 1.0));
+	base = mix(base, soaked, s.wet) * (1.0 - 0.35 * s.pool);
 	vec3 color = base * mix(1.0, s.diffuse, coverage) + reflection * s.tint * coverage;
 	if (s.glint > 0.0 && LightDir.w > 0.0) {
 		vec3 bounce = reflect(normalize(s.pos), s.normal);

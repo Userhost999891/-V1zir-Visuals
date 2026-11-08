@@ -40,7 +40,8 @@ struct SurfaceInfo {
 	vec3 normal;     // shading normal, waves and ripples included
 	vec3 tint;       // reflection weight per channel: Fresnel, metal tint and strength
 	float diffuse;   // how much of the surface's own colour stays
-	float wet;       // darkening by a water film, over 1 under standing water
+	float wet;       // darkening by a water film
+	float pool;      // standing water (puddles), which darkens what is under it further
 	float metallic;  // 1 where the reflection takes the surface's colour (metal blocks)
 	float satin;     // how much the surface turns into polished satin metal (Metal mode)
 	float roughness;
@@ -301,6 +302,7 @@ bool rSurface(ivec2 p, out SurfaceInfo s) {
 	s.tint = vec3(0.0);
 	s.diffuse = 1.0;
 	s.wet = 0.0;
+	s.pool = 0.0;
 	s.metallic = 0.0;
 	s.satin = 0.0;
 	s.roughness = 0.0;
@@ -360,8 +362,8 @@ bool rSurface(ivec2 p, out SurfaceInfo s) {
 			s.roughness = metal || glossy ? min(s.roughness, roughness) : roughness;
 		}
 		s.diffuse = min(s.diffuse, 1.0 - f);
-		// Over 1 where water stands: what is under it darkens further (reflect_composite).
-		s.wet = wet + pool;
+		s.wet = mix(wet, 1.0, pool);
+		s.pool = pool;
 		s.glint = max(s.glint, open * mix(0.3 * wet, 1.0, pool));
 	}
 	return max(s.tint.r, max(s.tint.g, s.tint.b)) > 0.002 || s.wet > 0.002;
