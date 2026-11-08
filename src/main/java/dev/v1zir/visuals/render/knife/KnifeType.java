@@ -6,8 +6,8 @@ package dev.v1zir.visuals.render.knife;
  * tab, a lighter one for knives in other players' hands.
  */
 public enum KnifeType {
-	KARAMBIT("Karambit", Grip.REVERSE, KnifeModels::karambit),
-	TALON("Talon", Grip.REVERSE, KnifeModels::talon),
+	KARAMBIT("Karambit", Grip.REVERSE, KnifeModels::karambit, 1.55f),
+	TALON("Talon", Grip.REVERSE, KnifeModels::talon, 1.45f),
 	BAYONET("Bayonet", Grip.FORWARD, KnifeModels::bayonet),
 	BUTTERFLY("Butterfly", Grip.FORWARD, KnifeModels::butterfly),
 	FLIP("Flip", Grip.FORWARD, KnifeModels::flip),
@@ -15,7 +15,7 @@ public enum KnifeType {
 	HUNTSMAN("Huntsman", Grip.FORWARD, KnifeModels::huntsman),
 	BOWIE("Bowie", Grip.FORWARD, KnifeModels::bowie),
 	FALCHION("Falchion", Grip.FORWARD, KnifeModels::falchion),
-	PUSH_DAGGER("Push Dagger", Grip.PUSH, KnifeModels::pushDagger),
+	PUSH_DAGGER("Push Dagger", Grip.PUSH, KnifeModels::pushDagger, 1.25f),
 	STILETTO("Stiletto", Grip.FORWARD, KnifeModels::stiletto),
 	KUKRI("Kukri", Grip.FORWARD, KnifeModels::kukri),
 	SKELETON("Skeleton", Grip.FORWARD, KnifeModels::skeleton),
@@ -32,14 +32,21 @@ public enum KnifeType {
 
 	private final String title;
 	final Grip grip;
+	/** Size in hand relative to the others: small knives are drawn up a little, as shooters do with theirs. */
+	final float viewScale;
 	private final Model model;
 	private KnifeMesh view;
 	private KnifeMesh world;
 
-	KnifeType(String title, Grip grip, Model model) {
+	KnifeType(String title, Grip grip, Model model, float viewScale) {
 		this.title = title;
 		this.grip = grip;
 		this.model = model;
+		this.viewScale = viewScale;
+	}
+
+	KnifeType(String title, Grip grip, Model model) {
+		this(title, grip, model, 1f);
 	}
 
 	public String title() {

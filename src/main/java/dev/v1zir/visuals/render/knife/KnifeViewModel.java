@@ -112,7 +112,8 @@ public final class KnifeViewModel {
 		}
 		matrices.push();
 		apply(matrices, ANIMATOR.knife, left);
-		matrices.scale(KnifeAnimator.SCALE, KnifeAnimator.SCALE, KnifeAnimator.SCALE);
+		float scale = ANIMATOR.scale();
+		matrices.scale(scale, scale, scale);
 		KnifeRenderer.submit(matrices, queue, type.mesh(), ANIMATOR.parts, module.finish().ordinal(), light);
 		matrices.pop();
 		return true;

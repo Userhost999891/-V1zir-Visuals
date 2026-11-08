@@ -226,7 +226,8 @@ final class KnivesPage {
 			if (inspecting) {
 				// The knife's motion relative to its rest pose in the hand, in the model's centimetres.
 				MOTION.set(REST).mul(INSPECT.knife);
-				MOTION.m30(MOTION.m30() / KnifeAnimator.SCALE).m31(MOTION.m31() / KnifeAnimator.SCALE).m32(MOTION.m32() / KnifeAnimator.SCALE);
+				float scale = INSPECT.scale();
+				MOTION.m30(MOTION.m30() / scale).m31(MOTION.m31() / scale).m32(MOTION.m32() / scale);
 				motion = MOTION;
 				parts = INSPECT.parts;
 			}

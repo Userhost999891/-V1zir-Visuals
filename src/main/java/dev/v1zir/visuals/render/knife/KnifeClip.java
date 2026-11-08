@@ -23,7 +23,7 @@ final class KnifeClip {
 	static final int PART_B = 13;
 	static final int SWING = 14;
 	static final int AIM = 17;
-	static final int CHANNELS = 19;
+	static final int CHANNELS = 20;
 
 	final float duration;
 	/** The knife spins about this point (centimetres, knife space): the grip, a finger ring, the balance point. */
@@ -97,14 +97,16 @@ final class KnifeClip {
 	}
 
 	/**
-	 * Arm and knife turned together about the fist, degrees in view space: yaw to the left about the vertical, pitch up.
-	 * Points the knife (forward for a stab or a slash) with the forearm following, as a wrist and elbow would.
+	 * Arm and knife turned together about the fist, degrees in view space: yaw to the left about the vertical, pitch up,
+	 * roll anticlockwise on screen. Points the knife with the forearm following, as a wrist and elbow would, and lays
+	 * the forearm across the view in a wide swing.
 	 */
+	KnifeClip aim(float yaw, float pitch, float roll) {
+		return set(AIM, yaw, pitch, roll);
+	}
+
 	KnifeClip aim(float yaw, float pitch) {
-		float[] k = keys[count - 1];
-		k[AIM] = yaw;
-		k[AIM + 1] = pitch;
-		return this;
+		return aim(yaw, pitch, 0f);
 	}
 
 	/** Angles of the moving parts (a folding blade; a balisong's blade and bite handle), degrees. */
