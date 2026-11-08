@@ -634,6 +634,20 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			context.waitTicks(5);
 			context.takeScreenshot("chams-" + look[0].toLowerCase(Locale.ROOT) + "-esp-" + look[1].toLowerCase(Locale.ROOT).replace(' ', '-'));
 		}
+		// Crystal up close, two blocks from the husk, without ESP.
+		context.runOnClient(client -> {
+			ModuleManager.get(ChamsModule.class).style.set("Crystal");
+			ModuleManager.get(EspModule.class).setEnabled(false, false);
+		});
+		singleplayer.getServer().runCommand("execute as @a at @s run tp @s ^ ^ ^2");
+		context.waitTicks(5);
+		context.takeScreenshot("chams-crystal-close");
+		singleplayer.getServer().runCommand("execute as @a at @s run tp @s ^ ^ ^-2");
+		context.runOnClient(client -> {
+			ModuleManager.get(ChamsModule.class).style.set("Flat");
+			ModuleManager.get(EspModule.class).setEnabled(true, false);
+		});
+		context.waitTicks(5);
 		bench(context, "chams-esp");
 		context.runOnClient(client -> {
 			ChamsModule chams = ModuleManager.get(ChamsModule.class);
@@ -717,7 +731,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		look(singleplayer, 0, 0);
 	}
 
-	/** Hand Chams Outline: the held sword wrapped in a glowing rim. */
+	/** Hand Chams: Outline wraps the held sword in a glowing rim, Crystal turns the empty hand's arm to crystal. */
 	private static void handOutline(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
 		singleplayer.getServer().runCommand("item replace entity @a weapon.mainhand with minecraft:diamond_sword");
 		boolean wasOn = context.computeOnClient(client -> {
@@ -729,8 +743,10 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		});
 		context.waitTicks(10);
 		context.takeScreenshot("hand-chams-outline");
+		// Crystal changes the arm, which first person shows only with an empty hand.
+		singleplayer.getServer().runCommand("item replace entity @a weapon.mainhand with minecraft:air");
 		context.runOnClient(client -> ModuleManager.get(HandChamsModule.class).style.set("Crystal"));
-		context.waitTicks(5);
+		context.waitTicks(15);
 		context.takeScreenshot("hand-chams-crystal");
 		context.runOnClient(client -> {
 			HandChamsModule chams = ModuleManager.get(HandChamsModule.class);

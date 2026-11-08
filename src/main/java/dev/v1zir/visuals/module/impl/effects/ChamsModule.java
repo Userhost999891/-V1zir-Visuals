@@ -40,6 +40,10 @@ public final class ChamsModule extends Module implements WorldEffect {
 	/** How far the shell sits outside the model per style: Glass clears the outer skin layer. */
 	private static final float[] INFLATE = {0.04f, 0.008f, 0.012f, 0.006f};
 	private static final float HALO = 0.07f;
+	/** Face kinds of shell and face: a fill, a glowing rounded border, or a thin one. */
+	private static final int NONE = 0;
+	private static final int BORDER = 1;
+	private static final int THIN = 2;
 	/** Per captured entity: first quad, quad count, colour. */
 	private static final int SPAN = 3;
 
@@ -169,14 +173,14 @@ public final class ChamsModule extends Module implements WorldEffect {
 				int o = i * ModelCapture.STRIDE;
 				switch (type) {
 					case GLASS -> {
-						shell(fill, q, o, INFLATE[GLASS], c, a * 0.1f, a * 0.55f, 0.15f, false);
-						shell(glow, q, o, INFLATE[GLASS], light, a * 0.55f, a * 0.45f, 0f, true);
+						shell(fill, q, o, INFLATE[GLASS], c, a * 0.1f, a * 0.55f, 0.15f, NONE);
+						shell(glow, q, o, INFLATE[GLASS], light, a * 0.55f, a * 0.45f, 0f, BORDER);
 					}
 					case CRYSTAL -> crystal(fill, glow, q, o, c, a);
 					case GLOW -> {
-						shell(fill, q, o, INFLATE[GLOW], dark, a * 0.55f, 0f, 0f, false);
-						shell(glow, q, o, INFLATE[GLOW], light, a * 0.35f, a * 0.55f, 0.1f, false);
-						shell(glow, q, o, INFLATE[GLOW], lighter, a * 0.5f, 0f, 0f, true);
+						shell(fill, q, o, INFLATE[GLOW], dark, a * 0.55f, 0f, 0f, NONE);
+						shell(glow, q, o, INFLATE[GLOW], light, a * 0.35f, a * 0.55f, 0.1f, NONE);
+						shell(glow, q, o, INFLATE[GLOW], lighter, a * 0.5f, 0f, 0f, BORDER);
 						halo(glow, q, o, c, a * 0.5f);
 					}
 					default -> flat(fill, q, o, INFLATE[3], c, a);
@@ -201,17 +205,18 @@ public final class ChamsModule extends Module implements WorldEffect {
 		boolean front = nx * cx + ny * cy + nz * cz < 0f;
 		int body = ColorUtil.lerp(color, 0xFFFFFFFF, 0.18f + 0.12f * Math.max(0f, ny));
 		int edge = ColorUtil.lerp(color, 0xFFFFFFFF, 0.8f);
-		face(fill, q, o, INFLATE[CRYSTAL], body, front ? a * 0.36f : a * 0.18f, front ? a * 0.22f : 0f, 0.3f, false);
-		face(glow, q, o, INFLATE[CRYSTAL] + 0.002f, edge, front ? a : a * 0.45f, 0f, 0f, true);
+		face(fill, q, o, INFLATE[CRYSTAL], body, front ? a * 0.36f : a * 0.18f, front ? a * 0.22f : 0f, 0.3f, NONE);
+		face(glow, q, o, INFLATE[CRYSTAL] + 0.002f, edge, front ? a : a * 0.45f, 0f, 0f, THIN);
 	}
 
 	/**
 	 * One face of the shell, pushed out along its normal, skipped when it faces away. Alpha is base plus rim
 	 * times the squared fresnel term (0 facing the camera, 1 edge on); white lifts the rim towards white.
-	 * Edges draws the face as a glowing rounded border instead of a fill.
+	 * Edges draws the face as a glowing rounded border instead of a fill (BORDER, or THIN for a crisp line
+	 * with only a short glow).
 	 */
 	private static void shell(WorldEffectRenderer.Mesh mesh, float[] q, int o, float inflate, int color, float base, float rim, float white,
-							  boolean edges) {
+							  int edges) {
 		float nx = q[o + 12], ny = q[o + 13], nz = q[o + 14];
 		float cx = (q[o] + q[o + 3] + q[o + 6] + q[o + 9]) * 0.25f;
 		float cy = (q[o + 1] + q[o + 4] + q[o + 7] + q[o + 10]) * 0.25f;
@@ -223,17 +228,19 @@ public final class ChamsModule extends Module implements WorldEffect {
 
 	/** A face of the shell whichever way it faces (see shell). */
 	private static void face(WorldEffectRenderer.Mesh mesh, float[] q, int o, float inflate, int color, float base, float rim, float white,
-							 boolean edges) {
+							 int edges) {
 		float nx = q[o + 12], ny = q[o + 13], nz = q[o + 14];
 		float u0 = 3f, u1 = 3f, v0 = 0f, v1 = 0f;
-		if (edges) {
+		if (edges != NONE) {
 			// The rounded border encoding of Draw3D.roundedBox: half sizes packed next to the position.
 			float hu = 0.5f * length(q[o + 3] - q[o], q[o + 4] - q[o + 1], q[o + 5] - q[o + 2]);
 			float hv = 0.5f * length(q[o + 9] - q[o], q[o + 10] - q[o + 1], q[o + 11] - q[o + 2]);
 			float qu = 16f * Math.max(1, Math.min(480, Math.round(hu * 64f)));
 			float qv = 16f * Math.max(1, Math.min(480, Math.round(hv * 64f))) + 8f;
-			u0 = qu - hu;
-			u1 = qu + hu;
+			// A negative u selects the thin border.
+			float sign = edges == THIN ? -1f : 1f;
+			u0 = sign * (qu - hu);
+			u1 = sign * (qu + hu);
 			v0 = -hv - qv;
 			v1 = hv - qv;
 		}
@@ -270,7 +277,7 @@ public final class ChamsModule extends Module implements WorldEffect {
 	private static void flat(WorldEffectRenderer.Mesh mesh, float[] q, int o, float inflate, int color, float alpha) {
 		float ny = q[o + 13];
 		float shade = 0.8f + 0.2f * ny;
-		shell(mesh, q, o, inflate, ColorUtil.darken(color, 1f - shade), alpha, 0f, 0f, false);
+		shell(mesh, q, o, inflate, ColorUtil.darken(color, 1f - shade), alpha, 0f, 0f, NONE);
 	}
 
 	private static float length(float x, float y, float z) {

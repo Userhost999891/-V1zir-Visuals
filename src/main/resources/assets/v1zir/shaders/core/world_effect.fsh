@@ -33,7 +33,8 @@ float rippleSky(vec3 view, vec3 n, out vec3 bounce) {
 }
 
 // UV0 selects the falloff of every effect quad:
-//   v < -1.5                 face of a rounded box: glowing rounded border (see Draw3D.roundedBox)
+//   v < -1.5                 face of a rounded box: glowing rounded border (see Draw3D.roundedBox),
+//                            thin when u < 0
 //   v > 8                    water ripple disc (see Draw3D.ripple)
 //   u > 2                    solid quad, no falloff
 //   v in [2, 4], u in [-1,1] camera facing orb, radial falloff around (0, 3)
@@ -42,9 +43,12 @@ void main() {
 	float a;
 	if (texCoord0.y < -1.5) {
 		// UV0 = (16 qu + px, py - 16 qv - 8): position p on the face around its centre and the
-		// half size h = q / 64, packed so that interpolation keeps both exact.
-		vec2 q = floor(vec2(texCoord0.x, -texCoord0.y - 8.0) / 16.0 + 0.5);
-		vec2 p = vec2(texCoord0.x - 16.0 * q.x, texCoord0.y + 16.0 * q.y + 8.0);
+		// half size h = q / 64, packed so that interpolation keeps both exact. A negative u asks for
+		// the thin border: the same line with only a short glow (Crystal chams).
+		bool thin = texCoord0.x < 0.0;
+		vec2 uv = vec2(abs(texCoord0.x), texCoord0.y);
+		vec2 q = floor(vec2(uv.x, -uv.y - 8.0) / 16.0 + 0.5);
+		vec2 p = vec2(uv.x - 16.0 * q.x, uv.y + 16.0 * q.y + 8.0);
 		vec2 h = q / 64.0;
 		float r = min(0.12, 0.35 * min(h.x, h.y));
 		vec2 e = abs(p) - h + r;
@@ -52,7 +56,8 @@ void main() {
 		// Distance inside the border in pixels: a crisp line and a soft glow of constant screen size,
 		// antialiased outwards so the face corners stay round.
 		float px = -d / max(fwidth(d), 1e-6);
-		a = (1.0 - smoothstep(1.0, 2.4, px) + exp(-max(px, 0.0) * 0.16) * 0.5) * clamp(px + 1.0, 0.0, 1.0);
+		float glow = thin ? exp(-max(px, 0.0) * 0.7) * 0.3 : exp(-max(px, 0.0) * 0.16) * 0.5;
+		a = (1.0 - smoothstep(thin ? 0.6 : 1.0, thin ? 1.8 : 2.4, px) + glow) * clamp(px + 1.0, 0.0, 1.0);
 	} else if (texCoord0.y > 8.0) {
 		// UV0 = (4 k + x, 16 + 4 b + y): (x, y) on the disc in [-1, 1], b = 1000 x progress and
 		// k = pass + 2 g with pass 0 for the light the ripple adds (additive) and 1 for its shade
