@@ -118,6 +118,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Run now_playing.ps1 for a few seconds
         shell: pwsh
+        timeout-minutes: 3
         run: |
           $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
           $info = New-Object System.Diagnostics.ProcessStartInfo $ps
@@ -153,6 +154,7 @@ jobs:
       # bridge reading it, as the game runs it and in a single-threaded apartment; the log shows every report.
       - name: Bridge against a fake player
         shell: pwsh
+        timeout-minutes: 3
         run: |
           $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
           foreach ($apartment in 'MTA', 'STA') {

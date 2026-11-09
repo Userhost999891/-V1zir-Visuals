@@ -66,6 +66,11 @@ $artTask = $null
 $artTaskKey = ''
 $artTaskStart = 0
 $streamType = [Windows.Storage.Streams.IRandomAccessStreamWithContentType]
+# The cover's stream comes as a bare COM object: PowerShell finds no members on it and cannot pass it to a method
+# by itself (calling Dispose() on it, or AsStreamForRead with it, throws, which kept every cover from being saved).
+# Invoked through reflection, the runtime asks the object for the interface, as it does for AsTask above.
+$asStreamForRead = [System.IO.WindowsRuntimeStreamExtensions].GetMethod('AsStreamForRead',
+	[Type[]]@([Windows.Storage.Streams.IInputStream, Windows.Storage.Streams, ContentType = WindowsRuntime]))
 
 function Remove-Art {
 	if ($script:artFile) { Remove-Item -LiteralPath $script:artFile -ErrorAction SilentlyContinue }
@@ -123,9 +128,8 @@ function End-Art {
 		if (-not $script:artFile) { $script:artState = 3 }
 		return
 	}
-	# The stream comes as a bare COM object here: it has no members to call by name (a Dispose() on it throws, which
-	# kept every cover from being saved), so it is only handed on. Closing the .NET stream over it closes it too.
-	$source = [System.IO.WindowsRuntimeStreamExtensions]::AsStreamForRead($task.Result)
+	# Closing the .NET stream over the cover's stream closes that too.
+	$source = $asStreamForRead.Invoke($null, @($task.Result))
 	$memory = New-Object System.IO.MemoryStream
 	try {
 		$source.CopyTo($memory)
