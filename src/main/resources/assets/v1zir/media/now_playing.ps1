@@ -3,6 +3,9 @@
 # session if there is one, else the current session) and runs playpause / next / previous read
 # from stdin. It exits when stdin closes. Only ASCII is printed (everything else is \u escaped),
 # so the console code page does not matter.
+# The session manager can go stale (Spotify does not always tell the media controls that a song
+# changed by itself): it is requested afresh every 15 seconds and on a refresh command, which the
+# game sends when Spotify's window names another song than the one reported here.
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Runtime.WindowsRuntime
 $null = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType = WindowsRuntime]
@@ -94,6 +97,7 @@ $clock = [System.Diagnostics.Stopwatch]::StartNew()
 $lastKey = $null
 $artChecks = 0
 $nextArtCheck = 0
+$nextRefresh = 15000
 
 while ($true) {
 	while ($pendingCommand.IsCompleted) {
@@ -103,16 +107,33 @@ while ($true) {
 			exit
 		}
 		try {
-			$session = Find-Session
-			if ($null -ne $session) {
-				switch ($command.Trim()) {
-					'playpause' { $null = Await ($session.TryTogglePlayPauseAsync()) ([bool]) }
-					'next' { $null = Await ($session.TrySkipNextAsync()) ([bool]) }
-					'previous' { $null = Await ($session.TrySkipPreviousAsync()) ([bool]) }
+			if ($command.Trim() -eq 'refresh') {
+				$nextRefresh = 0
+			} else {
+				$session = Find-Session
+				if ($null -ne $session) {
+					switch ($command.Trim()) {
+						'playpause' { $null = Await ($session.TryTogglePlayPauseAsync()) ([bool]) }
+						'next' { $null = Await ($session.TrySkipNextAsync()) ([bool]) }
+						'previous' { $null = Await ($session.TrySkipPreviousAsync()) ([bool]) }
+					}
 				}
 			}
 		} catch { }
 		$pendingCommand = $stdin.ReadLineAsync()
+	}
+	if ($clock.ElapsedMilliseconds -ge $nextRefresh) {
+		# A fresh manager sees what the players report now.
+		$nextRefresh = $clock.ElapsedMilliseconds + 15000
+		try {
+			$fresh = Await ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])
+			if ($null -ne $fresh) {
+				$manager = $fresh
+				# The cover is checked again too; an unchanged one is not saved again (its hash matches).
+				$artChecks = [Math]::Max($artChecks, 1)
+				$nextArtCheck = 0
+			}
+		} catch { }
 	}
 	try {
 		$line = '{"none":1}'

@@ -17,6 +17,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -29,6 +30,10 @@ import java.util.concurrent.TimeUnit;
  * When the bridge cannot run (blocked by an antivirus or a script policy, missing) or reports nothing while Spotify
  * plays, Spotify's own window title takes over ({@link SpotifyWindow}), so the song and lyrics still show. What went
  * wrong with the bridge is written to the game log.
+ * <p>
+ * The window title is also the check on the bridge: Spotify does not always tell the media controls that a song changed
+ * by itself, and they then keep reporting the previous one until playback is paused or resumed. When the window names
+ * another song than the bridge for a moment, the window's song shows and the bridge is asked to look again.
  */
 final class WindowsMediaSource extends MediaSource {
 	private static final String SCRIPT = "/assets/" + V1zir.MOD_ID + "/media/now_playing.ps1";
@@ -36,6 +41,10 @@ final class WindowsMediaSource extends MediaSource {
 	private static final int MAX_FAILURES = 3;
 	/** The window fallback speaks when the bridge has not reported a song for this long. */
 	private static final long BRIDGE_QUIET_NANOS = 2_500_000_000L;
+	/** The window naming another song than the bridge for this long means the bridge is stale. */
+	private static final long STALE_NANOS = 1_200_000_000L;
+	/** The bridge is asked to refresh at most this often while it stays stale. */
+	private static final long REFRESH_NANOS = 4_000_000_000L;
 
 	private volatile boolean stopped;
 	private Process process;
@@ -47,6 +56,11 @@ final class WindowsMediaSource extends MediaSource {
 	private SpotifyWindow window;
 	/** The window fallback published the state last. */
 	private volatile boolean windowSpeaking;
+	/** The song the bridge reported last, and the one the window names while it stands in for a stale bridge. */
+	private volatile Track bridgeTrack;
+	private volatile Track windowTrack;
+	private long mismatchSince;
+	private long lastRefresh;
 	private boolean windowBroken;
 	private boolean loggedFailure;
 
@@ -122,15 +136,35 @@ final class WindowsMediaSource extends MediaSource {
 		return path;
 	}
 
-	/** Spotify's window title stands in while the bridge is quiet or down. */
+	/** Spotify's window title stands in while the bridge is quiet, down or stale. */
 	private void pollWindow() {
 		if (stopped || window == null) return;
 		try {
-			if (System.nanoTime() - bridgeSongAt < BRIDGE_QUIET_NANOS) {
-				windowSpeaking = false;
+			NowPlaying state = window.poll();
+			long now = System.nanoTime();
+			if (now - bridgeSongAt < BRIDGE_QUIET_NANOS) {
+				// The bridge speaks; the window checks it. A playing song in the window that the bridge does not name
+				// for a moment means the media controls missed a change: the window's song shows until they catch up.
+				Track bridge = bridgeTrack;
+				boolean stale = state.track() != null && state.playing() && bridge != null && !sameSong(bridge, state.track());
+				if (!stale) {
+					mismatchSince = 0L;
+					windowSpeaking = false;
+					windowTrack = null;
+					return;
+				}
+				if (mismatchSince == 0L) mismatchSince = now;
+				if (now - mismatchSince < STALE_NANOS) return;
+				if (now - lastRefresh > REFRESH_NANOS) {
+					lastRefresh = now;
+					send("refresh\n");
+				}
+				windowSpeaking = true;
+				windowTrack = state.track();
+				publish(state.track(), state.art(), state.positionMs(), state.playing());
 				return;
 			}
-			NowPlaying state = window.poll();
+			windowTrack = null;
 			if (state.track() != null || windowSpeaking) {
 				windowSpeaking = state.track() != null;
 				publish(state.track(), state.art(), state.positionMs(), state.playing());
@@ -185,13 +219,40 @@ final class WindowsMediaSource extends MediaSource {
 				if (!windowSpeaking) publish(null, "", 0L, false);
 			} else {
 				bridgeSongAt = System.nanoTime();
-				windowSpeaking = false;
 				Track track = new Track(title, MacMediaSource.text(o, "a"), MacMediaSource.text(o, "al"), o.get("d").getAsLong());
+				bridgeTrack = track;
+				// Still the song the window has moved on from: the window keeps speaking until the bridge catches up.
+				Track window = windowTrack;
+				if (windowSpeaking && window != null && !sameSong(track, window)) return true;
+				windowSpeaking = false;
+				windowTrack = null;
 				publish(track, MacMediaSource.text(o, "art"), o.get("p").getAsLong(), o.get("s").getAsInt() == 1);
 			}
 			return true;
 		} catch (RuntimeException e) {
 			return false;
+		}
+	}
+
+	/**
+	 * Whether two reports name the same song: the same title, ignoring case and spacing, or one holding the other (the
+	 * window title splits "Artist - Title" at its first dash, so a title with a dash of its own still matches).
+	 */
+	static boolean sameSong(Track a, Track b) {
+		String x = a.title().toLowerCase(Locale.ROOT).replaceAll("\\s+", " ").strip();
+		String y = b.title().toLowerCase(Locale.ROOT).replaceAll("\\s+", " ").strip();
+		if (x.isEmpty() || y.isEmpty()) return true;
+		return x.equals(y) || x.contains(y) || y.contains(x);
+	}
+
+	/** Writes a line to the bridge, if it runs. */
+	private synchronized void send(String line) {
+		if (input == null) return;
+		try {
+			input.write(line);
+			input.flush();
+		} catch (IOException ignored) {
+			// The bridge is restarting.
 		}
 	}
 
