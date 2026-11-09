@@ -143,6 +143,29 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			// The test runner expects to end on the vanilla title screen.
 			context.runOnClient(client -> MainMenuModule.suspended = true);
 		}
+		lastPlayed(context);
+	}
+
+	/**
+	 * Back from the world, the lock screen's widget and the menu's Continue pill offer it again, with its picture and
+	 * its name; the test then ends on the vanilla title screen, as the runner expects.
+	 */
+	private static void lastPlayed(ClientGameTestContext context) {
+		context.runOnClient(client -> {
+			MainMenuModule.suspended = false;
+			LockScreen.lock();
+			client.setScreen(new V1zirMainMenu());
+		});
+		context.waitTicks(40);
+		context.takeScreenshot("lock-screen-last-played");
+		context.getInput().pressKey(GLFW.GLFW_KEY_SPACE);
+		context.waitTicks(40);
+		context.takeScreenshot("main-menu-continue");
+		context.runOnClient(client -> {
+			MainMenuModule.suspended = true;
+			client.setScreen(new TitleScreen());
+		});
+		context.waitForScreen(TitleScreen.class);
 	}
 
 	private static void resize(ClientGameTestContext context, int width, int height) {

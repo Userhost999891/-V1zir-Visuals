@@ -20,6 +20,7 @@ import dev.v1zir.visuals.util.Theme;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.entity.player.SkinTextures;
+import net.minecraft.client.texture.TextureSetup;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix3x2fStack;
 
@@ -162,7 +163,7 @@ final class LockWidgets {
 
 		float mediaW = h * 4.4f;
 		lastCaption.fit(medium, clock.lastPlayed, caption, h * 2.4f);
-		lastName.fit(semibold, LastPlayed.name, text, h * 2.8f);
+		lastName.fit(semibold, LastPlayed.label(), text, h * 2.8f);
 		float pingW = 0f;
 		if (LastPlayed.server && LastPlayed.ping >= 0) {
 			if (LastPlayed.ping != pingValue) {
@@ -256,7 +257,10 @@ final class LockWidgets {
 		if (done > 0f) Render2D.round(ctx, tx, barY, Math.max(barH, max * done), barH, barH / 2f, 0xD9FFFFFF);
 	}
 
-	/** The last world or server: its icon, "Last played" with the ping, and its name; clicked, it rejoins. */
+	/**
+	 * The last world or server: its icon (the world's picture or the server's icon, else a symbol), "Last played" with
+	 * the ping, and the world's name or the server's address; clicked, it rejoins.
+	 */
 	private void renderLast(DrawContext ctx, float x, float y, float w, float h, int mouseX, int mouseY) {
 		float hov = hovered(LAST, mouseX, mouseY);
 		float sink = h * 0.03f * held(LAST, mouseX, mouseY);
@@ -266,8 +270,15 @@ final class LockWidgets {
 		frost(ctx, x + sink, y + sink, w - sink * 2f, h - sink * 2f, h * 0.3f, hov);
 		float ix = x + pad + inner / 2f;
 		float iy = y + h / 2f;
-		Render2D.circle(ctx, ix, iy, inner / 2f, ColorUtil.withAlpha(0xFFFFFF, Math.round(36 + 24 * hov)));
-		Render2D.icon(ctx, LastPlayed.server ? Icons.SERVER : Icons.BOX, ix, iy, inner * 0.5f, 0xF2FFFFFF);
+		TextureSetup picture = LastPlayedIcon.get();
+		if (picture != null) {
+			float r = inner * 0.24f;
+			Render2D.image(ctx, picture, ix - inner / 2f, iy - inner / 2f, inner, inner, r, 0xFFFFFFFF);
+			Render2D.outline(ctx, ix - inner / 2f, iy - inner / 2f, inner, inner, r, 0.8f, ColorUtil.withAlpha(0xFFFFFF, Math.round(40 + 30 * hov)));
+		} else {
+			Render2D.circle(ctx, ix, iy, inner / 2f, ColorUtil.withAlpha(0xFFFFFF, Math.round(36 + 24 * hov)));
+			Render2D.icon(ctx, LastPlayed.server ? Icons.SERVER : Icons.BOX, ix, iy, inner * 0.5f, 0xF2FFFFFF);
+		}
 
 		float tx = x + pad + inner + pad * 0.8f;
 		float caption = h * 0.21f;

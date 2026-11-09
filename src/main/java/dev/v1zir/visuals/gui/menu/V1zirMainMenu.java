@@ -37,6 +37,7 @@ import net.minecraft.client.gui.screen.multiplayer.MultiplayerServerListWidget;
 import net.minecraft.client.gui.screen.world.CreateWorldScreen;
 import net.minecraft.client.gui.screen.world.WorldListWidget;
 import net.minecraft.client.option.ServerList;
+import net.minecraft.client.texture.TextureSetup;
 import net.minecraft.entity.player.SkinTextures;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix3x2fStack;
@@ -163,8 +164,9 @@ public final class V1zirMainMenu extends Screen {
 		// The world or server played last, if it is still there, one click away under the buttons.
 		continueText = "";
 		if (LastPlayed.available(client)) {
-			continueText = LastPlayed.name;
+			continueText = LastPlayed.label();
 			continueIcon = LastPlayed.server ? Icons.SERVER : Icons.PLAY;
+			LastPlayedIcon.refresh(client);
 		}
 		continuePressed = false;
 
@@ -437,8 +439,15 @@ public final class V1zirMainMenu extends Screen {
 		else Render2D.matte(ctx, x, y, w, ph, ph / 2f, fill, 0);
 		Render2D.outline(ctx, x, y, w, ph, ph / 2f, 0.8f, ColorUtil.withAlpha(0xFFFFFF, Math.round(26 + 30 * h)));
 		float cy = y + ph / 2f;
-		Render2D.circle(ctx, x + ph / 2f, cy, ph * 0.36f, ColorUtil.lerp(ColorUtil.withAlpha(Theme.accent(), 200), Theme.accent(), h));
-		Render2D.icon(ctx, continueIcon, x + ph / 2f + (continueIcon == Icons.PLAY ? ph * 0.03f : 0f), cy, ph * 0.38f, 0xFFFFFFFF);
+		TextureSetup picture = LastPlayedIcon.get();
+		if (picture != null) {
+			// The world's picture or the server's icon, rounded like the pill.
+			float side = ph * 0.72f;
+			Render2D.image(ctx, picture, x + ph / 2f - side / 2f, cy - side / 2f, side, side, side * 0.3f, 0xFFFFFFFF);
+		} else {
+			Render2D.circle(ctx, x + ph / 2f, cy, ph * 0.36f, ColorUtil.lerp(ColorUtil.withAlpha(Theme.accent(), 200), Theme.accent(), h));
+			Render2D.icon(ctx, continueIcon, x + ph / 2f + (continueIcon == Icons.PLAY ? ph * 0.03f : 0f), cy, ph * 0.38f, 0xFFFFFFFF);
+		}
 		float tx = x + ph + 2f;
 		Render2D.textMiddle(ctx, bold, head, tx, cy, size, 0xF2FFFFFF);
 		Render2D.textMiddle(ctx, font, name, tx + headW + 8f, cy, size, ColorUtil.lerp(0xA6FFFFFF, 0xE6FFFFFF, h));

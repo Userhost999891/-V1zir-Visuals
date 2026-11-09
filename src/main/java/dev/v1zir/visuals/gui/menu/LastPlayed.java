@@ -12,11 +12,14 @@ import net.minecraft.client.option.ServerList;
 import net.minecraft.server.integrated.IntegratedServer;
 import net.minecraft.util.WorldSavePath;
 
+import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 
 /**
  * The world or server the player was in last, which the lock screen offers to rejoin: remembered on joining, with
  * the ping followed while on a server, and saved in config.json. Realms are left out (they cannot be joined by address).
+ * A world shows with its name and icon, a server with its address and its icon from the server list.
  */
 public final class LastPlayed {
 	/** The world's or the server entry's name; empty before anything was played. */
@@ -26,6 +29,8 @@ public final class LastPlayed {
 	static boolean server;
 	/** Last ping on the server in milliseconds, or -1. */
 	static int ping = -1;
+	/** The server's icon as it was when joined (PNG), for one joined by address and not kept in the list; null if none. */
+	private static byte[] favicon;
 	/** The session in progress is the one remembered, so its ping counts. */
 	private static boolean tracking;
 	private static int ticks;
@@ -49,6 +54,35 @@ public final class LastPlayed {
 			if (!entry.address.equals(target)) ping = -1;
 			name = entry.name;
 			target = entry.address;
+			favicon = entry.getFavicon();
+		}
+	}
+
+	/** What to call it: a world's name, a server's address (its name in the list is often just "Minecraft Server"). */
+	static String label() {
+		if (!server) return name;
+		String address = target.strip();
+		return address.endsWith(":25565") ? address.substring(0, address.length() - 6) : address;
+	}
+
+	/**
+	 * The icon to show for it (PNG bytes): the world's icon.png, or the server's icon from the server list (or as it was
+	 * when joined); null when it has none. Reads the disk: call rarely.
+	 */
+	static byte[] icon(MinecraftClient client) {
+		if (name.isEmpty() || target.isEmpty()) return null;
+		try {
+			if (!server) {
+				Path file = client.getLevelStorage().getSavesDirectory().resolve(target).resolve("icon.png");
+				return Files.isRegularFile(file) && Files.size(file) < 1_048_576L ? Files.readAllBytes(file) : null;
+			}
+			ServerList list = new ServerList(client);
+			list.loadFile();
+			ServerInfo info = list.get(target);
+			byte[] icon = info != null ? info.getFavicon() : null;
+			return icon != null ? icon : favicon;
+		} catch (IOException | RuntimeException e) {
+			return null;
 		}
 	}
 
