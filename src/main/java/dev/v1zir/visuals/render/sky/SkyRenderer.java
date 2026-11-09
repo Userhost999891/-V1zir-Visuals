@@ -19,6 +19,11 @@ import java.util.OptionalInt;
 
 /** Draws the shader sky from inside the vanilla sky pass (see SkyRenderingMixin). */
 public final class SkyRenderer {
+	/**
+	 * Zoomed in further than this (the Zoom module, a spyglass), a texel of the cached panorama would cover several
+	 * pixels and show as blur and streaks: the sky is then drawn per pixel (at the render scale) instead.
+	 */
+	private static final float CACHE_MAX_ZOOM = 1.6f;
 	private static final Matrix4f VIEW = new Matrix4f();
 	private static final Matrix4f PROJECTION = new Matrix4f();
 	// The inverse is taken in double: the float inverse of a perspective matrix is too imprecise.
@@ -74,6 +79,12 @@ public final class SkyRenderer {
 		return render(sky);
 	}
 
+	/** How far the frame's projection is zoomed in from the field of view set in the options. */
+	private static float zoom(MinecraftClient mc) {
+		double fov = Math.toRadians(mc.options.getFov().getValue());
+		return (float) (PROJECTION.m11() * Math.tan(fov / 2.0));
+	}
+
 	private static boolean render(ShaderSkyModule sky) {
 		MinecraftClient mc = V1zir.mc();
 		if (mc.world == null) return false;
@@ -86,7 +97,7 @@ public final class SkyRenderer {
 			GpuTextureView color = RenderSystem.outputColorTextureOverride != null
 				? RenderSystem.outputColorTextureOverride
 				: mc.getFramebuffer().getColorAttachmentView();
-			if (sky.cache.on() && sky.currentPreset().cacheable() && RenderSystem.outputColorTextureOverride == null) {
+			if (sky.cache.on() && sky.currentPreset().cacheable() && RenderSystem.outputColorTextureOverride == null && zoom(mc) < CACHE_MAX_ZOOM) {
 				SkyCache.render(DATA, params, color, sky.cacheRefresh.f());
 				return true;
 			}
