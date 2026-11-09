@@ -49,6 +49,7 @@ import dev.v1zir.visuals.module.impl.visuals.ShaderSkyModule;
 import dev.v1zir.visuals.module.impl.visuals.ShootingStarsModule;
 import dev.v1zir.visuals.module.impl.visuals.WorldParticlesModule;
 import dev.v1zir.visuals.module.impl.visuals.ZoomModule;
+import dev.v1zir.visuals.pack.PackMixer;
 import dev.v1zir.visuals.render.knife.KnifeViewModel;
 import dev.v1zir.visuals.render.sky.SkyPreset;
 import dev.v1zir.visuals.util.Theme;
@@ -84,6 +85,7 @@ import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -924,6 +926,27 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.setScreen(ClickGuiScreen::new);
 		context.waitTicks(40);
 		context.takeScreenshot("clickgui-tab-packs");
+		// The Swords tab with its first texture selected.
+		context.runOnClient(client -> {
+			Object page = field(client.currentScreen, ClickGuiScreen.class, "packsPage");
+			Class<?> type = page.getClass();
+			try {
+				Field filter = type.getDeclaredField("filter");
+				filter.setAccessible(true);
+				filter.setInt(page, 3 + Arrays.asList(PackMixer.CATEGORIES).indexOf("Swords"));
+				for (PackMixer.Entry e : PackMixer.entries()) {
+					if (!e.group().equals("Swords")) continue;
+					Field selected = type.getDeclaredField("selected");
+					selected.setAccessible(true);
+					selected.set(page, e);
+					break;
+				}
+			} catch (ReflectiveOperationException e) {
+				throw new AssertionError(e);
+			}
+		});
+		context.waitTicks(20);
+		context.takeScreenshot("clickgui-tab-packs-swords");
 		context.setScreen(() -> null);
 	}
 

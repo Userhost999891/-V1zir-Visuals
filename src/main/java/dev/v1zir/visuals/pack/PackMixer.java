@@ -24,6 +24,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 
 /**
@@ -52,7 +53,37 @@ public final class PackMixer {
 		}
 	}
 
-	public static final String[] GROUPS = {"Blocks", "Items", "Entities", "GUI", "Particles", "Other"};
+	/** The tabs of the Packs page, in order; PvP packs mostly change the first few. */
+	public static final String[] CATEGORIES = {"Swords", "Axes", "Pickaxes", "Tools", "Bows", "Armor", "Food", "Potions", "Items",
+		"Blocks", "Ores", "Wool & Glass", "Mobs", "GUI", "Effects", "Particles", "Sky", "Other"};
+	/** The texture that stands for each tab (its icon), or null where the page draws a glyph instead. */
+	public static final String[] CATEGORY_TEXTURES = {"item/diamond_sword", "item/diamond_axe", "item/diamond_pickaxe", "item/diamond_shovel",
+		"item/bow", "item/diamond_chestplate", "item/golden_apple", "item/splash_potion", "item/emerald", "block/grass_block_side",
+		"block/diamond_ore", "block/light_blue_wool", null, null, "mob_effect/strength", "particle/heart", "environment/sun", null};
+	private static final int SWORDS = 0;
+	private static final int AXES = 1;
+	private static final int PICKAXES = 2;
+	private static final int TOOLS = 3;
+	private static final int BOWS = 4;
+	private static final int ARMOR = 5;
+	private static final int FOOD = 6;
+	private static final int POTIONS = 7;
+	private static final int ITEMS = 8;
+	private static final int BLOCKS = 9;
+	private static final int ORES = 10;
+	private static final int WOOL_GLASS = 11;
+	private static final int MOBS = 12;
+	private static final int GUI = 13;
+	private static final int EFFECTS = 14;
+	private static final int PARTICLES = 15;
+	private static final int SKY = 16;
+	private static final int OTHER = 17;
+	private static final Set<String> FOODS = Set.of("apple", "golden_apple", "enchanted_golden_apple", "bread", "beef", "porkchop", "mutton",
+		"chicken", "rabbit", "cod", "salmon", "tropical_fish", "pufferfish", "potato", "baked_potato", "poisonous_potato", "carrot", "golden_carrot",
+		"beetroot", "melon_slice", "glistering_melon_slice", "cookie", "pumpkin_pie", "cake", "sweet_berries", "glow_berries", "chorus_fruit",
+		"dried_kelp", "honey_bottle", "rotten_flesh", "spider_eye");
+	private static final Set<String> POTION_ITEMS = Set.of("ender_pearl", "ender_eye", "experience_bottle", "totem_of_undying", "ominous_bottle",
+		"dragon_breath", "glass_bottle", "wind_charge");
 
 	private static volatile Map<Identifier, String> choices = Map.of();
 	private static List<Entry> entries = List.of();
@@ -200,13 +231,46 @@ public final class PackMixer {
 	}
 
 	private static String group(Identifier id) {
-		String path = id.getPath();
-		if (path.startsWith("textures/block/")) return "Blocks";
-		if (path.startsWith("textures/item/")) return "Items";
-		if (path.startsWith("textures/entity/")) return "Entities";
-		if (path.startsWith("textures/gui/")) return "GUI";
-		if (path.startsWith("textures/particle/")) return "Particles";
-		return "Other";
+		return CATEGORIES[category(id.getPath())];
+	}
+
+	/** The tab of a texture, from its folder and, for items and blocks, its name. */
+	private static int category(String path) {
+		if (path.startsWith("textures/item/")) {
+			String n = path.substring("textures/item/".length(), path.length() - ".png".length());
+			if (n.endsWith("_sword")) return SWORDS;
+			if (n.endsWith("_pickaxe")) return PICKAXES;
+			if (n.endsWith("_axe")) return AXES;
+			if (n.endsWith("_shovel") || n.endsWith("_hoe") || n.equals("shears") || n.startsWith("fishing_rod") || n.equals("flint_and_steel")
+				|| n.equals("brush") || n.equals("spyglass")) return TOOLS;
+			if (n.startsWith("bow") || n.startsWith("crossbow") || n.endsWith("arrow") || n.startsWith("tipped_arrow") || n.equals("trident")
+				|| n.equals("mace")) return BOWS;
+			if (n.endsWith("_helmet") || n.endsWith("_chestplate") || n.endsWith("_leggings") || n.endsWith("_boots") || n.startsWith("elytra")
+				|| n.endsWith("horse_armor") || n.equals("wolf_armor")) return ARMOR;
+			if (FOODS.contains(n) || n.startsWith("cooked_") || n.endsWith("_stew") || n.endsWith("_soup")) return FOOD;
+			if (n.startsWith("potion") || n.endsWith("_potion") || POTION_ITEMS.contains(n)) return POTIONS;
+			return ITEMS;
+		}
+		if (path.startsWith("textures/block/")) {
+			String n = path.substring("textures/block/".length(), path.length() - ".png".length());
+			if (n.endsWith("_ore") || n.startsWith("ancient_debris")) return ORES;
+			if (n.endsWith("_wool") || n.contains("glass")) return WOOL_GLASS;
+			return BLOCKS;
+		}
+		if (path.startsWith("textures/entity/equipment/") || path.startsWith("textures/models/armor/") || path.startsWith("textures/trims/")) return ARMOR;
+		if (path.startsWith("textures/entity/")) return MOBS;
+		if (path.startsWith("textures/gui/")) return GUI;
+		if (path.startsWith("textures/mob_effect/")) return EFFECTS;
+		if (path.startsWith("textures/particle/")) return PARTICLES;
+		if (path.startsWith("textures/environment/")) return SKY;
+		return OTHER;
+	}
+
+	/** The texture minecraft:textures/{path}.png, or null when no pack has it. */
+	public static Entry find(String path) {
+		Identifier id = Identifier.of("minecraft", "textures/" + path + ".png");
+		for (Entry e : entries) if (e.id().equals(id)) return e;
+		return null;
 	}
 
 	private static String prettyPack(String id) {

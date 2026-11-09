@@ -12,19 +12,28 @@ import dev.v1zir.visuals.util.Theme;
 import net.minecraft.client.gui.DrawContext;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
 /**
  * The Packs tab (Pack Mixer): every texture of the loaded resource packs, vanilla's included, as a grid of tiles
- * showing the version in use; a tile with a number is provided by that many packs. Selecting one lists its versions on
- * the right with a preview each, and clicking a version makes the game use it. Apply reloads the resources so the
- * choices show; Reset goes back to the top pack everywhere. The search field filters by name.
+ * showing the version in use; a tile with a number is provided by that many packs. A sidebar sorts them into tabs the
+ * way PvP packs are made (swords, axes, pickaxes, tools, bows, armour, food, potions, blocks, ores, wool and glass,
+ * GUI...), each with a texture of the pack as its icon, how many textures it holds and a dot when one was changed here;
+ * All, Changed and Conflicts sit on top. Hovering a tile names it; selecting one lists its versions on the right with
+ * a preview each, and clicking a version makes the game use it. Apply reloads the resources so the choices show;
+ * Reset goes back to the top pack everywhere. The search field filters by name.
  */
 final class PacksPage {
-	private static final String[] FILTERS = {"All", "Changed", "Conflicts", "Blocks", "Items", "Entities", "GUI", "Particles", "Other"};
+	private static final String[] FILTERS = filters();
+	/** Glyphs of the rows without a texture icon: All, Changed, Conflicts, then the tabs that have none. */
+	private static final int[] GLYPHS = glyphs();
 	private static final float GAP = 10f;
-	private static final float CHIP_H = 18f;
+	private static final float SIDE_W = 112f;
+	private static final float SIDE_ROW = 18f;
+	/** The three overview rows are set apart from the tabs by this gap. */
+	private static final float SIDE_SPLIT = 7f;
 	private static final float TILE = 34f;
 	private static final float TILE_GAP = 5f;
 	private static final float ROW = 28f;
@@ -32,9 +41,15 @@ final class PacksPage {
 
 	private final Scroller scroller = new Scroller();
 	private final Scroller versionScroller = new Scroller();
-	private final Anim[] chipHover = new Anim[FILTERS.length];
-	private final Anim[] chipActive = new Anim[FILTERS.length];
-	private final Label[] chipWidth = new Label[FILTERS.length];
+	private final Scroller sideScroller = new Scroller();
+	private final Anim[] rowHover = new Anim[FILTERS.length];
+	private final Anim[] rowActive = new Anim[FILTERS.length];
+	/** Per row: textures in it, how many of them were changed here, and the texture its icon shows. */
+	private final int[] counts = new int[FILTERS.length];
+	private final int[] changedCounts = new int[FILTERS.length];
+	private final PackMixer.Entry[] icons = new PackMixer.Entry[FILTERS.length];
+	private List<PackMixer.Entry> countedFrom;
+	private int countedChoices = -1;
 	private final Anim applyHover = new Anim(0f, 22f);
 	private final Anim resetHover = new Anim(0f, 22f);
 	private final Label subtitleWidth = new Label();
@@ -51,15 +66,21 @@ final class PacksPage {
 	private float viewY;
 	private float viewW;
 	private float viewH;
-	private final float[] chipX = new float[FILTERS.length];
-	private final float[] chipW = new float[FILTERS.length];
-	private float chipY;
+	private float sideX;
+	private float sideY;
+	private float sideW;
+	private float sideH;
+	private float sideScroll;
+	/** Top of each row of the sidebar in the last frame (NaN when it was not drawn). */
+	private final float[] rowY = new float[FILTERS.length];
 	private float gridX;
 	private float gridY;
 	private float gridW;
 	private float gridH;
 	private int cols = 1;
 	private float scroll;
+	/** The tile under the cursor in the last frame, or -1. */
+	private int hoveredTile = -1;
 	private float listX;
 	private float listY;
 	private float listW;
@@ -73,10 +94,40 @@ final class PacksPage {
 
 	PacksPage() {
 		for (int i = 0; i < FILTERS.length; i++) {
-			chipHover[i] = new Anim(0f, 22f);
-			chipActive[i] = new Anim(i == 0 ? 1f : 0f, 16f);
-			chipWidth[i] = new Label();
+			rowHover[i] = new Anim(0f, 22f);
+			rowActive[i] = new Anim(i == 0 ? 1f : 0f, 16f);
 		}
+	}
+
+	private static String[] filters() {
+		String[] filters = new String[3 + PackMixer.CATEGORIES.length];
+		filters[0] = "All";
+		filters[1] = "Changed";
+		filters[2] = "Conflicts";
+		System.arraycopy(PackMixer.CATEGORIES, 0, filters, 3, PackMixer.CATEGORIES.length);
+		return filters;
+	}
+
+	private static int[] glyphs() {
+		int[] glyphs = new int[3 + PackMixer.CATEGORIES.length];
+		glyphs[0] = Icons.LAYOUT_GRID;
+		glyphs[1] = Icons.PENCIL;
+		glyphs[2] = Icons.LAYERS;
+		for (int i = 0; i < PackMixer.CATEGORIES.length; i++) {
+			glyphs[3 + i] = switch (PackMixer.CATEGORIES[i]) {
+				case "Mobs" -> Icons.GHOST;
+				case "GUI" -> Icons.LAYOUT_DASHBOARD;
+				case "Swords" -> Icons.SWORD;
+				case "Axes" -> Icons.AXE;
+				case "Pickaxes", "Tools" -> Icons.HAMMER;
+				case "Armor" -> Icons.SHIELD;
+				case "Potions" -> Icons.FLASK_CONICAL;
+				case "Sky" -> Icons.SUN;
+				case "Particles" -> Icons.SPARKLES;
+				default -> Icons.ELLIPSIS;
+			};
+		}
+		return glyphs;
 	}
 
 	void reset() {
@@ -129,14 +180,106 @@ final class PacksPage {
 		double hx = mouseFree ? mx : -1000;
 		double hy = mouseFree ? my : -1000;
 		refilter();
-		renderChips(ctx, x, y, hx, hy);
-		float panelW = Math.max(150f, Math.min(220f, w * 0.34f));
-		gridX = x;
-		gridY = y + CHIP_H + 10f;
-		gridW = w - panelW - GAP;
-		gridH = h - CHIP_H - 10f;
+		count();
+		float side = Math.min(SIDE_W, w * 0.3f);
+		renderSidebar(ctx, x, y, side, h, hx, hy);
+		float px = x + side + GAP;
+		float pw = w - side - GAP;
+		float panelW = Math.max(132f, Math.min(200f, pw * 0.4f));
+		gridX = px;
+		gridY = y;
+		gridW = pw - panelW - GAP;
+		gridH = h;
 		renderGrid(ctx, hx, hy);
-		renderDetail(ctx, x + w - panelW, gridY, panelW, gridH, hx, hy);
+		renderDetail(ctx, px + pw - panelW, y, panelW, h, hx, hy);
+	}
+
+	/** The rows' counts and icons, worked out again only when the textures or the choices changed. */
+	private void count() {
+		List<PackMixer.Entry> all = PackMixer.entries();
+		int choices = PackMixer.choices().size();
+		if (all == countedFrom && choices == countedChoices) return;
+		boolean rescanned = all != countedFrom;
+		countedFrom = all;
+		countedChoices = choices;
+		Arrays.fill(counts, 0);
+		Arrays.fill(changedCounts, 0);
+		for (PackMixer.Entry e : all) {
+			boolean changed = PackMixer.changed(e);
+			int row = 3 + Arrays.asList(PackMixer.CATEGORIES).indexOf(e.group());
+			counts[0]++;
+			if (changed) {
+				counts[1]++;
+				changedCounts[0]++;
+			}
+			if (e.conflict()) counts[2]++;
+			if (row >= 3) {
+				counts[row]++;
+				if (changed) changedCounts[row]++;
+			}
+		}
+		if (rescanned) {
+			for (int i = 0; i < PackMixer.CATEGORIES.length; i++) {
+				String texture = PackMixer.CATEGORY_TEXTURES[i];
+				icons[3 + i] = texture != null ? PackMixer.find(texture) : null;
+			}
+		}
+	}
+
+	/**
+	 * The tabs down the left: All, Changed and Conflicts, then every tab that has textures, each with its icon (a texture
+	 * of the pack in use, or a glyph), its name, how many textures it holds and a dot when some were changed here.
+	 */
+	private void renderSidebar(DrawContext ctx, float x, float y, float w, float h, double mx, double my) {
+		sideX = x;
+		sideY = y;
+		sideW = w;
+		sideH = h;
+		Render2D.matte(ctx, x, y, w, h, Ui.PANEL_RADIUS, Theme.raised(), Ui.LIT);
+		Render2D.rim(ctx, x, y, w, h, Ui.PANEL_RADIUS, Ui.HAIRLINE, Ui.LIT);
+		int visible = 0;
+		for (int i = 0; i < FILTERS.length; i++) if (i < 3 || counts[i] > 0) visible++;
+		float content = visible * SIDE_ROW + SIDE_SPLIT + 8f;
+		sideScroll = sideScroller.update(content, h);
+		boolean inside = Ui.inside(mx, my, x, y, w, h);
+		ctx.enableScissor((int) Math.floor(x), (int) Math.floor(y + 2f), (int) Math.ceil(x + w), (int) Math.ceil(y + h - 2f));
+		float ry = y + 4f - sideScroll;
+		SdfFont bold = Fonts.semibold();
+		SdfFont small = Fonts.medium();
+		for (int i = 0; i < FILTERS.length; i++) {
+			rowY[i] = Float.NaN;
+			if (i >= 3 && counts[i] == 0) continue;
+			if (i == 3) {
+				// A hairline between the overview rows and the tabs.
+				Render2D.rect(ctx, x + 8f, ry + SIDE_SPLIT / 2f - 0.25f, w - 16f, 0.5f, ColorUtil.withAlpha(0xFFFFFF, 18));
+				ry += SIDE_SPLIT;
+			}
+			rowY[i] = ry;
+			float rx = x + 4f;
+			float rw = w - 8f;
+			float hv = rowHover[i].target(inside && Ui.inside(mx, my, rx, ry, rw, SIDE_ROW - 2f) ? 1f : 0f).get();
+			float on = rowActive[i].target(i == filter ? 1f : 0f).get();
+			if (on > 0.01f || hv > 0.01f) {
+				Render2D.round(ctx, rx, ry, rw, SIDE_ROW - 2f, Ui.CELL_RADIUS, ColorUtil.lerp(ColorUtil.withAlpha(0xFFFFFF, Math.round(14 * hv)),
+					ColorUtil.withAlpha(Theme.accent(), 64), on));
+				if (on > 0.01f) Render2D.round(ctx, rx, ry + 3f, 2f, SIDE_ROW - 8f, 1f, ColorUtil.withAlpha(Theme.accent(), Math.round(255 * on)));
+			}
+			float cy = ry + (SIDE_ROW - 2f) / 2f;
+			PackMixer.Entry icon = icons[i];
+			PackMixer.Version iconVersion = icon != null ? version(icon, PackMixer.active(icon)) : null;
+			if (iconVersion != null) drawPreview(ctx, icon, iconVersion, rx + 5f, cy - 5.5f, 11f);
+			else Render2D.icon(ctx, GLYPHS[i], rx + 10.5f, cy, 8f, ColorUtil.lerp(Theme.textDim(), Theme.text(), Math.max(on, hv)));
+			String count = String.valueOf(counts[i]);
+			float countW = small.width(count, Ui.TINY);
+			float nameMax = rw - 22f - countW - 8f;
+			Render2D.textMiddle(ctx, bold, fit(bold, FILTERS[i], Ui.SMALL, nameMax), rx + 20f, cy, Ui.SMALL,
+				ColorUtil.lerp(Theme.textDim(), Theme.text(), Math.max(on, hv)));
+			Render2D.textMiddle(ctx, small, count, rx + rw - 5f - countW, cy, Ui.TINY, Theme.textFaint());
+			if (i != 1 && changedCounts[i] > 0) Render2D.circle(ctx, rx + rw - 9f - countW, cy, 1.6f, Theme.accent());
+			ry += SIDE_ROW;
+		}
+		ctx.disableScissor();
+		sideScroller.drawBar(ctx, x + w - 4f, y + 2f, h - 4f, content, inside);
 	}
 
 	/** The entries for the filter and search, worked out again only when one of them (or the choices) changed. */
@@ -174,29 +317,6 @@ final class PacksPage {
 		}
 	}
 
-	private void renderChips(DrawContext ctx, float x, float y, double mx, double my) {
-		chipY = y;
-		float cx = x;
-		for (int i = 0; i < FILTERS.length; i++) {
-			String label = FILTERS[i];
-			float tw = chipWidth[i].width(Fonts.semibold(), label, Ui.SMALL);
-			chipW[i] = tw + 20f;
-			chipX[i] = cx;
-			if (cx + chipW[i] > viewX + viewW) {
-				chipW[i] = 0f;
-				continue;
-			}
-			float hv = chipHover[i].target(Ui.inside(mx, my, cx, y, chipW[i], CHIP_H) ? 1f : 0f).get();
-			float on = chipActive[i].target(i == filter ? 1f : 0f).get();
-			Render2D.matte(ctx, cx, y, chipW[i], CHIP_H, CHIP_H / 2f, ColorUtil.lerp(ColorUtil.withAlpha(0xFFFFFF, Math.round(10 + 10 * hv)),
-				ColorUtil.withAlpha(Theme.accent(), 60), on), Ui.LIT);
-			Render2D.rim(ctx, cx, y, chipW[i], CHIP_H, CHIP_H / 2f, ColorUtil.lerp(ColorUtil.withAlpha(0xFFFFFF, Math.round(20 + 16 * hv)),
-				ColorUtil.withAlpha(Theme.accent(), 180), on), Ui.LIT);
-			Render2D.textMiddle(ctx, Fonts.semibold(), label, cx + 10f, y + CHIP_H / 2f, Ui.SMALL, ColorUtil.lerp(Theme.textDim(), Theme.text(), Math.max(on, hv)));
-			cx += chipW[i] + 5f;
-		}
-	}
-
 	/** The tiles: the version in use, a count when several packs have the texture, the accent when it was chosen here. */
 	private void renderGrid(DrawContext ctx, double mx, double my) {
 		cols = Math.max(1, (int) ((gridW + TILE_GAP) / (TILE + TILE_GAP)));
@@ -213,11 +333,13 @@ final class PacksPage {
 		ctx.enableScissor((int) Math.floor(gridX - 2f), (int) Math.floor(gridY), (int) Math.ceil(gridX + gridW + 2f), (int) Math.ceil(gridY + gridH));
 		int first = Math.max(0, (int) (scroll / step) * cols);
 		int last = Math.min(shown.size(), first + ((int) (gridH / step) + 2) * cols);
+		hoveredTile = -1;
 		for (int i = first; i < last; i++) {
 			PackMixer.Entry e = shown.get(i);
 			float tx = gridX + (i % cols) * step;
 			float ty = gridY + (i / cols) * step - scroll;
 			boolean hovered = inView && Ui.inside(mx, my, tx, ty, TILE, TILE);
+			if (hovered) hoveredTile = i;
 			boolean sel = e == selected;
 			boolean changed = PackMixer.changed(e);
 			int fill = sel ? ColorUtil.withAlpha(Theme.accent(), 70) : hovered ? Theme.raisedLit() : Theme.raised();
@@ -234,6 +356,19 @@ final class PacksPage {
 		}
 		ctx.disableScissor();
 		scroller.drawBar(ctx, gridX + gridW + 3f, gridY, gridH, content, inView);
+		if (hoveredTile >= 0) {
+			// The hovered tile's name in a pill above it (below it in the top row), kept inside the grid.
+			PackMixer.Entry e = shown.get(hoveredTile);
+			SdfFont font = Fonts.semibold();
+			float tw = font.width(e.name(), Ui.TINY) + 10f;
+			float tx = gridX + (hoveredTile % cols) * step + TILE / 2f - tw / 2f;
+			float ty = gridY + (hoveredTile / cols) * step - scroll - 13f;
+			if (ty < gridY) ty += TILE + 15f;
+			tx = Math.max(gridX, Math.min(gridX + gridW - tw, tx));
+			Render2D.round(ctx, tx, ty, tw, 11f, 5.5f, 0xE6141418);
+			Render2D.rim(ctx, tx, ty, tw, 11f, 5.5f, ColorUtil.withAlpha(0xFFFFFF, 28), 0);
+			Render2D.textMiddle(ctx, font, e.name(), tx + 5f, ty + 5.5f, Ui.TINY, Theme.text());
+		}
 	}
 
 	/** The selected texture large, its id, and its versions, the one in use checked; a click on one uses it. */
@@ -330,14 +465,16 @@ final class PacksPage {
 			return true;
 		}
 		if (!Ui.inside(mx, my, viewX, viewY, viewW, viewH)) return false;
-		for (int i = 0; i < FILTERS.length; i++) {
-			if (chipW[i] > 0f && Ui.inside(mx, my, chipX[i], chipY, chipW[i], CHIP_H)) {
+		if (Ui.inside(mx, my, sideX, sideY, sideW, sideH)) {
+			for (int i = 0; i < FILTERS.length; i++) {
+				if (Float.isNaN(rowY[i]) || !Ui.inside(mx, my, sideX + 4f, rowY[i], sideW - 8f, SIDE_ROW - 2f)) continue;
 				if (filter != i) {
 					filter = i;
 					scroller.reset();
 				}
 				return true;
 			}
+			return true;
 		}
 		if (Ui.inside(mx, my, gridX, gridY, gridW, gridH)) {
 			float step = TILE + TILE_GAP;
@@ -362,6 +499,7 @@ final class PacksPage {
 
 	void scroll(double mx, double my, double amount) {
 		if (selected != null && Ui.inside(mx, my, listX, listY, listW, listH)) versionScroller.scroll(amount);
+		else if (Ui.inside(mx, my, sideX, sideY, sideW, sideH)) sideScroller.scroll(amount);
 		else scroller.scroll(amount);
 	}
 }
