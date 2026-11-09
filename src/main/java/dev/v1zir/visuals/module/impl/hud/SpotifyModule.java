@@ -5,6 +5,8 @@ import dev.v1zir.visuals.media.Media;
 import dev.v1zir.visuals.module.setting.BoolSetting;
 import dev.v1zir.visuals.module.setting.KeySetting;
 import dev.v1zir.visuals.module.setting.ModeSetting;
+import dev.v1zir.visuals.render.font.Fonts;
+import dev.v1zir.visuals.render.font.SdfFont;
 import dev.v1zir.visuals.render.ui.Render2D;
 import dev.v1zir.visuals.util.Anim;
 import dev.v1zir.visuals.util.ColorUtil;
@@ -27,6 +29,8 @@ public final class SpotifyModule extends HudModule {
 	public final KeySetting playPauseKey = add(new KeySetting("Play/Pause key", GLFW.GLFW_KEY_UNKNOWN));
 	public final KeySetting nextKey = add(new KeySetting("Next key", GLFW.GLFW_KEY_UNKNOWN));
 	public final KeySetting previousKey = add(new KeySetting("Previous key", GLFW.GLFW_KEY_UNKNOWN));
+	/** Lines under the card saying where the song and the cover come from, to tell what goes wrong with a player. */
+	public final BoolSetting debugInfo = add(new BoolSetting("Debug info", false));
 
 	private final Anim appear = new Anim(0f, 10f);
 	private final MediaCard card = new MediaCard();
@@ -115,6 +119,26 @@ public final class SpotifyModule extends HudModule {
 			float tx = x + art + 18f;
 			card.details(ctx, tx, y, x + width - 10f - tx, buttons, accent, accent2, mx, my);
 		}
+		if (debugInfo.on()) debugLines(ctx, x, y + height + 4f);
 		Render2D.setAlpha(1f);
+	}
+
+	/** What the media backend sees and which cover is in use, in small lines on a dark strip. */
+	private void debugLines(DrawContext ctx, float x, float y) {
+		String art = Media.now().art();
+		String cover = art.isEmpty() ? "none (placeholder)" : art.startsWith("http") ? "found online" : "from the player";
+		String text = Media.debug();
+		String[] lines = (text.isEmpty() ? "No details from this player" : text).split("\n");
+		SdfFont font = Fonts.medium();
+		float size = 5.5f;
+		float lineH = 7.5f;
+		float w = 0f;
+		String[] shown = new String[lines.length + 1];
+		for (int i = 0; i < lines.length; i++) shown[i] = font.trim(lines[i], size, 320f);
+		shown[lines.length] = "Cover in use: " + cover + (AlbumArt.hasCover() ? ", loaded" : ", not loaded");
+		for (String line : shown) w = Math.max(w, font.width(line, size));
+		float h = shown.length * lineH + 6f;
+		Render2D.round(ctx, x, y, w + 10f, h, 5f, 0xB0000000);
+		for (int i = 0; i < shown.length; i++) Render2D.text(ctx, font, shown[i], x + 5f, y + 3f + i * lineH, size, 0xE6FFFFFF);
 	}
 }

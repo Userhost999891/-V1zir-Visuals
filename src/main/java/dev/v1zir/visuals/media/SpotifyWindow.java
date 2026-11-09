@@ -52,6 +52,9 @@ final class SpotifyWindow {
 	private final Map<Integer, Boolean> spotifyProcesses = new HashMap<>();
 	private long processesSince;
 	private boolean logged;
+	/** The title read last and how many titled Spotify windows there were, for the debug lines. */
+	private volatile String lastTitle = "";
+	private volatile int lastWindows;
 	private String artist;
 	private String title;
 	private boolean playing;
@@ -90,8 +93,11 @@ final class SpotifyWindow {
 			if (found[slot] == null) found[slot] = value;
 			return true;
 		}, null);
+		lastWindows = windows[0];
+		lastTitle = "";
 		for (String title : found) {
 			if (title == null) continue;
+			lastTitle = title;
 			if (!logged) {
 				logged = true;
 				V1zir.LOGGER.info("Spotify's window found ({} titled window(s)); reading \"{}\"", windows[0], title);
@@ -99,6 +105,11 @@ final class SpotifyWindow {
 			return title;
 		}
 		return null;
+	}
+
+	/** Spotify's window title as read last ("" when Spotify was not found), with the number of its titled windows. */
+	String describe() {
+		return lastWindows == 0 ? "not found" : "\"" + lastTitle + "\" (" + lastWindows + " window" + (lastWindows == 1 ? ")" : "s)");
 	}
 
 	/** Whether a window title names a song ("Artist - Title") rather than Spotify itself. */

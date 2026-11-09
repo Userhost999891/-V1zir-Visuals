@@ -644,9 +644,17 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.runOnClient(client -> ModuleManager.get(SpotifyModule.class).style.set("Compact"));
 		context.waitTicks(5);
 		context.takeScreenshot("spotify-compact");
+		// The debug lines under the card (what the player's backend sees; little on Linux).
 		context.runOnClient(client -> {
 			SpotifyModule spotify = ModuleManager.get(SpotifyModule.class);
 			spotify.style.reset();
+			spotify.debugInfo.set(true);
+		});
+		context.waitTicks(5);
+		context.takeScreenshot("spotify-debug");
+		context.runOnClient(client -> {
+			SpotifyModule spotify = ModuleManager.get(SpotifyModule.class);
+			spotify.debugInfo.set(false);
 			spotify.setEnabled(false, false);
 			Media.preview(null);
 		});

@@ -33,4 +33,9 @@ abstract class MediaSource {
 	protected final void unavailable(String reason) {
 		Media.unavailable(this, reason);
 	}
+
+	/** What this backend sees, for the widgets' debug lines. */
+	protected final void debug(String text) {
+		Media.debug(this, text);
+	}
 }

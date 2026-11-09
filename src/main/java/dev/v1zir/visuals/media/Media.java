@@ -42,6 +42,8 @@ public final class Media {
 	/** A sample shown instead of the player's state while set (previews), or null. */
 	private static volatile NowPlaying preview;
 	private static volatile String status;
+	/** What the backend sees, for the widgets' debug lines ("" when it has nothing to say). */
+	private static volatile String debug = "";
 	/** When the current song started to be reported, and since when nothing is (0 while something is). */
 	private static long songSince;
 	private static long goneSince;
@@ -73,6 +75,15 @@ public final class Media {
 		return status;
 	}
 
+	/** What the backend sees right now, one line per source ("" when it has nothing to say). */
+	public static String debug() {
+		return debug;
+	}
+
+	static void debug(MediaSource from, String text) {
+		if (from == source) debug = text;
+	}
+
 	/** Starts the backend for a module (idempotent per user). Never blocks: the helper starts on the media thread. */
 	public static synchronized void acquire(Object user) {
 		if (!USERS.add(user) || source != null) return;
@@ -102,6 +113,7 @@ public final class Media {
 		worker = null;
 		current = NowPlaying.NONE;
 		status = null;
+		debug = "";
 		goneSince = 0L;
 	}
 

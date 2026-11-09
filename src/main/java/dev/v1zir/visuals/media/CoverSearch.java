@@ -22,13 +22,21 @@ import java.util.regex.Pattern;
 /**
  * Covers for songs whose player gives none (a thumbnail the media controls leave out, Spotify's window title): the
  * iTunes Search API, then Deezer's, both public and keyless, each asked once per song for the session. The best
- * match must share the title and the artist (accents, case, "feat." parts and the like aside).
+ * match must share the title and the artist (accents, case, "feat." parts and the like aside). An edit the catalogues
+ * do not carry (slowed, sped up, nightcore...) or a collaboration they file under one name is looked for again as the
+ * song itself by its first artist, whose cover is the closest there is.
  */
 final class CoverSearch {
 	private static final String SEARCHING = "\u0000searching";
 	private static final Pattern NOISE = Pattern.compile(
 		"\\s*[(\\[](?:feat\\.?|ft\\.?|with|prod\\.?)\\s[^)\\]]*[)\\]]|\\s+-\\s+(?:.*remaster.*|.*version.*|.*edit.*|live.*|mono|stereo)$",
 		Pattern.CASE_INSENSITIVE);
+	/** "starly - Slowed", "Song (Sped Up + Reverb)": the edit and everything after it. */
+	private static final Pattern EDIT = Pattern.compile(
+		"\\s*(?:[-\u2013\u2014]\\s*|[(\\[]\\s*)(?:super\\s+|ultra\\s+)?(?:slowed|sped\\s*up|speed\\s*up|reverb|nightcore|8d|bass\\s*boost(?:ed)?|lo-?fi)\\b.*$",
+		Pattern.CASE_INSENSITIVE);
+	/** Between the artists of a collaboration: "A, B", "A & B", "A x B", "A feat. B". */
+	private static final Pattern ARTISTS = Pattern.compile("\\s*,\\s*|\\s+&\\s+|\\s+(?:x|feat\\.?|ft\\.?|with)\\s+", Pattern.CASE_INSENSITIVE);
 	private static final Pattern MARKS = Pattern.compile("\\p{M}+");
 	private static final Pattern NOT_WORD = Pattern.compile("[^\\p{L}\\p{N}]+");
 	private static final Map<String, String> FOUND = new ConcurrentHashMap<>();
@@ -54,6 +62,17 @@ final class CoverSearch {
 	private static CompletableFuture<String> search(Track track) {
 		String title = NOISE.matcher(track.title()).replaceAll("").strip();
 		String artist = track.artist().strip();
+		String song = EDIT.matcher(title).replaceAll("").strip();
+		String first = ARTISTS.split(artist, 2)[0].strip();
+		return lookUp(title, artist).thenCompose(url -> {
+			if (url != null || song.isEmpty() || first.isEmpty() || song.equals(title) && first.equals(artist)) {
+				return CompletableFuture.completedFuture(url);
+			}
+			return lookUp(song, first);
+		});
+	}
+
+	private static CompletableFuture<String> lookUp(String title, String artist) {
 		return itunes(title, artist).thenCompose(url -> url != null ? CompletableFuture.completedFuture(url) : deezer(title, artist));
 	}
 

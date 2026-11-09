@@ -9,6 +9,9 @@
 # When even that does not catch up, the game starts the bridge again: a new process sees what the
 # players report now. The game runs it in a multi-threaded apartment (-MTA), so the media controls'
 # notifications reach it without a message loop.
+# The cover often comes after the title (or only with the player's next update), so it is looked for
+# until there is one, every 1.5 seconds, and then every 5 seconds in case it changes; reading it never
+# holds up the reports. "as" tells how it went: 0 the player gives none, 1 reading, 2 saved, 3 failed.
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Runtime.WindowsRuntime
 $null = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType = WindowsRuntime]
@@ -55,6 +58,12 @@ $md5 = [System.Security.Cryptography.MD5]::Create()
 $artFile = ''
 $artHash = ''
 $artCount = 0
+$artState = 0
+# The cover being read: its OpenReadAsync task, for which song, and since when.
+$artTask = $null
+$artTaskKey = ''
+$artTaskStart = 0
+$streamType = [Windows.Storage.Streams.IRandomAccessStreamWithContentType]
 
 function Remove-Art {
 	if ($script:artFile) { Remove-Item -LiteralPath $script:artFile -ErrorAction SilentlyContinue }
@@ -63,20 +72,12 @@ function Remove-Art {
 
 # Saves the cover in the temp folder as the player gives it (PNG or JPEG; the game decodes either), unless it is
 # the one saved last, and deletes the previous file.
-function Save-Art($thumbnail) {
-	if ($null -eq $thumbnail) { return }
-	$stream = Await ($thumbnail.OpenReadAsync()) ([Windows.Storage.Streams.IRandomAccessStreamWithContentType])
-	if ($null -eq $stream) { return }
-	$memory = New-Object System.IO.MemoryStream
-	try {
-		$source = [System.IO.WindowsRuntimeStreamExtensions]::AsStreamForRead($stream)
-		$source.CopyTo($memory)
-		$source.Dispose()
-	} finally {
-		$stream.Dispose()
+function Save-Bytes([byte[]]$bytes) {
+	if ($null -eq $bytes -or $bytes.Length -lt 8) {
+		if (-not $script:artFile) { $script:artState = 3 }
+		return
 	}
-	$bytes = $memory.ToArray()
-	if ($bytes.Length -lt 8) { return }
+	$script:artState = 2
 	$hash = [Convert]::ToBase64String($md5.ComputeHash($bytes))
 	if ($hash -ceq $script:artHash) { return }
 	$script:artHash = $hash
@@ -90,6 +91,49 @@ function Save-Art($thumbnail) {
 	$script:artFile = $file
 }
 
+# Starts reading the player's cover without waiting for it (End-Art picks it up later).
+function Begin-Art($thumbnail, [string]$forKey) {
+	if ($null -eq $thumbnail) {
+		if (-not $script:artFile) { $script:artState = 0 }
+		return
+	}
+	$method = $taskMethods[$streamType]
+	if ($null -eq $method) {
+		$method = $asTask.MakeGenericMethod($streamType)
+		$taskMethods[$streamType] = $method
+	}
+	$script:artTask = $method.Invoke($null, @($thumbnail.OpenReadAsync()))
+	$script:artTaskKey = $forKey
+	$script:artTaskStart = $clock.ElapsedMilliseconds
+	if (-not $script:artFile) { $script:artState = 1 }
+}
+
+# A cover read that finished is saved if it belongs to the song still playing; one that hangs is given up.
+function End-Art {
+	$task = $script:artTask
+	if ($null -eq $task) { return }
+	if (-not $task.IsCompleted) {
+		if ($clock.ElapsedMilliseconds - $script:artTaskStart -gt 20000) { $script:artTask = $null }
+		return
+	}
+	$script:artTask = $null
+	if ($task.Status -ne [System.Threading.Tasks.TaskStatus]::RanToCompletion -or $null -eq $task.Result) {
+		if (-not $script:artFile) { $script:artState = 3 }
+		return
+	}
+	$stream = $task.Result
+	$memory = New-Object System.IO.MemoryStream
+	try {
+		$source = [System.IO.WindowsRuntimeStreamExtensions]::AsStreamForRead($stream)
+		$source.CopyTo($memory)
+		$source.Dispose()
+	} finally {
+		$stream.Dispose()
+	}
+	if ($script:artTaskKey -cne $script:lastKey) { return }
+	Save-Bytes $memory.ToArray()
+}
+
 $manager = Await ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])
 if ($null -eq $manager) { exit 1 }
 $playingStatus = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionPlaybackStatus]::Playing
@@ -98,7 +142,6 @@ $stdin = New-Object System.IO.StreamReader ([Console]::OpenStandardInput())
 $pendingCommand = $stdin.ReadLineAsync()
 $clock = [System.Diagnostics.Stopwatch]::StartNew()
 $lastKey = $null
-$artChecks = 0
 $nextArtCheck = 0
 $nextRefresh = 1000
 
@@ -113,7 +156,6 @@ while ($true) {
 			if ($command.Trim() -eq 'refresh') {
 				$nextRefresh = 0
 				# The cover is looked at again too; an unchanged one is not saved again (its hash matches).
-				$artChecks = [Math]::Max($artChecks, 2)
 				$nextArtCheck = 0
 			} else {
 				$session = Find-Session
@@ -159,17 +201,21 @@ while ($true) {
 					$lastKey = $key
 					Remove-Art
 					$artHash = ''
-					# Players often publish the new cover a moment after the title: look again a few times.
-					$artChecks = 4
+					$artState = 1
+					# A read still going is for the previous song: its result is dropped (End-Art checks the key).
+					$artTask = $null
 					$nextArtCheck = 0
 				}
-				if ($artChecks -gt 0 -and $clock.ElapsedMilliseconds -ge $nextArtCheck) {
-					$artChecks--
-					$nextArtCheck = $clock.ElapsedMilliseconds + 900
-					try { Save-Art $media.Thumbnail } catch { }
+				try { End-Art } catch { $artTask = $null }
+				if ($null -eq $artTask -and $clock.ElapsedMilliseconds -ge $nextArtCheck) {
+					# Until there is a cover, look again soon; after that now and then, in case it changes.
+					if ($artFile) { $nextArtCheck = $clock.ElapsedMilliseconds + 5000 }
+					else { $nextArtCheck = $clock.ElapsedMilliseconds + 1500 }
+					try { Begin-Art $media.Thumbnail $key } catch { $artTask = $null; if (-not $artFile) { $artState = 3 } }
 				}
 				$line = '{"t":' + (Json $media.Title) + ',"a":' + (Json $artist) + ',"al":' + (Json $media.AlbumTitle) +
-					',"p":' + [long]$position + ',"d":' + [long]$duration + ',"s":' + [int]$playing + ',"art":' + (Json $artFile) + '}'
+					',"p":' + [long]$position + ',"d":' + [long]$duration + ',"s":' + [int]$playing + ',"art":' + (Json $artFile) +
+					',"as":' + $artState + '}'
 			}
 		}
 		[Console]::Out.WriteLine($line)

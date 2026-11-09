@@ -82,6 +82,9 @@ final class WindowsMediaSource extends MediaSource {
 	private boolean loggedFailure;
 	private boolean loggedStale;
 	private boolean loggedRenew;
+	/** For the debug lines: the bridge's last report and how often it was started afresh. */
+	private volatile String bridgeInfo = "no report yet";
+	private volatile int renewCount;
 
 	WindowsMediaSource(ScheduledExecutorService worker) {
 		super(worker);
@@ -162,41 +165,11 @@ final class WindowsMediaSource extends MediaSource {
 		try {
 			NowPlaying state = window.poll();
 			long now = System.nanoTime();
-			if (now - bridgeSongAt < BRIDGE_QUIET_NANOS) {
-				// The bridge speaks; the window checks it. A playing song in the window that the bridge does not name
-				// for a moment means the media controls missed a change: the window's song shows until they catch up.
-				Track bridge = bridgeTrack;
-				boolean stale = state.track() != null && state.playing() && bridge != null && !sameSong(bridge, state.track());
-				if (!stale) {
-					mismatchSince = 0L;
-					refreshed = false;
-					windowSpeaking = false;
-					windowTrack = null;
-					return;
-				}
-				if (mismatchSince == 0L) mismatchSince = now;
-				long behind = now - mismatchSince;
-				if (behind < STALE_NANOS) return;
-				if (!refreshed) {
-					refreshed = true;
-					if (!loggedStale) {
-						loggedStale = true;
-						V1zir.LOGGER.info("Media controls report \"{}\" while Spotify plays \"{}\": showing Spotify's song and refreshing them",
-							bridge.title(), state.track().title());
-					}
-					send("refresh\n");
-				} else if (behind > STALE_NANOS + RENEW_AFTER_NANOS) {
-					renew(bridge.artist() + '\n' + bridge.title(), "Spotify's window names another song");
-				}
-				windowSpeaking = true;
-				windowTrack = state.track();
-				publish(state.track(), state.art(), state.positionMs(), state.playing());
-				return;
-			}
-			windowTrack = null;
-			if (state.track() != null || windowSpeaking) {
-				windowSpeaking = state.track() != null;
-				publish(state.track(), state.art(), state.positionMs(), state.playing());
+			try {
+				if (now - bridgeSongAt < BRIDGE_QUIET_NANOS) checkBridge(state, now);
+				else speakForQuietBridge(state);
+			} finally {
+				updateDebug();
 			}
 		} catch (Throwable e) {
 			// JNA missing or refused: stop trying, the bridge still works if it can.
@@ -204,6 +177,59 @@ final class WindowsMediaSource extends MediaSource {
 			windowBroken = true;
 			V1zir.LOGGER.warn("Spotify window fallback failed: {}", e.toString());
 		}
+	}
+
+	/**
+	 * The bridge speaks; the window checks it. A playing song in the window that the bridge does not name for a moment
+	 * means the media controls missed a change: the window's song shows until they catch up.
+	 */
+	private void checkBridge(NowPlaying state, long now) {
+		Track bridge = bridgeTrack;
+		boolean stale = state.track() != null && state.playing() && bridge != null && !sameSong(bridge, state.track());
+		if (!stale) {
+			mismatchSince = 0L;
+			refreshed = false;
+			windowSpeaking = false;
+			windowTrack = null;
+			return;
+		}
+		if (mismatchSince == 0L) mismatchSince = now;
+		long behind = now - mismatchSince;
+		if (behind < STALE_NANOS) return;
+		if (!refreshed) {
+			refreshed = true;
+			if (!loggedStale) {
+				loggedStale = true;
+				V1zir.LOGGER.info("Media controls report \"{}\" while Spotify plays \"{}\": showing Spotify's song and refreshing them",
+					bridge.title(), state.track().title());
+			}
+			send("refresh\n");
+		} else if (behind > STALE_NANOS + RENEW_AFTER_NANOS) {
+			renew(bridge.artist() + '\n' + bridge.title(), "Spotify's window names another song");
+		}
+		windowSpeaking = true;
+		windowTrack = state.track();
+		publish(state.track(), state.art(), state.positionMs(), state.playing());
+	}
+
+	/** The bridge is quiet (down, blocked or nothing in the media controls): the window speaks for it. */
+	private void speakForQuietBridge(NowPlaying state) {
+		windowTrack = null;
+		if (state.track() != null || windowSpeaking) {
+			windowSpeaking = state.track() != null;
+			publish(state.track(), state.art(), state.positionMs(), state.playing());
+		}
+	}
+
+	/** The debug lines: where the shown song comes from and what each source says. */
+	private void updateDebug() {
+		boolean bridgeSpeaks = System.nanoTime() - bridgeSongAt < BRIDGE_QUIET_NANOS;
+		String from = windowSpeaking ? bridgeSpeaks ? "Spotify window (media controls lag behind)" : "Spotify window (media controls quiet)"
+			: bridgeSpeaks ? "Windows media controls" : "nothing";
+		SpotifyWindow w = window;
+		String windowLine = w != null ? w.describe() : windowBroken ? "unavailable" : "starting";
+		debug("Shown from: " + from + "\nMedia controls: " + bridgeInfo + "\nSpotify window: " + windowLine
+			+ "\nBridge restarts: " + renewCount);
 	}
 
 	/** Reader thread: one report per line until the process ends (or is replaced by a fresh one). */
@@ -255,7 +281,8 @@ final class WindowsMediaSource extends MediaSource {
 		}
 		if (!loggedRenew) {
 			loggedRenew = true;
-			V1zir.LOGGER.info("Media bridge went stale ({}): starting it again", why);
+			renewCount++;
+		V1zir.LOGGER.info("Media bridge went stale ({}): starting it again", why);
 		} else {
 			V1zir.LOGGER.debug("Media bridge went stale ({}): starting it again", why);
 		}
@@ -312,6 +339,7 @@ final class WindowsMediaSource extends MediaSource {
 			JsonObject o = JsonParser.parseString(line).getAsJsonObject();
 			String title = MacMediaSource.text(o, "t");
 			if (o.has("none") || title.isEmpty()) {
+				bridgeInfo = "nothing playing";
 				// Nothing in the media controls; the window fallback may still see Spotify playing.
 				if (!windowSpeaking) publish(null, "", 0L, false);
 			} else {
@@ -321,6 +349,14 @@ final class WindowsMediaSource extends MediaSource {
 				boolean playing = o.get("s").getAsInt() == 1;
 				Track track = new Track(title, MacMediaSource.text(o, "a"), MacMediaSource.text(o, "al"), duration);
 				bridgeTrack = track;
+				int cover = o.has("as") ? o.get("as").getAsInt() : -1;
+				bridgeInfo = "\"" + title + "\" by " + track.artist() + (playing ? "" : " (paused)") + ", cover: " + switch (cover) {
+					case 0 -> "none from the player";
+					case 1 -> "reading";
+					case 2 -> "saved";
+					case 3 -> "could not read";
+					default -> "?";
+				};
 				String song = track.artist() + '\n' + track.title();
 				if (timelineStale(song, position, duration, playing)) renew(song, "its timeline left the song it names");
 				// Still the song the window has moved on from: the window keeps speaking until the bridge catches up.
