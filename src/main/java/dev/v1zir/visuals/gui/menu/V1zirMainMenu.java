@@ -1,6 +1,7 @@
 package dev.v1zir.visuals.gui.menu;
 
 import dev.v1zir.visuals.V1zir;
+import dev.v1zir.visuals.account.Accounts;
 import dev.v1zir.visuals.gui.clickgui.Ui;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.client.MainMenuModule;
@@ -9,6 +10,7 @@ import dev.v1zir.visuals.render.BackdropBlur;
 import dev.v1zir.visuals.render.font.Fonts;
 import dev.v1zir.visuals.render.font.Icons;
 import dev.v1zir.visuals.render.font.SdfFont;
+import dev.v1zir.visuals.render.ui.Heads;
 import dev.v1zir.visuals.render.ui.Render2D;
 import dev.v1zir.visuals.render.ui.ShapeElement;
 import dev.v1zir.visuals.render.wallpaper.WallpaperRenderer;
@@ -25,6 +27,7 @@ import net.minecraft.client.gui.screen.multiplayer.MultiplayerScreen;
 import net.minecraft.client.gui.screen.option.LanguageOptionsScreen;
 import net.minecraft.client.gui.screen.option.OptionsScreen;
 import net.minecraft.client.gui.screen.world.SelectWorldScreen;
+import net.minecraft.client.input.CharInput;
 import net.minecraft.client.input.KeyInput;
 import net.minecraft.client.realms.gui.screen.RealmsMainScreen;
 import net.minecraft.text.Text;
@@ -34,6 +37,7 @@ import net.minecraft.client.gui.screen.multiplayer.MultiplayerServerListWidget;
 import net.minecraft.client.gui.screen.world.CreateWorldScreen;
 import net.minecraft.client.gui.screen.world.WorldListWidget;
 import net.minecraft.client.option.ServerList;
+import net.minecraft.entity.player.SkinTextures;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix3x2fStack;
 import org.lwjgl.glfw.GLFW;
@@ -47,7 +51,8 @@ import java.util.function.Supplier;
  * Replacement title screen: an animated wallpaper, the time with a greeting and a row of round frosted icon buttons.
  * It opens on the {@link LockScreen}, which has a wallpaper of its own; once that slides away the menu comes up from
  * below, and a swipe up from an empty spot brings the lock screen back. Holding the mouse button on an empty spot of
- * either screen opens the {@link WallpaperEditor} for it.
+ * either screen opens the {@link WallpaperEditor} for it. The name pill in the corner opens the {@link AccountsPanel}
+ * to play as another account.
  * <p>
  * A button leaves the menu with a short animation (its content grows a little and fades while the wallpaper dims)
  * before the next screen comes in out of the dark ({@link ScreenTransition}). The classes of the screens the buttons
@@ -94,6 +99,14 @@ public final class V1zirMainMenu extends Screen {
 	private float continueW;
 	private float continueH;
 	private boolean continuePressed;
+	/** The accounts dropdown and the name pill that opens it (its bounds as last drawn). */
+	private final AccountsPanel accounts = new AccountsPanel();
+	private final Anim pillHover = new Anim(0f, 20f);
+	private final Anim pillOpen = new Anim(0f, 16f);
+	private float pillX;
+	private float pillY;
+	private float pillW;
+	private float pillH;
 
 	public V1zirMainMenu() {
 		super(Text.literal(V1zir.NAME));
@@ -113,6 +126,8 @@ public final class V1zirMainMenu extends Screen {
 		leavingTo = null;
 		leave = 0f;
 		warmUp();
+		// The account chosen last comes back before anything shows the player's name or head.
+		Accounts.init(client);
 		float size = Math.max(28f, Math.min(46f, height * 0.08f));
 		float gap = size * 0.5f;
 		Runnable singleplayer = () -> open(() -> new SelectWorldScreen(this));
@@ -278,6 +293,7 @@ public final class V1zirMainMenu extends Screen {
 		Wallpapers.Screen editing = picker ? editor.screen() : null;
 		float fade = picker ? editor.contentAlpha() : 1f;
 		boolean interactive = !overlay && !lock.locked() && !editor.active() && leavingTo == null;
+		if (!interactive && !overlay) accounts.close();
 		// The lock screen rising over the menu (a swipe up) dims it as it comes.
 		float shown = Anim.clamp01(open) * (1f - 0.6f * lock.risen()) * (1f - exit);
 		if (shown > 0.001f) {
@@ -365,13 +381,20 @@ public final class V1zirMainMenu extends Screen {
 
 		renderHeader(ctx, Anim.easeOutQuart(Anim.progress(t, 0.25f, 0.9f)) * shown, px, py);
 
-		Render2D.setAlpha(Anim.easeOutCubic(Anim.progress(t, 0.8f, 0.55f)) * shown);
+		// Under the open accounts panel the buttons are not hovered.
+		boolean panel = accounts.over(mouseX, mouseY);
+		int bx = panel ? -10000 : mouseX;
+		int by = panel ? -10000 : mouseY;
+		float controls = Anim.easeOutCubic(Anim.progress(t, 0.8f, 0.55f)) * shown;
+		Render2D.setAlpha(controls);
 		for (int i = 0; i < buttons.size(); i++) {
 			RoundButton button = buttons.get(i);
-			button.render(ctx, mouseX, mouseY, i == focused, button == pressed);
+			button.render(ctx, bx, by, i == focused, button == pressed);
 		}
-		renderContinue(ctx, mouseX, mouseY, Anim.easeOutCubic(Anim.progress(t, 0.95f, 0.55f)) * shown);
-		renderFooter(ctx);
+		renderContinue(ctx, bx, by, Anim.easeOutCubic(Anim.progress(t, 0.95f, 0.55f)) * shown);
+		Render2D.setAlpha(controls);
+		renderFooter(ctx, mouseX, mouseY);
+		accounts.render(ctx, client, pillX, pillY + pillH + 5f, height, mouseX, mouseY);
 		Render2D.setAlpha(1f);
 		if (moving) matrices.popMatrix();
 	}
@@ -440,7 +463,7 @@ public final class V1zirMainMenu extends Screen {
 		}
 	}
 
-	private void renderFooter(DrawContext ctx) {
+	private void renderFooter(DrawContext ctx, int mouseX, int mouseY) {
 		SdfFont font = Fonts.medium();
 		float size = 7f;
 		int dim = 0x99FFFFFF;
@@ -448,18 +471,45 @@ public final class V1zirMainMenu extends Screen {
 		String version = V1zir.NAME + " " + V1zir.version();
 		float w = font.width(version, size);
 		Render2D.text(ctx, font, version, width - 10f - w, 10f, size, dim);
+		renderPill(ctx, mouseX, mouseY);
+	}
 
+	/**
+	 * The account in use, with its head, in a pill in the corner; a click on it opens the accounts panel under it (the
+	 * chevron turns over while it is open).
+	 */
+	private void renderPill(DrawContext ctx, int mouseX, int mouseY) {
 		String user = client.getSession().getUsername();
 		SdfFont nameFont = Fonts.semibold();
 		float nameSize = 7.5f;
-		float pillH = 16f;
-		float pillW = nameFont.width(user, nameSize) + pillH + 12f;
-		float x = 10f;
-		float y = 10f;
-		Render2D.round(ctx, x, y, pillW, pillH, pillH / 2f, 0x55000000);
-		Render2D.outline(ctx, x, y, pillW, pillH, pillH / 2f, 1f, 0x22FFFFFF);
-		Render2D.icon(ctx, Icons.USER, x + pillH / 2f + 1f, y + pillH / 2f, 9f, 0xCCFFFFFF);
-		Render2D.textMiddle(ctx, nameFont, user, x + pillH + 2f, y + pillH / 2f, nameSize, 0xEEFFFFFF);
+		pillH = 18f;
+		float head = pillH - 6f;
+		pillW = 3f + head + 6f + nameFont.width(user, nameSize) + 6f + 8f + 6f;
+		pillX = 10f;
+		pillY = 9f;
+		boolean over = Ui.inside(mouseX, mouseY, pillX, pillY, pillW, pillH);
+		float hv = pillHover.target(over ? 1f : 0f).get();
+		float op = pillOpen.target(accounts.shown() ? 1f : 0f).get();
+		float lit = Math.max(hv, op);
+		Render2D.round(ctx, pillX, pillY, pillW, pillH, pillH / 2f, ColorUtil.lerp(0x55000000, 0x80101010, lit));
+		Render2D.outline(ctx, pillX, pillY, pillW, pillH, pillH / 2f, 1f,
+			ColorUtil.lerp(0x22FFFFFF, ColorUtil.withAlpha(Theme.accent(), 170), op * 0.8f + hv * 0.2f));
+		float hx = pillX + 3f;
+		float hy = pillY + 3f;
+		Accounts.Account account = Accounts.current();
+		SkinTextures skin = account != null ? accounts.skin(client, account) : null;
+		if (skin != null) Heads.skin(ctx, skin, hx, hy, head, head / 2f, 0xFFFFFFFF);
+		else Render2D.icon(ctx, Icons.USER, hx + head / 2f, hy + head / 2f, 9f, 0xCCFFFFFF);
+		float tx = hx + head + 6f;
+		Render2D.textMiddle(ctx, nameFont, user, tx, pillY + pillH / 2f, nameSize, 0xEEFFFFFF);
+		float cx = pillX + pillW - 10f;
+		float cy = pillY + pillH / 2f;
+		// The chevron turns over as the panel opens.
+		ctx.getMatrices().pushMatrix();
+		ctx.getMatrices().translate(cx, cy);
+		ctx.getMatrices().rotate((float) Math.PI * Anim.easeInOutSine(op));
+		Render2D.icon(ctx, Icons.CHEVRON_DOWN, 0f, 0f, 6.5f, ColorUtil.lerp(0x99FFFFFF, 0xF2FFFFFF, lit));
+		ctx.getMatrices().popMatrix();
 	}
 
 	private void renderParticles(DrawContext ctx, float dt, float px, float py) {
@@ -493,6 +543,17 @@ public final class V1zirMainMenu extends Screen {
 			return true;
 		}
 		if (left) {
+			boolean onPill = pillW > 0f && Ui.inside(click.x(), click.y(), pillX, pillY, pillW, pillH);
+			if (accounts.shown()) {
+				// A click outside the open panel closes it and does nothing else.
+				if (!accounts.mouseClicked(client, click.x(), click.y())) accounts.close();
+				return true;
+			}
+			if (onPill) {
+				accounts.toggle();
+				hold.cancel();
+				return true;
+			}
 			for (RoundButton button : buttons) {
 				if (button.hovered(click.x(), click.y())) {
 					pressed = button;
@@ -576,6 +637,7 @@ public final class V1zirMainMenu extends Screen {
 			if (verticalAmount != 0) lock.unlock();
 			return true;
 		}
+		if (accounts.mouseScrolled(mouseX, mouseY, verticalAmount)) return true;
 		return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
 	}
 
@@ -591,6 +653,7 @@ public final class V1zirMainMenu extends Screen {
 			if (client.getOverlay() == null) lock.unlock();
 			return true;
 		}
+		if (accounts.keyPressed(client, input.key(), input.modifiers())) return true;
 		int key = input.key();
 		boolean back = key == GLFW.GLFW_KEY_LEFT || key == GLFW.GLFW_KEY_UP
 			|| key == GLFW.GLFW_KEY_TAB && (input.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0;
@@ -604,6 +667,13 @@ public final class V1zirMainMenu extends Screen {
 			return true;
 		}
 		return super.keyPressed(input);
+	}
+
+	/** Typing goes into the accounts panel's nickname field while it is open. */
+	@Override
+	public boolean charTyped(CharInput input) {
+		if (input.isValidChar() && !lock.locked() && !editor.active() && accounts.charTyped(input.asString())) return true;
+		return super.charTyped(input);
 	}
 
 	@Override

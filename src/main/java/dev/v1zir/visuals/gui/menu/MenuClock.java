@@ -64,6 +64,8 @@ final class MenuClock {
 	private boolean twelveHour;
 	private boolean seconds;
 	private boolean greet;
+	/** The name the greeting was made for: a switch of account makes it again. */
+	private String name = "";
 	private boolean bold = true;
 	private DateTimeFormatter timeFormat;
 	private DateTimeFormatter dateFormat;
@@ -81,7 +83,9 @@ final class MenuClock {
 		boolean secs = module != null && module.seconds.on();
 		boolean hello = module == null || module.greeting.on();
 		bold = module == null || module.clockStyle.is("Bold");
-		if (now == second && lang.equals(language) && twelve == twelveHour && secs == seconds && hello == greet) return;
+		String user = client.getSession().getUsername();
+		if (now == second && lang.equals(language) && twelve == twelveHour && secs == seconds && hello == greet && user.equals(name)) return;
+		name = user;
 		if (!lang.equals(language) || dateFormat == null) {
 			language = lang;
 			polish = lang.startsWith("pl_");
@@ -107,7 +111,7 @@ final class MenuClock {
 		date = dateFormat.format(t);
 		int slot = hour < 5 ? 3 : hour < 12 ? 0 : hour < 18 ? 1 : hour < 22 ? 2 : 3;
 		greetingIcon = ICONS[slot];
-		greeting = hello ? (polish ? POLISH : ENGLISH)[slot] + ", " + client.getSession().getUsername() : "";
+		greeting = hello ? (polish ? POLISH : ENGLISH)[slot] + ", " + user : "";
 		tip = (polish ? POLISH_TIPS : TIPS)[t.getDayOfYear() % TIPS.length];
 	}
 

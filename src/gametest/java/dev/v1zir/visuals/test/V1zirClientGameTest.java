@@ -1,5 +1,6 @@
 package dev.v1zir.visuals.test;
 
+import dev.v1zir.visuals.account.Accounts;
 import dev.v1zir.visuals.gui.clickgui.ClickGuiScreen;
 import dev.v1zir.visuals.gui.menu.LockScreen;
 import dev.v1zir.visuals.gui.menu.V1zirMainMenu;
@@ -66,7 +67,9 @@ import net.minecraft.client.gui.screen.option.OptionsScreen;
 import net.minecraft.client.option.GameOptions;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.option.Perspective;
+import net.minecraft.client.session.ProfileKeys;
 import net.minecraft.util.Hand;
+import net.minecraft.util.Uuids;
 import net.minecraft.util.profiler.log.MultiValueDebugSampleLog;
 import org.lwjgl.glfw.GLFW;
 
@@ -246,6 +249,75 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.takeScreenshot("lock-screen-multiplayer");
 		context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
 		context.waitForScreen(V1zirMainMenu.class);
+		context.waitTicks(10);
+		context.getInput().setCursorPos(640, 360);
+		accounts(context);
+	}
+
+	/**
+	 * The name pill opens the accounts panel. A nickname typed into it becomes an offline account the game plays as (its
+	 * name, the UUID offline servers give it, no chat keys), and the cross on its row forgets it and goes back to the
+	 * launcher's account.
+	 */
+	private static void accounts(ClientGameTestContext context) {
+		String launcher = context.computeOnClient(client -> client.getSession().getUsername());
+		double[] pill = context.computeOnClient(client -> {
+			double scale = client.getWindow().getScaleFactor();
+			float x = (float) field(client.currentScreen, V1zirMainMenu.class, "pillX");
+			float y = (float) field(client.currentScreen, V1zirMainMenu.class, "pillY");
+			float w = (float) field(client.currentScreen, V1zirMainMenu.class, "pillW");
+			float h = (float) field(client.currentScreen, V1zirMainMenu.class, "pillH");
+			return new double[]{(x + w / 2f) * scale, (y + h / 2f) * scale};
+		});
+		context.getInput().setCursorPos(pill[0], pill[1]);
+		context.waitTicks(8);
+		context.takeScreenshot("main-menu-pill-hover");
+		context.getInput().holdMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+		context.waitTicks(2);
+		context.getInput().releaseMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+		context.waitTicks(15);
+		context.takeScreenshot("main-menu-accounts");
+
+		context.getInput().typeChars("V1zirTester");
+		context.waitTicks(5);
+		context.takeScreenshot("main-menu-accounts-typing");
+		context.getInput().pressKey(GLFW.GLFW_KEY_ENTER);
+		context.waitTicks(15);
+		context.runOnClient(client -> {
+			String name = client.getSession().getUsername();
+			if (!"V1zirTester".equals(name)) throw new AssertionError("Playing as " + name + " after adding V1zirTester");
+			if (!Uuids.getOfflinePlayerUuid("V1zirTester").equals(client.getSession().getUuidOrNull())) {
+				throw new AssertionError("The offline account does not have its offline UUID");
+			}
+			if (client.getProfileKeys() != ProfileKeys.MISSING) throw new AssertionError("The offline account kept the launcher's chat keys");
+			if (client.getGameProfile() == null) throw new AssertionError("No game profile for the offline account");
+		});
+		context.takeScreenshot("main-menu-accounts-added");
+
+		// Its row is the second: hovered, the cross shows at its right end, and a click there forgets it.
+		double[] cross = context.computeOnClient(client -> {
+			Object panel = field(client.currentScreen, V1zirMainMenu.class, "accounts");
+			Class<?> type = panel.getClass();
+			float x = (float) field(panel, type, "x");
+			float listY = (float) field(panel, type, "listY");
+			float width = (float) field(null, type, "WIDTH");
+			float row = (float) field(null, type, "ROW");
+			double scale = client.getWindow().getScaleFactor();
+			return new double[]{(x + width - 15f) * scale, (listY + row + (row - 2f) / 2f) * scale};
+		});
+		context.getInput().setCursorPos(cross[0], cross[1]);
+		context.waitTicks(8);
+		context.takeScreenshot("main-menu-accounts-remove");
+		context.getInput().holdMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+		context.waitTicks(2);
+		context.getInput().releaseMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+		context.waitTicks(5);
+		context.runOnClient(client -> {
+			String name = client.getSession().getUsername();
+			if (!launcher.equals(name)) throw new AssertionError("Playing as " + name + " after forgetting V1zirTester, not as " + launcher);
+			if (Accounts.all().size() != 1) throw new AssertionError("Accounts left after forgetting V1zirTester: " + Accounts.all());
+		});
+		context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
 		context.waitTicks(10);
 		context.getInput().setCursorPos(640, 360);
 	}

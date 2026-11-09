@@ -32,6 +32,7 @@
     "LivingEntityMixin",
     "LivingEntityRendererInvoker",
     "LivingEntityRendererMixin",
+    "MinecraftClientAccessor",
     "MinecraftClientMixin",
     "MouseClickMixin",
     "MouseMixin",

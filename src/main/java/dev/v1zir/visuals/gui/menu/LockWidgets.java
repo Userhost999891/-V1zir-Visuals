@@ -1,6 +1,7 @@
 package dev.v1zir.visuals.gui.menu;
 
 import dev.v1zir.visuals.V1zir;
+import dev.v1zir.visuals.account.Accounts;
 import dev.v1zir.visuals.media.AlbumArt;
 import dev.v1zir.visuals.media.Media;
 import dev.v1zir.visuals.media.NowPlaying;
@@ -55,6 +56,8 @@ final class LockWidgets {
 	private boolean last;
 	@Nullable
 	private Supplier<SkinTextures> skin;
+	/** The account switch the skin was loaded for ({@link Accounts#revision()}). */
+	private int skinRevision;
 	/** The song shown, kept while its widget shrinks away after the player stopped. */
 	@Nullable
 	private Track track;
@@ -83,7 +86,14 @@ final class LockWidgets {
 	/** When the screen opens or resizes: checks the last world is still there and starts loading the player's skin. */
 	void init(MinecraftClient client) {
 		last = LastPlayed.available(client);
-		if (skin == null) skin = client.getSkinProvider().supplySkinTextures(client.getGameProfile(), false);
+		refreshSkin(client);
+	}
+
+	/** Loads the skin of the account in use, again after a switch to another. */
+	private void refreshSkin(MinecraftClient client) {
+		if (skin != null && skinRevision == Accounts.revision()) return;
+		skinRevision = Accounts.revision();
+		skin = client.getSkinProvider().supplySkinTextures(client.getGameProfile(), false);
 	}
 
 	/** Forgets last frame's elements; the render methods record the ones they draw. */
@@ -183,6 +193,7 @@ final class LockWidgets {
 		Render2D.setAlpha(alpha);
 		frost(ctx, x, y, profileW, h, h * 0.3f, 0f);
 		record(PROFILE, x, y, profileW, h);
+		refreshSkin(client);
 		SkinTextures textures = skin != null ? skin.get() : null;
 		if (textures != null) {
 			Heads.skin(ctx, textures, x + pad, y + pad, inner, inner * 0.24f, 0xFFFFFFFF);
