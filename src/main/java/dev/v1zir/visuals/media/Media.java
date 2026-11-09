@@ -157,22 +157,24 @@ public final class Media {
 			return;
 		}
 		goneSince = 0L;
+		// When the position was sampled: the previous sample's time while the timeline runs on smoothly.
+		long sampledAt = now;
 		if (track.equals(prev.track())) {
 			track = prev.track();
-			if (art.equals(prev.art())) art = prev.art();
 			if (playing && prev.playing() && Math.abs(prev.position(now) - positionMs) < JITTER_MS) {
 				positionMs = prev.positionMs();
-				now = prev.sampledAt();
+				sampledAt = prev.sampledAt();
 			}
 		} else {
 			songSince = now;
 		}
-		// Players often publish the cover a moment after the title; past that, look it up.
-		if (art.isEmpty() && now - songSince > COVER_WAIT_NANOS) {
-			art = CoverSearch.find(track);
-			if (art.equals(prev.art())) art = prev.art();
-		}
-		current = new NowPlaying(track, art, Math.max(0L, positionMs), playing, now);
+		// A cover the game could not read or decode counts as none.
+		if (!art.isEmpty() && AlbumArt.unusable(art)) art = "";
+		// Players often publish the cover a moment after the title; past that, look it up. (By the clock, not by the
+		// sample time: that stands still while a song plays on smoothly.)
+		if (art.isEmpty() && now - songSince > COVER_WAIT_NANOS) art = CoverSearch.find(track);
+		if (art.equals(prev.art())) art = prev.art();
+		current = new NowPlaying(track, art, Math.max(0L, positionMs), playing, sampledAt);
 	}
 
 	/** A backend cannot run (tool missing, failed to start). */

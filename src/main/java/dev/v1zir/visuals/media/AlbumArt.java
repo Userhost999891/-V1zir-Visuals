@@ -26,6 +26,8 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -74,6 +76,8 @@ public final class AlbumArt {
 	}
 
 	private static final AtomicReference<Decoded> PENDING = new AtomicReference<>();
+	/** Covers that could not be read or decoded (a file gone or of a kind the game cannot decode): not tried again. */
+	private static final Set<String> UNUSABLE = ConcurrentHashMap.newKeySet();
 	private static final List<Art> RETIRED = new ArrayList<>();
 	/** 0 to 1 while the current cover (or the placeholder) fades in over the previous one. */
 	private static final Anim FADE = new Anim(1f, 7f);
@@ -112,6 +116,11 @@ public final class AlbumArt {
 			destroy(old);
 			RETIRED.remove(i);
 		}
+	}
+
+	/** Whether loading this cover failed, so another source should be tried for the song (any thread). */
+	static boolean unusable(String art) {
+		return UNUSABLE.contains(art);
 	}
 
 	/** Dominant colour of the cover (cross-faded like the image), or the fallback without one. */
@@ -227,27 +236,45 @@ public final class AlbumArt {
 				.build();
 			Media.http().sendAsync(request, HttpResponse.BodyHandlers.ofByteArray())
 				.thenAcceptAsync(response -> {
-					if (response.statusCode() == 200) offer(response.body(), generation);
-				}, Media.io());
+					if (response.statusCode() != 200 || !offer(response.body(), generation)) failed(art, "HTTP " + response.statusCode());
+				}, Media.io())
+				.exceptionally(error -> {
+					// The network may be back later: the cover is asked for again with the next song.
+					V1zir.LOGGER.debug("Could not download album art {}", art, error);
+					return null;
+				});
 			return;
 		}
 		Media.io().execute(() -> {
 			try {
 				Path path = art.startsWith("file:") ? Path.of(URI.create(art)) : Path.of(art);
-				if (Files.size(path) <= MAX_BYTES) offer(Files.readAllBytes(path), generation);
+				byte[] bytes = Files.size(path) <= MAX_BYTES ? Files.readAllBytes(path) : new byte[0];
+				// The player may still be writing it: one more try a moment later before giving it up.
+				if (!offer(bytes, generation)) {
+					Thread.sleep(250L);
+					if (!offer(Files.readAllBytes(path), generation)) failed(art, bytes.length + " bytes that do not decode");
+				}
 			} catch (IOException | RuntimeException e) {
-				V1zir.LOGGER.debug("Could not read album art {}", art, e);
+				failed(art, e.toString());
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
 			}
 		});
 	}
 
-	/** Decodes on the calling (background) thread and hands the image to the render thread. */
-	private static void offer(byte[] bytes, int generation) {
-		if (bytes.length == 0 || bytes.length > MAX_BYTES) return;
+	private static void failed(String art, String why) {
+		if (UNUSABLE.size() > 256) UNUSABLE.clear();
+		if (UNUSABLE.add(art)) V1zir.LOGGER.info("Album art {} is unusable ({}); looking the cover up online instead", art, why);
+	}
+
+	/** Decodes on the calling (background) thread and hands the image to the render thread; false when it does not decode. */
+	private static boolean offer(byte[] bytes, int generation) {
+		if (bytes.length == 0 || bytes.length > MAX_BYTES) return false;
 		Decoded decoded = decode(bytes, generation);
-		if (decoded == null) return;
+		if (decoded == null) return false;
 		Decoded stale = PENDING.getAndSet(decoded);
 		if (stale != null) stale.close();
+		return true;
 	}
 
 	private static Decoded decode(byte[] bytes, int generation) {

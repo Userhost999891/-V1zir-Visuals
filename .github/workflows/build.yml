@@ -149,3 +149,14 @@ jobs:
           if ($err) { Write-Host ('stderr: ' + $err) }
           if ($null -eq $out.Result -or -not $out.Result.StartsWith('{') -or $reports -lt 5) { Write-Host 'BRIDGE FAILED' } else { Write-Host 'BRIDGE OK' }
           exit 0
+      # Informative too: a fake media player (title, artist, timeline, a cover that comes late, a pause) with the
+      # bridge reading it, as the game runs it and in a single-threaded apartment; the log shows every report.
+      - name: Bridge against a fake player
+        shell: pwsh
+        run: |
+          $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+          foreach ($apartment in 'MTA', 'STA') {
+            Write-Host "===== bridge in an $apartment ====="
+            & $ps -NoLogo -NoProfile -ExecutionPolicy Bypass -File .github\media-bridge-test.ps1 -Apartment $apartment
+          }
+          exit 0
