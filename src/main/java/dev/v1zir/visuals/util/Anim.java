@@ -87,6 +87,12 @@ public final class Anim {
 		return Math.max(0f, Math.min(1f, t));
 	}
 
+	/** Slow start, fast finish (leaving animations). */
+	public static float easeInCubic(float t) {
+		float c = clamp01(t);
+		return c * c * c;
+	}
+
 	public static float easeOutCubic(float t) {
 		t = clamp01(t);
 		float f = 1f - t;

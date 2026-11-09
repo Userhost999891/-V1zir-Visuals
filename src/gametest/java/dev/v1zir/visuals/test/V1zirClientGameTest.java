@@ -200,6 +200,22 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
 		context.waitTicks(20);
 
+		// A swipe up from an empty spot brings the lock screen back: it rises from the bottom with the cursor.
+		context.getInput().setCursorPos(200, 660);
+		context.getInput().holdMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+		for (int step = 0; step < 4; step++) {
+			context.getInput().moveCursor(0, -45);
+			context.waitTick();
+		}
+		context.takeScreenshot("main-menu-swipe-up");
+		for (int step = 0; step < 4; step++) {
+			context.getInput().moveCursor(0, -45);
+			context.waitTick();
+		}
+		context.getInput().releaseMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+		context.waitTicks(30);
+		context.takeScreenshot("main-menu-relocked");
+
 		// Locked again: hovering the multiplayer quick action shows its name, and a click unlocks straight into
 		// the multiplayer screen, which goes back to the home screen.
 		context.runOnClient(client -> {
@@ -222,7 +238,9 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.waitTicks(2);
 		context.getInput().releaseMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
 		context.waitForScreen(MultiplayerScreen.class);
-		context.waitTicks(5);
+		context.waitTicks(2);
+		context.takeScreenshot("lock-screen-multiplayer-entering");
+		context.waitTicks(25);
 		context.takeScreenshot("lock-screen-multiplayer");
 		context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
 		context.waitForScreen(V1zirMainMenu.class);

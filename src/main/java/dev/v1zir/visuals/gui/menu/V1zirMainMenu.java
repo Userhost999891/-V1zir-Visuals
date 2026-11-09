@@ -27,6 +27,12 @@ import net.minecraft.client.gui.screen.world.SelectWorldScreen;
 import net.minecraft.client.input.KeyInput;
 import net.minecraft.client.realms.gui.screen.RealmsMainScreen;
 import net.minecraft.text.Text;
+import net.minecraft.client.gui.screen.multiplayer.AddServerScreen;
+import net.minecraft.client.gui.screen.multiplayer.DirectConnectScreen;
+import net.minecraft.client.gui.screen.multiplayer.MultiplayerServerListWidget;
+import net.minecraft.client.gui.screen.world.CreateWorldScreen;
+import net.minecraft.client.gui.screen.world.WorldListWidget;
+import net.minecraft.client.option.ServerList;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix3x2fStack;
 import org.lwjgl.glfw.GLFW;
@@ -34,17 +40,24 @@ import org.lwjgl.glfw.GLFW;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.function.Supplier;
 
 /**
  * Replacement title screen: an animated wallpaper, the time with a greeting and a row of round frosted icon buttons.
  * It opens on the {@link LockScreen}, which has a wallpaper of its own; once that slides away the menu comes up from
- * below. Holding the mouse button on an empty spot of either screen opens the {@link WallpaperEditor} for it.
+ * below, and a swipe up from an empty spot brings the lock screen back. Holding the mouse button on an empty spot of
+ * either screen opens the {@link WallpaperEditor} for it.
+ * <p>
+ * A button leaves the menu with a short animation (its content grows a little and fades while the wallpaper dims)
+ * before the next screen comes in out of the dark ({@link ScreenTransition}). The classes of the screens the buttons
+ * open are loaded in the background while the menu shows, so opening them the first time does not stall a frame.
  */
 public final class V1zirMainMenu extends Screen {
 	private static final int DANGER = 0xFFFF4D5E;
 	/** Header clock style, refilled every frame instead of allocated. */
 	private static final Render2D.TextStyle TIME_STYLE = new Render2D.TextStyle().weight(0f);
 	private static boolean playedIntro;
+	private static boolean warmedUp;
 
 	private final List<RoundButton> buttons = new ArrayList<>();
 	private final LockScreen lock = new LockScreen();
@@ -65,6 +78,11 @@ public final class V1zirMainMenu extends Screen {
 	private RoundButton pressed;
 	/** Button selected with the keyboard (Tab or the arrow keys), or -1. */
 	private int focused = -1;
+	/** The screen the menu is leaving for (null when staying), how far it has left (0 to 1) and whether it is set. */
+	@Nullable
+	private Supplier<Screen> leavingTo;
+	private float leave;
+	private boolean left;
 
 	public V1zirMainMenu() {
 		super(Text.literal(V1zir.NAME));
@@ -76,17 +94,25 @@ public final class V1zirMainMenu extends Screen {
 	protected void init() {
 		buttons.clear();
 		pressed = null;
+		if (left) {
+			// Back from the screen it left for: the menu comes in again (the short intro) instead of staying faded.
+			left = false;
+			introStart = -1L;
+		}
+		leavingTo = null;
+		leave = 0f;
+		warmUp();
 		float size = Math.max(26f, Math.min(42f, height * 0.072f));
 		float gap = size * 0.42f;
-		Runnable singleplayer = () -> client.setScreen(new SelectWorldScreen(this));
-		Runnable multiplayer = () -> client.setScreen(new MultiplayerScreen(this));
+		Runnable singleplayer = () -> open(() -> new SelectWorldScreen(this));
+		Runnable multiplayer = () -> open(() -> new MultiplayerScreen(this));
 		lock.init(client, singleplayer, multiplayer, () -> LastPlayed.join(client, this));
 		List<RoundButton> row = new ArrayList<>();
 		row.add(new RoundButton(Icons.USER, singleplayer, false));
 		row.add(new RoundButton(Icons.USERS, multiplayer, false));
-		if (!client.isDemo()) row.add(new RoundButton(Icons.GLOBE, () -> client.setScreen(new RealmsMainScreen(this)), false));
+		if (!client.isDemo()) row.add(new RoundButton(Icons.GLOBE, () -> open(() -> new RealmsMainScreen(this)), false));
 		if (FabricLoader.getInstance().isModLoaded("modmenu")) row.add(new RoundButton(Icons.PUZZLE, this::openModMenu, false));
-		row.add(new RoundButton(Icons.SETTINGS, () -> client.setScreen(new OptionsScreen(this, client.options)), false));
+		row.add(new RoundButton(Icons.SETTINGS, () -> open(() -> new OptionsScreen(this, client.options)), false));
 		row.add(new RoundButton(Icons.POWER, () -> client.scheduleStop(), true));
 
 		float total = row.size() * size + (row.size() - 1) * gap;
@@ -101,7 +127,7 @@ public final class V1zirMainMenu extends Screen {
 		}
 
 		RoundButton language = new RoundButton(Icons.LANGUAGES,
-			() -> client.setScreen(new LanguageOptionsScreen(this, client.options, client.getLanguageManager())), false);
+			() -> open(() -> new LanguageOptionsScreen(this, client.options, client.getLanguageManager())), false);
 		language.radius = size * 0.34f;
 		language.cx = width - 12f - language.radius;
 		language.cy = height - 12f - language.radius;
@@ -118,10 +144,49 @@ public final class V1zirMainMenu extends Screen {
 	private void openModMenu() {
 		try {
 			Class<?> screen = Class.forName("com.terraformersmc.modmenu.gui.ModsScreen");
-			client.setScreen((Screen) screen.getConstructor(Screen.class).newInstance(this));
+			Screen mods = (Screen) screen.getConstructor(Screen.class).newInstance(this);
+			open(() -> mods);
 		} catch (ReflectiveOperationException | ClassCastException e) {
 			V1zir.LOGGER.warn("Could not open Mod Menu", e);
 		}
+	}
+
+	/** Leaves the menu for the screen: the menu's exit plays first, then the screen is made and comes in. */
+	private void open(Supplier<Screen> screen) {
+		if (leavingTo != null) return;
+		leavingTo = screen;
+		leave = 0f;
+		pressed = null;
+	}
+
+	/**
+	 * Loads the classes of the screens the menu opens, and what their declarations name, on a background thread once
+	 * per game: the first opening of the world or server list then has nothing to load. Loading runs no static
+	 * initialisers, so nothing of the game is touched off its thread.
+	 */
+	private static void warmUp() {
+		if (warmedUp) return;
+		warmedUp = true;
+		Thread thread = new Thread(() -> {
+			Class<?>[] screens = {SelectWorldScreen.class, WorldListWidget.class, CreateWorldScreen.class, MultiplayerScreen.class,
+				MultiplayerServerListWidget.class, ServerList.class, AddServerScreen.class, DirectConnectScreen.class, OptionsScreen.class,
+				LanguageOptionsScreen.class, RealmsMainScreen.class};
+			for (Class<?> type : screens) {
+				try {
+					type.getDeclaredMethods();
+					type.getDeclaredFields();
+					for (Class<?> inner : type.getDeclaredClasses()) {
+						inner.getDeclaredMethods();
+						inner.getDeclaredFields();
+					}
+				} catch (Throwable ignored) {
+					// Whatever did not load now loads when the screen opens, as it did before.
+				}
+			}
+		}, "V1zir menu warm-up");
+		thread.setDaemon(true);
+		thread.setPriority(Thread.MIN_PRIORITY);
+		thread.start();
 	}
 
 	@Override
@@ -165,6 +230,20 @@ public final class V1zirMainMenu extends Screen {
 		boolean widgets = module == null || module.widgets.on();
 		float open = lock.update(module == null || module.lockScreen.on(), widgets);
 		if (!overlay) lock.drag(mouseY, height);
+		// Leaving for another screen: once the exit has played, the screen is made and set (outside this frame).
+		if (leavingTo != null) {
+			leave = Math.min(1f, leave + Math.min(dt, 1f / 30f) / ScreenTransition.LEAVE_SECONDS);
+			if (leave >= 1f && !left) {
+				left = true;
+				Supplier<Screen> next = leavingTo;
+				client.execute(() -> {
+					Screen screen = next.get();
+					ScreenTransition.enter(screen);
+					client.setScreen(screen);
+				});
+			}
+		}
+		float exit = Anim.easeInCubic(leave);
 		if (lock.dragged()) hold.cancel();
 		if (hold.update(mouseX, mouseY)) startEditing();
 
@@ -172,8 +251,9 @@ public final class V1zirMainMenu extends Screen {
 		boolean picker = editor.render(ctx, width, height, mouseX, mouseY, px, py);
 		Wallpapers.Screen editing = picker ? editor.screen() : null;
 		float fade = picker ? editor.contentAlpha() : 1f;
-		boolean interactive = !overlay && !lock.locked() && !editor.active();
-		float shown = Anim.clamp01(open);
+		boolean interactive = !overlay && !lock.locked() && !editor.active() && leavingTo == null;
+		// The lock screen rising over the menu (a swipe up) dims it as it comes.
+		float shown = Anim.clamp01(open) * (1f - 0.6f * lock.risen()) * (1f - exit);
 		if (shown > 0.001f) {
 			if (editing != Wallpapers.Screen.HOME) {
 				WallpaperStyle style = Wallpapers.style(Wallpapers.Screen.HOME);
@@ -186,9 +266,19 @@ public final class V1zirMainMenu extends Screen {
 			}
 			if (editing == Wallpapers.Screen.HOME) editor.pushContentTransform(ctx);
 			if (fade > 0.004f) {
-				Render2D.setAlpha(fade);
+				// Leaving, the content grows a little as it fades, as if passing through it.
+				boolean zoom = exit > 0.001f;
+				if (zoom) {
+					float scale = 1f + 0.06f * exit;
+					ctx.getMatrices().pushMatrix();
+					ctx.getMatrices().translate(width / 2f, height / 2f);
+					ctx.getMatrices().scale(scale, scale);
+					ctx.getMatrices().translate(-width / 2f, -height / 2f);
+				}
+				Render2D.setAlpha(fade * (1f - exit));
 				renderParticles(ctx, dt, px, py);
 				renderMenu(ctx, interactive ? mouseX : -10000, interactive ? mouseY : -10000, t, px, py, shown * fade);
+				if (zoom) ctx.getMatrices().popMatrix();
 			}
 			if (editing == Wallpapers.Screen.HOME) ctx.getMatrices().popMatrix();
 		}
@@ -215,6 +305,8 @@ public final class V1zirMainMenu extends Screen {
 		if (picker) editor.renderControls(ctx, mouseX, mouseY);
 		hold.render(ctx);
 		Render2D.setAlpha(1f);
+		// The wallpaper dims into the dark the next screen comes in from.
+		if (exit > 0.001f) Render2D.rect(ctx, 0, 0, width, height, ColorUtil.withAlpha(0x000000, Math.round(200f * exit)));
 	}
 
 	/** The hold completed: the picker opens for the screen it was made on. */
@@ -314,7 +406,7 @@ public final class V1zirMainMenu extends Screen {
 
 	@Override
 	public boolean mouseClicked(Click click, boolean doubled) {
-		if (client.getOverlay() != null) return true;
+		if (client.getOverlay() != null || leavingTo != null) return true;
 		boolean left = click.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT;
 		if (editor.active()) {
 			if (left) editor.mouseClicked(click.x(), click.y());
@@ -336,11 +428,17 @@ public final class V1zirMainMenu extends Screen {
 					return true;
 				}
 			}
-			// An empty spot: held long enough, it opens the wallpaper picker.
+			// An empty spot: held long enough, it opens the wallpaper picker; swiped up, it brings the lock screen back.
 			hold.start(click.x(), click.y());
+			if (lockScreenOn()) lock.pressRaise(click.y());
 			return true;
 		}
 		return super.mouseClicked(click, doubled);
+	}
+
+	private static boolean lockScreenOn() {
+		MainMenuModule module = ModuleManager.get(MainMenuModule.class);
+		return module == null || module.lockScreen.on();
 	}
 
 	@Override
@@ -351,6 +449,10 @@ public final class V1zirMainMenu extends Screen {
 		}
 		if (lock.locked()) {
 			lock.drag(click.y(), height);
+			return true;
+		}
+		if (lock.dragRaise(click.y(), height)) {
+			hold.cancel();
 			return true;
 		}
 		return super.mouseDragged(click, offsetX, offsetY);
@@ -369,6 +471,7 @@ public final class V1zirMainMenu extends Screen {
 				return true;
 			}
 			lock.release(click.x(), click.y(), height);
+			lock.releaseRaise();
 			RoundButton button = pressed;
 			pressed = null;
 			// It fires when let go over it, so the press can be seen (and taken back by moving away).
@@ -395,6 +498,7 @@ public final class V1zirMainMenu extends Screen {
 
 	@Override
 	public boolean keyPressed(KeyInput input) {
+		if (leavingTo != null) return true;
 		if (editor.active()) {
 			editor.keyPressed(input.key());
 			return true;

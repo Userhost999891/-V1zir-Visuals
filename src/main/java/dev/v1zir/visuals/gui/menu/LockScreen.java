@@ -22,6 +22,9 @@ import org.joml.Matrix3x2fStack;
  * away with a spring while its content swells and fades and the main menu comes in; let go early and it springs back.
  * Scrolling, any key, a click on the hint or the notification open it too; a quick action opens it straight into
  * singleplayer or multiplayer and the last played widget into that world or server.
+ * <p>
+ * From the main menu a swipe up brings it back: the sheet rises from the bottom of the screen with the cursor and,
+ * let go past a threshold (or flicked), settles over the menu locked again; let go early and it sinks back.
  */
 public final class LockScreen {
 	/** Fraction of the screen the sheet must be dragged past for letting go to open it. */
@@ -63,6 +66,15 @@ public final class LockScreen {
 	private Runnable pending;
 	/** Holding the media backend for the now playing widget. */
 	private boolean media;
+	/** The swipe up from the menu: how far the sheet has risen from the bottom (0 none, 1 covering). */
+	private final Anim rise = new Anim(0f, 6f);
+	private float risen;
+	private boolean raising;
+	private boolean raised;
+	private double raiseY;
+	private float raiseSample;
+	private long raiseTime;
+	private float raiseVelocity;
 	/** 1 after a few seconds without the mouse moving: the handle starts hopping. */
 	private final Anim idle = new Anim(0f, 4f);
 	private int lastMouseX;
@@ -92,9 +104,63 @@ public final class LockScreen {
 			dragging = false;
 			open.snap(1f);
 		}
+		risen = enabled ? rise.get() : 0f;
+		if (!raising && risen >= 0.999f && rise.target() >= 1f) {
+			// Risen all the way: locked again, the sheet back in its usual place.
+			locked = true;
+			open.snap(0f);
+			rise.snap(0f);
+			risen = 0f;
+		}
 		progress = open.get();
 		holdMedia(showWidgets && visible());
 		return progress;
+	}
+
+	/** How far the sheet has risen from the bottom in a swipe up from the menu (0 none, 1 covering). */
+	float risen() {
+		return risen;
+	}
+
+	/** A press on an empty spot of the unlocked menu: a swipe up from it may bring the lock screen back. */
+	void pressRaise(double y) {
+		raising = true;
+		raised = false;
+		raiseY = y;
+		raiseSample = rise.get();
+		raiseTime = System.nanoTime();
+		raiseVelocity = 0f;
+	}
+
+	/** Raises the sheet with the cursor; returns whether the press has turned into a swipe. */
+	boolean dragRaise(double y, int height) {
+		if (!raising) return false;
+		double dy = raiseY - y;
+		if (!raised && dy < 6.0) return false;
+		raised = true;
+		float up = (float) Math.max(0.0, dy / height);
+		// A little resistance at first, so a slip of the mouse does not lift it far.
+		float r = Math.min(1f, (float) (1.0 - Math.exp(-2.4 * up)) * 1.05f);
+		long now = System.nanoTime();
+		float dt = (now - raiseTime) / 1.0e9f;
+		if (dt >= 0.008f) {
+			raiseVelocity = raiseVelocity * 0.3f + (r - raiseSample) / dt * 0.7f;
+			raiseSample = r;
+			raiseTime = now;
+		}
+		rise.snap(r);
+		risen = r;
+		return true;
+	}
+
+	/** Let go of a swipe up: past the threshold (or flicked) the sheet settles and locks, else it sinks back. */
+	void releaseRaise() {
+		if (!raising) return;
+		raising = false;
+		if (!raised) return;
+		if (System.nanoTime() - raiseTime > 90_000_000L) raiseVelocity = 0f;
+		if (risen > 0.35f || raiseVelocity > 1.4f && risen > 0.05f) rise.target(1f).fling(Math.max(raiseVelocity, 1f));
+		else rise.target(0f).fling(raiseVelocity);
 	}
 
 	/** Runs the action the sheet was opened into once it is mostly gone; called every tick, outside rendering. */
@@ -126,7 +192,7 @@ public final class LockScreen {
 	}
 
 	boolean visible() {
-		return locked || progress < 0.999f;
+		return locked || progress < 0.999f || risen > 0.001f;
 	}
 
 	/** Whether the content (and so its glass) can still be seen; it is gone early in the slide. */
@@ -194,6 +260,7 @@ public final class LockScreen {
 	/** Forgets the press being held (it became a long press): letting go then does nothing. */
 	void cancelPress() {
 		dragging = false;
+		raising = false;
 		widgets.pressed = LockWidgets.NONE;
 	}
 
@@ -240,6 +307,15 @@ public final class LockScreen {
 	 * while it slides. tint dims it.
 	 */
 	void renderSheet(DrawContext ctx, int width, int height, @Nullable TextureSetup wallpaper, int tint) {
+		if (rising()) {
+			// Swiped up from the menu: the sheet rises from the bottom, its top corners rounded until it settles.
+			float y = (1f - risen) * height;
+			float radius = Anim.clamp01((1f - risen) * 12f) * 16f;
+			Render2D.shadow(ctx, 0f, y, width, 40f, radius, 24f, 0x70000000);
+			if (wallpaper != null) Render2D.wallpaper(ctx, wallpaper, 0f, y, width, height, radius, Render2D.CORNERS_TOP, tint);
+			else Render2D.round(ctx, 0f, y, width, height, radius, Render2D.CORNERS_TOP, 0xFF050505);
+			return;
+		}
 		float y = -progress * height;
 		float radius = Anim.clamp01(Math.abs(progress) * 12f) * 16f;
 		if (progress > 0.001f) Render2D.shadow(ctx, 0f, y + height - 40f, width, 40f, radius, 24f, 0x70000000);
@@ -250,14 +326,21 @@ public final class LockScreen {
 		}
 	}
 
+	/** The sheet is rising from the bottom in a swipe up from the menu. */
+	private boolean rising() {
+		return !locked && risen > 0.001f;
+	}
+
 	/**
 	 * Everything on the sheet; t is the intro time, time the seconds since the screen opened and fade the opacity left
 	 * by the wallpaper picker. While the sheet goes up its content rises with it, swells a little and fades.
 	 */
 	void renderContent(DrawContext ctx, MinecraftClient client, int width, int height, float t, float time, MenuClock clock,
 					   float fade, int mouseX, int mouseY, boolean showWidgets, boolean showCard) {
+		// Rising from the bottom, the content rides on the sheet as it is when it covers the menu.
+		float progress = rising() ? 0f : this.progress;
 		float appear = Anim.easeOutQuart(Anim.progress(t, 0.25f, 0.9f));
-		float lift = -progress * height + (1f - appear) * 10f;
+		float lift = -progress * height + (1f - appear) * 10f + (rising() ? (1f - risen) * height : 0f);
 		renderHint(ctx, width, height, t, time, clock.hint, lift, fade, mouseX, mouseY);
 		widgets.begin();
 		float p = Math.max(progress, 0f);
@@ -341,6 +424,7 @@ public final class LockScreen {
 			lastMove = now;
 		}
 		float rest = idle.target(now - lastMove > 3_000_000_000L ? 1f : 0f).get();
+		float progress = rising() ? 0f : this.progress;
 		float a = Anim.easeOutCubic(Anim.progress(t, 0.8f, 0.6f)) * Anim.clamp01(1f - Math.abs(progress) * 5f) * fade;
 		if (a <= 0.004f) return;
 		Render2D.setAlpha(a);
