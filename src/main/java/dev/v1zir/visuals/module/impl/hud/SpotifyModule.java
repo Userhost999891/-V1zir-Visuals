@@ -14,9 +14,10 @@ import net.minecraft.client.gui.screen.ChatScreen;
 import org.lwjgl.glfw.GLFW;
 
 /**
- * Now playing widget ({@link MediaCard}): album art, title and artist (scrolling when too long), a
- * progress bar with elapsed and total time, the play state and prev / play / next buttons that work
- * with the chat or the HUD editor open. Card and Compact styles; the accent can follow the album art.
+ * Now playing widget ({@link MediaCard}): the song's cover over a blurred copy of it filling the card,
+ * title and artist (scrolling when too long), a progress bar with elapsed and total time, the play
+ * state and prev / play / next buttons that work with the chat or the HUD editor open. Card and
+ * Compact styles; the accent can follow the album art.
  */
 public final class SpotifyModule extends HudModule {
 	public final ModeSetting style = add(new ModeSetting("Style", "Card", "Card", "Compact"));
@@ -99,20 +100,20 @@ public final class SpotifyModule extends HudModule {
 
 		Render2D.setAlpha(appear.get());
 		if (compact) {
-			width = 168f;
-			height = 24f;
+			width = 176f;
+			height = 26f;
 			panel(ctx, x, y, width, height, height / 2f);
 			card.compact(ctx, x, y, width, height, buttons, accent, accent2, mx, my);
 		} else {
-			width = 176f;
+			width = 196f;
 			height = buttons ? MediaCard.HEIGHT : MediaCard.HEIGHT_PLAIN;
-			panel(ctx, x, y, width, height, 8f);
-			// A wash of the album colour from the left gives the card its tint.
-			Render2D.gradientH(ctx, x, y, width * 0.75f, height, 8f, ColorUtil.withAlpha(accent, 34), ColorUtil.withAlpha(accent, 0));
-			float art = height - 12f;
-			card.cover(ctx, x + 6f, y + 6f, art, 7f, accent, accent2);
-			float tx = x + art + 14f;
-			card.details(ctx, tx, y, x + width - 9f - tx, buttons, accent, accent2, mx, my);
+			panel(ctx, x, y, width, height, 10f);
+			// The cover, blurred, fills the card in its own colours.
+			card.backdrop(ctx, x, y, width, height, 10f, accent);
+			float art = height - 16f;
+			card.cover(ctx, x + 8f, y + 8f, art, 8f, accent, accent2);
+			float tx = x + art + 18f;
+			card.details(ctx, tx, y, x + width - 10f - tx, buttons, accent, accent2, mx, my);
 		}
 		Render2D.setAlpha(1f);
 	}

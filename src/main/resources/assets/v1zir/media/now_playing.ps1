@@ -55,7 +55,8 @@ function Remove-Art {
 	$script:artFile = ''
 }
 
-# Saves the cover as a PNG in the temp folder (unless it is the one saved last) and deletes the previous file.
+# Saves the cover in the temp folder as the player gives it (PNG or JPEG; the game decodes either), unless it is
+# the one saved last, and deletes the previous file.
 function Save-Art($thumbnail) {
 	if ($null -eq $thumbnail) { return }
 	$stream = Await ($thumbnail.OpenReadAsync()) ([Windows.Storage.Streams.IRandomAccessStreamWithContentType])
@@ -74,15 +75,11 @@ function Save-Art($thumbnail) {
 	if ($hash -ceq $script:artHash) { return }
 	$script:artHash = $hash
 	$script:artCount++
-	$file = Join-Path ([System.IO.Path]::GetTempPath()) ('v1zir-art-' + $PID + '-' + $script:artCount + '.png')
-	if ($bytes[0] -eq 0x89 -and $bytes[1] -eq 0x50) {
-		[System.IO.File]::WriteAllBytes($file, $bytes)
-	} else {
-		Add-Type -AssemblyName System.Drawing
-		$memory.Position = 0
-		$image = [System.Drawing.Image]::FromStream($memory)
-		try { $image.Save($file, [System.Drawing.Imaging.ImageFormat]::Png) } finally { $image.Dispose() }
-	}
+	$extension = '.img'
+	if ($bytes[0] -eq 0x89 -and $bytes[1] -eq 0x50) { $extension = '.png' }
+	elseif ($bytes[0] -eq 0xFF -and $bytes[1] -eq 0xD8) { $extension = '.jpg' }
+	$file = Join-Path ([System.IO.Path]::GetTempPath()) ('v1zir-art-' + $PID + '-' + $script:artCount + $extension)
+	[System.IO.File]::WriteAllBytes($file, $bytes)
 	Remove-Art
 	$script:artFile = $file
 }

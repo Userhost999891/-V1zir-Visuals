@@ -34,11 +34,15 @@ import java.util.concurrent.atomic.AtomicReference;
  * <p>The image (a file path or an http(s)/file URL) is read and decoded with stb_image on a
  * background thread, centre-cropped, scaled down to at most {@link #SIZE} pixels and its dominant
  * colour measured there; the render thread then only uploads it into a NativeImageBackedTexture
- * registered under v1zir:spotify/art_N. A new cover cross-fades over the old one, which is
- * destroyed a moment after it was last drawn. Everything but the decoding is render thread only.
+ * registered under v1zir:spotify/art_N. A tiny copy of it, stretched with linear filtering, is the
+ * blurred backdrop of the widgets (v1zir:spotify/blur_N). A new cover cross-fades over the old one,
+ * which is destroyed a moment after it was last drawn. Everything but the decoding is render thread
+ * only.
  */
 public final class AlbumArt {
 	private static final int SIZE = 160;
+	/** Texels across the backdrop: few enough that linear filtering blurs it into soft colour fields. */
+	private static final int BLUR = 10;
 	private static final int MAX_BYTES = 8 << 20;
 	/** A retired texture may still be referenced by the frame being drawn; it is destroyed after this. */
 	private static final long RETIRE_NANOS = 400_000_000L;
@@ -48,17 +52,25 @@ public final class AlbumArt {
 	private static final class Art {
 		final Identifier id;
 		final TextureSetup texture;
+		final Identifier blurId;
+		final TextureSetup blur;
 		final int color;
 		long retiredAt;
 
-		Art(Identifier id, TextureSetup texture, int color) {
+		Art(Identifier id, TextureSetup texture, Identifier blurId, TextureSetup blur, int color) {
 			this.id = id;
 			this.texture = texture;
+			this.blurId = blurId;
+			this.blur = blur;
 			this.color = color;
 		}
 	}
 
-	private record Decoded(NativeImage image, int color, int generation) {
+	private record Decoded(NativeImage image, NativeImage blur, int color, int generation) {
+		void close() {
+			image.close();
+			blur.close();
+		}
 	}
 
 	private static final AtomicReference<Decoded> PENDING = new AtomicReference<>();
@@ -88,7 +100,7 @@ public final class AlbumArt {
 		Decoded decoded = PENDING.getAndSet(null);
 		if (decoded != null) {
 			if (decoded.generation() == generation) upload(decoded);
-			else decoded.image().close();
+			else decoded.close();
 		}
 		if (previous != null && FADE.get() >= 1f) {
 			retire(previous);
@@ -97,7 +109,7 @@ public final class AlbumArt {
 		for (int i = RETIRED.size() - 1; i >= 0; i--) {
 			Art old = RETIRED.get(i);
 			if (now - old.retiredAt < RETIRE_NANOS) continue;
-			MinecraftClient.getInstance().getTextureManager().destroyTexture(old.id);
+			destroy(old);
 			RETIRED.remove(i);
 		}
 	}
@@ -109,6 +121,32 @@ public final class AlbumArt {
 		if (f >= 1f) return to;
 		int from = previous != null && previous.color != 0 ? previous.color : fallback;
 		return ColorUtil.lerp(from, to, f);
+	}
+
+	/** Whether a cover (not the placeholder) is showing or fading in. */
+	public static boolean hasCover() {
+		return current != null;
+	}
+
+	/**
+	 * The cover blurred into soft fields of its colours, filling a rounded rectangle (its middle, so it keeps its
+	 * proportions); tint multiplies it and carries its opacity. Nothing without a cover.
+	 */
+	public static void drawBackdrop(DrawContext ctx, float x, float y, float w, float h, float radius, int tint) {
+		float f = FADE.get();
+		if (f < 1f) backdrop(ctx, previous, x, y, w, h, radius, ColorUtil.fade(tint, 1f - f));
+		backdrop(ctx, current, x, y, w, h, radius, f < 1f ? ColorUtil.fade(tint, f) : tint);
+	}
+
+	private static void backdrop(DrawContext ctx, Art art, float x, float y, float w, float h, float radius, int tint) {
+		if (art == null) return;
+		// Half a texel in from the edges, where linear filtering would clamp into flat bands.
+		float inset = 0.5f / BLUR;
+		float aspect = w / Math.max(h, 1e-3f);
+		float span = 1f - 2f * inset;
+		float u = aspect >= 1f ? span : span * aspect;
+		float v = aspect >= 1f ? span / aspect : span;
+		Render2D.image(ctx, art.blur, x, y, w, h, radius, tint, 0.5f - u / 2f, 0.5f - v / 2f, 0.5f + u / 2f, 0.5f + v / 2f, 0);
 	}
 
 	/** Draws the cover, or a placeholder (music icon on the accent gradient). tint multiplies the image. */
@@ -135,11 +173,10 @@ public final class AlbumArt {
 		generation++;
 		source = "";
 		Decoded decoded = PENDING.getAndSet(null);
-		if (decoded != null) decoded.image().close();
-		var textures = MinecraftClient.getInstance().getTextureManager();
-		if (current != null) textures.destroyTexture(current.id);
-		if (previous != null) textures.destroyTexture(previous.id);
-		for (Art old : RETIRED) textures.destroyTexture(old.id);
+		if (decoded != null) decoded.close();
+		if (current != null) destroy(current);
+		if (previous != null) destroy(previous);
+		for (Art old : RETIRED) destroy(old);
 		RETIRED.clear();
 		current = null;
 		previous = null;
@@ -159,11 +196,24 @@ public final class AlbumArt {
 		RETIRED.add(art);
 	}
 
+	private static void destroy(Art art) {
+		var textures = MinecraftClient.getInstance().getTextureManager();
+		textures.destroyTexture(art.id);
+		textures.destroyTexture(art.blurId);
+	}
+
 	private static void upload(Decoded decoded) {
-		Identifier id = V1zir.id("spotify/art_" + counter++);
+		int n = counter++;
+		Identifier id = V1zir.id("spotify/art_" + n);
+		Identifier blurId = V1zir.id("spotify/blur_" + n);
+		var textures = MinecraftClient.getInstance().getTextureManager();
 		NativeImageBackedTexture texture = new NativeImageBackedTexture(() -> "V1zir album art", decoded.image());
-		MinecraftClient.getInstance().getTextureManager().registerTexture(id, texture);
-		show(new Art(id, TextureSetup.of(texture.getGlTextureView(), RenderSystem.getSamplerCache().get(FilterMode.LINEAR)), decoded.color()));
+		NativeImageBackedTexture blur = new NativeImageBackedTexture(() -> "V1zir album art backdrop", decoded.blur());
+		textures.registerTexture(id, texture);
+		textures.registerTexture(blurId, blur);
+		var linear = RenderSystem.getSamplerCache().get(FilterMode.LINEAR);
+		show(new Art(id, TextureSetup.of(texture.getGlTextureView(), linear), blurId, TextureSetup.of(blur.getGlTextureView(), linear),
+			decoded.color()));
 	}
 
 	// ------------------------------------------------------------------ background loading
@@ -197,7 +247,7 @@ public final class AlbumArt {
 		Decoded decoded = decode(bytes, generation);
 		if (decoded == null) return;
 		Decoded stale = PENDING.getAndSet(decoded);
-		if (stale != null) stale.image().close();
+		if (stale != null) stale.close();
 	}
 
 	private static Decoded decode(byte[] bytes, int generation) {
@@ -263,6 +313,7 @@ public final class AlbumArt {
 			total += weight[i];
 			if (weight[i] > weight[best]) best = i;
 		}
+		NativeImage blur = blur(image, n);
 		int color = 0;
 		if (total > n * n * 0.02f) {
 			float w = weight[best];
@@ -271,6 +322,31 @@ public final class AlbumArt {
 			float[] hsv = ColorUtil.toHsv(dominant);
 			color = ColorUtil.fromHsv(hsv[0], Math.max(0.35f, Math.min(0.75f, hsv[1])), Math.max(0.78f, Math.min(0.96f, hsv[2])), 255);
 		}
-		return new Decoded(image, color, generation);
+		return new Decoded(image, blur, color, generation);
+	}
+
+	/** The backdrop: the scaled cover box-filtered down to BLUR texels across. */
+	private static NativeImage blur(NativeImage image, int n) {
+		NativeImage blur = new NativeImage(NativeImage.Format.RGBA, BLUR, BLUR, false);
+		for (int by = 0; by < BLUR; by++) {
+			int y0 = by * n / BLUR;
+			int y1 = Math.max(y0 + 1, (by + 1) * n / BLUR);
+			for (int bx = 0; bx < BLUR; bx++) {
+				int x0 = bx * n / BLUR;
+				int x1 = Math.max(x0 + 1, (bx + 1) * n / BLUR);
+				int r = 0, g = 0, b = 0, count = 0;
+				for (int y = y0; y < y1; y++) {
+					for (int x = x0; x < x1; x++) {
+						int argb = image.getColorArgb(x, y);
+						r += ColorUtil.red(argb);
+						g += ColorUtil.green(argb);
+						b += ColorUtil.blue(argb);
+						count++;
+					}
+				}
+				blur.setColorArgb(bx, by, ColorUtil.argb(255, r / count, g / count, b / count));
+			}
+		}
+		return blur;
 	}
 }

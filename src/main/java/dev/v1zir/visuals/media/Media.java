@@ -29,10 +29,22 @@ public final class Media {
 
 	/** Reported positions this close to the interpolated one are jitter and do not move the timeline. */
 	private static final long JITTER_MS = 300L;
+	/**
+	 * A song the player stops reporting for less than this (a session switching over, an advert
+	 * starting, the bridge restarting) stays, so the widgets and lyrics do not drop out and reload.
+	 */
+	private static final long GAP_NANOS = 2_000_000_000L;
+	/** A song whose player gives no cover gets one looked up online after this long. */
+	private static final long COVER_WAIT_NANOS = 1_500_000_000L;
 
 	private static final Set<Object> USERS = new HashSet<>();
 	private static volatile NowPlaying current = NowPlaying.NONE;
+	/** A sample shown instead of the player's state while set (previews), or null. */
+	private static volatile NowPlaying preview;
 	private static volatile String status;
+	/** When the current song started to be reported, and since when nothing is (0 while something is). */
+	private static long songSince;
+	private static long goneSince;
 	private static volatile MediaSource source;
 	private static ScheduledExecutorService worker;
 	private static ExecutorService io;
@@ -44,7 +56,16 @@ public final class Media {
 
 	/** Latest snapshot; never null, {@link NowPlaying#NONE} when nothing plays. */
 	public static NowPlaying now() {
-		return current;
+		NowPlaying sample = preview;
+		return sample != null ? sample : current;
+	}
+
+	/**
+	 * Shows a sample song in every media widget instead of the player's (null goes back to the player),
+	 * so the widgets can be looked at and placed with nothing playing.
+	 */
+	public static void preview(NowPlaying sample) {
+		preview = sample;
 	}
 
 	/** Why there is no information (a missing tool...), or null. */
@@ -81,6 +102,7 @@ public final class Media {
 		worker = null;
 		current = NowPlaying.NONE;
 		status = null;
+		goneSince = 0L;
 	}
 
 	/** Sends play/pause, next or previous to the player, off the render thread. */
@@ -102,16 +124,27 @@ public final class Media {
 		}
 	}
 
-	/** A backend's report. Keeps the track instance (and the smooth timeline) while the song stays the same. */
-	static void publish(MediaSource from, Track track, String art, long positionMs, boolean playing) {
+	/**
+	 * A backend's report. Keeps the track instance (and the smooth timeline) while the song stays the same,
+	 * rides out short gaps in the reports and finds a cover online for songs the player gives none.
+	 */
+	static synchronized void publish(MediaSource from, Track track, String art, long positionMs, boolean playing) {
 		if (from != source) return;
 		status = null;
+		NowPlaying prev = current;
+		long now = System.nanoTime();
 		if (track == null) {
+			if (prev.track() == null) return;
+			if (goneSince == 0L) goneSince = now;
+			// Still within a short gap: the song stays (paused at where it was) until reports come back or it lasts.
+			if (now - goneSince < GAP_NANOS) {
+				if (prev.playing()) current = prev.withPlaying(false);
+				return;
+			}
 			current = NowPlaying.NONE;
 			return;
 		}
-		NowPlaying prev = current;
-		long now = System.nanoTime();
+		goneSince = 0L;
 		if (track.equals(prev.track())) {
 			track = prev.track();
 			if (art.equals(prev.art())) art = prev.art();
@@ -119,6 +152,13 @@ public final class Media {
 				positionMs = prev.positionMs();
 				now = prev.sampledAt();
 			}
+		} else {
+			songSince = now;
+		}
+		// Players often publish the cover a moment after the title; past that, look it up.
+		if (art.isEmpty() && now - songSince > COVER_WAIT_NANOS) {
+			art = CoverSearch.find(track);
+			if (art.equals(prev.art())) art = prev.art();
 		}
 		current = new NowPlaying(track, art, Math.max(0L, positionMs), playing, now);
 	}

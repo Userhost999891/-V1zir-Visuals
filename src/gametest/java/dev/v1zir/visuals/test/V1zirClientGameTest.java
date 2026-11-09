@@ -3,6 +3,9 @@ package dev.v1zir.visuals.test;
 import dev.v1zir.visuals.gui.clickgui.ClickGuiScreen;
 import dev.v1zir.visuals.gui.menu.LockScreen;
 import dev.v1zir.visuals.gui.menu.V1zirMainMenu;
+import dev.v1zir.visuals.media.Media;
+import dev.v1zir.visuals.media.NowPlaying;
+import dev.v1zir.visuals.media.Track;
 import dev.v1zir.visuals.module.Category;
 import dev.v1zir.visuals.module.Module;
 import dev.v1zir.visuals.module.ModuleManager;
@@ -33,6 +36,7 @@ import dev.v1zir.visuals.module.impl.hud.PerformanceModule;
 import dev.v1zir.visuals.module.impl.hud.PotionsModule;
 import dev.v1zir.visuals.module.impl.hud.ServerInfoModule;
 import dev.v1zir.visuals.module.impl.hud.SpeedModule;
+import dev.v1zir.visuals.module.impl.hud.SpotifyModule;
 import dev.v1zir.visuals.module.impl.hud.TargetHudModule;
 import dev.v1zir.visuals.module.impl.hud.WatermarkModule;
 import dev.v1zir.visuals.module.impl.visuals.BlockReflectionModule;
@@ -67,6 +71,12 @@ import org.lwjgl.glfw.GLFW;
 
 import jdk.jfr.Recording;
 
+import javax.imageio.ImageIO;
+import java.awt.Color;
+import java.awt.GradientPaint;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.lang.reflect.Field;
@@ -109,6 +119,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			hud(context, singleplayer);
 			dynamicIsland(context);
 			hudElements(context, singleplayer);
+			spotify(context);
 			targetHud(context, singleplayer);
 			customIndicators(context, singleplayer);
 			healthIndicator(context, singleplayer);
@@ -501,6 +512,52 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		}
 		context.runOnClient(client -> ModuleManager.get(ThemeModule.class).style.set(Theme.Style.BLUR.title()));
 		context.setScreen(() -> null);
+	}
+
+	/** The Spotify card and its compact style over a sample song whose cover is generated here. */
+	private static void spotify(ClientGameTestContext context) {
+		Path cover = Path.of("v1zir-test-cover.png").toAbsolutePath();
+		writeCover(cover);
+		context.runOnClient(client -> {
+			Media.preview(new NowPlaying(new Track("Midnight Drive", "Neon Coast", "Afterglow", 214_000L), cover.toString(), 83_000L, true,
+				System.nanoTime()));
+			ModuleManager.get(SpotifyModule.class).setEnabled(true, false);
+		});
+		context.waitTicks(30);
+		context.takeScreenshot("spotify-card");
+		context.runOnClient(client -> ModuleManager.get(SpotifyModule.class).style.set("Compact"));
+		context.waitTicks(5);
+		context.takeScreenshot("spotify-compact");
+		context.runOnClient(client -> {
+			SpotifyModule spotify = ModuleManager.get(SpotifyModule.class);
+			spotify.style.reset();
+			spotify.setEnabled(false, false);
+			Media.preview(null);
+		});
+	}
+
+	/** A synthwave cover: a dusk gradient, a striped sun and a grid, so the card's colours have something to follow. */
+	private static void writeCover(Path path) {
+		BufferedImage image = new BufferedImage(300, 300, BufferedImage.TYPE_INT_RGB);
+		Graphics2D g = image.createGraphics();
+		g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+		g.setPaint(new GradientPaint(0, 0, new Color(0x1B0B3A), 0, 300, new Color(0xE0457B)));
+		g.fillRect(0, 0, 300, 300);
+		g.setPaint(new GradientPaint(0, 70, new Color(0xFFD86B), 0, 190, new Color(0xFF4F9A)));
+		g.fillOval(75, 60, 150, 150);
+		g.setColor(new Color(0x2A0F4F));
+		for (int i = 0; i < 5; i++) g.fillRect(70, 150 + i * 12, 160, 4 + i);
+		g.setColor(new Color(0x2A0F4F));
+		g.fillRect(0, 205, 300, 95);
+		g.setColor(new Color(0x7DF9FF));
+		for (int i = 0; i <= 10; i++) g.drawLine(150 + (i - 5) * 12, 205, 150 + (i - 5) * 70, 300);
+		for (int i = 0; i < 6; i++) g.drawLine(0, 210 + i * i * 3, 300, 210 + i * i * 3);
+		g.dispose();
+		try {
+			ImageIO.write(image, "png", path.toFile());
+		} catch (IOException e) {
+			throw new UncheckedIOException(e);
+		}
 	}
 
 	/** A module toggled with the HUD showing: the Dynamic Island at the top centre shows its tab icon, name and ON. */

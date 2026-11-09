@@ -22,8 +22,8 @@ import org.lwjgl.glfw.GLFW;
  */
 public final class MediaCard {
 	/** Height of the card with controls, and without. */
-	static final float HEIGHT = 62f;
-	static final float HEIGHT_PLAIN = 52f;
+	static final float HEIGHT = 70f;
+	static final float HEIGHT_PLAIN = 58f;
 	private static final float MARQUEE_PAUSE = 2.5f;
 	private static final float MARQUEE_SPEED = 20f;
 	private static final float MARQUEE_GAP = 26f;
@@ -87,37 +87,55 @@ public final class MediaCard {
 		return track != null;
 	}
 
-	/** The cover with its accent shadow, greyed a little while paused. */
+	/**
+	 * The card's backdrop: the cover blurred into soft fields of its colours under a dark veil that keeps the text
+	 * readable, with a faint sheen along the top; without a cover, a wash of the accent from the left.
+	 */
+	void backdrop(DrawContext ctx, float x, float y, float w, float h, float radius, int accent) {
+		if (!AlbumArt.hasCover()) {
+			Render2D.gradientH(ctx, x, y, w * 0.75f, h, radius, ColorUtil.withAlpha(accent, 34), ColorUtil.withAlpha(accent, 0));
+			return;
+		}
+		AlbumArt.drawBackdrop(ctx, x, y, w, h, radius, 0xD8FFFFFF);
+		Render2D.round(ctx, x, y, w, h, radius, 0x66000000, 0x8C000000, 0x99000000, 0x73000000);
+		Render2D.gradientV(ctx, x, y, w, h * 0.45f, radius, ColorUtil.withAlpha(0xFFFFFF, 16), ColorUtil.withAlpha(0xFFFFFF, 0));
+	}
+
+	/** The cover with its accent glow and a faint rim, greyed a little while paused. */
 	void cover(DrawContext ctx, float x, float y, float size, float radius, int accent, int accent2) {
-		Render2D.shadow(ctx, x, y + 1f, size, size, radius, 9f, ColorUtil.withAlpha(accent, 80));
+		Render2D.shadow(ctx, x, y + 1.5f, size, size, radius, 10f, ColorUtil.withAlpha(accent, 96));
 		AlbumArt.draw(ctx, x, y, size, radius, ColorUtil.lerp(0xFF8C8C8C, 0xFFFFFFFF, track == null ? 1f : 0.35f + 0.65f * play), accent, accent2);
+		Render2D.outline(ctx, x, y, size, size, radius, 0.6f, ColorUtil.withAlpha(0xFFFFFF, 36));
 	}
 
 	/**
-	 * Title and artist, then (with a song) the progress bar, the times and the controls, in a column at tx of
-	 * width tw; y is the top of the card. The title leaves room for the equalizer at the right.
+	 * A small "now playing" or "paused" label over the title and artist, then (with a song) the progress bar, the
+	 * times and the controls, in a column at tx of width tw; y is the top of the card. The equalizer dances at the
+	 * right of the label.
 	 */
 	void details(DrawContext ctx, float tx, float y, float tw, boolean controls, int accent, int accent2, float mx, float my) {
 		float time = (System.nanoTime() - trackSince) / 1.0e9f;
 		SdfFont font = Fonts.medium();
-		marquee(ctx, Fonts.semibold(), title, titleW, tx, y + 8f, tw - 14f, 8.5f, Theme.text(), titleStyle, time);
-		marquee(ctx, font, artist, artistW, tx, y + 19.5f, tw, 6.5f, Theme.textDim(), artistStyle, time);
-		equalizer(ctx, tx + tw - 8f, y + 15.5f, play, accent);
+		Render2D.text(ctx, Fonts.semibold(), track == null ? "MEDIA" : play > 0.5f ? "NOW PLAYING" : "PAUSED", tx, y + 9f, 4.8f,
+			ColorUtil.withAlpha(ColorUtil.lerp(accent, 0xFFFFFFFF, 0.25f), 235));
+		equalizer(ctx, tx + tw - 9f, y + 14.5f, play, accent);
+		marquee(ctx, Fonts.semibold(), title, titleW, tx, y + 17f, tw, 9f, Theme.text(), titleStyle, time);
+		marquee(ctx, font, artist, artistW, tx, y + 29.5f, tw, 6.5f, Theme.textDim(), artistStyle, time);
 		if (track == null) return;
 
-		float by = y + 33f;
-		Render2D.round(ctx, tx, by, tw, 3f, 1.5f, ColorUtil.withAlpha(0xFFFFFF, 24));
+		float by = y + 41f;
+		Render2D.round(ctx, tx, by, tw, 3f, 1.5f, ColorUtil.withAlpha(0xFFFFFF, 30));
 		float fill = Math.max(3f, tw * bar);
-		Render2D.glow(ctx, tx, by, fill, 3f, 1.5f, 4f, ColorUtil.withAlpha(accent, 70), ColorUtil.withAlpha(accent2, 70));
+		Render2D.glow(ctx, tx, by, fill, 3f, 1.5f, 5f, ColorUtil.withAlpha(accent, 90), ColorUtil.withAlpha(accent2, 80));
 		Render2D.gradientH(ctx, tx, by, fill, 3f, 1.5f, accent, accent2);
-		Render2D.circle(ctx, tx + fill, by + 1.5f, 2.6f, 0xFFFFFFFF);
+		Render2D.circle(ctx, tx + fill, by + 1.5f, 2.7f, 0xFFFFFFFF);
 
-		float ty = y + 40f;
+		float ty = y + 47.5f;
 		Render2D.text(ctx, font, elapsed, tx, ty, 5.5f, Theme.textDim());
 		Render2D.text(ctx, font, total, tx + tw - totalW, ty, 5.5f, Theme.textDim());
 		if (controls) {
 			float cx = tx + tw / 2f;
-			buttonControls(ctx, cx - 16f, cx, cx + 16f, y + 50f, 6.5f, accent, mx, my);
+			buttonControls(ctx, cx - 17f, cx, cx + 17f, y + 59f, 6.8f, accent, mx, my);
 		}
 	}
 
@@ -127,7 +145,7 @@ public final class MediaCard {
 		float dt = Math.min((nanos - lastFrame) / 1.0e9f, 0.1f);
 		lastFrame = nanos;
 		boolean withButtons = controls && track != null;
-		Render2D.gradientH(ctx, x, y, w * 0.6f, h, h / 2f, ColorUtil.withAlpha(accent, 30), ColorUtil.withAlpha(accent, 0));
+		backdrop(ctx, x, y, w, h, h / 2f, accent);
 
 		// The cover is a record that spins while the song plays.
 		float disc = h - 6f;
@@ -281,7 +299,7 @@ public final class MediaCard {
 		measuredWith = bold;
 		measuredCompact = compact;
 		SdfFont font = compact ? bold : Fonts.medium();
-		titleW = bold.width(title, compact ? 7f : 8.5f);
+		titleW = bold.width(title, compact ? 7f : 9f);
 		artistW = font.width(artist, compact ? 7f : 6.5f);
 		separatorW = bold.width(SEPARATOR, 7f);
 		totalW = Fonts.medium().width(total, 5.5f);

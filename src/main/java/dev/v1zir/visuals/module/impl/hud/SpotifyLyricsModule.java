@@ -49,6 +49,8 @@ public final class SpotifyLyricsModule extends HudModule implements WorldEffect 
 	private static final float KARAOKE_BOTTOM = 48f;
 	/** How long a status (no lyrics, instrumental...) stays up before the element hides. */
 	private static final float STATUS_SECONDS = 5f;
+	/** A lookup that failed (offline, LRCLIB busy) is tried again after this long. */
+	private static final long RETRY_NANOS = 15_000_000_000L;
 
 	public final ModeSetting preset = add(new ModeSetting("Preset", "Window", "Window", "3D", "Karaoke"));
 	public final ModeSetting highlight = add(new ModeSetting("Highlight", "Word", "Word", "Line", "Off").visibleIf(() -> preset.is("Window")));
@@ -90,6 +92,7 @@ public final class SpotifyLyricsModule extends HudModule implements WorldEffect 
 	private Track track;
 	private long trackSince;
 	private LyricsService.Request request;
+	private long requestedAt;
 	private Lyrics lyrics;
 	private long position;
 	private int index = -1;
@@ -156,11 +159,17 @@ public final class SpotifyLyricsModule extends HudModule implements WorldEffect 
 	private void update() {
 		NowPlaying now = Media.now();
 		AlbumArt.sync(now.art());
+		long nanos = System.nanoTime();
 		if (now.track() != track) {
 			track = now.track();
-			trackSince = System.nanoTime();
+			trackSince = nanos;
+			requestedAt = nanos;
 			request = track != null ? LyricsService.request(track) : null;
 			headerFont = null;
+		} else if (request != null && request.result() == Lyrics.ERROR && nanos - requestedAt > RETRY_NANOS) {
+			// The lookup failed: the song's cache entry is gone, so asking again looks it up afresh.
+			requestedAt = nanos;
+			request = LyricsService.request(track);
 		}
 		Lyrics current = request != null ? request.result() : null;
 		if (current != lyrics) {
@@ -209,7 +218,9 @@ public final class SpotifyLyricsModule extends HudModule implements WorldEffect 
 	private boolean visible() {
 		// The now playing view stays for its time once opened, lyrics or not.
 		if (editing() || mediaUntil != 0L) return true;
-		if (track == null || preset.is("3D")) return false;
+		if (track == null) return false;
+		// The 3D lyrics live in the world; the HUD only says why there are none, for a few seconds or while they load.
+		if (preset.is("3D")) return status3D() != null;
 		boolean showing = preset.is("Window") ? lyrics != null && lyrics.hasLines() : synced();
 		return showing || (System.nanoTime() - trackSince) / 1.0e9f < STATUS_SECONDS;
 	}
@@ -497,13 +508,27 @@ public final class SpotifyLyricsModule extends HudModule implements WorldEffect 
 		Render2D.setAlpha(alpha);
 	}
 
-	/** In the HUD editor the 3D preset shows a small chip with the cover, so the element can still be found and switched. */
+	/** Why the 3D preset shows nothing for the song (loading, none, failed), or null when it has lines or it is late to say. */
+	private String status3D() {
+		if (track == null || lyrics != null && lyrics.hasLines()) return null;
+		boolean loading = lyrics == null || lyrics.state() == Lyrics.State.LOADING;
+		if (!loading && (System.nanoTime() - trackSince) / 1.0e9f >= STATUS_SECONDS) return null;
+		return status();
+	}
+
+	/**
+	 * The 3D preset's chip with the cover: in the HUD editor, so the element can still be found and switched, and for
+	 * a few seconds when a song has no lyrics to show, saying why.
+	 */
 	private void renderWorldChip(DrawContext ctx, float x, float y) {
-		width = 92f;
+		String text = editing() ? "Lyrics in 3D" : status3D();
+		if (text == null) text = "Lyrics in 3D";
+		SdfFont font = Fonts.medium();
+		width = Math.max(92f, 28f + font.width(text, 6.5f));
 		height = 18f;
 		panel(ctx, x, y, width, height, 9f);
 		AlbumArt.draw(ctx, x + 4f, y + 4f, 10f, 5f, 0xFFFFFFFF, accent(), Theme.accent2());
-		Render2D.textMiddle(ctx, Fonts.medium(), "Lyrics in 3D", x + 20f, y + 9f, 6.5f, Theme.text());
+		Render2D.textMiddle(ctx, font, text, x + 20f, y + 9f, 6.5f, Theme.text());
 	}
 
 	// ------------------------------------------------------------------ 3D preset
@@ -519,7 +544,8 @@ public final class SpotifyLyricsModule extends HudModule implements WorldEffect 
 		update();
 		float letter = 0.26f * size.f();
 		float clock = 0f;
-		if (synced() && index >= 0) {
+		// Plain lyrics too: their lines are timed by length over the song.
+		if (lyrics != null && lyrics.hasLines() && index >= 0) {
 			long duration = track.durationMs();
 			long start = lyrics.time(index, duration);
 			clock = (position - start) / 1000f;

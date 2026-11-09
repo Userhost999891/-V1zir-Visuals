@@ -6,7 +6,8 @@ import java.util.List;
 
 /**
  * Lyrics of one song. Synced lyrics have a start time per line; plain-only lyrics have no times
- * and are spread over the song. An empty line inside synced lyrics is an instrumental break.
+ * and are spread over the song between a short intro and outro, each line getting time by its
+ * length. An empty line inside synced lyrics is an instrumental break.
  */
 public final class Lyrics {
 	public enum State {
@@ -27,14 +28,24 @@ public final class Lyrics {
 	public static final Lyrics MISSING = new Lyrics(State.MISSING, new String[0], null);
 	public static final Lyrics ERROR = new Lyrics(State.ERROR, new String[0], null);
 
+	/** Share of a song before the first and after the last line of plain lyrics. */
+	private static final double INTRO = 0.07;
+	private static final double OUTRO = 0.05;
+	/** Weight of a plain line beyond its letters: even a short one takes a moment to sing. */
+	private static final int BEAT = 8;
+
 	private final State state;
 	private final String[] lines;
 	private final long[] times;
+	/** Plain lyrics: the weights of the lines before each (letters plus a beat), the total last. */
+	private final int[] before;
 
 	private Lyrics(State state, String[] lines, long[] times) {
 		this.state = state;
 		this.lines = lines;
 		this.times = times;
+		before = new int[lines.length + 1];
+		for (int i = 0; i < lines.length; i++) before[i + 1] = before[i] + lines[i].length() + BEAT;
 	}
 
 	public State state() {
@@ -57,10 +68,10 @@ public final class Lyrics {
 		return lines[index];
 	}
 
-	/** Start of a line in milliseconds (plain lyrics: spread evenly over the song). */
+	/** Start of a line in milliseconds (plain lyrics: by length between the intro and the outro). */
 	public long time(int index, long durationMs) {
 		if (times != null) return times[index];
-		return durationMs * index / Math.max(1, lines.length);
+		return Math.round(durationMs * (INTRO + (1.0 - INTRO - OUTRO) * before[index] / Math.max(1, before[lines.length])));
 	}
 
 	/**
@@ -79,7 +90,10 @@ public final class Lyrics {
 		if (lines.length == 0) return -1;
 		if (times == null) {
 			if (durationMs <= 0) return 0;
-			return (int) Math.max(0, Math.min(lines.length - 1, positionMs * lines.length / durationMs));
+			double sung = (positionMs / (double) durationMs - INTRO) / (1.0 - INTRO - OUTRO) * before[lines.length];
+			if (sung < 0.0) return -1;
+			int i = Arrays.binarySearch(before, 0, lines.length, (int) sung);
+			return Math.min(lines.length - 1, i >= 0 ? i : -i - 2);
 		}
 		int i = Arrays.binarySearch(times, positionMs);
 		if (i < 0) i = -i - 2;
