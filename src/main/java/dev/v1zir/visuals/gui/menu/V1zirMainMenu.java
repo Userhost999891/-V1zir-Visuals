@@ -1,6 +1,7 @@
 package dev.v1zir.visuals.gui.menu;
 
 import dev.v1zir.visuals.V1zir;
+import dev.v1zir.visuals.gui.clickgui.Ui;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.client.MainMenuModule;
 import dev.v1zir.visuals.module.impl.client.ThemeModule;
@@ -83,6 +84,16 @@ public final class V1zirMainMenu extends Screen {
 	private Supplier<Screen> leavingTo;
 	private float leave;
 	private boolean left;
+	/** The world or server played last, offered under the buttons ("" when there is none), and its pill. */
+	private String continueText = "";
+	private int continueIcon;
+	private final Anim continueHover = new Anim(0f, 20f);
+	private final Anim continuePress = new Anim(0f, 24f);
+	private float continueX;
+	private float continueY;
+	private float continueW;
+	private float continueH;
+	private boolean continuePressed;
 
 	public V1zirMainMenu() {
 		super(Text.literal(V1zir.NAME));
@@ -102,18 +113,18 @@ public final class V1zirMainMenu extends Screen {
 		leavingTo = null;
 		leave = 0f;
 		warmUp();
-		float size = Math.max(26f, Math.min(42f, height * 0.072f));
-		float gap = size * 0.42f;
+		float size = Math.max(28f, Math.min(46f, height * 0.08f));
+		float gap = size * 0.5f;
 		Runnable singleplayer = () -> open(() -> new SelectWorldScreen(this));
 		Runnable multiplayer = () -> open(() -> new MultiplayerScreen(this));
 		lock.init(client, singleplayer, multiplayer, () -> LastPlayed.join(client, this));
 		List<RoundButton> row = new ArrayList<>();
-		row.add(new RoundButton(Icons.USER, singleplayer, false));
-		row.add(new RoundButton(Icons.USERS, multiplayer, false));
-		if (!client.isDemo()) row.add(new RoundButton(Icons.GLOBE, () -> open(() -> new RealmsMainScreen(this)), false));
-		if (FabricLoader.getInstance().isModLoaded("modmenu")) row.add(new RoundButton(Icons.PUZZLE, this::openModMenu, false));
-		row.add(new RoundButton(Icons.SETTINGS, () -> open(() -> new OptionsScreen(this, client.options)), false));
-		row.add(new RoundButton(Icons.POWER, () -> client.scheduleStop(), true));
+		row.add(new RoundButton(Icons.USER, singleplayer, false).label(label("menu.singleplayer")));
+		row.add(new RoundButton(Icons.USERS, multiplayer, false).label(label("menu.multiplayer")));
+		if (!client.isDemo()) row.add(new RoundButton(Icons.GLOBE, () -> open(() -> new RealmsMainScreen(this)), false).label(label("menu.online")));
+		if (FabricLoader.getInstance().isModLoaded("modmenu")) row.add(new RoundButton(Icons.PUZZLE, this::openModMenu, false).label("Mods"));
+		row.add(new RoundButton(Icons.SETTINGS, () -> open(() -> new OptionsScreen(this, client.options)), false).label(label("menu.options")));
+		row.add(new RoundButton(Icons.POWER, () -> client.scheduleStop(), true).label(label("menu.quit")));
 
 		float total = row.size() * size + (row.size() - 1) * gap;
 		float x = width / 2f - total / 2f + size / 2f;
@@ -134,6 +145,14 @@ public final class V1zirMainMenu extends Screen {
 		buttons.add(language);
 		if (focused >= buttons.size()) focused = -1;
 
+		// The world or server played last, if it is still there, one click away under the buttons.
+		continueText = "";
+		if (LastPlayed.available(client)) {
+			continueText = LastPlayed.name;
+			continueIcon = LastPlayed.server ? Icons.SERVER : Icons.PLAY;
+		}
+		continuePressed = false;
+
 		MainMenuModule module = ModuleManager.get(MainMenuModule.class);
 		int count = module != null && module.particles.on() ? module.particleCount.i() : 0;
 		Random random = new Random(1337);
@@ -149,6 +168,13 @@ public final class V1zirMainMenu extends Screen {
 		} catch (ReflectiveOperationException | ClassCastException e) {
 			V1zir.LOGGER.warn("Could not open Mod Menu", e);
 		}
+	}
+
+	/** A button's name in the game's language, without the trailing dots some of them have ("Options..."). */
+	private static String label(String key) {
+		String text = Text.translatable(key).getString().strip();
+		while (text.endsWith(".") || text.endsWith("…")) text = text.substring(0, text.length() - 1).strip();
+		return text;
 	}
 
 	/** Leaves the menu for the screen: the menu's exit plays first, then the screen is made and comes in. */
@@ -344,9 +370,55 @@ public final class V1zirMainMenu extends Screen {
 			RoundButton button = buttons.get(i);
 			button.render(ctx, mouseX, mouseY, i == focused, button == pressed);
 		}
+		renderContinue(ctx, mouseX, mouseY, Anim.easeOutCubic(Anim.progress(t, 0.95f, 0.55f)) * shown);
 		renderFooter(ctx);
 		Render2D.setAlpha(1f);
 		if (moving) matrices.popMatrix();
+	}
+
+	/**
+	 * "Continue" with the name of the world or server played last, in a frosted pill under the buttons; a click loads it
+	 * (the lock screen's widget does the same).
+	 */
+	private void renderContinue(DrawContext ctx, int mouseX, int mouseY, float alpha) {
+		continueW = 0f;
+		if (continueText.isEmpty() || buttons.isEmpty() || alpha <= 0.004f) return;
+		RoundButton first = buttons.getFirst();
+		SdfFont bold = Fonts.semibold();
+		SdfFont font = Fonts.medium();
+		String head = "Continue";
+		float size = Math.max(6.5f, Math.min(8f, height * 0.019f));
+		continueH = size * 2.6f;
+		float headW = bold.width(head, size);
+		String name = continueText;
+		float maxName = Math.min(width * 0.4f, 220f);
+		while (font.width(name, size) > maxName && name.length() > 2) name = name.substring(0, name.length() - 2);
+		if (!name.equals(continueText)) name = name + "…";
+		float nameW = font.width(name, size);
+		continueW = continueH + headW + 8f + nameW + continueH * 0.55f;
+		continueX = width / 2f - continueW / 2f;
+		continueY = first.cy + first.radius + first.labelSpace() + 10f;
+		boolean over = Ui.inside(mouseX, mouseY, continueX, continueY, continueW, continueH);
+		float h = continueHover.target(over ? 1f : 0f).get();
+		float p = continuePress.target(continuePressed && over ? 1f : 0f).get();
+		Render2D.setAlpha(alpha);
+		float lift = 1f + 0.03f * h - 0.05f * p;
+		float w = continueW * lift;
+		float ph = continueH * lift;
+		float x = width / 2f - w / 2f;
+		float y = continueY + (continueH - ph) / 2f;
+		Render2D.shadow(ctx, x, y + 1.5f, w, ph, ph / 2f, 10f, ColorUtil.withAlpha(0x000000, Math.round(60 + 30 * h)));
+		int base = Theme.preset().base();
+		int fill = ColorUtil.lerp(ColorUtil.withAlpha(base, 120), ColorUtil.withAlpha(ColorUtil.lerp(base, 0xFFFFFF, 0.28f), 130), h);
+		if (BackdropBlur.available()) Render2D.glass(ctx, x, y, w, ph, ph / 2f, 0, ShapeElement.MATTE, fill);
+		else Render2D.matte(ctx, x, y, w, ph, ph / 2f, fill, 0);
+		Render2D.outline(ctx, x, y, w, ph, ph / 2f, 0.8f, ColorUtil.withAlpha(0xFFFFFF, Math.round(26 + 30 * h)));
+		float cy = y + ph / 2f;
+		Render2D.circle(ctx, x + ph / 2f, cy, ph * 0.36f, ColorUtil.lerp(ColorUtil.withAlpha(Theme.accent(), 200), Theme.accent(), h));
+		Render2D.icon(ctx, continueIcon, x + ph / 2f + (continueIcon == Icons.PLAY ? ph * 0.03f : 0f), cy, ph * 0.38f, 0xFFFFFFFF);
+		float tx = x + ph + 2f;
+		Render2D.textMiddle(ctx, bold, head, tx, cy, size, 0xF2FFFFFF);
+		Render2D.textMiddle(ctx, font, name, tx + headW + 8f, cy, size, ColorUtil.lerp(0xA6FFFFFF, 0xE6FFFFFF, h));
 	}
 
 	/** The time with the greeting (or the date) under it, where the big title used to be. */
@@ -428,6 +500,10 @@ public final class V1zirMainMenu extends Screen {
 					return true;
 				}
 			}
+			if (continueW > 0f && Ui.inside(click.x(), click.y(), continueX, continueY, continueW, continueH)) {
+				continuePressed = true;
+				return true;
+			}
 			// An empty spot: held long enough, it opens the wallpaper picker; swiped up, it brings the lock screen back.
 			hold.start(click.x(), click.y());
 			if (lockScreenOn()) lock.pressRaise(click.y());
@@ -472,6 +548,13 @@ public final class V1zirMainMenu extends Screen {
 			}
 			lock.release(click.x(), click.y(), height);
 			lock.releaseRaise();
+			if (continuePressed) {
+				continuePressed = false;
+				if (continueW > 0f && Ui.inside(click.x(), click.y(), continueX, continueY, continueW, continueH)) {
+					LastPlayed.join(client, this);
+					return true;
+				}
+			}
 			RoundButton button = pressed;
 			pressed = null;
 			// It fires when let go over it, so the press can be seen (and taken back by moving away).
@@ -557,6 +640,8 @@ public final class V1zirMainMenu extends Screen {
 		float cx;
 		float cy;
 		float radius;
+		/** The name under the button, or "" for none. */
+		private String label = "";
 		/** About 150 ms to light up. */
 		private final Anim hover = new Anim(0f, 20f);
 		private final Anim press = new Anim(0f, 24f);
@@ -567,6 +652,20 @@ public final class V1zirMainMenu extends Screen {
 			this.icon = icon;
 			this.action = action;
 			this.danger = danger;
+		}
+
+		RoundButton label(String label) {
+			this.label = label;
+			return this;
+		}
+
+		/** Room the label takes under the button. */
+		float labelSpace() {
+			return label.isEmpty() ? 0f : labelSize() * 2.2f;
+		}
+
+		private float labelSize() {
+			return Math.max(5.5f, Math.min(7f, radius * 0.3f));
 		}
 
 		boolean hovered(double mx, double my) {
@@ -605,6 +704,19 @@ public final class V1zirMainMenu extends Screen {
 					ColorUtil.withAlpha(tint, Math.round(115 * h * (1f - 0.5f * p))));
 			}
 			Render2D.icon(ctx, icon, cx, cy, r * 0.92f, ColorUtil.lerp(0xC8FFFFFF, 0xFFFFFFFF, h));
+			if (!label.isEmpty()) {
+				// The name under it, shrunk to fit between its neighbours; it lights up with the button.
+				SdfFont font = Fonts.medium();
+				float size = labelSize();
+				float max = radius * 3.1f;
+				float w = font.width(label, size);
+				if (w > max) {
+					size *= max / w;
+					w = max;
+				}
+				int color = ColorUtil.lerp(0x99FFFFFF, danger ? DANGER : 0xFFFFFFFF, h);
+				Render2D.textCentered(ctx, font, label, cx, Render2D.middle(font, cy + radius + labelSpace() * 0.55f, size), size, color);
+			}
 		}
 	}
 
