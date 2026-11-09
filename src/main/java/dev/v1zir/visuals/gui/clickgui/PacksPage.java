@@ -51,6 +51,7 @@ final class PacksPage {
 	private List<PackMixer.Entry> countedFrom;
 	private int countedChoices = -1;
 	private final Anim applyHover = new Anim(0f, 22f);
+	private final Anim panelOpen = new Anim(0f, 12f);
 	private final Anim resetHover = new Anim(0f, 22f);
 	private final Label subtitleWidth = new Label();
 	private int filter;
@@ -185,13 +186,20 @@ final class PacksPage {
 		renderSidebar(ctx, x, y, side, h, hx, hy);
 		float px = x + side + GAP;
 		float pw = w - side - GAP;
-		float panelW = Math.max(132f, Math.min(200f, pw * 0.4f));
+		// The details slide in once a texture is picked; until then the tiles have the whole width.
+		float open = panelOpen.target(selected != null ? 1f : 0f).get();
+		float panelW = Math.max(104f, Math.min(200f, pw * 0.42f)) * open;
 		gridX = px;
 		gridY = y;
-		gridW = pw - panelW - GAP;
+		gridW = pw - panelW - GAP * open;
 		gridH = h;
 		renderGrid(ctx, hx, hy);
-		renderDetail(ctx, px + pw - panelW, y, panelW, h, hx, hy);
+		if (open > 0.01f) {
+			float alpha = Render2D.alpha();
+			Render2D.setAlpha(alpha * open);
+			renderDetail(ctx, px + pw - panelW, y, panelW, h, hx, hy);
+			Render2D.setAlpha(alpha);
+		}
 	}
 
 	/** The rows' counts and icons, worked out again only when the textures or the choices changed. */
@@ -483,7 +491,9 @@ final class PacksPage {
 			if (col < cols && (mx - gridX) - col * step <= TILE && (my - gridY + scroll) - row * step <= TILE) {
 				int index = row * cols + col;
 				if (index >= 0 && index < shown.size()) {
-					selected = shown.get(index);
+					// A second click on the selected texture closes its details.
+					PackMixer.Entry e = shown.get(index);
+					selected = e == selected ? null : e;
 					versionScroller.reset();
 				}
 			}
