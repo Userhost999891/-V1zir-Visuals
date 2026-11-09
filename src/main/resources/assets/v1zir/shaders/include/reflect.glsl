@@ -5,7 +5,7 @@ layout(std140) uniform ReflectParams {
 	mat4 ViewProj;    // camera-relative world position to clip space
 	mat4 InvViewProj;
 	vec4 CameraPos;   // xyz = camera position (x and z modulo 4096, for world-space noise), w = camera block Y
-	vec4 CameraBlock; // xyz = camera block modulo 128 (texture wrap), w = bottom of the world
+	vec4 CameraBlock; // xyz = camera block modulo 512, 128, 512 (texture wrap), w = bottom of the world
 	vec4 CameraFrac;  // xyz = camera position inside its block, w = time in seconds
 	vec4 Screen;      // xy = screen size, zw = trace texture size
 	vec4 Trace;       // x = march steps, y = refinement steps, z = ray length, w = material grid ready
@@ -21,6 +21,7 @@ uniform sampler2D Sampler0; // the frame
 uniform sampler2D Sampler1; // its depth
 uniform sampler2D Sampler2; // block columns
 uniform sampler2D Sampler3; // material grid
+uniform sampler2D Sampler4; // far block columns
 
 const int AIR = 0;
 const int SOLID = 1;
@@ -30,8 +31,9 @@ const int METAL = 4;
 const int FOLIAGE = 5;
 const int LAVA = 6;
 
-// Beyond these distances (blocks) water, other shiny surfaces and rain are left alone.
-const float WATER_DISTANCE = 160.0;
+// Beyond these distances (blocks) water, other shiny surfaces and rain are left alone. Water reaches
+// as far as the far columns do and fades out over its last fifth, so it has no edge.
+const float WATER_DISTANCE = 252.0;
 const float SHINE_DISTANCE = 96.0;
 const float RAIN_DISTANCE = 60.0;
 
@@ -89,9 +91,21 @@ int rUnpack(float v) {
 	return int(v * 255.0 + 0.5);
 }
 
+// A far column (render/SurfaceMap), trusted only when its alpha names the 512 block tile the column
+// is in: a texel not refreshed since the camera moved still holds the column from the other side.
+vec2 rFarColumn(ivec2 v) {
+	if (max(abs(v.x), abs(v.y)) > 255) return vec2(-1.0e9, 0.0);
+	vec4 c = texelFetch(Sampler4, (ivec2(CameraBlock.xz) + v + 512) & 511, 0);
+	ivec2 block = (ivec2(floor(CameraPos.xz)) + v + 4096) & 4095;
+	if (rUnpack(c.a) != (128 | (block.x >> 9 & 7) << 3 | (block.y >> 9 & 7))) return vec2(-1.0e9, 0.0);
+	return vec2(float(rUnpack(c.r) * 256 + rUnpack(c.g)) + CameraBlock.w, float(rUnpack(c.b)));
+}
+
 // x = first free Y above the column's highest motion-blocking block, y = that block's material;
-// x is -1e9 while the column is not known.
+// x is -1e9 while the column is not known. Near the camera from the columns refreshed often,
+// further out from the far ones.
 vec2 rColumn(ivec2 v) {
+	if (max(abs(v.x), abs(v.y)) > 60) return rFarColumn(v);
 	vec4 c = texelFetch(Sampler2, (ivec2(CameraBlock.xz) + v + 256) & 127, 0);
 	if (c.a < 0.5) return vec2(-1.0e9, 0.0);
 	return vec2(float(rUnpack(c.r) * 256 + rUnpack(c.g)) + CameraBlock.w, float(rUnpack(c.b)));
@@ -107,7 +121,6 @@ int rMaterial(vec3 rel) {
 		vec4 c = texelFetch(Sampler3, ivec2(t.x & 63, (layer >> 2) * 64 + (t.z & 63)), 0);
 		return rUnpack(c[layer & 3]);
 	}
-	if (max(abs(v.x), abs(v.z)) > 60) return SOLID;
 	vec2 column = rColumn(v.xz);
 	float y = CameraPos.w + float(v.y);
 	if (y >= column.x) return column.x < -1.0e8 ? SOLID : AIR;
@@ -147,13 +160,20 @@ float rNoise(vec2 p) {
 	return mix(mix(rHash(i), rHash(i + vec2(1.0, 0.0)), f.x), mix(rHash(i + vec2(0.0, 1.0)), rHash(i + 1.0), f.x), f.y);
 }
 
-// Gentle wind waves on water: the slope of four travelling sines.
-vec2 rWaves(vec2 xz) {
+// How much of a pattern of this angular frequency (radians per block) to keep where one pixel covers
+// footprint blocks of the surface: detail finer than a couple of pixels would only shimmer, so it fades.
+float rLod(float frequency, float footprint) {
+	return 1.0 - smoothstep(0.5, 1.5, frequency * footprint);
+}
+
+// Gentle wind waves on water: the slope of four travelling sines, the finer ones fading where a
+// pixel covers more water than their wavelength (far away, at grazing angles).
+vec2 rWaves(vec2 xz, float footprint) {
 	float t = CameraFrac.w;
-	vec2 s = vec2(0.8, 0.6) * cos(dot(xz, vec2(0.8, 0.6)) * 1.9 + t * 1.5);
-	s += vec2(-0.5, 0.86) * (0.6 * cos(dot(xz, vec2(-0.5, 0.86)) * 3.1 + t * 2.0));
-	s += vec2(0.96, -0.28) * (0.35 * cos(dot(xz, vec2(0.96, -0.28)) * 5.3 + t * 2.7));
-	s += vec2(-0.24, -0.97) * (0.2 * cos(dot(xz, vec2(-0.24, -0.97)) * 8.7 + t * 3.4));
+	vec2 s = vec2(0.8, 0.6) * (rLod(1.9, footprint) * cos(dot(xz, vec2(0.8, 0.6)) * 1.9 + t * 1.5));
+	s += vec2(-0.5, 0.86) * (0.6 * rLod(3.1, footprint) * cos(dot(xz, vec2(-0.5, 0.86)) * 3.1 + t * 2.0));
+	s += vec2(0.96, -0.28) * (0.35 * rLod(5.3, footprint) * cos(dot(xz, vec2(0.96, -0.28)) * 5.3 + t * 2.7));
+	s += vec2(-0.24, -0.97) * (0.2 * rLod(8.7, footprint) * cos(dot(xz, vec2(-0.24, -0.97)) * 8.7 + t * 3.4));
 	return s * 0.035;
 }
 
@@ -264,7 +284,7 @@ bool rSurface(ivec2 p, out SurfaceInfo s) {
 	// Fabulous graphics keep water out of the depth buffer: under the water of a column the surface
 	// is where the view ray crosses the water plane.
 	bool plane = false;
-	if (mode != 0 && material != WATER && dist < 56.0 && view.y < 0.0) {
+	if (mode != 0 && material != WATER && view.y < 0.0) {
 		float eye = CameraPos.w + CameraFrac.y;
 		// Just in front of the hit, so the side walls of a pool count as under its water.
 		vec2 column = rColumn(ivec2(floor(CameraFrac.xz + pos.xz - view.xz * 0.05)));
@@ -292,6 +312,10 @@ bool rSurface(ivec2 p, out SurfaceInfo s) {
 
 	vec3 n = plane ? vec3(0.0, 1.0, 0.0) : rNormal(p, pos);
 	vec2 xz = CameraPos.xz + pos.xz;
+	// How much surface one pixel covers along the view (blocks), from the projection's vertical scale:
+	// it grows with the distance and towards grazing angles and shrinks with zoom.
+	float pixelAngle = 2.0 / (length(vec3(ViewProj[0][1], ViewProj[1][1], ViewProj[2][1])) * Screen.y);
+	float footprint = dist * pixelAngle / max(abs(view.y), 0.03);
 	float strength = Shading.y;
 	s.pos = pos;
 	s.normal = n;
@@ -304,14 +328,22 @@ bool rSurface(ivec2 p, out SurfaceInfo s) {
 	s.glint = 0.0;
 	s.exposure = exposure;
 	if (water) {
-		if (n.y > 0.5) {
-			vec2 slope = rWaves(xz) + rRipples(xz) * exposure;
+		// Far away the depth buffer is too coarse for the face normal; the water's top lies at its column's
+		// surface, which tells it apart from the side of a waterfall.
+		bool top = n.y > 0.5;
+		if (!top && !plane) {
+			vec2 column = rColumn(ivec2(floor(CameraFrac.xz + pos.xz)));
+			top = int(column.y) == WATER && abs(CameraPos.w + CameraFrac.y + pos.y - (column.x - 0.111)) < 0.3;
+		}
+		if (top) {
+			vec2 slope = rWaves(xz, footprint) + rRipples(xz) * (exposure * rLod(12.0, footprint));
 			s.normal = normalize(vec3(-slope.x, 1.0, -slope.y));
 		}
-		float f = min(rSchlick(0.02, dot(-view, s.normal)) * strength, 1.0);
+		float fade = 1.0 - smoothstep(WATER_DISTANCE * 0.8, WATER_DISTANCE, dist);
+		float f = min(rSchlick(0.02, dot(-view, s.normal)) * strength, 1.0) * fade;
 		s.tint = vec3(f);
 		s.diffuse = 1.0 - f;
-		s.glint = exposure;
+		s.glint = exposure * fade;
 		return true;
 	}
 	float cosV = dot(-view, n);
@@ -355,7 +387,7 @@ bool rSurface(ivec2 p, out SurfaceInfo s) {
 			shore = smoothstep(level - 0.07, level, shape) * open;
 		}
 		if (pool > 0.001) {
-			vec2 slope = (rDrops(xz) + rWaves(xz) * 0.25) * pool;
+			vec2 slope = (rDrops(xz) * rLod(8.0, footprint) + rWaves(xz, footprint) * 0.25) * pool;
 			s.normal = normalize(vec3(-slope.x, 1.0, -slope.y));
 			float m = 1.0 - clamp(dot(-view, s.normal), 0.0, 1.0);
 			f = mix(f, 0.3 + 0.7 * m * m * m * m * m, pool);

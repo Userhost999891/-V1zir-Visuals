@@ -130,7 +130,7 @@ public final class Reflections {
 		try (RenderPass pass = encoder.createRenderPass(() -> "V1zir reflection composite", fb.getColorAttachmentView(), OptionalInt.empty())) {
 			pass.setPipeline(V1zirPipelines.REFLECT_COMPOSITE);
 			bindScene(pass, params, nearest, nearest);
-			pass.bindTexture("Sampler4", tracedView, linear);
+			pass.bindTexture("Sampler5", tracedView, linear);
 			pass.setVertexBuffer(0, Fullscreen.buffer());
 			pass.draw(0, 3);
 		}
@@ -142,6 +142,7 @@ public final class Reflections {
 		pass.bindTexture("Sampler1", V1zir.mc().getFramebuffer().getDepthAttachmentView(), nearest);
 		pass.bindTexture("Sampler2", SurfaceMap.columns(), nearest);
 		pass.bindTexture("Sampler3", SurfaceMap.grid(), nearest);
+		pass.bindTexture("Sampler4", SurfaceMap.far(), nearest);
 	}
 
 	private static void fill(ClientWorld world, Vec3d cam, BlockReflectionModule settings, boolean reflections, RainEffectsModule rain, float tickDelta) {
@@ -154,9 +155,9 @@ public final class Reflections {
 		float fx = (float) (cam.x - bx);
 		float fy = (float) (cam.y - by);
 		float fz = (float) (cam.z - bz);
-		// Small numbers only: world-space noise repeats every 4096 blocks, the textures every 128.
+		// Small numbers only: world-space noise repeats every 4096 blocks, the textures every 512 (x and z) and 128 (y).
 		p.cameraPos.set(Math.floorMod(bx, 4096) + fx, by + fy, Math.floorMod(bz, 4096) + fz, by);
-		p.cameraBlock.set(Math.floorMod(bx, 128), Math.floorMod(by, 128), Math.floorMod(bz, 128), world.getBottomY());
+		p.cameraBlock.set(Math.floorMod(bx, SurfaceMap.FAR), Math.floorMod(by, 128), Math.floorMod(bz, SurfaceMap.FAR), world.getBottomY());
 		p.cameraFrac.set(fx, fy, fz, V1zir.time() % 3600f);
 		p.screen.set(width, height, tracedWidth, tracedHeight);
 		p.trace.set(settings.steps(), settings.refinements(), RAY_LENGTH, SurfaceMap.gridReady() && reflections ? 1f : 0f);

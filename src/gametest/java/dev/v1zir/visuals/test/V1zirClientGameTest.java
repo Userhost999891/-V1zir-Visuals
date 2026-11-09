@@ -137,6 +137,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			cosmetics(context, singleplayer);
 			packs(context);
 			reflections(context, singleplayer);
+			farWater(context, singleplayer);
 			clickGui(context);
 			clickGuiFavourites(context);
 
@@ -1169,6 +1170,45 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.waitTicks(110);
 		context.runOnClient(client -> ModuleManager.get(RainEffectsModule.class).setEnabled(rainWasOn, false));
 		singleplayer.getServer().runCommand("time set 6000");
+	}
+
+	/**
+	 * A lake reaching far out behind the player, seen from just above it: the water reflects out to its far shore
+	 * (it used to stop sixty blocks out, the rest plain water with its tiled texture), and stays calm far away and
+	 * through a 14x zoom instead of shimmering.
+	 */
+	private static void farWater(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
+		// Kept loaded while the fill runs (chunks load over the next ticks, not within the command).
+		singleplayer.getServer().runCommand("execute as @a at @s run forceload add ~-48 ~-150 ~48 ~-16");
+		context.waitTicks(20);
+		singleplayer.getServer().runCommand("execute as @a at @s run fill ~-40 ~-1 ~-140 ~40 ~-1 ~-20 minecraft:water");
+		singleplayer.getServer().runCommand("execute as @a at @s run forceload remove ~-48 ~-150 ~48 ~-16");
+		look(singleplayer, 180, 4);
+		boolean zoomWasOn = context.computeOnClient(client -> {
+			BlockReflectionModule reflection = ModuleManager.get(BlockReflectionModule.class);
+			reflection.mode.set(BlockReflectionModule.NORMAL);
+			reflection.setEnabled(true, false);
+			return ModuleManager.isEnabled(ZoomModule.class);
+		});
+		// The water's chunks rebuild, and the far block columns fill (in under a second).
+		context.waitTicks(100);
+		context.takeScreenshot("reflection-far-water");
+		bench(context, "reflection-far-water");
+		look(singleplayer, 180, 0.6f);
+		context.runOnClient(client -> {
+			ZoomModule zoom = ModuleManager.get(ZoomModule.class);
+			zoom.setEnabled(true, false);
+			zoom.factor.set(14.0);
+		});
+		context.getInput().holdKey(GLFW.GLFW_KEY_C);
+		context.waitTicks(30);
+		context.takeScreenshot("reflection-far-water-zoom");
+		context.getInput().releaseKey(GLFW.GLFW_KEY_C);
+		context.waitTicks(20);
+		context.runOnClient(client -> {
+			ModuleManager.get(ZoomModule.class).setEnabled(zoomWasOn, false);
+			ModuleManager.get(BlockReflectionModule.class).setEnabled(false, false);
+		});
 	}
 
 	private static void clickGui(ClientGameTestContext context) {

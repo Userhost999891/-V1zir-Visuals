@@ -5,7 +5,7 @@
 // not change are discarded.
 #moj_import <v1zir:reflect.glsl>
 
-uniform sampler2D Sampler4; // traced reflections, alpha 1 where a pixel reflects
+uniform sampler2D Sampler5; // traced reflections, alpha 1 where a pixel reflects
 
 out vec4 fragColor;
 
@@ -20,7 +20,7 @@ void main() {
 	vec4 sum = vec4(0.0);
 	for (int i = 0; i < 6; i++) {
 		float a = float(i) * 1.0472 + 0.3;
-		sum += texture(Sampler4, uv + vec2(cos(a), sin(a)) * r * (i % 2 == 0 ? 1.0 : 0.55));
+		sum += texture(Sampler5, uv + vec2(cos(a), sin(a)) * r * (i % 2 == 0 ? 1.0 : 0.55));
 	}
 	vec3 reflection = sum.rgb / max(sum.a, 0.001);
 	float coverage = clamp(sum.a * 0.35, 0.0, 1.0);
