@@ -123,16 +123,17 @@ function End-Art {
 		if (-not $script:artFile) { $script:artState = 3 }
 		return
 	}
-	$stream = $task.Result
+	# The stream comes as a bare COM object here: it has no members to call by name (a Dispose() on it throws, which
+	# kept every cover from being saved), so it is only handed on. Closing the .NET stream over it closes it too.
+	$source = [System.IO.WindowsRuntimeStreamExtensions]::AsStreamForRead($task.Result)
 	$memory = New-Object System.IO.MemoryStream
 	try {
-		$source = [System.IO.WindowsRuntimeStreamExtensions]::AsStreamForRead($stream)
 		$source.CopyTo($memory)
-		$source.Dispose()
 	} finally {
-		$stream.Dispose()
+		$source.Dispose()
 	}
 	if ($script:artTaskKey -cne $script:lastKey) { return }
+	$script:artError = ''
 	Save-Bytes $memory.ToArray()
 }
 
