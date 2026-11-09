@@ -151,29 +151,78 @@ public final class Draw3D {
 		mesh.vertex(x + ux - vx, y, z + uz - vz, 1f, 2f, argb);
 	}
 
+	/** Rings and segments of the ripple mesh, and its wave height and lift above the ground per block of radius. */
+	private static final int RIPPLE_RINGS = 36;
+	private static final int RIPPLE_SEGMENTS = 44;
+	private static final double RIPPLE_HEIGHT = 0.014;
+	private static final double RIPPLE_LIFT = 0.028;
+	private static final float[] RIPPLE_COS = new float[RIPPLE_SEGMENTS + 1];
+	private static final float[] RIPPLE_SIN = new float[RIPPLE_SEGMENTS + 1];
+	private static final double[] RIPPLE_Y = new double[RIPPLE_RINGS + 1];
+
+	static {
+		for (int j = 0; j <= RIPPLE_SEGMENTS; j++) {
+			double a = Math.PI * 2.0 * j / RIPPLE_SEGMENTS;
+			RIPPLE_COS[j] = (float) Math.cos(a);
+			RIPPLE_SIN[j] = (float) Math.sin(a);
+		}
+	}
+
 	/**
-	 * Water ripple lying flat at height y, rings running out from (x, z) to {@code radius} as
-	 * {@code progress} goes from 0 to 1 (world_effect.fsh shades the waves). The light the waves
-	 * catch goes into {@code glow} in the colour {@code light}, their shade into {@code shade} in the
-	 * colour {@code dark}; flat water adds nothing, so the disc blends into whatever it lies on.
-	 * {@code shine} (0..1.5) adds a soft glow along the crests on top of the reflections.
+	 * Water ripple at height y, rings running out from (x, z) to {@code radius} as {@code progress} goes
+	 * from 0 to 1: a disc of rings whose surface really rises into crests and sinks into troughs (it sits
+	 * a little above the ground for them), shaded by world_effect.fsh from the same wave function. The
+	 * light the waves catch goes into {@code glow} in the colour {@code light}, their shade into
+	 * {@code shade} in the colour {@code dark}; flat water adds nothing, so the disc blends into whatever
+	 * it lies on. {@code shine} (0..1.5) adds a soft glow along the crests on top of the reflections.
 	 */
 	public static void ripple(WorldEffectRenderer.Mesh glow, WorldEffectRenderer.Mesh shade, double x, double y, double z, double radius,
 							  float progress, float shine, int light, int dark) {
-		int b = Math.round(Math.max(0f, Math.min(1f, progress)) * 1000f);
+		float p = Math.max(0f, Math.min(1f, progress));
+		int b = Math.round(p * 1000f);
 		int g = Math.round(Math.max(0f, Math.min(1.5f, shine)) * 10f);
-		disc(glow, x, y, z, radius, 2 * g, b, light);
-		disc(shade, x, y, z, radius, 2 * g + 1, b, dark);
+		// The rings' heights, from the wave function the shader shades with (at the packed progress).
+		float packed = b * 0.001f;
+		double lift = y + RIPPLE_LIFT * radius;
+		for (int i = 0; i <= RIPPLE_RINGS; i++) {
+			float h = rippleHeight(i / (float) RIPPLE_RINGS, packed);
+			RIPPLE_Y[i] = lift + RIPPLE_HEIGHT * radius * Math.max(-1.6f, Math.min(1.6f, h));
+		}
+		disc(glow, x, z, radius, 2 * g, b, light);
+		disc(shade, x, z, radius, 2 * g + 1, b, dark);
 	}
 
-	/** One ripple quad: the disc position in [-1, 1] next to the packed pass, shine and progress (see world_effect.fsh). */
-	private static void disc(WorldEffectRenderer.Mesh mesh, double x, double y, double z, double r, int k, int b, int argb) {
+	/**
+	 * Surface height of a ripple at radius r (0 centre, 1 rim) and progress p, as rippleHeight in world_effect.fsh:
+	 * a short train of rings behind a front that spreads and slows, smaller further out and as it settles, and a
+	 * dimple at the centre that bobs a few times.
+	 */
+	public static float rippleHeight(float r, float p) {
+		double front = 0.07 + 0.86 * (1.0 - Math.pow(1.0 - p, 1.6));
+		double x = (r - front) / (0.14 + 0.06 * p);
+		double ahead = Math.max(x, 0.0);
+		double behind = Math.min(x, 0.0) / 1.3;
+		double h = Math.cos(x * 6.2831853) * Math.exp(-ahead * ahead * 5.0 - behind * behind) * Math.pow(1.0 - p, 1.2) / Math.sqrt(0.3 + r * 1.6);
+		return (float) (h + Math.exp(-r * r * 125.0) * Math.cos(p * 22.0) * Math.pow(1.0 - p, 3.0) * 0.9);
+	}
+
+	/** One pass of the ripple mesh: each vertex carries its place on the disc next to the packed pass, shine and progress (world_effect.fsh). */
+	private static void disc(WorldEffectRenderer.Mesh mesh, double x, double z, double radius, int k, int b, int argb) {
 		float u = 4f * k;
 		float v = 16f + 4f * b;
-		mesh.vertex(x - r, y, z - r, u - 1f, v - 1f, argb);
-		mesh.vertex(x + r, y, z - r, u + 1f, v - 1f, argb);
-		mesh.vertex(x + r, y, z + r, u + 1f, v + 1f, argb);
-		mesh.vertex(x - r, y, z + r, u - 1f, v + 1f, argb);
+		for (int i = 0; i < RIPPLE_RINGS; i++) {
+			float r0 = i / (float) RIPPLE_RINGS;
+			float r1 = (i + 1) / (float) RIPPLE_RINGS;
+			double y0 = RIPPLE_Y[i];
+			double y1 = RIPPLE_Y[i + 1];
+			for (int j = 0; j < RIPPLE_SEGMENTS; j++) {
+				float c0 = RIPPLE_COS[j], s0 = RIPPLE_SIN[j], c1 = RIPPLE_COS[j + 1], s1 = RIPPLE_SIN[j + 1];
+				mesh.vertex(x + c0 * r0 * radius, y0, z + s0 * r0 * radius, u + c0 * r0, v + s0 * r0, argb);
+				mesh.vertex(x + c0 * r1 * radius, y1, z + s0 * r1 * radius, u + c0 * r1, v + s0 * r1, argb);
+				mesh.vertex(x + c1 * r1 * radius, y1, z + s1 * r1 * radius, u + c1 * r1, v + s1 * r1, argb);
+				mesh.vertex(x + c1 * r0 * radius, y0, z + s1 * r0 * radius, u + c1 * r0, v + s1 * r0, argb);
+			}
+		}
 	}
 
 	private static float quantize(float half) {

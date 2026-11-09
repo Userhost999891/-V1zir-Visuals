@@ -14,12 +14,13 @@ out vec4 fragColor;
 
 // Surface height of a water ripple at radius r (0 centre, 1 rim of the disc) and progress p (0..1):
 // a short train of rings behind a front that spreads and slows, smaller further out and as it
-// settles, and a dimple at the centre that bobs a few times.
+// settles, and a dimple at the centre that bobs a few times. Draw3D.rippleHeight is the same on the CPU
+// (the mesh rises and sinks with it).
 float rippleHeight(float r, float p) {
 	float front = 0.07 + 0.86 * (1.0 - pow(1.0 - p, 1.6));
-	float x = (r - front) / (0.12 + 0.05 * p);
+	float x = (r - front) / (0.14 + 0.06 * p);
 	float ahead = max(x, 0.0);
-	float behind = min(x, 0.0) / 1.5;
+	float behind = min(x, 0.0) / 1.3;
 	float h = cos(x * 6.2831853) * exp(-ahead * ahead * 5.0 - behind * behind) * pow(1.0 - p, 1.2) * inversesqrt(0.3 + r * 1.6);
 	return h + exp(-r * r * 125.0) * cos(p * 22.0) * pow(1.0 - p, 3.0) * 0.9;
 }
@@ -82,13 +83,13 @@ void main() {
 		float sky = rippleSky(view, n, bounce) - rippleSky(view, vec3(0.0, 1.0, 0.0), flatBounce);
 		const vec3 LIGHT = vec3(0.3563, 0.8144, 0.4581);
 		float glint = pow(max(dot(bounce, LIGHT), 0.0), 40.0) - pow(max(dot(flatBounce, LIGHT), 0.0), 40.0);
-		float change = sky * 3.0 + glint * 0.8 + (dot(n, LIGHT) - LIGHT.y) * 1.5;
+		float change = sky * 3.0 + glint * 0.9 + (dot(n, LIGHT) - LIGHT.y) * 2.2;
 		float edge = clamp((1.0 - r) * 8.0, 0.0, 1.0);
 		if (mod(k, 2.0) < 0.5) {
 			float shine = floor(k * 0.5) * 0.1;
 			a = clamp(change + (1.0 - exp(-max(h, 0.0) * 2.0)) * shine, 0.0, 1.0) * edge;
 		} else {
-			a = clamp(-change * 1.2, 0.0, 0.45) * edge;
+			a = clamp(-change * 1.3, 0.0, 0.55) * edge;
 		}
 	} else if (texCoord0.x > 2.0) {
 		a = 1.0;
