@@ -19,6 +19,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -28,6 +29,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * which Minecraft ships). Spotify titles its window "Artist - Title" while a song plays and "Spotify…" while paused or
  * idle, so this knows the song and whether it plays; the position is counted from when the song appeared, and the
  * length and cover come from a public catalogue search. Media keys stand in for the player's controls.
+ * <p>
+ * Spotify has several top-level windows besides the main one (hidden helpers, some with titles of their own), and the
+ * main one is hidden while Spotify sits in the tray, so all of them are read and a song's title wins over the others.
  * <p>
  * Media thread only.
  */
@@ -44,7 +48,10 @@ final class SpotifyWindow {
 		static final Info UNKNOWN = new Info(0L, "");
 	}
 
-	private int spotifyPid;
+	/** Whether a process is Spotify's, by its id; forgotten every half minute, as ids get reused. */
+	private final Map<Integer, Boolean> spotifyProcesses = new HashMap<>();
+	private long processesSince;
+	private boolean logged;
 	private String artist;
 	private String title;
 	private boolean playing;
@@ -52,13 +59,23 @@ final class SpotifyWindow {
 	private long positionMs;
 	private long since;
 
-	/** Spotify's main window title, or null when Spotify is not running. */
+	/**
+	 * The title to read among Spotify's windows: a song's ("Artist - Title"), from a visible window before a hidden one,
+	 * else another title (paused, an advert); null when Spotify is not running.
+	 */
 	private String windowTitle() {
-		String[] found = new String[1];
+		long now = System.nanoTime();
+		if (now - processesSince > 30_000_000_000L) {
+			spotifyProcesses.clear();
+			processesSince = now;
+		}
+		// Visible song, hidden song, visible other, hidden other.
+		String[] found = new String[4];
+		int[] windows = new int[1];
 		User32.INSTANCE.EnumWindows((hwnd, data) -> {
 			IntByReference pid = new IntByReference();
 			User32.INSTANCE.GetWindowThreadProcessId(hwnd, pid);
-			if (spotifyPid != 0 ? pid.getValue() != spotifyPid : !isSpotify(pid.getValue())) return true;
+			if (!spotifyProcesses.computeIfAbsent(pid.getValue(), SpotifyWindow::isSpotify)) return true;
 			char[] cls = new char[64];
 			User32.INSTANCE.GetClassName(hwnd, cls, cls.length);
 			if (!Native.toString(cls).startsWith("Chrome_WidgetWin")) return true;
@@ -68,12 +85,26 @@ final class SpotifyWindow {
 			User32.INSTANCE.GetWindowText(hwnd, text, text.length);
 			String value = Native.toString(text).strip();
 			if (value.isEmpty()) return true;
-			spotifyPid = pid.getValue();
-			found[0] = value;
-			return false;
+			windows[0]++;
+			int slot = (song(value) ? 0 : 2) + (User32.INSTANCE.IsWindowVisible(hwnd) ? 0 : 1);
+			if (found[slot] == null) found[slot] = value;
+			return true;
 		}, null);
-		if (found[0] == null) spotifyPid = 0;
-		return found[0];
+		for (String title : found) {
+			if (title == null) continue;
+			if (!logged) {
+				logged = true;
+				V1zir.LOGGER.info("Spotify's window found ({} titled window(s)); reading \"{}\"", windows[0], title);
+			}
+			return title;
+		}
+		return null;
+	}
+
+	/** Whether a window title names a song ("Artist - Title") rather than Spotify itself. */
+	private static boolean song(String title) {
+		int dash = title.indexOf(" - ");
+		return dash > 0 && dash + 3 < title.length() && !title.toLowerCase(Locale.ROOT).startsWith("spotify");
 	}
 
 	private static boolean isSpotify(int pid) {
@@ -103,8 +134,7 @@ final class SpotifyWindow {
 			return NowPlaying.NONE;
 		}
 		int dash = text.indexOf(" - ");
-		boolean song = dash > 0 && !text.equalsIgnoreCase("Spotify") && !text.toLowerCase(Locale.ROOT).startsWith("spotify ");
-		if (song) {
+		if (song(text)) {
 			String a = text.substring(0, dash).strip();
 			String t = text.substring(dash + 3).strip();
 			if (!a.equals(artist) || !t.equals(title)) {

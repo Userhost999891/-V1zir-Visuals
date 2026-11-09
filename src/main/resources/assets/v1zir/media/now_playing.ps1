@@ -3,9 +3,12 @@
 # session if there is one, else the current session) and runs playpause / next / previous read
 # from stdin. It exits when stdin closes. Only ASCII is printed (everything else is \u escaped),
 # so the console code page does not matter.
-# The session manager can go stale (Spotify does not always tell the media controls that a song
-# changed by itself): it is requested afresh every 15 seconds and on a refresh command, which the
-# game sends when Spotify's window names another song than the one reported here.
+# A session manager kept for long goes stale: it can keep reporting a song that changed by itself
+# (Spotify's next song) until playback is paused or resumed. So it is requested afresh every second,
+# and at once on a refresh command, which the game sends when Spotify's window names another song.
+# When even that does not catch up, the game starts the bridge again: a new process sees what the
+# players report now. The game runs it in a multi-threaded apartment (-MTA), so the media controls'
+# notifications reach it without a message loop.
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Runtime.WindowsRuntime
 $null = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType = WindowsRuntime]
@@ -97,7 +100,7 @@ $clock = [System.Diagnostics.Stopwatch]::StartNew()
 $lastKey = $null
 $artChecks = 0
 $nextArtCheck = 0
-$nextRefresh = 15000
+$nextRefresh = 1000
 
 while ($true) {
 	while ($pendingCommand.IsCompleted) {
@@ -109,6 +112,9 @@ while ($true) {
 		try {
 			if ($command.Trim() -eq 'refresh') {
 				$nextRefresh = 0
+				# The cover is looked at again too; an unchanged one is not saved again (its hash matches).
+				$artChecks = [Math]::Max($artChecks, 2)
+				$nextArtCheck = 0
 			} else {
 				$session = Find-Session
 				if ($null -ne $session) {
@@ -124,15 +130,10 @@ while ($true) {
 	}
 	if ($clock.ElapsedMilliseconds -ge $nextRefresh) {
 		# A fresh manager sees what the players report now.
-		$nextRefresh = $clock.ElapsedMilliseconds + 15000
+		$nextRefresh = $clock.ElapsedMilliseconds + 1000
 		try {
 			$fresh = Await ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])
-			if ($null -ne $fresh) {
-				$manager = $fresh
-				# The cover is checked again too; an unchanged one is not saved again (its hash matches).
-				$artChecks = [Math]::Max($artChecks, 1)
-				$nextArtCheck = 0
-			}
+			if ($null -ne $fresh) { $manager = $fresh }
 		} catch { }
 	}
 	try {

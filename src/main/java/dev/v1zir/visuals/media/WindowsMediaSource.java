@@ -23,17 +23,19 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Windows 10/11: one long-lived Windows PowerShell (no window) running now_playing.ps1, copied into the game's config
- * folder, which reads the system media transport controls through WinRT. It prints a JSON line about every 300 ms
- * and takes commands on stdin; closing stdin ends it.
+ * Windows 10/11: one long-lived Windows PowerShell (no window, multi-threaded apartment) running now_playing.ps1,
+ * copied into the game's config folder, which reads the system media transport controls through WinRT. It prints a
+ * JSON line about every 300 ms and takes commands on stdin; closing stdin ends it.
  * <p>
  * When the bridge cannot run (blocked by an antivirus or a script policy, missing) or reports nothing while Spotify
  * plays, Spotify's own window title takes over ({@link SpotifyWindow}), so the song and lyrics still show. What went
  * wrong with the bridge is written to the game log.
  * <p>
- * The window title is also the check on the bridge: Spotify does not always tell the media controls that a song changed
- * by itself, and they then keep reporting the previous one until playback is paused or resumed. When the window names
- * another song than the bridge for a moment, the window's song shows and the bridge is asked to look again.
+ * The media controls can go stale: they keep reporting a song that changed by itself (Spotify's next song) until
+ * playback is paused or resumed. Two checks catch that. Spotify's window title: when it names another playing song
+ * than the bridge for a moment, the window's song shows, the bridge is asked to look again and, if that does not
+ * help, started afresh (a new process sees what the players report now). And the bridge's own timeline: a song that
+ * keeps playing past its end, or whose timeline moves on to another song under the same title, starts it afresh too.
  */
 final class WindowsMediaSource extends MediaSource {
 	private static final String SCRIPT = "/assets/" + V1zir.MOD_ID + "/media/now_playing.ps1";
@@ -43,8 +45,13 @@ final class WindowsMediaSource extends MediaSource {
 	private static final long BRIDGE_QUIET_NANOS = 2_500_000_000L;
 	/** The window naming another song than the bridge for this long means the bridge is stale. */
 	private static final long STALE_NANOS = 1_200_000_000L;
-	/** The bridge is asked to refresh at most this often while it stays stale. */
-	private static final long REFRESH_NANOS = 4_000_000_000L;
+	/** Still stale this long after it was asked to refresh, the bridge is started afresh. */
+	private static final long RENEW_AFTER_NANOS = 2_500_000_000L;
+	/** A song reported playing at its very end for this long has really ended: the report is stale. */
+	private static final long AT_END_NANOS = 2_500_000_000L;
+	/** The bridge is started afresh at most this often, and at most MAX_RENEWS times for one stale song. */
+	private static final long RENEW_GAP_NANOS = 8_000_000_000L;
+	private static final int MAX_RENEWS = 2;
 
 	private volatile boolean stopped;
 	private Process process;
@@ -59,10 +66,22 @@ final class WindowsMediaSource extends MediaSource {
 	/** The song the bridge reported last, and the one the window names while it stands in for a stale bridge. */
 	private volatile Track bridgeTrack;
 	private volatile Track windowTrack;
+	/** Window thread: since when the window names another song, and whether the bridge was asked to look again. */
 	private long mismatchSince;
-	private long lastRefresh;
+	private boolean refreshed;
+	/** Reader thread: the song and timeline of the bridge's last report, and since when it plays at its very end. */
+	private String lastSong = "";
+	private long lastPosition;
+	private long lastDuration;
+	private long atEndSince;
+	/** When the bridge was last started afresh, for which stale song and how many times. */
+	private long lastRenew;
+	private String renewedFor = "";
+	private int renews;
 	private boolean windowBroken;
 	private boolean loggedFailure;
+	private boolean loggedStale;
+	private boolean loggedRenew;
 
 	WindowsMediaSource(ScheduledExecutorService worker) {
 		super(worker);
@@ -83,7 +102,8 @@ final class WindowsMediaSource extends MediaSource {
 		Process started;
 		try {
 			if (script == null) script = copyScript();
-			started = new ProcessBuilder(powershell(), "-NoLogo", "-NoProfile", "-NonInteractive",
+			// A multi-threaded apartment: the media controls' notifications reach the bridge without a message loop.
+			started = new ProcessBuilder(powershell(), "-NoLogo", "-NoProfile", "-NonInteractive", "-MTA",
 				"-ExecutionPolicy", "Bypass", "-File", script.toString())
 				.redirectError(log().toFile())
 				.start();
@@ -149,15 +169,24 @@ final class WindowsMediaSource extends MediaSource {
 				boolean stale = state.track() != null && state.playing() && bridge != null && !sameSong(bridge, state.track());
 				if (!stale) {
 					mismatchSince = 0L;
+					refreshed = false;
 					windowSpeaking = false;
 					windowTrack = null;
 					return;
 				}
 				if (mismatchSince == 0L) mismatchSince = now;
-				if (now - mismatchSince < STALE_NANOS) return;
-				if (now - lastRefresh > REFRESH_NANOS) {
-					lastRefresh = now;
+				long behind = now - mismatchSince;
+				if (behind < STALE_NANOS) return;
+				if (!refreshed) {
+					refreshed = true;
+					if (!loggedStale) {
+						loggedStale = true;
+						V1zir.LOGGER.info("Media controls report \"{}\" while Spotify plays \"{}\": showing Spotify's song and refreshing them",
+							bridge.title(), state.track().title());
+					}
 					send("refresh\n");
+				} else if (behind > STALE_NANOS + RENEW_AFTER_NANOS) {
+					renew(bridge.artist() + '\n' + bridge.title(), "Spotify's window names another song");
 				}
 				windowSpeaking = true;
 				windowTrack = state.track();
@@ -177,21 +206,89 @@ final class WindowsMediaSource extends MediaSource {
 		}
 	}
 
-	/** Reader thread: one report per line until the process ends. */
+	/** Reader thread: one report per line until the process ends (or is replaced by a fresh one). */
 	private void read(Process from) {
 		boolean reported = false;
 		try (BufferedReader reader = new BufferedReader(new InputStreamReader(from.getInputStream(), StandardCharsets.UTF_8))) {
 			String line;
 			while ((line = reader.readLine()) != null) {
+				// A bridge that was replaced still has stale reports buffered: they are dropped.
+				if (!running(from)) break;
 				reported |= handle(line);
 			}
 		} catch (IOException ignored) {
 			// The process ended.
 		}
-		if (stopped) return;
+		if (stopped || !running(from)) return;
 		if (!windowSpeaking) publish(null, "", 0L, false);
 		if (!reported) logFailure(from);
 		restart(reported);
+	}
+
+	private synchronized boolean running(Process from) {
+		return from == process;
+	}
+
+	/**
+	 * Replaces the bridge with a fresh one, whose media controls see what the players report now; the old one gets its
+	 * stdin closed (it deletes its cover file and exits) and is ended if it lingers. Not more often than every few
+	 * seconds, nor more than twice for one stale song (when the media controls themselves are stale, a new bridge sees
+	 * the same, and the window's song shows instead).
+	 */
+	private void renew(String song, String why) {
+		Process old;
+		Writer oldInput;
+		synchronized (this) {
+			long now = System.nanoTime();
+			if (stopped || process == null || now - lastRenew < RENEW_GAP_NANOS) return;
+			if (!song.equals(renewedFor)) {
+				renewedFor = song;
+				renews = 0;
+			}
+			if (renews >= MAX_RENEWS) return;
+			renews++;
+			lastRenew = now;
+			old = process;
+			oldInput = input;
+			process = null;
+			input = null;
+		}
+		if (!loggedRenew) {
+			loggedRenew = true;
+			V1zir.LOGGER.info("Media bridge went stale ({}): starting it again", why);
+		} else {
+			V1zir.LOGGER.debug("Media bridge went stale ({}): starting it again", why);
+		}
+		try {
+			oldInput.close();
+		} catch (IOException ignored) {
+			// Already gone.
+		}
+		old.onExit().completeOnTimeout(old, 2, TimeUnit.SECONDS).thenAccept(Process::destroy);
+		try {
+			worker.execute(this::start);
+		} catch (RejectedExecutionException ignored) {
+			// Stopped.
+		}
+	}
+
+	/**
+	 * Reader thread: whether the report's timeline gives the media controls away as stale. A song reported playing at
+	 * its very end for a few seconds has ended (the next one plays unreported); the same title with another length, or
+	 * back at its start from well into it, means the timeline moved on to the next song under the old title.
+	 */
+	private boolean timelineStale(String song, long position, long duration, boolean playing) {
+		long now = System.nanoTime();
+		boolean same = song.equals(lastSong);
+		boolean moved = same && playing
+			&& (lastDuration > 0L && duration > 0L && Math.abs(duration - lastDuration) > 2_000L || lastPosition > 10_000L && position < 3_000L);
+		lastSong = song;
+		lastPosition = position;
+		lastDuration = duration;
+		boolean atEnd = playing && duration > 0L && position >= duration - 250L;
+		if (!atEnd) atEndSince = 0L;
+		else if (atEndSince == 0L) atEndSince = now;
+		return moved || atEndSince != 0L && now - atEndSince > AT_END_NANOS;
 	}
 
 	/** Once per session: why the bridge ended without a report, from its error output, into the game log. */
@@ -219,14 +316,19 @@ final class WindowsMediaSource extends MediaSource {
 				if (!windowSpeaking) publish(null, "", 0L, false);
 			} else {
 				bridgeSongAt = System.nanoTime();
-				Track track = new Track(title, MacMediaSource.text(o, "a"), MacMediaSource.text(o, "al"), o.get("d").getAsLong());
+				long position = o.get("p").getAsLong();
+				long duration = o.get("d").getAsLong();
+				boolean playing = o.get("s").getAsInt() == 1;
+				Track track = new Track(title, MacMediaSource.text(o, "a"), MacMediaSource.text(o, "al"), duration);
 				bridgeTrack = track;
+				String song = track.artist() + '\n' + track.title();
+				if (timelineStale(song, position, duration, playing)) renew(song, "its timeline left the song it names");
 				// Still the song the window has moved on from: the window keeps speaking until the bridge catches up.
 				Track window = windowTrack;
 				if (windowSpeaking && window != null && !sameSong(track, window)) return true;
 				windowSpeaking = false;
 				windowTrack = null;
-				publish(track, MacMediaSource.text(o, "art"), o.get("p").getAsLong(), o.get("s").getAsInt() == 1);
+				publish(track, MacMediaSource.text(o, "art"), position, playing);
 			}
 			return true;
 		} catch (RuntimeException e) {

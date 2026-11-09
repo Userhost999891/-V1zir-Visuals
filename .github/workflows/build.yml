@@ -121,7 +121,8 @@ jobs:
         run: |
           $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
           $info = New-Object System.Diagnostics.ProcessStartInfo $ps
-          $info.Arguments = '-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File src\main\resources\assets\v1zir\media\now_playing.ps1'
+          # The same arguments as the game (WindowsMediaSource), multi-threaded apartment included.
+          $info.Arguments = '-NoLogo -NoProfile -NonInteractive -MTA -ExecutionPolicy Bypass -File src\main\resources\assets\v1zir\media\now_playing.ps1'
           $info.RedirectStandardInput = $true
           $info.RedirectStandardOutput = $true
           $info.RedirectStandardError = $true
@@ -130,9 +131,21 @@ jobs:
           $out = $p.StandardOutput.ReadLineAsync()
           if (-not $out.Wait(15000)) { Write-Host 'BRIDGE FAILED: no report within 15 s'; $p.Kill(); Write-Host ('stderr: ' + $p.StandardError.ReadToEnd()); exit 0 }
           Write-Host ('First report: ' + $out.Result)
+          # It keeps reporting through a refresh command and its own refreshes of the media controls (every second).
+          $p.StandardInput.WriteLine('refresh')
+          $p.StandardInput.Flush()
+          $reports = 0
+          $watch = [System.Diagnostics.Stopwatch]::StartNew()
+          while ($watch.ElapsedMilliseconds -lt 3500) {
+            $next = $p.StandardOutput.ReadLineAsync()
+            if (-not $next.Wait(3000) -or $null -eq $next.Result) { break }
+            $reports++
+          }
+          Write-Host ('Reports in 3.5 s after a refresh: ' + $reports)
+          if ($reports -lt 5) { Write-Host 'BRIDGE FAILED: it stopped reporting after a refresh' }
           $p.StandardInput.Close()
           if (-not $p.WaitForExit(5000)) { $p.Kill() }
           $err = $p.StandardError.ReadToEnd()
           if ($err) { Write-Host ('stderr: ' + $err) }
-          if ($null -eq $out.Result -or -not $out.Result.StartsWith('{')) { Write-Host 'BRIDGE FAILED' } else { Write-Host 'BRIDGE OK' }
+          if ($null -eq $out.Result -or -not $out.Result.StartsWith('{') -or $reports -lt 5) { Write-Host 'BRIDGE FAILED' } else { Write-Host 'BRIDGE OK' }
           exit 0
