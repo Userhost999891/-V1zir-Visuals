@@ -59,6 +59,8 @@ $artFile = ''
 $artHash = ''
 $artCount = 0
 $artState = 0
+# Why the cover could not be read last ("" when it could), for the game's debug lines.
+$artError = ''
 # The cover being read: its OpenReadAsync task, for which song, and since when.
 $artTask = $null
 $artTaskKey = ''
@@ -206,16 +208,16 @@ while ($true) {
 					$artTask = $null
 					$nextArtCheck = 0
 				}
-				try { End-Art } catch { $artTask = $null }
+				try { End-Art } catch { $artTask = $null; $artError = 'read: ' + $_.Exception.Message; if (-not $artFile) { $artState = 3 } }
 				if ($null -eq $artTask -and $clock.ElapsedMilliseconds -ge $nextArtCheck) {
 					# Until there is a cover, look again soon; after that now and then, in case it changes.
 					if ($artFile) { $nextArtCheck = $clock.ElapsedMilliseconds + 5000 }
 					else { $nextArtCheck = $clock.ElapsedMilliseconds + 1500 }
-					try { Begin-Art $media.Thumbnail $key } catch { $artTask = $null; if (-not $artFile) { $artState = 3 } }
+					try { Begin-Art $media.Thumbnail $key } catch { $artTask = $null; $artError = 'open: ' + $_.Exception.Message; if (-not $artFile) { $artState = 3 } }
 				}
 				$line = '{"t":' + (Json $media.Title) + ',"a":' + (Json $artist) + ',"al":' + (Json $media.AlbumTitle) +
 					',"p":' + [long]$position + ',"d":' + [long]$duration + ',"s":' + [int]$playing + ',"art":' + (Json $artFile) +
-					',"as":' + $artState + '}'
+					',"as":' + $artState + ',"ae":' + (Json $artError) + '}'
 			}
 		}
 		[Console]::Out.WriteLine($line)
