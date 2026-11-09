@@ -943,6 +943,13 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.waitTicks(10);
 		context.takeScreenshot("rain-wet");
 		bench(context, "rain-wet");
+		// Puddles over the open ground behind the player, far and near.
+		look(singleplayer, 180, 18);
+		context.waitTicks(5);
+		context.takeScreenshot("rain-puddles");
+		look(singleplayer, 180, 50);
+		context.waitTicks(3);
+		context.takeScreenshot("rain-puddles-near");
 		// Splashes underfoot: looking down, one frame just after the jump and one just after the landing.
 		look(singleplayer, 0, 65);
 		context.waitTicks(5);

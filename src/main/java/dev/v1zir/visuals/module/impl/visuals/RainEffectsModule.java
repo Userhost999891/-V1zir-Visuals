@@ -4,6 +4,7 @@ import dev.v1zir.visuals.module.Category;
 import dev.v1zir.visuals.module.Module;
 import dev.v1zir.visuals.module.setting.BoolSetting;
 import dev.v1zir.visuals.module.setting.NumberSetting;
+import dev.v1zir.visuals.render.Puddles;
 import dev.v1zir.visuals.render.world.Draw3D;
 import dev.v1zir.visuals.render.world.WorldEffect;
 import dev.v1zir.visuals.render.world.WorldEffectRenderer;
@@ -15,6 +16,7 @@ import net.minecraft.fluid.FluidState;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.Heightmap;
 import net.minecraft.world.biome.Biome;
 
@@ -24,8 +26,8 @@ import net.minecraft.world.biome.Biome;
  * dark mirror with raindrops ringing on it (render/Reflections). The wetness builds up over the rain
  * and dries slowly after, the puddles shrinking with it; nothing is drawn while everything is dry.
  * <p>
- * Jumping or landing on wet ground in the open (or in shallow water) splashes: ripples run out over
- * the water underfoot and droplets fly up and out, bigger after a fall.
+ * Jumping or landing on wet ground in the open (or in shallow water) splashes: droplets fly up and
+ * out, bigger after a fall, and in a puddle or water ripples run out over it.
  */
 public final class RainEffectsModule extends Module implements WorldEffect {
 	private static final float TICK = 0.05f;
@@ -104,11 +106,17 @@ public final class RainEffectsModule extends Module implements WorldEffect {
 			if (!fluid.isEmpty()) y = pos.getY() + fluid.getHeight(world, pos);
 		}
 		size *= splashSize.f();
+		// Ripples only where water stands: in water or in one of the shader's puddles (Puddles
+		// evaluates the same noise); on merely wet ground the drops alone fly, smaller.
+		Vec3d cam = mc.gameRenderer.getCamera().getCameraPos();
+		boolean ripple = water || Puddles.at(x, z, cam.x, cam.z, wetness(1f)) > 0.5f;
+		if (!ripple) size *= 0.6f;
 		Splash s = splashList[nextSplash];
 		nextSplash = (nextSplash + 1) % splashList.length;
-		s.set(x, y + 0.015, z, size, System.nanoTime());
+		s.set(x, y + 0.015, z, size, System.nanoTime(), ripple);
 		if (splashSound.on()) {
-			world.playSoundClient(x, y, z, SoundEvents.ENTITY_PLAYER_SPLASH, SoundCategory.PLAYERS, 0.05f + 0.05f * size, 1.35f + hash(s.seed, 0, 0) * 0.3f, false);
+			world.playSoundClient(x, y, z, SoundEvents.ENTITY_PLAYER_SPLASH, SoundCategory.PLAYERS, (ripple ? 0.05f : 0.025f) + 0.05f * size,
+				1.35f + hash(s.seed, 0, 0) * 0.3f, false);
 		}
 	}
 
@@ -120,15 +128,17 @@ public final class RainEffectsModule extends Module implements WorldEffect {
 		for (Splash s : splashList) {
 			if (!s.live) continue;
 			float age = (now - s.born) / 1.0e9f;
-			if (age > SPLASH_SECONDS) {
+			if (age > (s.ripple ? SPLASH_SECONDS : DROP_SECONDS)) {
 				s.live = false;
 				continue;
 			}
-			// The ripples settle by themselves; the last moments only fade what is left.
-			float p = age / SPLASH_SECONDS;
-			int alpha = Math.round(255f * (1f - Anim.easeInOutCubic(Math.max(0f, (p - 0.75f) / 0.25f))));
-			Draw3D.ripple(glow, water, s.x, s.y, s.z, 1.4 * s.size, p, 0.15f, ColorUtil.withAlpha(RIPPLE_LIGHT, alpha),
-				ColorUtil.withAlpha(RIPPLE_SHADE, alpha));
+			if (s.ripple) {
+				// The ripples settle by themselves; the last moments only fade what is left.
+				float p = age / SPLASH_SECONDS;
+				int alpha = Math.round(255f * (1f - Anim.easeInOutCubic(Math.max(0f, (p - 0.75f) / 0.25f))));
+				Draw3D.ripple(glow, water, s.x, s.y, s.z, s.size, p, 0.15f, ColorUtil.withAlpha(RIPPLE_LIGHT, alpha),
+					ColorUtil.withAlpha(RIPPLE_SHADE, alpha));
+			}
 			if (age < DROP_SECONDS) drops(water, glow, s, age);
 		}
 	}
@@ -197,15 +207,17 @@ public final class RainEffectsModule extends Module implements WorldEffect {
 		float size;
 		long born;
 		int seed;
+		boolean ripple;
 		boolean live;
 
-		void set(double x, double y, double z, float size, long born) {
+		void set(double x, double y, double z, float size, long born, boolean ripple) {
 			this.x = x;
 			this.y = y;
 			this.z = z;
 			this.size = size;
 			this.born = born;
 			this.seed = (int) (born ^ born >>> 32);
+			this.ripple = ripple;
 			this.live = true;
 		}
 	}

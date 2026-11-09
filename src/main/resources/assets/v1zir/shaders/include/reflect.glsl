@@ -41,9 +41,8 @@ struct SurfaceInfo {
 	vec3 tint;       // reflection weight per channel: Fresnel, metal tint and strength
 	float diffuse;   // how much of the surface's own colour stays
 	float wet;       // darkening by a water film
-	float pool;      // standing water (puddles), which darkens what is under it further
+	float pool;      // standing water (puddles, a little along their shores), which darkens what is under it further
 	float metallic;  // 1 where the reflection takes the surface's colour (metal blocks)
-	float satin;     // how much the surface turns into polished satin metal (Metal mode)
 	float roughness;
 	float glint;     // weight of the sun or moon highlight
 	float exposure;  // 1 under the open sky, 0 under a roof
@@ -194,13 +193,42 @@ vec2 rDrops(vec2 xz) {
 	return slope * 0.35 * Weather.y;
 }
 
-// Standing water on open flat ground: 0 dry, 1 inside a puddle, soft at its shore. Soft noise over a
-// few blocks floods above a level that sinks as everything gets wetter, so the puddles collect in
-// the same places every rain, grow while it pours and shrink again as it dries.
-float rPuddle(vec2 xz) {
-	float level = mix(0.86, 0.64, clamp((Weather.x - 0.25) / 0.75, 0.0, 1.0)) - 0.12 * max(Weather.x - 1.0, 0.0);
-	float shape = 0.62 * rNoise(xz * 0.16) + 0.28 * rNoise(xz * 0.45 + 17.3) + 0.1 * rNoise(xz * 1.6 + 5.7);
-	return smoothstep(level, level + 0.035, shape);
+// Integer hash of a noise cell (pcg2d), the same on the CPU (render/Puddles.java) to the last bit.
+float rCellHash(uvec2 v) {
+	v = v * 1664525u + 1013904223u;
+	v.x += v.y * 1664525u;
+	v.y += v.x * 1664525u;
+	v ^= v >> 16u;
+	v.x += v.y * 1664525u;
+	v.y += v.x * 1664525u;
+	v ^= v >> 16u;
+	return float((v.x ^ v.y) >> 8u) / 16777216.0;
+}
+
+// Value noise on rCellHash; cells are offset so their coordinates stay positive.
+float rCellNoise(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = p - i;
+	f = f * f * (3.0 - 2.0 * f);
+	uvec2 c = uvec2(ivec2(i) + 8192);
+	float a = rCellHash(c);
+	float b = rCellHash(c + uvec2(1u, 0u));
+	float d = rCellHash(c + uvec2(0u, 1u));
+	float e = rCellHash(c + uvec2(1u, 1u));
+	return mix(mix(a, b, f.x), mix(d, e, f.x), f.y);
+}
+
+// Where puddles lie on open flat ground: soft noise over a few blocks with a little detail, so they
+// are rounded, one to a few blocks across, and lie in the same places every rain (Puddles.java
+// evaluates the same for the splashes).
+float rPuddleShape(vec2 xz) {
+	return 0.68 * rCellNoise(xz * 0.3) + 0.24 * rCellNoise(xz * 0.9 + 17.3) + 0.08 * rCellNoise(xz * 2.6 + 5.7);
+}
+
+// Water stands wherever the shape rises above this level, which sinks as everything gets wetter:
+// a few small puddles in a drizzle, more and larger ones as it pours, shrinking again as it dries.
+float rPuddleLevel() {
+	return mix(0.8, 0.67, clamp((Weather.x - 0.25) / 0.75, 0.0, 1.0)) - 0.07 * max(Weather.x - 1.0, 0.0);
 }
 
 float rSchlick(float f0, float cosTheta) {
@@ -218,38 +246,6 @@ vec3 rMetal(vec3 albedo, float cosTheta, float roughness) {
 	vec3 f0 = mix(hue, sqrt(albedo) * 0.9, 0.35);
 	float m = 1.0 - clamp(cosTheta, 0.0, 1.0);
 	return f0 + max(vec3(0.75 - 1.5 * roughness) - f0, 0.0) * (m * m * m * m * m);
-}
-
-// Polished satin metal (Metal mode): the block's texture smoothed away by averaging the frame over
-// half a block of the surface around the point (taps on its plane, so other surfaces never leak in),
-// then turned into a bright pale base under the same light that only hints at the block's hue and
-// takes a little of the sky's colour, as polished metal under an open sky does.
-vec3 rSatin(ivec2 p, SurfaceInfo s) {
-	vec3 n = s.normal;
-	vec3 t1 = normalize(cross(n, abs(n.y) > 0.9 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0)));
-	vec3 t2 = cross(n, t1);
-	vec3 here = texelFetch(Sampler0, p, 0).rgb;
-	vec3 sum = here;
-	float count = 1.0;
-	for (int i = 0; i < 8; i++) {
-		float a = float(i) * 2.39996;
-		vec3 q = s.pos + (t1 * cos(a) + t2 * sin(a)) * (0.12 + 0.05 * float(i));
-		vec4 c = ViewProj * vec4(q, 1.0);
-		if (c.w <= 0.1) continue;
-		ivec2 t = ivec2((c.xy / c.w * 0.5 + 0.5) * Screen.xy);
-		if (any(lessThan(t, ivec2(0))) || any(greaterThanEqual(t, ivec2(Screen.xy)))) continue;
-		if (abs(dot(rPosition(t) - s.pos, n)) > 0.06) continue;
-		sum += texelFetch(Sampler0, t, 0).rgb;
-		count += 1.0;
-	}
-	vec3 average = sum / count;
-	const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
-	float light = dot(average, LUMA);
-	vec3 hint = mix(vec3(1.0), average / max(light, 0.001), 0.12);
-	hint *= mix(vec3(1.0), FogColor.rgb / max(dot(FogColor.rgb, LUMA), 0.05), 0.2 * s.exposure);
-	// A faint trace of the texture stays.
-	float detail = mix(1.0, dot(here, LUMA) / max(light, 0.001), 0.12);
-	return clamp(hint * (0.9 * pow(light / 0.45, 0.6) * detail), 0.0, 1.0);
 }
 
 // Everything the passes need about the surface under a full-resolution pixel; false where nothing
@@ -304,7 +300,6 @@ bool rSurface(ivec2 p, out SurfaceInfo s) {
 	s.wet = 0.0;
 	s.pool = 0.0;
 	s.metallic = 0.0;
-	s.satin = 0.0;
 	s.roughness = 0.0;
 	s.glint = 0.0;
 	s.exposure = exposure;
@@ -321,14 +316,14 @@ bool rSurface(ivec2 p, out SurfaceInfo s) {
 	}
 	float cosV = dot(-view, n);
 	if (metal) {
-		// Polished satin metal: a smooth pale base (rSatin) under soft reflections that take their
-		// colour from the sky and the scene, with a gentle Fresnel.
-		float m = 1.0 - clamp(cosV, 0.0, 1.0);
-		float f = min((0.28 + 0.5 * m * m * m) * strength, 1.0);
-		s.tint = vec3(material == FOLIAGE ? 0.5 * f : f);
-		s.diffuse = 1.0 - s.tint.x;
-		s.satin = (material == FOLIAGE ? 0.5 : 1.0) * min(strength, 1.0);
-		s.roughness = 0.3 + 0.5 * Shading.z;
+		// Every block as polished metal of its own colour: the texture stays, a blurred
+		// reflection tinted by the block's colour lies over it (Schlick with F0 from its hue),
+		// stronger at grazing angles; leaves and plants only half as shiny.
+		s.roughness = 0.18 + 0.45 * Shading.z;
+		vec3 f = rMetal(texelFetch(Sampler0, p, 0).rgb, cosV, s.roughness) * (material == FOLIAGE ? 0.3 : 0.55) * strength;
+		s.tint = min(f, vec3(1.0));
+		s.diffuse = 1.0 - 0.55 * dot(s.tint, vec3(0.3333));
+		s.metallic = 1.0;
 		s.glint = exposure * 0.6;
 	} else if (glossy) {
 		// Metal blocks keep their colour in the reflection; glass, ice and polished stone a faint sheen.
@@ -347,14 +342,23 @@ bool rSurface(ivec2 p, out SurfaceInfo s) {
 		float gloss = 0.55 + 0.45 * rNoise(xz * 0.3);
 		float f = rSchlick(0.04, cosV) * 0.65 * wet * gloss;
 		float roughness = 0.15;
-		// Puddles on open flat ground: a dark mirror, rippled by the raindrops falling into it. Seen
-		// from above it still shows some of the sky, more than water's Fresnel alone would give.
-		float pool = n.y > 0.5 && material != FOLIAGE ? rPuddle(xz) * open : 0.0;
+		// Puddles on open flat ground: a dark bed under a sharp mirror with a crisp shoreline,
+		// rippled by the raindrops falling into it, in a ring of darker, soaked ground. A puddle
+		// reflects more than water's Fresnel alone would give, so it reads as standing water from
+		// above too.
+		float pool = 0.0;
+		float shore = 0.0;
+		if (n.y > 0.5 && material != FOLIAGE) {
+			float shape = rPuddleShape(xz);
+			float level = rPuddleLevel();
+			pool = smoothstep(level, level + 0.012, shape) * open;
+			shore = smoothstep(level - 0.07, level, shape) * open;
+		}
 		if (pool > 0.001) {
 			vec2 slope = (rDrops(xz) + rWaves(xz) * 0.25) * pool;
 			s.normal = normalize(vec3(-slope.x, 1.0, -slope.y));
 			float m = 1.0 - clamp(dot(-view, s.normal), 0.0, 1.0);
-			f = mix(f, 0.16 + 0.84 * m * m * m * m * m, pool);
+			f = mix(f, 0.3 + 0.7 * m * m * m * m * m, pool);
 			roughness = mix(roughness, 0.0, pool);
 		}
 		if (f > max(s.tint.r, max(s.tint.g, s.tint.b))) {
@@ -362,8 +366,8 @@ bool rSurface(ivec2 p, out SurfaceInfo s) {
 			s.roughness = metal || glossy ? min(s.roughness, roughness) : roughness;
 		}
 		s.diffuse = min(s.diffuse, 1.0 - f);
-		s.wet = mix(wet, 1.0, pool);
-		s.pool = pool;
+		s.wet = mix(wet, 1.0, max(pool, shore));
+		s.pool = max(pool, shore * 0.35);
 		s.glint = max(s.glint, open * mix(0.3 * wet, 1.0, pool));
 	}
 	return max(s.tint.r, max(s.tint.g, s.tint.b)) > 0.002 || s.wet > 0.002;

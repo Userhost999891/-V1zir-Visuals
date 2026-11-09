@@ -26,11 +26,11 @@ void main() {
 	float coverage = clamp(sum.a * 0.35, 0.0, 1.0);
 	// Metal blocks tint what they reflect with their own colour, so the sky's hue must not take over.
 	reflection = mix(reflection, vec3(dot(reflection, vec3(0.2126, 0.7152, 0.0722))), 0.55 * s.metallic);
-	vec3 base = s.satin > 0.0 ? mix(scene.rgb, rSatin(p, s), s.satin) : scene.rgb;
+	vec3 base = scene.rgb;
 	// A water film darkens what is under it and deepens its colour; standing water more.
 	vec3 soaked = pow(base, vec3(1.2)) * 0.85;
 	soaked = max(mix(vec3(dot(soaked, vec3(0.2126, 0.7152, 0.0722))), soaked, 1.25), 0.0);
-	base = mix(base, soaked, s.wet) * (1.0 - 0.35 * s.pool);
+	base = mix(base, soaked, s.wet) * (1.0 - 0.5 * s.pool);
 	vec3 color = base * mix(1.0, s.diffuse, coverage) + reflection * s.tint * coverage;
 	if (s.glint > 0.0 && LightDir.w > 0.0) {
 		vec3 bounce = reflect(normalize(s.pos), s.normal);

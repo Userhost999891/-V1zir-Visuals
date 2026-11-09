@@ -73,21 +73,22 @@ void main() {
 		vec2 radial = q / max(r, 1.0e-5);
 		vec3 n = normalize(vec3(-slope * 0.05 * radial.x, 1.0, -slope * 0.05 * radial.y));
 		// Only what the waves change: flat water adds and takes away nothing, so the disc melts into
-		// the ground under it. Slopes towards the sky light up, slopes towards the ground darken,
-		// and a sparkle runs along the crests just above the mirror direction.
+		// the ground under it. Seen low, slopes that turn the reflection towards the sky light up and
+		// the others darken; from any angle the slopes facing a light high in the sky catch it and
+		// the far sides of the rings fall into shade, so every ring shows a lit and a shaded side.
 		vec3 view = normalize(relPos);
 		vec3 bounce;
 		vec3 flatBounce;
 		float sky = rippleSky(view, n, bounce) - rippleSky(view, vec3(0.0, 1.0, 0.0), flatBounce);
-		vec3 sparkle = normalize(vec3(view.x, 0.25 - view.y, view.z));
-		float glint = pow(max(dot(bounce, sparkle), 0.0), 60.0) - pow(max(dot(flatBounce, sparkle), 0.0), 60.0);
-		float change = sky * 3.0 + glint * 0.9;
+		const vec3 LIGHT = vec3(0.3563, 0.8144, 0.4581);
+		float glint = pow(max(dot(bounce, LIGHT), 0.0), 40.0) - pow(max(dot(flatBounce, LIGHT), 0.0), 40.0);
+		float change = sky * 3.0 + glint * 0.8 + (dot(n, LIGHT) - LIGHT.y) * 1.5;
 		float edge = clamp((1.0 - r) * 8.0, 0.0, 1.0);
 		if (mod(k, 2.0) < 0.5) {
 			float shine = floor(k * 0.5) * 0.1;
 			a = clamp(change + (1.0 - exp(-max(h, 0.0) * 2.0)) * shine, 0.0, 1.0) * edge;
 		} else {
-			a = clamp(-change * 1.2 + max(-h, 0.0) * 0.15, 0.0, 0.45) * edge;
+			a = clamp(-change * 1.2, 0.0, 0.45) * edge;
 		}
 	} else if (texCoord0.x > 2.0) {
 		a = 1.0;
