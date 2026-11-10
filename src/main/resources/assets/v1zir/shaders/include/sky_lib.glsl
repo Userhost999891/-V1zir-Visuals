@@ -8,8 +8,8 @@
 //    MoonDir  xyz = direction towards the moon, w = moon phase (0 = full .. 1)
 //    Timing   x = animation time (seconds, already speed-scaled)
 //             y = thunder gradient, z = rain gradient, w = star brightness multiplier
-//    ColorA   rgb = preset colour A (tint / zenith),  a = colour strength
-//    ColorB   rgb = preset colour B (secondary / horizon)
+//    ColorA   rgb = preset colour A (tint / zenith),  a = colour strength (0 = the preset's own colours)
+//    ColorB   rgb = preset colour B (secondary / horizon), a = rainbow speed (0 = the two colours as given)
 //    Settings x = brightness, y = cloud coverage, z = star density, w = quality (0..2)
 //    Camera   xyz = camera position (blocks), w = preset index
 //    Extra    x = horizon fade (1 = fade below horizon), y = clouds enabled,
@@ -28,6 +28,8 @@
 #define PRESET_SYNTHWAVE 6
 #define PRESET_BLOOD_MOON 7
 #define PRESET_CUSTOM 8
+#define PRESET_PLASMA 9
+#define PRESET_LAGOON 10
 
 // ---------------------------------------------------------------------------
 //  Hashing & noise (sine-free hashes keep the patterns stable on every GPU)
@@ -193,6 +195,19 @@ vec3 vToDisplay(vec3 linearColor) {
 vec3 vSaturate(vec3 c, float amount) {
 	float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
 	return mix(vec3(l), c, amount);
+}
+
+vec3 vHsv(float h, float s, float v) {
+	vec3 k = abs(fract(h + vec3(0.0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - 3.0);
+	return v * mix(vec3(1.0), clamp(k - 1.0, 0.0, 1.0), s);
+}
+
+// The colour a preset is recoloured with at k, from the primary (0) to the secondary (1): the two colours as
+// picked (or the theme's), or with Rainbow a hue that turns slowly with the time and shifts along k, so a
+// preset's two colours are always a third of the wheel apart. Only meant where ColorA.a says to recolour.
+vec3 vPalette(float k) {
+	if (ColorB.a > 0.0) return vHsv(Timing.x * 0.012 * ColorB.a + k * 0.36, 0.74, 1.0);
+	return mix(ColorA.rgb, ColorB.rgb, clamp(k, 0.0, 1.0));
 }
 
 // Black-body-ish star tint: 0 = orange dwarf, 1 = blue giant.
@@ -1064,7 +1079,9 @@ vec3 vSkyRealistic(vec3 rd, float t, int quality) {
 }
 
 vec3 vSkyMagma(vec3 rd, float t) {
-	vec3 tint = mix(vec3(1.0), ColorA.rgb, ColorA.a);
+	vec3 tint = mix(vec3(1.0), vPalette(0.0), ColorA.a);
+	// Recoloured, the hottest lava runs towards the secondary colour.
+	vec3 tintHot = mix(vec3(1.0), mix(vPalette(1.0), vec3(1.0), 0.3), ColorA.a);
 	float up = rd.y;
 	// Map the dome onto a molten "ceiling" that stretches towards the horizon.
 	vec2 uv = rd.xz / (abs(up) + 0.30) * 0.85;
@@ -1121,7 +1138,7 @@ vec3 vSkyMagma(vec3 rd, float t) {
 	heat = mix(heat, 0.05 + pool * 0.3, lod * 0.9);
 
 	// Incandescence curve: black crust -> grey -> blinding white core, plus a soft heat glow.
-	vec3 col = tint * (pow(heat, 2.4) * 1.1 + pow(max(heat - 0.72, 0.0), 2.0) * 3.2);
+	vec3 col = mix(tint, tintHot, smoothstep(0.62, 0.95, heat)) * (pow(heat, 2.4) * 1.1 + pow(max(heat - 0.72, 0.0), 2.0) * 3.2);
 	// Bloom around the molten network and the basalt it lights up.
 	col += tint * (crackGlow * 0.22 * hot * (1.0 - pool) + rockLit * 0.5 * (1.0 - lod));
 	col += tint * (smoothstep(0.5, 0.75, m) * 0.06 + 0.004);
@@ -1246,8 +1263,8 @@ vec3 vAurora(vec3 rd, float t, vec3 low, vec3 high, int quality) {
 }
 
 vec3 vSkyAurora(vec3 rd, float t, int quality, vec2 fragCoord) {
-	vec3 low = mix(vec3(0.12, 1.0, 0.45), ColorA.rgb, ColorA.a);
-	vec3 high = mix(vec3(0.55, 0.2, 1.0), ColorB.rgb, ColorA.a);
+	vec3 low = mix(vec3(0.12, 1.0, 0.45), vPalette(0.0), ColorA.a);
+	vec3 high = mix(vec3(0.55, 0.2, 1.0), vPalette(1.0), ColorA.a);
 	float up = max(rd.y, 0.0);
 	// A deep blue night, a little lighter towards the horizon, darker below it.
 	vec3 col = mix(vec3(0.011, 0.02, 0.042), vec3(0.003, 0.006, 0.018), pow(up, 0.5));
@@ -1286,8 +1303,8 @@ float vRidged3(vec3 p, int octaves) {
 // and young clusters of crisp stars sit in its bright cores. It is all a function of the
 // direction (warped 3D noise on the unit sphere), so it stays sharp at any field of view.
 vec3 vSkyNebula(vec3 rd, float t, int quality, vec2 fragCoord) {
-	vec3 cA = mix(vec3(1.0, 0.2, 0.42), ColorA.rgb, ColorA.a);
-	vec3 cB = mix(vec3(0.12, 0.62, 1.0), ColorB.rgb, ColorA.a);
+	vec3 cA = mix(vec3(1.0, 0.2, 0.42), vPalette(0.0), ColorA.a);
+	vec3 cB = mix(vec3(0.12, 0.62, 1.0), vPalette(1.0), ColorA.a);
 	// The sky turns very slowly.
 	float ang = t * 0.0015;
 	float ca = cos(ang);
@@ -1359,8 +1376,10 @@ vec3 vSkySunset(vec3 rd, float t, int quality) {
 	return vToDisplay(vTonemap(col));
 }
 
+// Ink: smoke and fine filaments of ink unfurling in black water, white by itself. Recoloured it runs in two
+// colours: the ink shifts from one to the other along its flow, its thickest strands burn towards white and a
+// faint haze of the colours lies behind it; with Rainbow the hue also drifts across the sky.
 vec3 vSkyInk(vec3 rd, float t) {
-	vec3 tint = mix(vec3(1.0), ColorA.rgb, ColorA.a);
 	float up = rd.y;
 	vec2 uv = rd.xz / (abs(up) + 0.38);
 	uv += vec2(t * 0.008, t * 0.004);
@@ -1370,11 +1389,100 @@ vec3 vSkyInk(vec3 rd, float t) {
 	float filaments = vRidged2(uv * 2.2 + r * 3.2 - t * 0.02, 6);
 	float ink = smoothstep(0.46, 0.9, smoke) * 0.55 + pow(filaments, 3.5) * 1.35;
 	ink *= smoothstep(0.25, 0.75, q.x + 0.2);
-	vec3 col = tint * ink;
-	col += vStarsW(rd, t, Settings.z, (1.0 - ink) * 0.8 * Timing.w);
+	vec3 col = vec3(ink);
+	if (ColorA.a > 0.5) {
+		// Where along the flow this ink is: slow fields, so each colour holds whole plumes.
+		float k = smoothstep(0.3, 0.7, r.x * 0.75 + q.y * 0.45 - 0.08);
+		k += ColorB.a > 0.0 ? (q.x - 0.5) * 1.2 : 0.0;
+		vec3 hue = vPalette(k);
+		col = hue * ink * 1.15;
+		// The densest strands glow white hot, and a haze of the other colour fills the dark around them.
+		col += (vec3(1.0) - hue) * smoothstep(0.85, 1.9, ink) * ink * 0.38;
+		col += vPalette(1.0 - k) * 0.03 * smoothstep(0.3, 0.75, smoke) * (0.4 + 0.6 * q.y);
+	}
+	col += vStarsW(rd, t, Settings.z, (1.0 - min(ink, 1.0)) * 0.8 * Timing.w);
 	col *= smoothstep(-0.05, 0.25, up);
 	col *= Settings.x;
 	return col / (1.0 + col * 0.25);
+}
+
+// The colour of Plasma at k (0..1): violet, magenta, cyan and a little gold of its own, or the two picked
+// colours there and back with white in between.
+vec3 vPlasmaColor(float k) {
+	if (ColorA.a > 0.5) {
+		float tri = 1.0 - abs(fract(k) * 2.0 - 1.0);
+		return mix(vPalette(tri), vec3(1.0), 0.16 * (0.5 - 0.5 * cos(k * V_TAU * 2.0)));
+	}
+	vec3 c = mix(vec3(0.33, 0.12, 0.95), vec3(1.0, 0.18, 0.62), smoothstep(0.0, 0.36, k));
+	c = mix(c, vec3(0.1, 0.78, 1.0), smoothstep(0.36, 0.7, k));
+	return mix(c, vec3(1.0, 0.78, 0.35), smoothstep(0.74, 1.0, k));
+}
+
+// Plasma: slow rivers of coloured light folding into each other across the whole sky, bright veins where they
+// crease, and dark gaps between them where the stars show through.
+vec3 vSkyPlasma(vec3 rd, float t) {
+	float up = rd.y;
+	vec2 uv = rd.xz / (abs(up) + 0.42) * 0.8;
+	uv += vec2(t * 0.006, -t * 0.0045);
+	vec2 q = vec2(vFbm2(uv * 0.75 + vec2(0.0, t * 0.016), 4), vFbm2(uv * 0.75 + vec2(4.1, 2.7) - t * 0.013, 4));
+	vec2 r = vec2(vFbm2(uv * 1.15 + q * 2.6 + vec2(1.7, 9.2) + t * 0.011, 5), vFbm2(uv * 1.15 + q * 2.6 + vec2(8.3, 2.8) - t * 0.009, 5));
+	float f = vFbm2(uv * 1.35 + r * 2.4, 5);
+	float veins = vRidged2(uv * 1.7 + r * 2.9 + vec2(t * 0.012, 0.0), 5);
+	veins = veins * veins * veins;
+	// The colour runs with the warp, so each river keeps a hue of its own and they meet in gradients.
+	float k = clamp(r.x * 1.3 - 0.18 + (q.y - 0.5) * 0.55, 0.0, 1.0);
+	vec3 hue = vPlasmaColor(k);
+	float body = smoothstep(0.3, 0.8, f);
+	float gaps = smoothstep(0.16, 0.52, q.x + 0.12);
+	vec3 col = hue * (0.04 + 0.5 * body) * gaps;
+	col += hue * veins * (0.95 * gaps + 0.08);
+	col += mix(hue, vec3(1.0), 0.65) * veins * veins * 0.5 * gaps;
+	// A deep glow of the opposite colour, so no part of the sky is flat black.
+	col += vPlasmaColor(1.0 - k) * 0.02;
+	col += vStarsW(rd, t, Settings.z, (1.0 - clamp(body * gaps * 1.2 + veins * 1.5, 0.0, 1.0)) * 0.8 * Timing.w);
+	col *= smoothstep(-0.05, 0.25, up);
+	col += hue * 0.025 * exp(-abs(up) * 14.0);
+	col *= Settings.x;
+	return col / (1.0 + col * 0.3);
+}
+
+// A net of sunlight as it falls through rippling water: the bright borders of a drifting cell pattern.
+float vCaustic(vec2 p, float t) {
+	float border = vVoronoi(p, t).x;
+	float line = 1.0 - smoothstep(0.0, 0.22, border);
+	return line * line * line + exp(-border * 9.0) * 0.18;
+}
+
+// Lagoon: the sky as the surface of clear tropical water seen from below. A net of sunlight drifts and
+// ripples across it, brightest overhead around the sun's glare, shafts of light slant down from it, and the
+// water deepens from bright aqua above to dark blue at the horizon. Recoloured: the water takes the primary
+// colour, the light the secondary.
+vec3 vSkyLagoon(vec3 rd, float t) {
+	float up = max(rd.y, 0.0);
+	vec3 water = mix(vec3(0.02, 0.5, 0.62), vPalette(0.0), ColorA.a);
+	vec3 light = mix(vec3(0.7, 1.0, 0.92), mix(vPalette(1.0), vec3(1.0), 0.35), ColorA.a);
+	// The surface is a plane overhead: flat towards the zenith, compressed towards the horizon.
+	vec2 uv = rd.xz / (abs(rd.y) + 0.22);
+	vec2 flow = vec2(vFbm2(uv * 0.5 + t * 0.03, 3), vFbm2(uv * 0.5 + vec2(5.2, 1.3) - t * 0.025, 3)) - 0.5;
+	vec2 p = uv * 1.25 + flow * 0.9 + vec2(t * 0.02, t * 0.012);
+	float lod = clamp(length(fwidth(p)) * 5.0, 0.0, 1.0);
+	float net = vCaustic(p, t * 0.55) + 0.55 * vCaustic(p * 1.9 + 3.7 - flow * 0.6, t * 0.75 + 2.0);
+	// Towards the horizon the net is too fine to draw: its mean light stands in.
+	net = mix(net, 0.16, lod);
+	// Depth: bright aqua overhead, dark at the horizon; the sun's glare is a soft disc straight up.
+	vec3 deep = water * mix(0.05, 0.62, pow(up, 0.75));
+	float glare = exp(-(1.0 - up) * 6.0);
+	vec3 col = deep + light * glare * 0.3;
+	col += light * net * (0.12 + 0.75 * pow(up, 1.4)) * (0.6 + 0.9 * glare);
+	// Shafts of light: streaks that turn slowly around the zenith and fade towards the horizon.
+	float ang = atan(rd.z, rd.x);
+	float shafts = vNoise2(vec2(ang * 5.0 + t * 0.05, t * 0.08)) * vNoise2(vec2(ang * 11.0 - t * 0.04, 3.0 + t * 0.05));
+	col += light * shafts * shafts * 0.9 * smoothstep(0.0, 0.5, up) * (1.0 - smoothstep(0.75, 1.0, up)) * (0.3 + 0.7 * glare);
+	// Motes drifting in the water glint in the light.
+	col += vStarsW(rd, t * 3.0, Settings.z * 0.35, 0.35 * smoothstep(0.1, 0.6, up) * Timing.w) * light;
+	col *= smoothstep(-0.12, 0.05, rd.y) * 0.85 + 0.15;
+	col *= Settings.x;
+	return col / (1.0 + col * 0.22);
 }
 
 vec3 vSkySynthwave(vec3 rd, float t) {
@@ -1382,9 +1490,9 @@ vec3 vSkySynthwave(vec3 rd, float t) {
 	vec2 az = normalize(sunDirRaw.xz + vec2(1e-3, 0.0));
 	vec3 sunDir = normalize(vec3(az.x, 0.10, az.y));
 	float up = rd.y;
-	vec3 top = mix(vec3(0.04, 0.01, 0.10), ColorA.rgb * 0.12, ColorA.a);
-	vec3 mid = vec3(0.35, 0.05, 0.42);
-	vec3 horizon = mix(vec3(1.0, 0.35, 0.45), ColorB.rgb, ColorA.a);
+	vec3 top = mix(vec3(0.04, 0.01, 0.10), vPalette(0.0) * 0.12, ColorA.a);
+	vec3 mid = mix(vec3(0.35, 0.05, 0.42), mix(vPalette(0.0), vPalette(1.0), 0.45) * 0.42, ColorA.a);
+	vec3 horizon = mix(vec3(1.0, 0.35, 0.45), vPalette(1.0), ColorA.a);
 	vec3 col = mix(horizon, mid, smoothstep(0.0, 0.25, up));
 	col = mix(col, top, smoothstep(0.2, 0.75, up));
 	col += vStars(rd, t, Settings.z) * smoothstep(0.15, 0.5, up) * Timing.w;
@@ -1403,9 +1511,11 @@ vec3 vSkySynthwave(vec3 rd, float t) {
 			float line = fract(suv.y * (6.0 + k) - t * 0.25);
 			stripes = smoothstep(0.0, 0.08, line - k * 0.06);
 		}
-		vec3 sunCol = mix(vec3(1.0, 0.25, 0.55), vec3(1.0, 0.92, 0.35), smoothstep(-0.9, 0.8, suv.y));
+		vec3 sunLow = mix(vec3(1.0, 0.25, 0.55), vPalette(1.0), ColorA.a);
+		vec3 sunHigh = mix(vec3(1.0, 0.92, 0.35), mix(vPalette(0.0), vec3(1.0), 0.55), ColorA.a);
+		vec3 sunCol = mix(sunLow, sunHigh, smoothstep(-0.9, 0.8, suv.y));
 		col = mix(col, sunCol * 1.4, disk * stripes);
-		col += vec3(1.0, 0.3, 0.6) * exp(-max(sd - 1.0, 0.0) * 2.2) * 0.35;
+		col += mix(vec3(1.0, 0.3, 0.6), sunLow, ColorA.a) * exp(-max(sd - 1.0, 0.0) * 2.2) * 0.35;
 	}
 
 	// Below the horizon: neon grid (visible in the menu or from high up).
@@ -1414,7 +1524,7 @@ vec3 vSkySynthwave(vec3 rd, float t) {
 		g.y += t * 1.5;
 		vec2 grid = abs(fract(g * 0.5) - 0.5) / max(fwidth(g * 0.5), vec2(1e-4));
 		float line = 1.0 - min(min(grid.x, grid.y), 1.0);
-		vec3 floorCol = vec3(0.03, 0.0, 0.06) + vec3(1.0, 0.2, 0.8) * line * exp(up * 3.0) * 0.9;
+		vec3 floorCol = vec3(0.03, 0.0, 0.06) + mix(vec3(1.0, 0.2, 0.8), vPalette(1.0), ColorA.a) * line * exp(up * 3.0) * 0.9;
 		col = mix(col, floorCol, (1.0 - smoothstep(-0.02, 0.0, up)));
 	}
 	col += horizon * 0.25 * exp(-abs(up) * 30.0);
@@ -1422,9 +1532,18 @@ vec3 vSkySynthwave(vec3 rd, float t) {
 	return col / (1.0 + col * 0.2);
 }
 
+// Blood Moon in another colour (linear light): its reds become the primary colour, its copper highlights
+// lighter shades of it.
+vec3 vMoonHue(vec3 c) {
+	if (ColorA.a < 0.5) return c;
+	vec3 hue = pow(vPalette(0.0), vec3(2.2));
+	hue /= max(max(hue.r, hue.g), max(hue.b, 0.05));
+	return hue * c.r + (vec3(1.0) - hue) * c.g * 0.9;
+}
+
 // Blood Moon: a huge eclipsed moon, deep red with a brighter copper rim, hangs in a dark crimson
 // sky; ragged clouds drift past it with their edges set alight by its glow, and a red haze lies
-// along the horizon.
+// along the horizon. Recoloured, the whole scene takes the primary colour.
 vec3 vSkyBloodMoon(vec3 rd, float t, int quality) {
 	vec3 moonDir = normalize(MoonDir.xyz);
 	if (moonDir.y < 0.25) moonDir = normalize(vec3(moonDir.x, 0.25, moonDir.z) + vec3(0.0, 0.0, 1e-3));
@@ -1452,6 +1571,7 @@ vec3 vSkyBloodMoon(vec3 rd, float t, int quality) {
 		col = vOver(col, vec4(clouds.rgb, clouds.a * 0.92));
 	}
 	col = vBelowHorizon(col, rd);
+	col = vMoonHue(col);
 	col *= Settings.x;
 	return vToDisplay(vTonemap(col * 1.3));
 }
@@ -1470,8 +1590,8 @@ vec3 vSoftClip(vec3 c) {
 vec3 vSkyCustom(vec3 rd, float t, int quality) {
 	float up = rd.y;
 	// The colours are picked on screen: work in linear light so they come out as picked.
-	vec3 zenith = pow(ColorA.rgb, vec3(2.2));
-	vec3 horizon = pow(ColorB.rgb, vec3(2.2));
+	vec3 zenith = pow(vPalette(0.0), vec3(2.2));
+	vec3 horizon = pow(vPalette(1.0), vec3(2.2));
 	float k = smoothstep(-0.02, 0.8, up);
 	vec3 col = mix(horizon, zenith, k * k * (3.0 - 2.0 * k));
 	col += horizon * 0.12 * exp(-abs(up) * 22.0);
@@ -1515,6 +1635,8 @@ vec3 v1zirSky(vec3 rd, vec2 fragCoord) {
 	else if (preset == PRESET_SYNTHWAVE) col = vSkySynthwave(rd, t);
 	else if (preset == PRESET_BLOOD_MOON) col = vSkyBloodMoon(rd, t, quality);
 	else if (preset == PRESET_CUSTOM) col = vSkyCustom(rd, t, quality);
+	else if (preset == PRESET_PLASMA) col = vSkyPlasma(rd, t);
+	else if (preset == PRESET_LAGOON) col = vSkyLagoon(rd, t);
 	else col = vSkyRealistic(rd, t, quality);
 
 #ifndef V1ZIR_SKY_CACHE

@@ -13,6 +13,8 @@ public enum SkyPreset {
 	INK("Ink", 5, 0xFF060606),
 	SYNTHWAVE("Synthwave", 6, 0xFF5A1848),
 	BLOOD_MOON("Blood Moon", 7, 0xFF1C0305),
+	PLASMA("Plasma", 9, 0xFF0A0614),
+	LAGOON("Lagoon", 10, 0xFF062A3A),
 	CUSTOM("Custom", 8, 0);
 
 	private final String title;

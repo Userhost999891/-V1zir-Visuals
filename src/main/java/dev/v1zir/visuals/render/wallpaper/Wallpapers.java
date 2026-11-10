@@ -47,6 +47,8 @@ public final class Wallpapers {
 		Wallpaper.sky(SkyPreset.SYNTHWAVE),
 		Wallpaper.sky(SkyPreset.SUNSET),
 		Wallpaper.sky(SkyPreset.BLOOD_MOON),
+		Wallpaper.sky(SkyPreset.PLASMA),
+		Wallpaper.sky(SkyPreset.LAGOON),
 		Wallpaper.sky(SkyPreset.REALISTIC)
 	);
 	/** The new mesh gradient greets on the lock screen; Magma, the long-time favourite, stays behind the buttons. */

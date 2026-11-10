@@ -411,20 +411,61 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		skyShot(context, singleplayer, SkyPreset.REALISTIC, 18000, "sky-realistic-night");
 		look(singleplayer, 0, -25);
 		for (SkyPreset preset : List.of(SkyPreset.MAGMA, SkyPreset.AURORA, SkyPreset.NEBULA, SkyPreset.SUNSET,
-			SkyPreset.INK, SkyPreset.SYNTHWAVE, SkyPreset.BLOOD_MOON)) {
+			SkyPreset.INK, SkyPreset.SYNTHWAVE, SkyPreset.BLOOD_MOON, SkyPreset.PLASMA, SkyPreset.LAGOON)) {
 			skyShot(context, singleplayer, preset, 18000, "sky-" + preset.name().toLowerCase().replace('_', '-'));
 		}
+		// Recoloured: Ink in two picked colours and as a rainbow, Magma and the Blood Moon in colours of their own.
+		skyColors(context, "Custom", 0xFFFF3D9A, 0xFF3DA5FF);
+		skyShot(context, singleplayer, SkyPreset.INK, 18000, "sky-ink-custom");
+		skyShot(context, singleplayer, SkyPreset.NEBULA, 18000, "sky-nebula-custom");
+		skyColors(context, "Custom", 0xFF22D3EE, 0xFFA855F7);
+		skyShot(context, singleplayer, SkyPreset.MAGMA, 18000, "sky-magma-custom");
+		skyShot(context, singleplayer, SkyPreset.BLOOD_MOON, 18000, "sky-blood-moon-custom");
+		skyShot(context, singleplayer, SkyPreset.PLASMA, 18000, "sky-plasma-custom");
+		skyColors(context, "Rainbow", 0, 0);
+		skyShot(context, singleplayer, SkyPreset.INK, 18000, "sky-ink-rainbow");
+		context.runOnClient(client -> {
+			ShaderSkyModule sky = ModuleManager.get(ShaderSkyModule.class);
+			sky.colors.reset();
+			sky.colorA.reset();
+			sky.colorB.reset();
+			sky.preset.set(SkyPreset.REALISTIC.title());
+		});
 		context.runOnClient(client -> ModuleManager.get(ShaderSkyModule.class).setEnabled(false, false));
 		bench(context, "world-vanilla-sky-end");
 		context.runOnClient(client -> ModuleManager.get(ShaderSkyModule.class).setEnabled(true, false));
 	}
 
+	/**
+	 * A preset at a time of day. The shot is taken without the sky cache (which takes two refreshes to show a new
+	 * preset, long at the frame rate of CI), the measurement after it with the cache, as the sky is drawn in play.
+	 */
 	private static void skyShot(ClientGameTestContext context, TestSingleplayerContext singleplayer, SkyPreset preset, int time, String name) {
 		singleplayer.getServer().runCommand("time set " + time);
-		context.runOnClient(client -> ModuleManager.get(ShaderSkyModule.class).preset.set(preset.title()));
-		context.waitTicks(20);
+		context.runOnClient(client -> {
+			ShaderSkyModule sky = ModuleManager.get(ShaderSkyModule.class);
+			sky.preset.set(preset.title());
+			sky.cache.set(false);
+			sky.renderScale.set(1.0);
+		});
+		context.waitTicks(6);
 		context.takeScreenshot(name);
+		context.runOnClient(client -> {
+			ShaderSkyModule sky = ModuleManager.get(ShaderSkyModule.class);
+			sky.cache.reset();
+			sky.renderScale.reset();
+		});
 		bench(context, name);
+	}
+
+	/** Where the sky's colours come from, and the two picked ones (ignored unless Custom). */
+	private static void skyColors(ClientGameTestContext context, String source, int primary, int secondary) {
+		context.runOnClient(client -> {
+			ShaderSkyModule sky = ModuleManager.get(ShaderSkyModule.class);
+			sky.colors.set(source);
+			if (primary != 0) sky.colorA.set(primary);
+			if (secondary != 0) sky.colorB.set(secondary);
+		});
 	}
 
 	/** Frame time of a scene the test does not touch, for the CI benchmark table. */

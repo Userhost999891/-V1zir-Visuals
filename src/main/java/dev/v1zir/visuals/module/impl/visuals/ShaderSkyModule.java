@@ -9,10 +9,25 @@ import dev.v1zir.visuals.module.setting.NumberSetting;
 import dev.v1zir.visuals.render.sky.SkyPreset;
 import dev.v1zir.visuals.render.sky.SkyUniforms;
 import dev.v1zir.visuals.util.ColorUtil;
+import dev.v1zir.visuals.util.Theme;
 import net.minecraft.client.world.ClientWorld;
 
+/**
+ * Replaces the sky by a shader preset. Every stylised preset can be recoloured (Colors): with two picked colours,
+ * the theme's accents, or a rainbow whose hue turns slowly; Realistic and Sunset keep the colours of their light.
+ */
 public final class ShaderSkyModule extends Module {
+	private static final int PRESET_COLORS = 0;
+	private static final int CUSTOM_COLORS = 1;
+	private static final int THEME_COLORS = 2;
+	private static final int RAINBOW_COLORS = 3;
+
 	public final ModeSetting preset = add(new ModeSetting("Preset", SkyPreset.MAGMA.title(), SkyPreset.titles()));
+	public final ModeSetting colors = add(new ModeSetting("Colors", "Preset", "Preset", "Custom", "Theme", "Rainbow"));
+	public final ColorSetting colorA = add(new ColorSetting("Primary color", 0xFFB45CFF, false).visibleIf(this::colorsVisible));
+	public final ColorSetting colorB = add(new ColorSetting("Secondary color", 0xFF4FD8FF, false).visibleIf(this::colorsVisible));
+	public final NumberSetting rainbowSpeed = add(new NumberSetting("Rainbow speed", 1.0, 0.1, 5.0, 0.05).suffix("x")
+		.visibleIf(() -> colorMode(currentPreset()) == RAINBOW_COLORS));
 	public final NumberSetting brightness = add(new NumberSetting("Brightness", 1.0, 0.2, 2.0, 0.05));
 	public final NumberSetting speed = add(new NumberSetting("Speed", 1.0, 0.0, 4.0, 0.05).suffix("x"));
 	public final ModeSetting quality = add(new ModeSetting("Quality", "Medium", "Low", "Medium", "High"));
@@ -26,9 +41,8 @@ public final class ShaderSkyModule extends Module {
 	public final NumberSetting coverage = add(new NumberSetting("Cloud coverage", 0.45, 0.0, 1.0, 0.01).visibleIf(clouds::on));
 	public final BoolSetting hideVanillaClouds = add(new BoolSetting("Hide vanilla clouds", true));
 	public final NumberSetting stars = add(new NumberSetting("Stars", 1.0, 0.0, 3.0, 0.05));
-	public final BoolSetting customColors = add(new BoolSetting("Custom colors", false));
-	public final ColorSetting colorA = add(new ColorSetting("Primary color", 0xFFFFFFFF, false).visibleIf(this::colorsVisible));
-	public final ColorSetting colorB = add(new ColorSetting("Secondary color", 0xFF8A5CFF, false).visibleIf(this::colorsVisible));
+	/** The switch Colors replaced; a config that still has it on is moved over to Colors: Custom. */
+	public final BoolSetting customColors = add(new BoolSetting("Custom colors", false).visibleIf(() -> false));
 	public final BoolSetting vanillaCelestial = add(new BoolSetting("Vanilla sun & moon", false));
 	public final BoolSetting syncFog = add(new BoolSetting("Sync fog", true));
 	public final BoolSetting endSky = add(new BoolSetting("Replace End sky", false));
@@ -42,7 +56,18 @@ public final class ShaderSkyModule extends Module {
 	}
 
 	private boolean colorsVisible() {
-		return customColors.on() || preset.is(SkyPreset.CUSTOM.title());
+		return colorMode(currentPreset()) == CUSTOM_COLORS;
+	}
+
+	/** Where the preset's colours come from: its own, the two picked ones (always for Custom), the theme or the rainbow. */
+	private int colorMode(SkyPreset p) {
+		if (customColors.on()) {
+			// From before Colors existed.
+			customColors.set(false);
+			if (colors.index() == PRESET_COLORS) colors.set("Custom");
+		}
+		int mode = colors.index();
+		return mode == PRESET_COLORS && p == SkyPreset.CUSTOM ? CUSTOM_COLORS : mode;
 	}
 
 	public SkyPreset currentPreset() {
@@ -69,8 +94,14 @@ public final class ShaderSkyModule extends Module {
 	public int fogColor() {
 		if (!syncFog.on()) return 0;
 		SkyPreset p = currentPreset();
-		if (p == SkyPreset.CUSTOM) return colorB.argb();
-		if (customColors.on() && (p == SkyPreset.MAGMA || p == SkyPreset.INK)) return ColorUtil.darken(colorA.argb(), 0.97f);
+		int mode = colorMode(p);
+		// The rainbow's hue is the shader's: a dark neutral fog goes with all of it.
+		if (mode == RAINBOW_COLORS) return p == SkyPreset.CUSTOM ? 0xFF14141C : p.fogColor();
+		int a = mode == THEME_COLORS ? Theme.accent() : colorA.argb();
+		int b = mode == THEME_COLORS ? Theme.accent2() : colorB.argb();
+		if (p == SkyPreset.CUSTOM) return 0xFF000000 | b;
+		if (mode != PRESET_COLORS && (p == SkyPreset.MAGMA || p == SkyPreset.INK || p == SkyPreset.PLASMA)) return ColorUtil.darken(0xFF000000 | a, 0.97f);
+		if (mode != PRESET_COLORS && p == SkyPreset.LAGOON) return ColorUtil.darken(0xFF000000 | a, 0.75f);
 		return p.fogColor();
 	}
 
@@ -89,12 +120,13 @@ public final class ShaderSkyModule extends Module {
 		data.extra.set(1f, clouds.on() ? 1f : 0f, vanillaCelestial.on() ? 1f : 0f, 0f);
 	}
 
+	/** The colours of the preset: strength in colorA.w (0 keeps the preset's own), the rainbow's speed in colorB.w (0 for none). */
 	public void fillColors(SkyUniforms.Data data, SkyPreset p) {
-		boolean custom = customColors.on() || p == SkyPreset.CUSTOM;
-		float[] a = ColorUtil.rgbFloats(colorA.argb());
-		float[] b = ColorUtil.rgbFloats(colorB.argb());
-		data.colorA.set(a[0], a[1], a[2], custom ? 1f : 0f);
-		data.colorB.set(b[0], b[1], b[2], custom ? 1f : 0f);
+		int mode = colorMode(p);
+		float[] a = ColorUtil.rgbFloats(mode == THEME_COLORS ? Theme.accent() : colorA.argb());
+		float[] b = ColorUtil.rgbFloats(mode == THEME_COLORS ? Theme.accent2() : colorB.argb());
+		data.colorA.set(a[0], a[1], a[2], mode != PRESET_COLORS ? 1f : 0f);
+		data.colorB.set(b[0], b[1], b[2], mode == RAINBOW_COLORS ? rainbowSpeed.f() : 0f);
 	}
 
 	/** Same sky angle formula vanilla uses for the overworld (0 = noon). */
