@@ -3,7 +3,7 @@
 layout(std140) uniform WorldParams {
 	mat4 WorldProj;
 	mat4 WorldView;
-	vec4 WorldTime;
+	vec4 WorldTime; // x = seconds, y = camera height modulo 64 blocks, z = height of the frame in pixels
 };
 
 in vec2 texCoord0;
@@ -33,15 +33,33 @@ float rippleSky(vec3 view, vec3 n, out vec3 bounce) {
 	return (0.04 + 0.96 * m * m * m * m * m) * (0.35 + 0.65 * clamp((bounce.y + 0.1) * 2.0, 0.0, 1.0));
 }
 
+float hash21(vec2 p) {
+	vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+	p3 += dot(p3, p3.yzx + 33.33);
+	return fract((p3.x + p3.y) * p3.z);
+}
+
+float valueNoise(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = p - i;
+	f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(hash21(i), hash21(i + vec2(1.0, 0.0)), f.x), mix(hash21(i + vec2(0.0, 1.0)), hash21(i + 1.0), f.x), f.y);
+}
+
 // UV0 selects the falloff of every effect quad:
 //   v < -1.5                 face of a rounded box: glowing rounded border (see Draw3D.roundedBox),
 //                            thin when u < 0
 //   v > 8                    water ripple disc (see Draw3D.ripple)
+//   u in (5, 7)              hologram: scan lines at fixed heights in the world, a band of light
+//                            sweeping up through them (Chams)
+//   u in (7, 9)              window into space: a starfield and drifting nebula fixed to the screen,
+//                            in the vertex colour (Chams)
 //   u > 2                    solid quad, no falloff
 //   v in [2, 4], u in [-1,1] camera facing orb, radial falloff around (0, 3)
 //   otherwise                glowing ribbon, falloff across u in [-1, 1]
 void main() {
 	float a;
+	vec3 rgb = vertexColor.rgb;
 	if (texCoord0.y < -1.5) {
 		// UV0 = (16 qu + px, py - 16 qv - 8): position p on the face around its centre and the
 		// half size h = q / 64, packed so that interpolation keeps both exact. A negative u asks for
@@ -91,6 +109,34 @@ void main() {
 		} else {
 			a = clamp(-change * 1.3, 0.0, 0.55) * edge;
 		}
+	} else if (texCoord0.x > 7.0) {
+		// Fixed to the screen, so the body is a moving window onto one sky: crisp stars that twinkle, two of
+		// their layers drifting at different speeds, over nebula clouds in the colour and a little of its
+		// neighbouring hue.
+		float t = WorldTime.x;
+		vec2 sp = gl_FragCoord.xy / max(WorldTime.z, 1.0);
+		float clouds = valueNoise(sp * 5.0 + vec2(t * 0.03, 0.0)) * 0.6 + valueNoise(sp * 11.0 - vec2(0.0, t * 0.04)) * 0.4;
+		float veil = valueNoise(sp * 3.0 + vec2(7.3, t * 0.02));
+		rgb = mix(rgb * 0.1, mix(rgb, rgb.brg, 0.55 * veil), smoothstep(0.3, 0.85, clouds));
+		for (int layer = 0; layer < 2; layer++) {
+			vec2 g = sp * (layer == 0 ? 70.0 : 120.0) + vec2(t * (layer == 0 ? 0.25 : 0.12), float(layer) * 17.0);
+			vec2 cell = floor(g);
+			float h = hash21(cell + float(layer) * 31.0);
+			vec2 at = fract(g) - 0.5 - (vec2(hash21(cell + 3.1), hash21(cell + 7.7)) - 0.5) * 0.6;
+			float star = step(0.9, h) * smoothstep(layer == 0 ? 0.16 : 0.11, 0.0, length(at)) * (0.55 + 0.45 * sin(t * 2.5 + h * 60.0));
+			rgb += vec3(star);
+		}
+		a = 1.0;
+	} else if (texCoord0.x > 5.0) {
+		// Scan lines that stand still in the world while the body moves through them, a slow flicker, and
+		// a bright band that sweeps up every few seconds.
+		float t = WorldTime.x;
+		float y = relPos.y + WorldTime.y;
+		float line = 0.5 + 0.5 * sin(y * 88.0 - t * 5.0);
+		float band = exp(-pow((fract(y * 0.4 - t * 0.35) - 0.5) * 9.0, 2.0));
+		float flicker = 0.9 + 0.1 * sin(t * 37.0 + floor(y * 14.0) * 5.0);
+		a = (0.3 + 0.7 * line * line) * flicker + band * 0.9;
+		rgb = mix(rgb, vec3(1.0), band * 0.6);
 	} else if (texCoord0.x > 2.0) {
 		a = 1.0;
 	} else if (texCoord0.y >= 1.5) {
@@ -103,5 +149,5 @@ void main() {
 		a *= 1.0 - smoothstep(0.9, 1.0, x);
 	}
 	if (a <= 0.003) discard;
-	fragColor = vec4(vertexColor.rgb, vertexColor.a * min(a, 1.0));
+	fragColor = vec4(min(rgb, vec3(1.0)), vertexColor.a * min(a, 1.0));
 }

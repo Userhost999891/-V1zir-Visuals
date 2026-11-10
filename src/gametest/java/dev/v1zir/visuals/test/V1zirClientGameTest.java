@@ -799,14 +799,22 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 
 	/** Target ESP around a husk the player "hit": every mode in turn, then Ghosts again right after a hit (swollen, flashing red). */
 	private static void targetEsp(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
-		look(singleplayer, 0, 6);
-		singleplayer.getServer().runCommand("execute as @a at @s run summon minecraft:husk ^ ^ ^3.6 "
+		look(singleplayer, 0, 4);
+		plainFov(context, true);
+		singleplayer.getServer().runCommand("execute as @a at @s run summon minecraft:husk ^ ^ ^3.2 "
 			+ "{NoAI:1b,Silent:1b,PersistenceRequired:1b,Tags:[\"v1zir_esp\"],DeathLootTable:\"minecraft:empty\"}");
 		context.waitTicks(15);
 		boolean wasOn = context.computeOnClient(client -> {
 			TargetEspModule esp = ModuleManager.get(TargetEspModule.class);
 			boolean on = esp.isEnabled();
 			esp.setEnabled(true, false);
+			return on;
+		});
+		// The Target HUD's card would sit right over the husk.
+		boolean hudWasOn = context.computeOnClient(client -> {
+			TargetHudModule hud = ModuleManager.get(TargetHudModule.class);
+			boolean on = hud.isEnabled();
+			hud.setEnabled(false, false);
 			return on;
 		});
 		for (String mode : List.of("Ghosts", "Ring", "Marker", "Helix", "Orbit", "Crystals")) {
@@ -831,9 +839,23 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			TargetEspModule esp = ModuleManager.get(TargetEspModule.class);
 			esp.mode.reset();
 			esp.setEnabled(wasOn, false);
+			ModuleManager.get(TargetHudModule.class).setEnabled(hudWasOn, false);
 		});
+		plainFov(context, false);
 		singleplayer.getServer().runCommand("kill @e[tag=v1zir_esp]");
 		context.waitTicks(25);
+	}
+
+	/**
+	 * The speed effect the test player has widens the field of view, which makes everything a few blocks away small:
+	 * close-ups switch that off for their shots.
+	 */
+	private static void plainFov(ClientGameTestContext context, boolean plain) {
+		context.runOnClient(client -> {
+			if (plain) client.options.getFovEffectScale().setValue(0.0);
+			else client.options.getFovEffectScale().setValue(1.0);
+		});
+		context.waitTicks(12);
 	}
 
 	/** The living entity nearest to the player (the mob a test summoned in front of them). */
@@ -939,6 +961,11 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		singleplayer.getServer().runCommand("execute as @a at @s run tp @s ^ ^ ^2");
 		context.waitTicks(5);
 		context.takeScreenshot("chams-crystal-close");
+		for (String style : List.of("Hologram", "Galaxy", "Wireframe", "Rainbow")) {
+			context.runOnClient(client -> ModuleManager.get(ChamsModule.class).style.set(style));
+			context.waitTicks(5);
+			context.takeScreenshot("chams-" + style.toLowerCase(Locale.ROOT) + "-close");
+		}
 		singleplayer.getServer().runCommand("execute as @a at @s run tp @s ^ ^ ^-2");
 		context.runOnClient(client -> {
 			ModuleManager.get(ChamsModule.class).style.set("Flat");
@@ -991,9 +1018,12 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			kills.mode.set("Ghost");
 			kills.duration.set(1.5);
 		});
-		singleplayer.getServer().runCommand("execute as @a at @s run summon minecraft:mannequin ^ ^ ^4 {Silent:1b,Tags:[\"v1zir_kill\"]}");
-		singleplayer.getServer().runCommand("execute as @a at @s run tp @e[tag=v1zir_kill] ^ ^ ^4 facing entity @s");
+		look(singleplayer, 0, -8);
+		plainFov(context, true);
+		singleplayer.getServer().runCommand("execute as @a at @s run summon minecraft:mannequin ~ ~ ~3.4 {Silent:1b,Tags:[\"v1zir_kill\"]}");
+		singleplayer.getServer().runCommand("execute as @a at @s run tp @e[tag=v1zir_kill] ~ ~ ~3.4 facing entity @s");
 		context.waitTicks(20);
+		context.takeScreenshot("kill-ghost-before");
 		singleplayer.getServer().runCommand("kill @e[tag=v1zir_kill]");
 		context.waitTicks(6);
 		context.takeScreenshot("kill-ghost");
@@ -1004,6 +1034,8 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.waitTicks(16);
 		context.takeScreenshot("kill-ghost-embers");
 		context.waitTicks(60);
+		plainFov(context, false);
+		look(singleplayer, 0, 2);
 		context.runOnClient(client -> {
 			KillEffectsModule kills = ModuleManager.get(KillEffectsModule.class);
 			kills.setEnabled(wasOn, false);

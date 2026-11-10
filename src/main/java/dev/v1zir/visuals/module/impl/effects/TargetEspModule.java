@@ -26,7 +26,9 @@ import java.util.function.IntUnaryOperator;
  * comet tails (Ghosts), a ring gliding up and down it (Ring), lock-on brackets (Marker), a double helix of light
  * winding up around it (Helix), three tilted rings with a spark racing along each like an atom (Orbit), or glowing
  * cubes tumbling around it (Crystals). It grows in when the fight starts, fades out after it, and on every hit it
- * swells and flashes towards red. Everything is a closed formula of the time, so it costs a few quads per frame.
+ * swells and flashes towards red. Everything is drawn twice: as light added to the scene, which glows at night,
+ * and as a blended body of the colour under it, which is what shows against a bright sky or snow. Everything is a
+ * closed formula of the time, so it costs a few hundred quads per frame.
  */
 public final class TargetEspModule extends Module implements WorldEffect {
 	private static final int HURT = 0xFFFF3B4F;
@@ -61,6 +63,9 @@ public final class TargetEspModule extends Module implements WorldEffect {
 	private final Vector3f axisB = new Vector3f();
 	private int ringColor;
 	private final IntUnaryOperator ringColorAt = i -> ringColor;
+	/** This frame's batches: light added to the scene, and the blended body under it. */
+	private WorldEffectRenderer.Mesh glow;
+	private WorldEffectRenderer.Mesh solid;
 	/** The entity being drawn; kept while the marker fades out after the fight. */
 	private LivingEntity shown;
 	private int lastHurtTime;
@@ -119,7 +124,10 @@ public final class TargetEspModule extends Module implements WorldEffect {
 		int c2 = ColorUtil.lerp(themeColor.on() ? Theme.accent2() : color2.argb(), HURT, flash);
 		// Grows into place while fading in, and swells a little with every hit.
 		float s = size.f() * (0.8f + 0.2f * Anim.easeOutCubic(fade)) * (1f + 0.1f * hit);
-		WorldEffectRenderer.Mesh mesh = throughWalls.on() ? WorldEffectRenderer.glowThrough() : WorldEffectRenderer.glow();
+		boolean through = throughWalls.on();
+		glow = through ? WorldEffectRenderer.glowThrough() : WorldEffectRenderer.glow();
+		solid = through ? WorldEffectRenderer.translucentThrough() : WorldEffectRenderer.translucent();
+		WorldEffectRenderer.Mesh mesh = glow;
 		switch (mode.get()) {
 			case "Ring" -> ring(mesh, pos, w, h, t, s, c1, c2);
 			case "Marker" -> marker(mesh, pos, h, t, s, hit, c1, c2);
@@ -132,6 +140,18 @@ public final class TargetEspModule extends Module implements WorldEffect {
 
 	private int alpha(int color, float a) {
 		return ColorUtil.withAlpha(color, Math.round(Math.max(0f, Math.min(255f, 255f * a * fade * brightness.f()))));
+	}
+
+	/** A glowing orb with a smaller blended body of its colour in it. */
+	private void orb(double x, double y, double z, float size, int color, float a) {
+		glow.orb(x, y, z, size, alpha(color, a));
+		solid.orb(x, y, z, size * 0.6f, alpha(color, Math.min(1f, a * 1.1f)));
+	}
+
+	/** A glowing line with a thinner blended body of its colours in it. */
+	private void line(double x0, double y0, double z0, double x1, double y1, double z1, float width, int c0, float a0, int c1, float a1) {
+		Draw3D.line(glow, x0, y0, z0, x1, y1, z1, width, alpha(c0, a0), alpha(c1, a1));
+		Draw3D.line(solid, x0, y0, z0, x1, y1, z1, width * 0.62f, alpha(c0, Math.min(1f, a0 * 1.1f)), alpha(c1, Math.min(1f, a1 * 1.1f)));
 	}
 
 	// ------------------------------------------------------------------ ghosts
@@ -163,16 +183,16 @@ public final class TargetEspModule extends Module implements WorldEffect {
 			for (int k = 1; k <= TAIL; k++) {
 				ghostAt(pos, w, h, t - k * TAIL_STEP, s, g, p);
 				float f0 = 1f - (k - 1) / (float) TAIL, f1 = 1f - k / (float) TAIL;
-				Draw3D.line(mesh, px, py, pz, p[0], p[1], p[2], (0.17f * f0 + 0.02f) * s,
-					alpha(ColorUtil.lerp(tail, head, f0), 0.8f * f0 * f0 * near), alpha(ColorUtil.lerp(tail, head, f1), 0.8f * f1 * f1 * near));
+				line(px, py, pz, p[0], p[1], p[2], (0.2f * f0 + 0.025f) * s,
+					ColorUtil.lerp(tail, head, f0), 0.85f * f0 * f0 * near, ColorUtil.lerp(tail, head, f1), 0.85f * f1 * f1 * near);
 				// A few soft puffs along the first half give the tail some body.
-				if (k % 3 == 0 && k <= TAIL / 2) mesh.orb(p[0], p[1], p[2], 0.2f * f1 * s, alpha(ColorUtil.lerp(tail, head, f1), 0.4f * f1 * near));
+				if (k % 3 == 0 && k <= TAIL / 2) mesh.orb(p[0], p[1], p[2], 0.22f * f1 * s, alpha(ColorUtil.lerp(tail, head, f1), 0.4f * f1 * near));
 				px = p[0];
 				py = p[1];
 				pz = p[2];
 			}
-			mesh.orb(hx, hy, hz, 0.3f * s, alpha(head, 0.75f * near));
-			mesh.orb(hx, hy, hz, 0.11f * s, alpha(0xFFFFFFFF, 0.95f * near));
+			orb(hx, hy, hz, 0.34f * s, head, 0.8f * near);
+			orb(hx, hy, hz, 0.13f * s, 0xFFFFFFFF, 0.95f * near);
 		}
 	}
 
@@ -188,7 +208,7 @@ public final class TargetEspModule extends Module implements WorldEffect {
 		float velocity = (float) Math.cos(t * 2.0);
 		double y = pos.y + 0.05 + wave * (h - 0.1);
 		double tail = y - velocity * h * 0.32;
-		double rim = 0.035 * s;
+		double rim = 0.05 * s;
 		float spin = t * 0.6f;
 		for (int i = 0; i < SEGMENTS; i++) {
 			double a0 = TAU * i / SEGMENTS;
@@ -204,22 +224,32 @@ public final class TargetEspModule extends Module implements WorldEffect {
 			mesh.vertex(x0, tail, z0, 3f, 0f, alpha(col0, 0f));
 			mesh.vertex(x1, tail, z1, 3f, 0f, alpha(col1, 0f));
 			mesh.vertex(x1, y, z1, 3f, 0f, alpha(col1, 0.36f));
-			// Rim: a thin band with the glow falloff across it.
-			mesh.vertex(x0, y - rim, z0, -1f, 0f, alpha(col0, 1f));
-			mesh.vertex(x0, y + rim, z0, 1f, 0f, alpha(col0, 1f));
-			mesh.vertex(x1, y + rim, z1, 1f, 1f, alpha(col1, 1f));
-			mesh.vertex(x1, y - rim, z1, -1f, 1f, alpha(col1, 1f));
+			// Rim: a thin band with the glow falloff across it, and its blended body.
+			for (int pass = 0; pass < 2; pass++) {
+				WorldEffectRenderer.Mesh band = pass == 0 ? mesh : solid;
+				double half = pass == 0 ? rim : rim * 0.7;
+				band.vertex(x0, y - half, z0, -1f, 0f, alpha(col0, 1f));
+				band.vertex(x0, y + half, z0, 1f, 0f, alpha(col0, 1f));
+				band.vertex(x1, y + half, z1, 1f, 1f, alpha(col1, 1f));
+				band.vertex(x1, y - half, z1, -1f, 1f, alpha(col1, 1f));
+			}
+			// The curtain's body, fainter than its light.
+			solid.vertex(x0, y, z0, 3f, 0f, alpha(col0, 0.22f));
+			solid.vertex(x0, tail, z0, 3f, 0f, alpha(col0, 0f));
+			solid.vertex(x1, tail, z1, 3f, 0f, alpha(col1, 0f));
+			solid.vertex(x1, y, z1, 3f, 0f, alpha(col1, 0.22f));
 		}
 		// The second ring, where the first one is not.
 		double y2 = pos.y + 0.05 + (1f - wave) * (h - 0.1);
-		ringColor = alpha(ColorUtil.lerp(c1, c2, 0.5f), 0.4f);
+		ringColor = alpha(ColorUtil.lerp(c1, c2, 0.5f), 0.5f);
 		Draw3D.bandRing(mesh, pos.x, y2, pos.z, r * 0.86, rim * 0.7, SEGMENTS, ringColorAt);
+		Draw3D.bandRing(solid, pos.x, y2, pos.z, r * 0.86, rim * 0.45, SEGMENTS, ringColorAt);
 		for (int i = 0; i < 4; i++) {
 			double a = t * 1.9 + i * TAU / 4;
 			double x = pos.x + Math.cos(a) * r, z = pos.z + Math.sin(a) * r;
 			float near = Draw3D.cameraFade(x, y, z, 0.5f, 1.4f);
-			mesh.orb(x, y, z, 0.13f * s, alpha(i % 2 == 0 ? c1 : c2, 0.7f * near));
-			mesh.orb(x, y, z, 0.045f * s, alpha(0xFFFFFFFF, 0.95f * near));
+			orb(x, y, z, 0.15f * s, i % 2 == 0 ? c1 : c2, 0.75f * near);
+			orb(x, y, z, 0.055f * s, 0xFFFFFFFF, 0.95f * near);
 		}
 	}
 
@@ -242,15 +272,15 @@ public final class TargetEspModule extends Module implements WorldEffect {
 			corners[i * 3 + 1] = cy + right.y * ox + up.y * oy;
 			corners[i * 3 + 2] = cz + right.z * ox + up.z * oy;
 		}
-		float width = 0.06f * s;
+		float width = 0.075f * s;
 		for (int i = 0; i < 4; i++) {
 			int color = i % 2 == 0 ? c1 : c2;
 			bracketArm(mesh, i, (i + 1) % 4, width, color);
 			bracketArm(mesh, i, (i + 3) % 4, width, color);
-			mesh.orb(corners[i * 3], corners[i * 3 + 1], corners[i * 3 + 2], 0.09f * s, alpha(0xFFFFFFFF, 0.85f));
+			orb(corners[i * 3], corners[i * 3 + 1], corners[i * 3 + 2], 0.1f * s, 0xFFFFFFFF, 0.85f);
 		}
 		// A soft dot in the middle, brighter with every hit.
-		mesh.orb(cx, cy, cz, (0.1f + 0.12f * hit) * s, alpha(ColorUtil.lerp(c1, 0xFFFFFFFF, 0.4f), 0.35f + 0.5f * hit));
+		orb(cx, cy, cz, (0.1f + 0.12f * hit) * s, ColorUtil.lerp(c1, 0xFFFFFFFF, 0.4f), 0.35f + 0.5f * hit);
 	}
 
 	/** One arm of a bracket: a third of the way from a corner towards its neighbour, fading out. */
@@ -261,7 +291,7 @@ public final class TargetEspModule extends Module implements WorldEffect {
 		double x1 = x0 + (corners[to * 3] - x0) * 0.34;
 		double y1 = y0 + (corners[to * 3 + 1] - y0) * 0.34;
 		double z1 = z0 + (corners[to * 3 + 2] - z0) * 0.34;
-		Draw3D.line(mesh, x0, y0, z0, x1, y1, z1, width, alpha(color, 0.95f), alpha(color, 0f));
+		line(x0, y0, z0, x1, y1, z1, width, color, 0.95f, color, 0f);
 	}
 
 	// ------------------------------------------------------------------ helix
@@ -277,6 +307,7 @@ public final class TargetEspModule extends Module implements WorldEffect {
 		for (int strand = 0; strand < 2; strand++) {
 			double px = 0, py = 0, pz = 0;
 			int pc = 0;
+			float pa = 0f;
 			for (int i = 0; i <= HELIX_SEGMENTS; i++) {
 				float u = i / (float) HELIX_SEGMENTS;
 				double angle = u * TAU * turns + t * 1.8 + strand * Math.PI;
@@ -287,19 +318,21 @@ public final class TargetEspModule extends Module implements WorldEffect {
 				float pulse = (float) Math.pow(0.5 + 0.5 * Math.sin(u * TAU * 1.5 - t * 3.2 + strand * Math.PI), 2.0);
 				float ends = (float) Math.sin(Math.PI * u);
 				float near = Draw3D.cameraFade(x, y, z, 0.5f, 1.4f);
-				int c = alpha(ColorUtil.lerp(strand == 0 ? c1 : c2, 0xFFFFFFFF, 0.45f * pulse), (0.3f + 0.7f * pulse) * ends * near);
-				if (i > 0) Draw3D.line(mesh, px, py, pz, x, y, z, (0.055f + 0.035f * pulse) * s, pc, c);
-				if (pulse > 0.93f && i % 2 == 0) mesh.orb(x, y, z, 0.13f * s, alpha(0xFFFFFFFF, 0.6f * ends * near));
+				int c = ColorUtil.lerp(strand == 0 ? c1 : c2, 0xFFFFFFFF, 0.45f * pulse);
+				float ca = (0.4f + 0.6f * pulse) * ends * near;
+				if (i > 0) line(px, py, pz, x, y, z, (0.075f + 0.04f * pulse) * s, pc, pa, c, ca);
+				if (pulse > 0.93f && i % 2 == 0) mesh.orb(x, y, z, 0.15f * s, alpha(0xFFFFFFFF, 0.6f * ends * near));
 				// Rungs to the other strand, on the first pass only.
 				if (strand == 0 && i % 5 == 2) {
 					double ox = pos.x - Math.cos(angle) * r, oz = pos.z - Math.sin(angle) * r;
-					int rung = alpha(ColorUtil.lerp(c1, c2, 0.5f), 0.22f * ends * near);
-					Draw3D.line(mesh, x, y, z, ox, y, oz, 0.025f * s, rung, rung);
+					int rung = ColorUtil.lerp(c1, c2, 0.5f);
+					line(x, y, z, ox, y, oz, 0.035f * s, rung, 0.3f * ends * near, rung, 0.3f * ends * near);
 				}
 				px = x;
 				py = y;
 				pz = z;
 				pc = c;
+				pa = ca;
 			}
 		}
 	}
@@ -322,8 +355,9 @@ public final class TargetEspModule extends Module implements WorldEffect {
 			axisA.set(cu, 0f, su);
 			axisB.set(-su * ct, st, cu * ct);
 			int base = j == 0 ? c1 : j == 1 ? c2 : ColorUtil.lerp(c1, c2, 0.5f);
-			ringColor = alpha(base, 0.3f);
-			Draw3D.ring(mesh, cx, cy, cz, axisA.x, axisA.y, axisA.z, axisB.x, axisB.y, axisB.z, radius, 0.018 * s, ORBIT_SEGMENTS, ringColorAt);
+			ringColor = alpha(base, 0.45f);
+			Draw3D.ring(mesh, cx, cy, cz, axisA.x, axisA.y, axisA.z, axisB.x, axisB.y, axisB.z, radius, 0.03 * s, ORBIT_SEGMENTS, ringColorAt);
+			Draw3D.ring(solid, cx, cy, cz, axisA.x, axisA.y, axisA.z, axisB.x, axisB.y, axisB.z, radius, 0.018 * s, ORBIT_SEGMENTS, ringColorAt);
 			double e = t * (2.6 + 0.5 * j) + j * 2.1;
 			for (int k = 0; k < 7; k++) {
 				double a = e - k * 0.11;
@@ -331,8 +365,8 @@ public final class TargetEspModule extends Module implements WorldEffect {
 				double x = cx + axisA.x * ca + axisB.x * sa, y = cy + axisA.y * ca + axisB.y * sa, z = cz + axisA.z * ca + axisB.z * sa;
 				float f = 1f - k / 7f;
 				float near = Draw3D.cameraFade(x, y, z, 0.5f, 1.4f);
-				mesh.orb(x, y, z, (0.05f + 0.15f * f) * s, alpha(base, 0.75f * f * f * near));
-				if (k == 0) mesh.orb(x, y, z, 0.07f * s, alpha(0xFFFFFFFF, 0.95f * near));
+				orb(x, y, z, (0.06f + 0.17f * f) * s, base, 0.8f * f * f * near);
+				if (k == 0) orb(x, y, z, 0.08f * s, 0xFFFFFFFF, 0.95f * near);
 			}
 		}
 		mesh.orb(cx, cy, cz, (float) (radius * 0.9), alpha(ColorUtil.lerp(c1, c2, 0.5f), 0.1f));
@@ -357,9 +391,10 @@ public final class TargetEspModule extends Module implements WorldEffect {
 			float ax = (float) Math.sin(i * 1.3), ay = 1f, az = (float) Math.cos(i * 2.1);
 			float al = (float) Math.sqrt(ax * ax + ay * ay + az * az);
 			Draw3D.rotation(basis, ax / al, ay / al, az / al, t * (1.6f + 0.3f * i) + i);
-			float half = (0.075f + 0.02f * (float) Math.sin(t * 2.6 + i)) * s;
+			float half = (0.095f + 0.02f * (float) Math.sin(t * 2.6 + i)) * s;
 			Draw3D.cube(mesh, x, y, z, half, basis, alpha(ColorUtil.lerp(c, 0xFFFFFFFF, 0.45f), 0.95f * near));
-			mesh.orb(x, y, z, half * 3.4f, alpha(c, 0.42f * near));
+			Draw3D.cube(solid, x, y, z, half, basis, alpha(c, 0.9f * near));
+			orb(x, y, z, half * 3.4f, c, 0.45f * near);
 			// A short trail of fading sparks along its orbit.
 			for (int j = 1; j <= 3; j++) {
 				double a = angle - j * 0.16;

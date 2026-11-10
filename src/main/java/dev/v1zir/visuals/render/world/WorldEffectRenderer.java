@@ -144,6 +144,8 @@ public final class WorldEffectRenderer {
 
 		if (storage == null) storage = new DynamicUniformStorage<>("V1zir world effects UBO", UBO_SIZE, 4);
 		DATA.time = V1zir.time();
+		DATA.cameraHeight = (float) (camY - Math.floor(camY / 64.0) * 64.0);
+		DATA.frameHeight = mc.getFramebuffer().textureHeight;
 		GpuBufferSlice params = storage.write(DATA);
 		draw(V1zirPipelines.WORLD_TRANSLUCENT, TRANSLUCENT, params);
 		draw(V1zirPipelines.WORLD_GLOW, GLOW, params);
@@ -238,10 +240,13 @@ public final class WorldEffectRenderer {
 	/** One reused block: write() copies it into the buffer right away, so nothing is allocated per frame. */
 	private static final class WorldData implements DynamicUniformStorage.Uploadable {
 		float time;
+		/** Camera height modulo 64 blocks (patterns fixed in the world) and the frame's height in pixels (patterns fixed on screen). */
+		float cameraHeight;
+		float frameHeight;
 
 		@Override
 		public void write(ByteBuffer buffer) {
-			Std140Builder.intoBuffer(buffer).putMat4f(PROJECTION).putMat4f(VIEW).putVec4(time, 0f, 0f, 0f);
+			Std140Builder.intoBuffer(buffer).putMat4f(PROJECTION).putMat4f(VIEW).putVec4(time, cameraHeight, frameHeight, 0f);
 		}
 
 		@Override

@@ -1395,10 +1395,12 @@ vec3 vSkyInk(vec3 rd, float t) {
 		float k = smoothstep(0.3, 0.7, r.x * 0.75 + q.y * 0.45 - 0.08);
 		k += ColorB.a > 0.0 ? (q.x - 0.5) * 1.2 : 0.0;
 		vec3 hue = vPalette(k);
-		col = hue * ink * 1.15;
+		// A colour is darker than the white it replaces: the ink is drawn stronger, and its faint parts lifted,
+		// so the sky is as bright in colour as it is in white.
+		col = hue * (ink * 1.9 + sqrt(ink) * 0.28);
 		// The densest strands glow white hot, and a haze of the other colour fills the dark around them.
-		col += (vec3(1.0) - hue) * smoothstep(0.85, 1.9, ink) * ink * 0.38;
-		col += vPalette(1.0 - k) * 0.03 * smoothstep(0.3, 0.75, smoke) * (0.4 + 0.6 * q.y);
+		col += (vec3(1.0) - hue) * smoothstep(0.7, 1.7, ink) * ink * 0.5;
+		col += vPalette(1.0 - k) * 0.06 * smoothstep(0.3, 0.75, smoke) * (0.4 + 0.6 * q.y);
 	}
 	col += vStarsW(rd, t, Settings.z, (1.0 - min(ink, 1.0)) * 0.8 * Timing.w);
 	col *= smoothstep(-0.05, 0.25, up);
@@ -1434,11 +1436,11 @@ vec3 vSkyPlasma(vec3 rd, float t) {
 	vec3 hue = vPlasmaColor(k);
 	float body = smoothstep(0.3, 0.8, f);
 	float gaps = smoothstep(0.16, 0.52, q.x + 0.12);
-	vec3 col = hue * (0.04 + 0.5 * body) * gaps;
-	col += hue * veins * (0.95 * gaps + 0.08);
-	col += mix(hue, vec3(1.0), 0.65) * veins * veins * 0.5 * gaps;
+	vec3 col = hue * (0.06 + 0.85 * body * body) * gaps;
+	col += hue * veins * (1.6 * gaps + 0.12);
+	col += mix(hue, vec3(1.0), 0.65) * veins * veins * 0.9 * gaps;
 	// A deep glow of the opposite colour, so no part of the sky is flat black.
-	col += vPlasmaColor(1.0 - k) * 0.02;
+	col += vPlasmaColor(1.0 - k) * 0.035;
 	col += vStarsW(rd, t, Settings.z, (1.0 - clamp(body * gaps * 1.2 + veins * 1.5, 0.0, 1.0)) * 0.8 * Timing.w);
 	col *= smoothstep(-0.05, 0.25, up);
 	col += hue * 0.025 * exp(-abs(up) * 14.0);
@@ -1470,10 +1472,10 @@ vec3 vSkyLagoon(vec3 rd, float t) {
 	// Towards the horizon the net is too fine to draw: its mean light stands in.
 	net = mix(net, 0.16, lod);
 	// Depth: bright aqua overhead, dark at the horizon; the sun's glare is a soft disc straight up.
-	vec3 deep = water * mix(0.05, 0.62, pow(up, 0.75));
-	float glare = exp(-(1.0 - up) * 6.0);
-	vec3 col = deep + light * glare * 0.3;
-	col += light * net * (0.12 + 0.75 * pow(up, 1.4)) * (0.6 + 0.9 * glare);
+	vec3 deep = water * mix(0.07, 0.8, pow(up, 0.75));
+	float glare = exp(-(1.0 - up) * 5.0);
+	vec3 col = deep + light * glare * 0.45;
+	col += light * net * (0.22 + 1.1 * pow(up, 1.2)) * (0.7 + 1.1 * glare);
 	// Shafts of light: streaks that turn slowly around the zenith and fade towards the horizon.
 	float ang = atan(rd.z, rd.x);
 	float shafts = vNoise2(vec2(ang * 5.0 + t * 0.05, t * 0.08)) * vNoise2(vec2(ang * 11.0 - t * 0.04, 3.0 + t * 0.05));

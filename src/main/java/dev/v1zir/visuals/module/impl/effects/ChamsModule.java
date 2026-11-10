@@ -1,5 +1,6 @@
 package dev.v1zir.visuals.module.impl.effects;
 
+import dev.v1zir.visuals.V1zir;
 import dev.v1zir.visuals.module.Category;
 import dev.v1zir.visuals.module.Module;
 import dev.v1zir.visuals.module.ModuleManager;
@@ -28,7 +29,10 @@ import java.util.Arrays;
  * a tinted shell with a bright fresnel rim and softly glowing edges on every face; Crystal turns the
  * body itself into tinted see-through crystal whose every box is drawn with bright glowing edges, the
  * far ones seen through it, in a soft aura of its colour (Aura); Glow replaces the body by a bright
- * self-lit silhouette with a halo; Flat by one solid colour. The quads of the model are captured
+ * self-lit silhouette with a halo; Flat by one solid colour; Hologram by a flickering projection whose
+ * scan lines stand still in the world while a band of light sweeps up it; Galaxy by a window into space,
+ * stars and nebula fixed to the screen inside its outline; Wireframe by the glowing edges of its boxes
+ * alone; Rainbow by a gradient of hues that climbs it. The quads of the model are captured
  * while vanilla submits it (LivingEntityRendererMixin) and drawn as a shell after the world in the
  * effect batches, depth tested or through walls, so chams add no render pass of their own. Back
  * faces are dropped on the CPU. Never for yourself in first person.
@@ -37,17 +41,27 @@ public final class ChamsModule extends Module implements WorldEffect {
 	private static final int GLASS = 0;
 	private static final int CRYSTAL = 1;
 	private static final int GLOW = 2;
+	private static final int FLAT = 3;
+	private static final int HOLOGRAM = 4;
+	private static final int GALAXY = 5;
+	private static final int WIREFRAME = 6;
+	private static final int RAINBOW = 7;
 	/** How far the shell sits outside the model per style: Glass clears the outer skin layer. */
-	private static final float[] INFLATE = {0.04f, 0.008f, 0.012f, 0.006f};
+	private static final float[] INFLATE = {0.04f, 0.008f, 0.012f, 0.006f, 0.01f, 0.008f, 0.008f, 0.008f};
 	private static final float HALO = 0.07f;
-	/** Face kinds of shell and face: a fill, a glowing rounded border, or a thin one. */
+	/**
+	 * Face kinds of shell and face: a fill, a glowing rounded border or a thin one, and the fills the shader
+	 * patterns: hologram scan lines, or the starfield.
+	 */
 	private static final int NONE = 0;
 	private static final int BORDER = 1;
 	private static final int THIN = 2;
+	private static final int SCAN = 3;
+	private static final int STARS = 4;
 	/** Per captured entity: first quad, quad count, colour. */
 	private static final int SPAN = 3;
 
-	public final ModeSetting style = add(new ModeSetting("Style", "Glass", "Glass", "Crystal", "Glow", "Flat"));
+	public final ModeSetting style = add(new ModeSetting("Style", "Glass", "Glass", "Crystal", "Glow", "Flat", "Hologram", "Galaxy", "Wireframe", "Rainbow"));
 	public final BoolSetting throughWalls = add(new BoolSetting("Through walls", true));
 	public final NumberSetting opacity = add(new NumberSetting("Opacity", 0.75, 0.1, 1.0, 0.05));
 	public final BoolSetting aura = add(new BoolSetting("Aura", true).visibleIf(() -> style.is("Crystal")));
@@ -66,7 +80,7 @@ public final class ChamsModule extends Module implements WorldEffect {
 	private int frame = -1;
 
 	public ChamsModule() {
-		super("Chams", "Players as glass, crystal, glowing or flat silhouettes", Category.COMBAT);
+		super("Chams", "Players as glass, crystal, holograms, a window into space and more", Category.COMBAT);
 		setSubCategory("Target");
 	}
 
@@ -163,6 +177,9 @@ public final class ChamsModule extends Module implements WorldEffect {
 		int type = style.index();
 		float a = opacity.f();
 		float[] q = capture.quads();
+		float time = V1zir.time();
+		// The camera's height (modulo a few blocks), for hues that stay put in the world.
+		float camera = (float) (WorldEffectRenderer.camY - Math.floor(WorldEffectRenderer.camY / 32.0) * 32.0);
 		for (int s = 0; s < spanCount; s++) {
 			int start = spans[s * SPAN], end = start + spans[s * SPAN + 1];
 			int c = spans[s * SPAN + 2];
@@ -187,7 +204,22 @@ public final class ChamsModule extends Module implements WorldEffect {
 						shell(glow, q, o, INFLATE[GLOW], lighter, a * 0.5f, 0f, 0f, BORDER);
 						halo(glow, q, o, c, a * 0.5f);
 					}
-					default -> flat(fill, q, o, INFLATE[3], c, a);
+					case HOLOGRAM -> {
+						shell(fill, q, o, INFLATE[HOLOGRAM], c, a * 0.42f, a * 0.4f, 0.2f, SCAN);
+						shell(glow, q, o, INFLATE[HOLOGRAM], light, a * 0.16f, a * 0.55f, 0.35f, SCAN);
+						face(glow, q, o, INFLATE[HOLOGRAM] + 0.002f, lighter, a * 0.35f, 0f, 0f, THIN);
+					}
+					case GALAXY -> {
+						shell(fill, q, o, INFLATE[GALAXY], c, Math.min(1f, a * 1.25f), 0f, 0f, STARS);
+						shell(glow, q, o, INFLATE[GALAXY], lighter, 0f, a * 0.8f, 0.3f, NONE);
+						halo(glow, q, o, c, a * 0.45f);
+					}
+					case WIREFRAME -> {
+						shell(fill, q, o, INFLATE[WIREFRAME], dark, a * 0.14f, a * 0.12f, 0f, NONE);
+						wire(glow, q, o, lighter, a);
+					}
+					case RAINBOW -> rainbow(fill, glow, q, o, a, time, camera);
+					default -> flat(fill, q, o, INFLATE[FLAT], c, a);
 				}
 			}
 		}
@@ -213,6 +245,35 @@ public final class ChamsModule extends Module implements WorldEffect {
 		face(glow, q, o, INFLATE[CRYSTAL] + 0.002f, edge, front ? a : a * 0.45f, 0f, 0f, THIN);
 	}
 
+	/** Wireframe: the glowing edges of every box, the far ones fainter behind the near ones. */
+	private static void wire(WorldEffectRenderer.Mesh glow, float[] q, int o, int color, float a) {
+		float nx = q[o + 12], ny = q[o + 13], nz = q[o + 14];
+		float cx = (q[o] + q[o + 6]) * 0.5f, cy = (q[o + 1] + q[o + 7]) * 0.5f, cz = (q[o + 2] + q[o + 8]) * 0.5f;
+		boolean front = nx * cx + ny * cy + nz * cz < 0f;
+		face(glow, q, o, INFLATE[WIREFRAME] + 0.002f, color, front ? a : a * 0.3f, 0f, 0f, THIN);
+	}
+
+	/**
+	 * Rainbow: the faces turned to the camera in hues that run up the body and climb it with time (they stay put in
+	 * the world as it moves), denser and lit towards the silhouette.
+	 */
+	private static void rainbow(WorldEffectRenderer.Mesh fill, WorldEffectRenderer.Mesh glow, float[] q, int o, float a, float time, float camera) {
+		float nx = q[o + 12], ny = q[o + 13], nz = q[o + 14];
+		float cx = (q[o] + q[o + 6]) * 0.5f, cy = (q[o + 1] + q[o + 7]) * 0.5f, cz = (q[o + 2] + q[o + 8]) * 0.5f;
+		if (nx * cx + ny * cy + nz * cz >= 0f) return;
+		float inflate = INFLATE[RAINBOW];
+		for (int pass = 0; pass < 2; pass++) {
+			WorldEffectRenderer.Mesh mesh = pass == 0 ? fill : glow;
+			for (int corner = 0; corner < 12; corner += 3) {
+				float y = q[o + corner + 1];
+				float hue = (y + camera) * 0.3f - time * 0.22f;
+				int color = ColorUtil.fromHsv(hue - (float) Math.floor(hue), 0.72f, 1f, 255);
+				if (pass == 0) vertex(mesh, q, o, corner, nx, ny, nz, inflate, 3f, 0f, color, a * 0.55f, a * 0.35f, 0.25f);
+				else vertex(mesh, q, o, corner, nx, ny, nz, inflate, 3f, 0f, color, a * 0.08f, a * 0.6f, 0.4f);
+			}
+		}
+	}
+
 	/**
 	 * One face of the shell, pushed out along its normal, skipped when it faces away. Alpha is base plus rim
 	 * times the squared fresnel term (0 facing the camera, 1 edge on); white lifts the rim towards white.
@@ -235,7 +296,10 @@ public final class ChamsModule extends Module implements WorldEffect {
 							 int edges) {
 		float nx = q[o + 12], ny = q[o + 13], nz = q[o + 14];
 		float u0 = 3f, u1 = 3f, v0 = 0f, v1 = 0f;
-		if (edges != NONE) {
+		if (edges == SCAN || edges == STARS) {
+			// The shader's patterned fills (world_effect.fsh): u picks the pattern.
+			u0 = u1 = edges == SCAN ? 6f : 8f;
+		} else if (edges != NONE) {
 			// The rounded border encoding of Draw3D.roundedBox: half sizes packed next to the position.
 			float hu = 0.5f * length(q[o + 3] - q[o], q[o + 4] - q[o + 1], q[o + 5] - q[o + 2]);
 			float hv = 0.5f * length(q[o + 9] - q[o], q[o + 10] - q[o + 1], q[o + 11] - q[o + 2]);
