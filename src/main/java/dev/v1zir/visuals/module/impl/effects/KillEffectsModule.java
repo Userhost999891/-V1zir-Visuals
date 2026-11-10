@@ -12,6 +12,7 @@ import dev.v1zir.visuals.render.ui.Render2D;
 import dev.v1zir.visuals.render.world.Draw3D;
 import dev.v1zir.visuals.render.world.Effects;
 import dev.v1zir.visuals.render.world.ModelCapture;
+import dev.v1zir.visuals.render.world.PixelBody;
 import dev.v1zir.visuals.render.world.Splatter;
 import dev.v1zir.visuals.render.world.WorldEffect;
 import dev.v1zir.visuals.render.world.WorldEffectRenderer;
@@ -29,6 +30,7 @@ import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.decoration.ArmorStandEntity;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvent;
 import net.minecraft.sound.SoundEvents;
@@ -41,11 +43,13 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.IntUnaryOperator;
 
 /**
- * A finishing effect where an entity dies: a pillar of light from the sky, a branching lightning
- * strike, the body shattering into glowing cubes, a soul rising with a trailing wisp, a burst of
- * blood or a firework. It plays for your kills, or for every death nearby. Everything is client side
- * and purely visual. Paths are closed formulas of the age where they can be; only shards and blood,
- * which land and bounce, are stepped each frame. A soft screen edge flash and a sound are optional.
+ * A finishing effect where an entity dies: its ghost, still in the pose it died in and wearing its
+ * skin, lifted up and falling apart pixel by pixel; a pillar of light from the sky, a branching
+ * lightning strike, the body shattering into glowing cubes, a soul rising with a trailing wisp, a
+ * burst of blood or a firework. It plays for your kills, or for every death nearby. Everything is
+ * client side and purely visual. Paths are closed formulas of the age where they can be; only shards
+ * and blood, which land and bounce, are stepped each frame. A soft screen edge flash and a sound are
+ * optional.
  */
 public final class KillEffectsModule extends Module implements WorldEffect {
 	private static final int PILLAR = 0;
@@ -54,8 +58,11 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 	private static final int SOUL = 3;
 	private static final int BLOOD = 4;
 	private static final int FIREWORK = 5;
+	private static final int GHOST = 6;
 	/** Lifetime of each mode in seconds at Duration 1. */
-	private static final float[] LIFE = {2.6f, 1.8f, 3.2f, 3.0f, 0.6f, 2.8f};
+	private static final float[] LIFE = {2.6f, 1.8f, 3.2f, 3.0f, 0.6f, 2.8f, 4.2f};
+	/** The most cells a ghost is cut into: a whole player skin, every pixel of both layers. */
+	private static final int GHOST_CELLS = 3600;
 	private static final int MAX_EFFECTS = 8;
 	private static final int FULL_BRIGHT = 0xF000F0;
 	private static final float TAU = (float) (Math.PI * 2);
@@ -79,8 +86,12 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 	private static final int FIREWORK_SPARKS = 84;
 	private static final int RING_SPARKS = 24;
 
-	public final ModeSetting mode = add(new ModeSetting("Mode", "Light Pillar", "Light Pillar", "Lightning", "Shatter", "Soul", "Blood Burst", "Firework"));
+	public final ModeSetting mode = add(new ModeSetting("Mode", "Ghost", "Light Pillar", "Lightning", "Shatter", "Soul", "Blood Burst", "Firework", "Ghost"));
 	public final ModeSetting trigger = add(new ModeSetting("Trigger", "Your kills", "Your kills", "All deaths"));
+	public final ModeSetting victims = add(new ModeSetting("Victims", "Everything", "Everything", "Players only"));
+	/** Ghost: how high the body is lifted, and how much of its skin's own colours it keeps (the rest is the effect's colour). */
+	public final NumberSetting ghostRise = add(new NumberSetting("Rise", 2.2, 0.5, 5.0, 0.1).suffix(" m").visibleIf(() -> mode.is("Ghost")));
+	public final NumberSetting ghostSkin = add(new NumberSetting("Skin colors", 0.75, 0.0, 1.0, 0.05).visibleIf(() -> mode.is("Ghost")));
 	public final NumberSetting size = add(new NumberSetting("Size", 1.0, 0.5, 2.0, 0.05).suffix("x"));
 	public final NumberSetting duration = add(new NumberSetting("Duration", 1.0, 0.4, 3.0, 0.05).suffix("x"));
 	public final BoolSetting themeColor = add(new BoolSetting("Theme color", true).visibleIf(() -> !mode.is("Blood Burst")));
@@ -102,7 +113,7 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 	private final IntUnaryOperator ringColorAt = i -> ringColor;
 
 	public KillEffectsModule() {
-		super("Kill Effects", "Light pillar, lightning, shatter, soul, blood or fireworks on kills", Category.COMBAT);
+		super("Kill Effects", "A rising ghost, light pillar, lightning, shatter, soul, blood or fireworks on kills", Category.COMBAT);
 		setSubCategory("Hits");
 	}
 
@@ -122,14 +133,14 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 		return trigger.is("All deaths");
 	}
 
-	/** Whether the entity's body is not drawn this frame because it shattered (EntityRenderManagerMixin). */
+	/** Whether the entity's body is not drawn this frame because it shattered or left as a ghost (EntityRenderManagerMixin). */
 	public static boolean hides(Entity entity) {
 		KillEffectsModule module = ModuleManager.get(KillEffectsModule.class);
 		if (module == null || !module.isEnabled()) return false;
 		List<Kill> list = module.kills;
 		for (int i = 0; i < list.size(); i++) {
 			Kill kill = list.get(i);
-			if (kill.type == SHATTER && kill.entity == entity) return true;
+			if ((kill.type == SHATTER || kill.type == GHOST && kill.body != null) && kill.entity == entity) return true;
 		}
 		return false;
 	}
@@ -138,6 +149,7 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 	public void spawn(LivingEntity entity) {
 		// Your own death would play around the camera; armour stands do not die, they break.
 		if (entity == mc.player || entity instanceof ArmorStandEntity) return;
+		if (victims.index() == 1 && !(entity instanceof PlayerEntity)) return;
 		for (int i = 0; i < kills.size(); i++) {
 			if (kills.get(i).entity == entity) return;
 		}
@@ -151,7 +163,7 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 		Kill kill = new Kill(type, entity, entity.getX(), entity.getY(), entity.getZ(), ground, entity.getWidth(), h, s,
 			LIFE[type] * duration.f(), random.nextFloat() * 100f, System.nanoTime());
 		switch (type) {
-			case PILLAR -> kill.data = motes(random, s);
+			case PILLAR, GHOST -> kill.data = motes(random, s);
 			case LIGHTNING -> {
 				kill.data = bolt(random, s);
 				kill.extra = sparks(random, s);
@@ -184,7 +196,7 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 			case PILLAR -> SoundEvents.BLOCK_BEACON_ACTIVATE;
 			case LIGHTNING -> SoundEvents.ENTITY_LIGHTNING_BOLT_IMPACT;
 			case SHATTER -> SoundEvents.BLOCK_AMETHYST_CLUSTER_BREAK;
-			case SOUL -> SoundEvents.BLOCK_AMETHYST_BLOCK_RESONATE;
+			case SOUL, GHOST -> SoundEvents.BLOCK_AMETHYST_BLOCK_RESONATE;
 			case BLOOD -> SoundEvents.ENTITY_SLIME_SQUISH;
 			default -> SoundEvents.ENTITY_FIREWORK_ROCKET_LARGE_BLAST;
 		};
@@ -243,6 +255,7 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 				case SHATTER -> shatter(kill, age, dt, tickDelta, a1, a2);
 				case SOUL -> soul(kill, age, a1, a2);
 				case BLOOD -> mist(kill, age);
+				case GHOST -> ghost(kill, age, tickDelta, a1, a2);
 				default -> firework(kill, age, a1, a2);
 			}
 		}
@@ -695,6 +708,128 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 		}
 	}
 
+	// ------------------------------------------------------------------ ghost
+
+	/**
+	 * The body turns into its own ghost: still in the pose it died in and wearing its skin, see-through and rimmed
+	 * with light. It is lifted slowly, turning a little as it goes, motes of light spiralling up around it, and from
+	 * the feet up it falls apart pixel by pixel into embers that drift off and go out. The body itself is not drawn
+	 * meanwhile (LivingEntityRendererMixin). Only the faces turned to the camera are drawn while they are whole.
+	 */
+	private void ghost(Kill k, float age, float tickDelta, int a1, int a2) {
+		if (!k.captured) {
+			k.captured = true;
+			k.body = PixelBody.capture(k.entity, tickDelta, GHOST_CELLS);
+		}
+		PixelBody body = k.body;
+		if (body == null) {
+			// Nothing to lift (a renderer without a model): the plain soul rises instead.
+			soul(k, age, a1, a2);
+			return;
+		}
+		WorldEffectRenderer.Mesh fill = WorldEffectRenderer.translucent();
+		WorldEffectRenderer.Mesh glow = WorldEffectRenderer.glow();
+		float s = k.size;
+		float p = age / k.life;
+		float appear = Anim.clamp01(age / 0.18f);
+		// How much of the body is still whole, for the lights that belong to it.
+		float whole = 1f - smooth((p - 0.45f) / 0.4f);
+		float rise = ghostRise.f();
+		float lift = rise * Anim.easeInOutSine(Anim.clamp01(p / 0.85f)) + 0.035f * (float) Math.sin(age * 2.3f) * appear;
+		double ox = k.x + Math.sin(age * 1.1f + k.seed) * 0.05 * appear;
+		double oy = k.y + lift;
+		double oz = k.z + Math.cos(age * 0.9f + k.seed * 1.3f) * 0.05 * appear;
+		float turn = 0.45f * (hash(k.seed) < 0.5f ? -1f : 1f) * Anim.easeInOutSine(p);
+		float cos = (float) Math.cos(turn), sin = (float) Math.sin(turn);
+		float keep = ghostSkin.f();
+		// The camera as the ghost sees it, to tell which faces are turned to it.
+		float camX = (float) (WorldEffectRenderer.camX - ox), camY = (float) (WorldEffectRenderer.camY - oy), camZ = (float) (WorldEffectRenderer.camZ - oz);
+		float[] c = body.cells;
+		int[] colors = body.colors;
+		for (int i = 0; i < body.count; i++) {
+			int o = i * PixelBody.STRIDE;
+			// 0 while the cell is part of the body, 1 once it has broken off and gone out.
+			float d = Anim.clamp01((p - 0.34f - c[o + 12] * 0.44f) / 0.15f);
+			if (d >= 1f) continue;
+			float x = c[o] * cos - c[o + 2] * sin, y = c[o + 1], z = c[o] * sin + c[o + 2] * cos;
+			float nx = c[o + 9] * cos - c[o + 11] * sin, ny = c[o + 10], nz = c[o + 9] * sin + c[o + 11] * cos;
+			float vx = x - camX, vy = y - camY, vz = z - camZ;
+			float facing = -(vx * nx + vy * ny + vz * nz) / Math.max(1e-4f, (float) Math.sqrt(vx * vx + vy * vy + vz * vz));
+			if (d <= 0f && facing <= 0f) continue;
+			int tint = ColorUtil.lerp(a1, a2, c[o + 13]);
+			int base = ColorUtil.lerp(ColorUtil.lerp(tint, colors[i], keep), 0xFFFFFFFF, 0.1f);
+			float ax = c[o + 3] * cos - c[o + 5] * sin, ay = c[o + 4], az = c[o + 3] * sin + c[o + 5] * cos;
+			float bx = c[o + 6] * cos - c[o + 8] * sin, by = c[o + 7], bz = c[o + 6] * sin + c[o + 8] * cos;
+			if (d <= 0f) {
+				// Faces seen edge on are the silhouette: they are denser and glow.
+				float rim = (1f - facing) * (1f - facing);
+				quad(fill, ox + x, oy + y, oz + z, ax, ay, az, bx, by, bz, ColorUtil.fade(base, appear * (0.5f + 0.4f * rim)));
+				if (rim > 0.18f) quad(glow, ox + x, oy + y, oz + z, ax, ay, az, bx, by, bz, ColorUtil.fade(tint, appear * 0.55f * rim));
+				continue;
+			}
+			// Broken off: it drifts up and away from the body, swirling, shrinking, white hot at first and then an
+			// ember of the effect's colour that goes out.
+			float e = d * d;
+			float swirl = c[o + 12] * 40f + age * 3f;
+			float px = x + nx * e * 0.4f + (float) Math.sin(swirl) * e * 0.16f;
+			float py = y + ny * e * 0.25f + e * 0.9f + d * 0.12f;
+			float pz = z + nz * e * 0.4f + (float) Math.cos(swirl * 1.3f) * e * 0.16f;
+			float small = 1f - 0.78f * d;
+			float out = 1f - d;
+			int ember = ColorUtil.lerp(tint, 0xFFFFFFFF, 0.6f * out * out);
+			quad(fill, ox + px, oy + py, oz + pz, ax * small, ay * small, az * small, bx * small, by * small, bz * small, ColorUtil.fade(base, 0.55f * out));
+			quad(glow, ox + px, oy + py, oz + pz, ax * small, ay * small, az * small, bx * small, by * small, bz * small, ColorUtil.fade(ember, 0.9f * out));
+		}
+
+		// The light it leaves in: a flash where it stood and a ring over the ground, a soft halo around the ghost and a
+		// faint shaft down to the spot it left.
+		float release = 1f - age / 0.5f;
+		if (release > 0f) glow.orb(k.x, k.y + k.height * 0.5, k.z, (0.9f + k.width) * s, ColorUtil.fade(a2, 0.6f * release));
+		for (int r = 0; r < 2; r++) {
+			float t = (age - r * 0.18f) / (0.75f + r * 0.3f);
+			if (t <= 0f || t >= 1f) continue;
+			ringColor = ColorUtil.fade(r == 0 ? a1 : a2, 0.85f * (1f - t));
+			Draw3D.flatRing(glow, k.x, k.ground + 0.04, k.z, (0.25f + (2.2f - r * 0.6f) * Anim.easeOutCubic(t)) * s, 0.09f * (1f - t * 0.6f), 48, ringColorAt);
+		}
+		float glowing = appear * whole;
+		if (glowing > 0.01f) {
+			double middle = oy + body.height * 0.55;
+			glow.orb(ox, middle, oz, (0.85f + k.width) * s, ColorUtil.fade(a1, 0.2f * glowing));
+			Draw3D.line(glow, k.x, k.ground + 0.02, k.z, ox, middle, oz, 0.45f * s, ColorUtil.fade(a1, 0f), ColorUtil.fade(a1, 0.16f * glowing));
+			float pool = (0.9f + 0.4f * k.width) * s;
+			Draw3D.flatOrb(glow, k.x, k.ground + 0.02, k.z, pool, 0f, 0f, pool, ColorUtil.fade(a1, 0.32f * glowing * (1f - 0.6f * Anim.clamp01(lift / Math.max(0.5f, rise)))));
+		}
+
+		// Motes spiral up around it from the ground, until the last of the body is gone.
+		float[] m = k.data;
+		float fade = appear * fadeOut(p, 0.7f);
+		float span = body.height + rise + 0.6f;
+		int light = ColorUtil.lerp(a1, 0xFFFFFFFF, 0.35f);
+		for (int i = 0; i < MOTES && fade > 0.01f; i += 2) {
+			int o = i * 5;
+			float t = age - m[o + 3] * 0.6f;
+			if (t <= 0f) continue;
+			float climbed = (t * m[o + 2] * 0.75f) % span;
+			float along = climbed / span;
+			float alpha = fade * (float) Math.sin(Math.PI * along);
+			if (alpha <= 0.01f) continue;
+			double angle = m[o] + t * (i % 4 == 0 ? 1.5 : -1.5);
+			double r = (0.35f + m[o + 1] * 0.55f) * (1f - 0.35f * along);
+			double x = ox + Math.cos(angle) * r, y = k.ground + 0.1 + climbed, z = oz + Math.sin(angle) * r;
+			glow.orb(x, y, z, m[o + 4] * 2.2f, ColorUtil.fade(i % 3 == 0 ? a2 : a1, 0.5f * alpha));
+			glow.orb(x, y, z, m[o + 4] * 0.65f, ColorUtil.fade(light, 0.9f * alpha));
+		}
+	}
+
+	/** A solid quad around (x, y, z) spanned by the half edges a and b. */
+	private static void quad(WorldEffectRenderer.Mesh mesh, double x, double y, double z, float ax, float ay, float az,
+							 float bx, float by, float bz, int argb) {
+		mesh.vertex(x - ax - bx, y - ay - by, z - az - bz, 3f, 0f, argb);
+		mesh.vertex(x + ax - bx, y + ay - by, z + az - bz, 3f, 0f, argb);
+		mesh.vertex(x + ax + bx, y + ay + by, z + az + bz, 3f, 0f, argb);
+		mesh.vertex(x - ax + bx, y - ay + by, z - az + bz, 3f, 0f, argb);
+	}
+
 	// ------------------------------------------------------------------ blood burst
 
 	/** A short red mist where the body burst; the droplets and stains are the Splatter's. */
@@ -801,6 +936,9 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 		float[] extra;
 		/** Firework: the third colour of the shell. */
 		int third;
+		/** Ghost: the body as coloured cells, captured on the first frame (null when it could not be). */
+		PixelBody body;
+		boolean captured;
 
 		Kill(int type, LivingEntity entity, double x, double y, double z, double ground, float width, float height, float size,
 			 float life, float seed, long born) {

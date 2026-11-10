@@ -920,7 +920,10 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.waitTicks(25);
 	}
 
-	/** Kill Effects on husks killed with a command (every death nearby counts here): Light Pillar just after the strike, then Shatter. */
+	/**
+	 * Kill Effects on husks killed with a command (every death nearby counts here): Light Pillar just after the strike,
+	 * then Shatter, then the Ghost of a mannequin.
+	 */
 	private static void killEffects(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
 		look(singleplayer, 0, 2);
 		boolean wasOn = context.computeOnClient(client -> {
@@ -940,11 +943,32 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			context.takeScreenshot("kill-" + mode.toLowerCase(Locale.ROOT).replace(' ', '-'));
 			context.waitTicks(40);
 		}
+		// Ghost, on a mannequin (a player's model and skin): just after the death, lifted and whole, then falling apart.
+		// (Slowed down: the test's ticks run at the frame rate, which is low in CI.)
+		context.runOnClient(client -> {
+			KillEffectsModule kills = ModuleManager.get(KillEffectsModule.class);
+			kills.mode.set("Ghost");
+			kills.duration.set(1.5);
+		});
+		singleplayer.getServer().runCommand("execute as @a at @s run summon minecraft:mannequin ^ ^ ^4 {Silent:1b,Tags:[\"v1zir_kill\"]}");
+		singleplayer.getServer().runCommand("execute as @a at @s run tp @e[tag=v1zir_kill] ^ ^ ^4 facing entity @s");
+		context.waitTicks(20);
+		singleplayer.getServer().runCommand("kill @e[tag=v1zir_kill]");
+		context.waitTicks(6);
+		context.takeScreenshot("kill-ghost");
+		context.waitTicks(24);
+		context.takeScreenshot("kill-ghost-rising");
+		context.waitTicks(20);
+		context.takeScreenshot("kill-ghost-dissolving");
+		context.waitTicks(16);
+		context.takeScreenshot("kill-ghost-embers");
+		context.waitTicks(60);
 		context.runOnClient(client -> {
 			KillEffectsModule kills = ModuleManager.get(KillEffectsModule.class);
 			kills.setEnabled(wasOn, false);
 			kills.trigger.reset();
 			kills.mode.reset();
+			kills.duration.reset();
 		});
 	}
 
