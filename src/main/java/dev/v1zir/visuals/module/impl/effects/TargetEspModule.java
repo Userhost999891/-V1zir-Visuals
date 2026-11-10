@@ -3,6 +3,8 @@ package dev.v1zir.visuals.module.impl.effects;
 import dev.v1zir.visuals.V1zir;
 import dev.v1zir.visuals.module.Category;
 import dev.v1zir.visuals.module.Module;
+import dev.v1zir.visuals.module.setting.BoolSetting;
+import dev.v1zir.visuals.module.setting.ColorSetting;
 import dev.v1zir.visuals.module.setting.ModeSetting;
 import dev.v1zir.visuals.module.setting.NumberSetting;
 import dev.v1zir.visuals.render.world.Draw3D;
@@ -13,29 +15,55 @@ import dev.v1zir.visuals.util.Anim;
 import dev.v1zir.visuals.util.ColorUtil;
 import dev.v1zir.visuals.util.Theme;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.decoration.ArmorStandEntity;
 import net.minecraft.util.math.Vec3d;
 import org.joml.Vector3f;
 
+import java.util.function.IntUnaryOperator;
+
 /**
- * Animated marker around the entity you are fighting (Ghosts, Ring or Marker). It fades in when
- * the fight starts, fades out after it, and flashes towards red on every hit.
+ * Animated marker around the entity you are fighting (or, if asked, the one you aim at): souls circling it with
+ * comet tails (Ghosts), a ring gliding up and down it (Ring), lock-on brackets (Marker), a double helix of light
+ * winding up around it (Helix), three tilted rings with a spark racing along each like an atom (Orbit), or glowing
+ * cubes tumbling around it (Crystals). It grows in when the fight starts, fades out after it, and on every hit it
+ * swells and flashes towards red. Everything is a closed formula of the time, so it costs a few quads per frame.
  */
 public final class TargetEspModule extends Module implements WorldEffect {
 	private static final int HURT = 0xFFFF3B4F;
 	private static final double TAU = Math.PI * 2;
-	private static final int TAIL = 20;
+	/** Segments of a ghost's tail, and how many seconds lie between two of them. */
+	private static final int TAIL = 16;
+	private static final float TAIL_STEP = 0.03f;
 	private static final int SEGMENTS = 48;
+	private static final int HELIX_SEGMENTS = 30;
+	private static final int ORBIT_SEGMENTS = 44;
+	private static final int CRYSTALS = 5;
 
-	public final ModeSetting mode = add(new ModeSetting("Mode", "Ghosts", "Ghosts", "Ring", "Marker"));
+	public final ModeSetting mode = add(new ModeSetting("Mode", "Ghosts", "Ghosts", "Ring", "Marker", "Helix", "Orbit", "Crystals"));
+	public final ModeSetting targets = add(new ModeSetting("Target", "Attacked", "Attacked", "Attacked or aimed at"));
 	public final NumberSetting speed = add(new NumberSetting("Speed", 1.0, 0.2, 3.0, 0.05).suffix("x"));
 	public final NumberSetting size = add(new NumberSetting("Size", 1.0, 0.5, 2.0, 0.05).suffix("x"));
 	public final NumberSetting brightness = add(new NumberSetting("Brightness", 1.0, 0.2, 2.0, 0.05));
+	public final BoolSetting throughWalls = add(new BoolSetting("Through walls", false));
+	public final BoolSetting hitFlash = add(new BoolSetting("Hit flash", true));
+	public final BoolSetting themeColor = add(new BoolSetting("Theme color", true));
+	public final ColorSetting color = add(new ColorSetting("Color", 0xFF8A5CFF, false).visibleIf(() -> !themeColor.on()));
+	public final ColorSetting color2 = add(new ColorSetting("Second color", 0xFF5CE1FF, false).visibleIf(() -> !themeColor.on()));
 
 	private final Anim appear = new Anim(0f, 8f);
-	/** Marker corners (x, y, z per corner), reused every frame. */
+	/** Follows the hits: jumps up with each and eases back, smoother than the 20 Hz hurt timer. */
+	private final Anim punch = new Anim(0f, 7f);
+	/** Marker corners and ghost path points (x, y, z each), reused every frame. */
 	private final double[] corners = new double[12];
+	private final double[] point = new double[3];
+	private final float[] basis = new float[9];
+	private final Vector3f axisA = new Vector3f();
+	private final Vector3f axisB = new Vector3f();
+	private int ringColor;
+	private final IntUnaryOperator ringColorAt = i -> ringColor;
 	/** The entity being drawn; kept while the marker fades out after the fight. */
 	private LivingEntity shown;
+	private int lastHurtTime;
 	private float fade;
 
 	public TargetEspModule() {
@@ -52,67 +80,109 @@ public final class TargetEspModule extends Module implements WorldEffect {
 	protected void onDisable() {
 		shown = null;
 		appear.snap(0f);
+		punch.snap(0f);
+	}
+
+	/** The entity to mark: the one attacked last, or with "aimed at" also the one under the crosshair. */
+	private LivingEntity target() {
+		LivingEntity attacked = Effects.combatTarget();
+		if (attacked != null || targets.index() == 0) return attacked;
+		LivingEntity aimed = Effects.target();
+		return aimed == null || aimed == mc.player || aimed instanceof ArmorStandEntity || aimed.isInvisible() ? null : aimed;
 	}
 
 	@Override
 	public void render3D(float tickDelta) {
-		LivingEntity target = Effects.combatTarget();
-		if (target != null) shown = target;
+		LivingEntity target = target();
+		if (target != null && target != shown) {
+			shown = target;
+			lastHurtTime = target.hurtTime;
+			punch.snap(0f);
+		}
 		fade = appear.target(target != null ? 1f : 0f).get();
 		if (shown == null) return;
-		if (target == null && fade <= 0.005f) {
+		if (target == null && (fade <= 0.005f || shown.isRemoved())) {
 			shown = null;
 			return;
 		}
+		// A new hit starts the hurt timer again: the marker swells with it.
+		if (shown.hurtTime > lastHurtTime) punch.snap(1f);
+		lastHurtTime = shown.hurtTime;
+		float hit = punch.target(0f).get();
+
 		Vec3d pos = shown.getLerpedPos(tickDelta);
 		float t = V1zir.time() * speed.f();
 		float h = shown.getHeight();
 		float w = shown.getWidth();
-		float hurt = Math.min(shown.hurtTime, 10) / 10f;
-		int c1 = ColorUtil.lerp(Theme.accent(), HURT, hurt * 0.65f);
-		int c2 = ColorUtil.lerp(Theme.accent2(), HURT, hurt * 0.65f);
-		// Grows slightly into place while fading in.
-		float s = size.f() * (0.85f + 0.15f * fade);
+		float flash = hitFlash.on() ? hit * 0.7f : 0f;
+		int c1 = ColorUtil.lerp(themeColor.on() ? Theme.accent() : color.argb(), HURT, flash);
+		int c2 = ColorUtil.lerp(themeColor.on() ? Theme.accent2() : color2.argb(), HURT, flash);
+		// Grows into place while fading in, and swells a little with every hit.
+		float s = size.f() * (0.8f + 0.2f * Anim.easeOutCubic(fade)) * (1f + 0.1f * hit);
+		WorldEffectRenderer.Mesh mesh = throughWalls.on() ? WorldEffectRenderer.glowThrough() : WorldEffectRenderer.glow();
 		switch (mode.get()) {
-			case "Ring" -> ring(pos, w, h, t, s, c1, c2);
-			case "Marker" -> marker(pos, h, t, s, hurt, c1, c2);
-			default -> ghosts(pos, w, h, t, s, c1, c2);
+			case "Ring" -> ring(mesh, pos, w, h, t, s, c1, c2);
+			case "Marker" -> marker(mesh, pos, h, t, s, hit, c1, c2);
+			case "Helix" -> helix(mesh, pos, w, h, t, s, c1, c2);
+			case "Orbit" -> orbit(mesh, pos, w, h, t, s, c1, c2);
+			case "Crystals" -> crystals(mesh, pos, w, h, t, s, c1, c2);
+			default -> ghosts(mesh, pos, w, h, t, s, c1, c2);
 		}
 	}
 
 	private int alpha(int color, float a) {
-		return ColorUtil.withAlpha(color, Math.round(Math.min(255f, 255f * a * fade * brightness.f())));
+		return ColorUtil.withAlpha(color, Math.round(Math.max(0f, Math.min(255f, 255f * a * fade * brightness.f()))));
 	}
 
-	/** Three glowing souls circling the target, each trailing a tail that shifts between the accents. */
-	private void ghosts(Vec3d pos, float w, float h, float t, float s, int c1, int c2) {
-		WorldEffectRenderer.Mesh mesh = WorldEffectRenderer.glow();
-		double radius = (w * 0.75 + 0.35) * s;
-		int light = ColorUtil.lerp(c1, 0xFFFFFFFF, 0.35f);
-		for (int g = 0; g < 3; g++) {
-			int head = g == 0 ? c1 : g == 1 ? c2 : light;
-			int tail = g == 1 ? c1 : c2;
-			for (int k = 0; k < TAIL; k++) {
-				float tt = t - k * 0.022f;
-				double angle = tt * 2.4 + g * TAU / 3;
-				double y = pos.y + h * 0.5 + Math.sin(tt * 1.6 + g * 2.1) * h * 0.38;
-				double x = pos.x + Math.cos(angle) * radius;
-				double z = pos.z + Math.sin(angle) * radius;
-				float near = Draw3D.cameraFade(x, y, z, 0.6f, 1.6f);
-				if (near <= 0.01f) continue;
-				float f = 1f - k / (float) TAIL;
-				mesh.orb(x, y, z, (0.22f * f + 0.03f) * s, alpha(ColorUtil.lerp(head, tail, 1f - f), f * f * 0.85f * near));
-				if (k == 0) mesh.orb(x, y, z, 0.1f * s, alpha(0xFFFFFFFF, 0.95f * near));
-			}
-		}
+	// ------------------------------------------------------------------ ghosts
+
+	/** Where ghost g is at time tt: circling the target, weaving up and down, its orbit breathing a little. */
+	private void ghostAt(Vec3d pos, float w, float h, float tt, float s, int g, double[] out) {
+		double angle = tt * 2.4 + g * TAU / 3;
+		double radius = (w * 0.75 + 0.35) * s * (1.0 + 0.08 * Math.sin(tt * 1.3 + g * 1.9));
+		out[0] = pos.x + Math.cos(angle) * radius;
+		out[1] = pos.y + h * 0.5 + Math.sin(tt * 1.6 + g * 2.1) * h * 0.38;
+		out[2] = pos.z + Math.sin(angle) * radius;
 	}
 
 	/**
-	 * A bright ring gliding up and down the target, trailing a soft curtain that is longest while it
-	 * moves fastest and gone at the turning points.
+	 * Three glowing souls circling the target: a bright head in a soft halo, and behind it a tapering comet tail that
+	 * shifts from one accent to the other.
 	 */
-	private void ring(Vec3d pos, float w, float h, float t, float s, int c1, int c2) {
-		WorldEffectRenderer.Mesh mesh = WorldEffectRenderer.glow();
+	private void ghosts(WorldEffectRenderer.Mesh mesh, Vec3d pos, float w, float h, float t, float s, int c1, int c2) {
+		int light = ColorUtil.lerp(c1, 0xFFFFFFFF, 0.35f);
+		double[] p = point;
+		for (int g = 0; g < 3; g++) {
+			int head = g == 0 ? c1 : g == 1 ? c2 : light;
+			int tail = g == 1 ? c1 : c2;
+			ghostAt(pos, w, h, t, s, g, p);
+			double hx = p[0], hy = p[1], hz = p[2];
+			float near = Draw3D.cameraFade(hx, hy, hz, 0.6f, 1.6f);
+			if (near <= 0.01f) continue;
+			double px = hx, py = hy, pz = hz;
+			for (int k = 1; k <= TAIL; k++) {
+				ghostAt(pos, w, h, t - k * TAIL_STEP, s, g, p);
+				float f0 = 1f - (k - 1) / (float) TAIL, f1 = 1f - k / (float) TAIL;
+				Draw3D.line(mesh, px, py, pz, p[0], p[1], p[2], (0.17f * f0 + 0.02f) * s,
+					alpha(ColorUtil.lerp(tail, head, f0), 0.8f * f0 * f0 * near), alpha(ColorUtil.lerp(tail, head, f1), 0.8f * f1 * f1 * near));
+				// A few soft puffs along the first half give the tail some body.
+				if (k % 3 == 0 && k <= TAIL / 2) mesh.orb(p[0], p[1], p[2], 0.2f * f1 * s, alpha(ColorUtil.lerp(tail, head, f1), 0.4f * f1 * near));
+				px = p[0];
+				py = p[1];
+				pz = p[2];
+			}
+			mesh.orb(hx, hy, hz, 0.3f * s, alpha(head, 0.75f * near));
+			mesh.orb(hx, hy, hz, 0.11f * s, alpha(0xFFFFFFFF, 0.95f * near));
+		}
+	}
+
+	// ------------------------------------------------------------------ ring
+
+	/**
+	 * A bright ring gliding up and down the target, trailing a soft curtain that is longest while it moves fastest and
+	 * gone at the turning points; a fainter second ring runs against it, and sparks ride the first.
+	 */
+	private void ring(WorldEffectRenderer.Mesh mesh, Vec3d pos, float w, float h, float t, float s, int c1, int c2) {
 		double r = (w * 0.7 + 0.15) * s;
 		float wave = (float) (Math.sin(t * 2.0) * 0.5 + 0.5);
 		float velocity = (float) Math.cos(t * 2.0);
@@ -140,15 +210,27 @@ public final class TargetEspModule extends Module implements WorldEffect {
 			mesh.vertex(x1, y + rim, z1, 1f, 1f, alpha(col1, 1f));
 			mesh.vertex(x1, y - rim, z1, -1f, 1f, alpha(col1, 1f));
 		}
+		// The second ring, where the first one is not.
+		double y2 = pos.y + 0.05 + (1f - wave) * (h - 0.1);
+		ringColor = alpha(ColorUtil.lerp(c1, c2, 0.5f), 0.4f);
+		Draw3D.bandRing(mesh, pos.x, y2, pos.z, r * 0.86, rim * 0.7, SEGMENTS, ringColorAt);
+		for (int i = 0; i < 4; i++) {
+			double a = t * 1.9 + i * TAU / 4;
+			double x = pos.x + Math.cos(a) * r, z = pos.z + Math.sin(a) * r;
+			float near = Draw3D.cameraFade(x, y, z, 0.5f, 1.4f);
+			mesh.orb(x, y, z, 0.13f * s, alpha(i % 2 == 0 ? c1 : c2, 0.7f * near));
+			mesh.orb(x, y, z, 0.045f * s, alpha(0xFFFFFFFF, 0.95f * near));
+		}
 	}
 
-	/** Four lock-on brackets facing the camera, turning slowly and tightening on every hit. */
-	private void marker(Vec3d pos, float h, float t, float s, float hurt, int c1, int c2) {
-		WorldEffectRenderer.Mesh mesh = WorldEffectRenderer.glow();
+	// ------------------------------------------------------------------ marker
+
+	/** Four lock-on brackets facing the camera, turning slowly, breathing, and tightening on every hit. */
+	private void marker(WorldEffectRenderer.Mesh mesh, Vec3d pos, float h, float t, float s, float hit, int c1, int c2) {
 		double cx = pos.x;
 		double cy = pos.y + h * 0.5;
 		double cz = pos.z;
-		double half = (h * 0.42 + 0.15) * s * (1.0 - hurt * 0.15);
+		double half = (h * 0.42 + 0.15) * s * (1.0 - hit * 0.22) * (1.0 + 0.03 * Math.sin(t * 3.0));
 		double rot = t * 1.4;
 		Vector3f right = WorldEffectRenderer.RIGHT;
 		Vector3f up = WorldEffectRenderer.UP;
@@ -167,6 +249,8 @@ public final class TargetEspModule extends Module implements WorldEffect {
 			bracketArm(mesh, i, (i + 3) % 4, width, color);
 			mesh.orb(corners[i * 3], corners[i * 3 + 1], corners[i * 3 + 2], 0.09f * s, alpha(0xFFFFFFFF, 0.85f));
 		}
+		// A soft dot in the middle, brighter with every hit.
+		mesh.orb(cx, cy, cz, (0.1f + 0.12f * hit) * s, alpha(ColorUtil.lerp(c1, 0xFFFFFFFF, 0.4f), 0.35f + 0.5f * hit));
 	}
 
 	/** One arm of a bracket: a third of the way from a corner towards its neighbour, fading out. */
@@ -178,5 +262,109 @@ public final class TargetEspModule extends Module implements WorldEffect {
 		double y1 = y0 + (corners[to * 3 + 1] - y0) * 0.34;
 		double z1 = z0 + (corners[to * 3 + 2] - z0) * 0.34;
 		Draw3D.line(mesh, x0, y0, z0, x1, y1, z1, width, alpha(color, 0.95f), alpha(color, 0f));
+	}
+
+	// ------------------------------------------------------------------ helix
+
+	/**
+	 * Two strands of light wind up around the target from its feet to over its head, turning slowly, with pulses of
+	 * brightness running up them and faint rungs between them, like a helix of DNA.
+	 */
+	private void helix(WorldEffectRenderer.Mesh mesh, Vec3d pos, float w, float h, float t, float s, int c1, int c2) {
+		double r = (w * 0.72 + 0.2) * s;
+		double height = h + 0.35;
+		double turns = 1.35;
+		for (int strand = 0; strand < 2; strand++) {
+			double px = 0, py = 0, pz = 0;
+			int pc = 0;
+			for (int i = 0; i <= HELIX_SEGMENTS; i++) {
+				float u = i / (float) HELIX_SEGMENTS;
+				double angle = u * TAU * turns + t * 1.8 + strand * Math.PI;
+				double x = pos.x + Math.cos(angle) * r;
+				double y = pos.y - 0.05 + u * height;
+				double z = pos.z + Math.sin(angle) * r;
+				// Pulses run up the strand; both ends fade out.
+				float pulse = (float) Math.pow(0.5 + 0.5 * Math.sin(u * TAU * 1.5 - t * 3.2 + strand * Math.PI), 2.0);
+				float ends = (float) Math.sin(Math.PI * u);
+				float near = Draw3D.cameraFade(x, y, z, 0.5f, 1.4f);
+				int c = alpha(ColorUtil.lerp(strand == 0 ? c1 : c2, 0xFFFFFFFF, 0.45f * pulse), (0.3f + 0.7f * pulse) * ends * near);
+				if (i > 0) Draw3D.line(mesh, px, py, pz, x, y, z, (0.055f + 0.035f * pulse) * s, pc, c);
+				if (pulse > 0.93f && i % 2 == 0) mesh.orb(x, y, z, 0.13f * s, alpha(0xFFFFFFFF, 0.6f * ends * near));
+				// Rungs to the other strand, on the first pass only.
+				if (strand == 0 && i % 5 == 2) {
+					double ox = pos.x - Math.cos(angle) * r, oz = pos.z - Math.sin(angle) * r;
+					int rung = alpha(ColorUtil.lerp(c1, c2, 0.5f), 0.22f * ends * near);
+					Draw3D.line(mesh, x, y, z, ox, y, oz, 0.025f * s, rung, rung);
+				}
+				px = x;
+				py = y;
+				pz = z;
+				pc = c;
+			}
+		}
+	}
+
+	// ------------------------------------------------------------------ orbit
+
+	/**
+	 * Three thin rings tilted against each other turn around the target's middle like the orbits of an atom, a
+	 * bright spark with a short tail racing along each.
+	 */
+	private void orbit(WorldEffectRenderer.Mesh mesh, Vec3d pos, float w, float h, float t, float s, int c1, int c2) {
+		double cx = pos.x, cy = pos.y + h * 0.5, cz = pos.z;
+		double radius = (Math.max(w, h * 0.55) * 0.95 + 0.25) * s;
+		for (int j = 0; j < 3; j++) {
+			// The ring's plane: tilted from the horizontal, and the tilt turning around the target.
+			double tilt = Math.toRadians(62.0) * (j == 0 ? 0.25 : 1.0);
+			double turn = t * 0.5 + j * TAU / 3;
+			float ct = (float) Math.cos(tilt), st = (float) Math.sin(tilt);
+			float cu = (float) Math.cos(turn), su = (float) Math.sin(turn);
+			axisA.set(cu, 0f, su);
+			axisB.set(-su * ct, st, cu * ct);
+			int base = j == 0 ? c1 : j == 1 ? c2 : ColorUtil.lerp(c1, c2, 0.5f);
+			ringColor = alpha(base, 0.3f);
+			Draw3D.ring(mesh, cx, cy, cz, axisA.x, axisA.y, axisA.z, axisB.x, axisB.y, axisB.z, radius, 0.018 * s, ORBIT_SEGMENTS, ringColorAt);
+			double e = t * (2.6 + 0.5 * j) + j * 2.1;
+			for (int k = 0; k < 7; k++) {
+				double a = e - k * 0.11;
+				double ca = Math.cos(a) * radius, sa = Math.sin(a) * radius;
+				double x = cx + axisA.x * ca + axisB.x * sa, y = cy + axisA.y * ca + axisB.y * sa, z = cz + axisA.z * ca + axisB.z * sa;
+				float f = 1f - k / 7f;
+				float near = Draw3D.cameraFade(x, y, z, 0.5f, 1.4f);
+				mesh.orb(x, y, z, (0.05f + 0.15f * f) * s, alpha(base, 0.75f * f * f * near));
+				if (k == 0) mesh.orb(x, y, z, 0.07f * s, alpha(0xFFFFFFFF, 0.95f * near));
+			}
+		}
+		mesh.orb(cx, cy, cz, (float) (radius * 0.9), alpha(ColorUtil.lerp(c1, c2, 0.5f), 0.1f));
+	}
+
+	// ------------------------------------------------------------------ crystals
+
+	/** Small glowing cubes circle the target at different heights, tumbling and bobbing, each in a soft halo. */
+	private void crystals(WorldEffectRenderer.Mesh mesh, Vec3d pos, float w, float h, float t, float s, int c1, int c2) {
+		double radius = (w * 0.8 + 0.42) * s;
+		for (int i = 0; i < CRYSTALS; i++) {
+			float k = i / (float) (CRYSTALS - 1);
+			double angle = t * 1.25 + i * TAU / CRYSTALS;
+			double r = radius * (1.0 + 0.07 * Math.sin(t * 1.7 + i * 2.3));
+			double x = pos.x + Math.cos(angle) * r;
+			double y = pos.y + h * (0.18 + 0.64 * ((i * 2) % CRYSTALS) / (float) (CRYSTALS - 1)) + Math.sin(t * 2.1 + i * 1.7) * 0.12;
+			double z = pos.z + Math.sin(angle) * r;
+			float near = Draw3D.cameraFade(x, y, z, 0.5f, 1.4f);
+			if (near <= 0.01f) continue;
+			int c = ColorUtil.lerp(c1, c2, k);
+			// Tumbling about an axis of its own.
+			float ax = (float) Math.sin(i * 1.3), ay = 1f, az = (float) Math.cos(i * 2.1);
+			float al = (float) Math.sqrt(ax * ax + ay * ay + az * az);
+			Draw3D.rotation(basis, ax / al, ay / al, az / al, t * (1.6f + 0.3f * i) + i);
+			float half = (0.075f + 0.02f * (float) Math.sin(t * 2.6 + i)) * s;
+			Draw3D.cube(mesh, x, y, z, half, basis, alpha(ColorUtil.lerp(c, 0xFFFFFFFF, 0.45f), 0.95f * near));
+			mesh.orb(x, y, z, half * 3.4f, alpha(c, 0.42f * near));
+			// A short trail of fading sparks along its orbit.
+			for (int j = 1; j <= 3; j++) {
+				double a = angle - j * 0.16;
+				mesh.orb(pos.x + Math.cos(a) * r, y, pos.z + Math.sin(a) * r, half * (1.5f - 0.3f * j), alpha(c, 0.3f * (1f - j / 4f) * near));
+			}
+		}
 	}
 }

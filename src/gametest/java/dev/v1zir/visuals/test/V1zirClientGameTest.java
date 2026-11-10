@@ -20,6 +20,7 @@ import dev.v1zir.visuals.module.impl.effects.EspModule;
 import dev.v1zir.visuals.module.impl.effects.HealthIndicatorModule;
 import dev.v1zir.visuals.module.impl.effects.JumpCirclesModule;
 import dev.v1zir.visuals.module.impl.effects.KillEffectsModule;
+import dev.v1zir.visuals.module.impl.effects.TargetEspModule;
 import dev.v1zir.visuals.module.impl.hud.ArmorModule;
 import dev.v1zir.visuals.module.impl.cosmetics.CosmeticsModule;
 import dev.v1zir.visuals.module.impl.knives.KnivesModule;
@@ -52,6 +53,7 @@ import dev.v1zir.visuals.module.impl.visuals.WorldParticlesModule;
 import dev.v1zir.visuals.module.impl.visuals.ZoomModule;
 import dev.v1zir.visuals.pack.PackMixer;
 import dev.v1zir.visuals.render.knife.KnifeViewModel;
+import dev.v1zir.visuals.render.world.Effects;
 import dev.v1zir.visuals.render.sky.SkyPreset;
 import dev.v1zir.visuals.util.Theme;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
@@ -68,6 +70,8 @@ import net.minecraft.client.option.GameOptions;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.option.Perspective;
 import net.minecraft.client.session.ProfileKeys;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.util.Hand;
 import net.minecraft.util.Uuids;
 import net.minecraft.util.profiler.log.MultiValueDebugSampleLog;
@@ -126,6 +130,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			hudElements(context, singleplayer);
 			spotify(context);
 			targetHud(context, singleplayer);
+			targetEsp(context, singleplayer);
 			customIndicators(context, singleplayer);
 			healthIndicator(context, singleplayer);
 			chamsAndEsp(context, singleplayer);
@@ -749,6 +754,56 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.runOnClient(client -> ModuleManager.get(TargetHudModule.class).setEnabled(wasOn, false));
 		singleplayer.getServer().runCommand("kill @e[tag=v1zir_target]");
 		context.waitTicks(25);
+	}
+
+	/** Target ESP around a husk the player "hit": every mode in turn, then Ghosts again right after a hit (swollen, flashing red). */
+	private static void targetEsp(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
+		look(singleplayer, 0, 6);
+		singleplayer.getServer().runCommand("execute as @a at @s run summon minecraft:husk ^ ^ ^3.6 "
+			+ "{NoAI:1b,Silent:1b,PersistenceRequired:1b,Tags:[\"v1zir_esp\"],DeathLootTable:\"minecraft:empty\"}");
+		context.waitTicks(15);
+		boolean wasOn = context.computeOnClient(client -> {
+			TargetEspModule esp = ModuleManager.get(TargetEspModule.class);
+			boolean on = esp.isEnabled();
+			esp.setEnabled(true, false);
+			return on;
+		});
+		for (String mode : List.of("Ghosts", "Ring", "Marker", "Helix", "Orbit", "Crystals")) {
+			context.runOnClient(client -> {
+				ModuleManager.get(TargetEspModule.class).mode.set(mode);
+				// Hit again: a fight ends after eight seconds without one.
+				Effects.onAttack(nearestMob(client));
+			});
+			context.waitTicks(12);
+			context.takeScreenshot("target-esp-" + mode.toLowerCase(Locale.ROOT));
+		}
+		context.runOnClient(client -> {
+			ModuleManager.get(TargetEspModule.class).mode.set("Ghosts");
+			LivingEntity mob = nearestMob(client);
+			Effects.onAttack(mob);
+			mob.hurtTime = 10;
+			mob.maxHurtTime = 10;
+		});
+		context.waitTicks(1);
+		context.takeScreenshot("target-esp-hit");
+		context.runOnClient(client -> {
+			TargetEspModule esp = ModuleManager.get(TargetEspModule.class);
+			esp.mode.reset();
+			esp.setEnabled(wasOn, false);
+		});
+		singleplayer.getServer().runCommand("kill @e[tag=v1zir_esp]");
+		context.waitTicks(25);
+	}
+
+	/** The living entity nearest to the player (the mob a test summoned in front of them). */
+	private static LivingEntity nearestMob(MinecraftClient client) {
+		LivingEntity nearest = null;
+		for (Entity entity : client.world.getEntities()) {
+			if (!(entity instanceof LivingEntity living) || entity == client.player) continue;
+			if (nearest == null || living.squaredDistanceTo(client.player) < nearest.squaredDistanceTo(client.player)) nearest = living;
+		}
+		if (nearest == null) throw new AssertionError("No mob near the player");
+		return nearest;
 	}
 
 	/** Custom Indicators over the hotbar with the player hurt, a little hungry, absorbing and a few levels up. */
