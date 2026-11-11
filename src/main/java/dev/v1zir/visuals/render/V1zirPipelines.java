@@ -229,6 +229,11 @@ public final class V1zirPipelines {
 	/** Composites the traced reflections and the wet look back onto the frame. */
 	public static final RenderPipeline REFLECT_COMPOSITE = reflectPipeline("reflect_composite", 6);
 
+	/** Mist and light shafts over the world (render/PostFx): the frame and its depth. */
+	public static final RenderPipeline ATMOSPHERE = postPipeline("atmosphere", 2);
+	/** Colour fringes, grain, vignette and letterbox bars over the finished world picture. */
+	public static final RenderPipeline LENS = postPipeline("lens", 1);
+
 	/** Click GUI open and close animations: the captured window composited over the frame (render/GuiCapture). */
 	public static final RenderPipeline GUI_TRANSITION = RenderPipeline.builder()
 		.withLocation(V1zir.id("pipeline/gui_transition"))
@@ -431,6 +436,22 @@ public final class V1zirPipelines {
 		return builder.build();
 	}
 
+	/** Full screen pass of render/PostFx over a copy of the frame (and its depth). */
+	private static RenderPipeline postPipeline(String name, int samplers) {
+		RenderPipeline.Builder builder = RenderPipeline.builder()
+			.withLocation(V1zir.id("pipeline/" + name))
+			.withVertexShader(V1zir.id("core/fullscreen"))
+			.withFragmentShader(V1zir.id("core/" + name))
+			.withVertexFormat(VertexFormats.POSITION, VertexFormat.DrawMode.TRIANGLES)
+			.withUniform("PostParams", UniformType.UNIFORM_BUFFER)
+			.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+			.withDepthWrite(false)
+			.withoutBlend()
+			.withCull(false);
+		for (int i = 0; i < samplers; i++) builder.withSampler("Sampler" + i);
+		return builder.build();
+	}
+
 	private static RenderPipeline worldPipeline(String name, BlendFunction blend, boolean depthTest) {
 		return RenderPipeline.builder()
 			.withLocation(V1zir.id("pipeline/" + name))
@@ -473,6 +494,8 @@ public final class V1zirPipelines {
 		RenderPipelines.register(WALLPAPER);
 		RenderPipelines.register(WALLPAPER_IMAGE);
 		RenderPipelines.register(WALLPAPER_BLUR);
+		RenderPipelines.register(ATMOSPHERE);
+		RenderPipelines.register(LENS);
 		RenderPipelines.register(SKY_PANORAMA);
 		RenderPipelines.register(SKY_CACHED);
 		RenderPipelines.register(CLOUD_NOISE);

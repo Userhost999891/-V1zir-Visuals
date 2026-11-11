@@ -12,6 +12,7 @@ import dev.v1zir.visuals.module.impl.visuals.MotionBlurModule;
 import dev.v1zir.visuals.module.impl.visuals.NoRenderModule;
 import dev.v1zir.visuals.module.impl.visuals.ZoomModule;
 import dev.v1zir.visuals.render.world.WorldText;
+import dev.v1zir.visuals.render.PostFx;
 import net.minecraft.client.render.GameRenderer;
 import net.minecraft.client.util.math.MatrixStack;
 import org.joml.Matrix4f;
@@ -27,9 +28,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * renderWorld builds three projections: the one the world is drawn with (getBasicProjectionMatrix),
  * a plain one for frustum culling (getProjectionMatrix) and the hand's (ProjectionMatrix3.set). They
  * are changed at those call sites only, so nothing else that asks for a projection is affected.
- * No Render takes the nausea and portal wobble out of the world projection; Motion Blur runs once the
- * world is drawn, before the hand; Bloom and then Color Grading once the world and the hand are drawn,
- * before any GUI, and overlay world text (3D lyrics) last of all.
+ * No Render takes the nausea and portal wobble out of the world projection; the Mist and God Rays and then
+ * Motion Blur run once the world is drawn, before the hand; Bloom, Color Grading and the Cinematic lens once
+ * the world and the hand are drawn, before any GUI, and overlay world text (3D lyrics) last of all.
  */
 @Mixin(GameRenderer.class)
 public abstract class GameRendererMixin {
@@ -99,6 +100,9 @@ public abstract class GameRendererMixin {
 
 	@Inject(method = RENDER_WORLD, at = @At(value = "INVOKE", target = WORLD_RENDER, shift = At.Shift.AFTER))
 	private void v1zir$motionBlur(CallbackInfo ci) {
+		// The mist and the light shafts read the world's depth, which is cleared for the hand right after this; they
+		// go before the blur, so it smears them with the rest.
+		PostFx.atmosphere();
 		MotionBlurModule.renderIfEnabled();
 	}
 
@@ -106,6 +110,7 @@ public abstract class GameRendererMixin {
 	private void v1zir$colorGrade(CallbackInfo ci) {
 		BloomModule.renderIfEnabled();
 		ColorGradingModule.renderIfEnabled();
+		PostFx.lens();
 	}
 
 	/** World text on the overlay layer (3D lyrics) goes on top of everything once the world and the hand are drawn. */

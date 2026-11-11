@@ -42,9 +42,12 @@ import dev.v1zir.visuals.module.impl.hud.SpotifyModule;
 import dev.v1zir.visuals.module.impl.hud.TargetHudModule;
 import dev.v1zir.visuals.module.impl.hud.WatermarkModule;
 import dev.v1zir.visuals.module.impl.visuals.BlockReflectionModule;
+import dev.v1zir.visuals.module.impl.visuals.CinematicModule;
 import dev.v1zir.visuals.module.impl.visuals.ColorGradingModule;
 import dev.v1zir.visuals.module.impl.visuals.FreeLookModule;
+import dev.v1zir.visuals.module.impl.visuals.GodRaysModule;
 import dev.v1zir.visuals.module.impl.visuals.HandChamsModule;
+import dev.v1zir.visuals.module.impl.visuals.MistModule;
 import dev.v1zir.visuals.module.impl.visuals.MotionBlurModule;
 import dev.v1zir.visuals.module.impl.visuals.RainEffectsModule;
 import dev.v1zir.visuals.module.impl.visuals.ShaderSkyModule;
@@ -137,6 +140,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			killEffects(context, singleplayer);
 			shootingStars(context, singleplayer);
 			motionBlur(context, singleplayer);
+			atmosphere(context, singleplayer);
 			handOutline(context, singleplayer);
 			knives(context, singleplayer);
 			cosmetics(context, singleplayer);
@@ -1081,6 +1085,78 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			blur.setEnabled(false, false);
 			blur.strength.reset();
 		});
+		look(singleplayer, 0, 0);
+	}
+
+	/**
+	 * The atmosphere and the lens: God Rays through a row of trunks under a canopy with gaps at sunset, the Mist over
+	 * the land in the morning and together with the rays, and the Cinematic lens with letterbox bars.
+	 */
+	private static void atmosphere(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
+		// The sun sets in the west (yaw 90): trunks and leaves between it and the camera cut its glow into shafts.
+		String[] build = {
+			"fill ~-14 ~ ~-10 ~-14 ~6 ~-10 minecraft:oak_log", "fill ~-14 ~ ~-6 ~-14 ~6 ~-6 minecraft:oak_log",
+			"fill ~-14 ~ ~-3 ~-14 ~6 ~-3 minecraft:oak_log", "fill ~-14 ~ ~1 ~-14 ~6 ~1 minecraft:oak_log",
+			"fill ~-14 ~ ~4 ~-14 ~6 ~4 minecraft:oak_log", "fill ~-14 ~ ~8 ~-14 ~6 ~8 minecraft:oak_log",
+			"fill ~-17 ~6 ~-12 ~-12 ~8 ~11 minecraft:oak_leaves[persistent=true]",
+			"fill ~-17 ~6 ~-5 ~-12 ~8 ~-4 minecraft:air", "fill ~-17 ~6 ~2 ~-12 ~8 ~3 minecraft:air",
+		};
+		for (String command : build) singleplayer.getServer().runCommand("execute as @a at @s run " + command);
+		look(singleplayer, 90, -10);
+		singleplayer.getServer().runCommand("time set 12300");
+		context.waitTicks(20);
+		context.takeScreenshot("god-rays-off");
+		context.runOnClient(client -> ModuleManager.get(GodRaysModule.class).setEnabled(true, false));
+		context.waitTicks(5);
+		context.takeScreenshot("god-rays-sunset");
+		bench(context, "god-rays");
+		context.runOnClient(client -> ModuleManager.get(MistModule.class).setEnabled(true, false));
+		context.waitTicks(5);
+		context.takeScreenshot("god-rays-mist-sunset");
+		context.runOnClient(client -> ModuleManager.get(GodRaysModule.class).setEnabled(false, false));
+
+		// The Mist alone in the morning, over open land and then looking down on it.
+		singleplayer.getServer().runCommand("time set 23600");
+		look(singleplayer, -90, 0);
+		context.waitTicks(10);
+		context.takeScreenshot("mist-dawn");
+		bench(context, "mist");
+		singleplayer.getServer().runCommand("time set 4000");
+		look(singleplayer, -60, 12);
+		context.waitTicks(10);
+		context.takeScreenshot("mist-day");
+		context.runOnClient(client -> {
+			MistModule mist = ModuleManager.get(MistModule.class);
+			mist.colors.set("Theme");
+			mist.density.set(2.0);
+		});
+		context.waitTicks(5);
+		context.takeScreenshot("mist-theme");
+		context.runOnClient(client -> {
+			MistModule mist = ModuleManager.get(MistModule.class);
+			mist.setEnabled(false, false);
+			mist.colors.reset();
+			mist.density.reset();
+		});
+
+		context.runOnClient(client -> {
+			CinematicModule cinematic = ModuleManager.get(CinematicModule.class);
+			cinematic.bars.set(true);
+			cinematic.fringes.set(0.8);
+			cinematic.setEnabled(true, false);
+		});
+		look(singleplayer, 90, -10);
+		singleplayer.getServer().runCommand("time set 12300");
+		context.waitTicks(10);
+		context.takeScreenshot("cinematic");
+		context.runOnClient(client -> {
+			CinematicModule cinematic = ModuleManager.get(CinematicModule.class);
+			cinematic.setEnabled(false, false);
+			cinematic.bars.reset();
+			cinematic.fringes.reset();
+		});
+		singleplayer.getServer().runCommand("execute as @a at @s run fill ~-17 ~ ~-12 ~-12 ~8 ~11 minecraft:air");
+		singleplayer.getServer().runCommand("time set 6000");
 		look(singleplayer, 0, 0);
 	}
 
