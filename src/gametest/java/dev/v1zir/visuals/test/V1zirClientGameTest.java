@@ -125,6 +125,8 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			resize(context, 1280, 720);
 			singleplayer.getServer().runCommand("effect give @a minecraft:speed 9999 1 true");
 			singleplayer.getServer().runCommand("effect give @a minecraft:night_vision 9999 0 true");
+			// The weather cycle runs: rain that starts by chance halfway through darkens every later shot.
+			singleplayer.getServer().runCommand("weather clear 1000000");
 
 			sky(context, singleplayer);
 			walk(context, singleplayer);
@@ -1440,7 +1442,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			ModuleManager.get(BlockReflectionModule.class).setEnabled(false, false);
 			ModuleManager.get(RainEffectsModule.class).setEnabled(false, false);
 		});
-		singleplayer.getServer().runCommand("weather clear");
+		singleplayer.getServer().runCommand("weather clear 1000000");
 		context.waitTicks(110);
 		context.runOnClient(client -> ModuleManager.get(RainEffectsModule.class).setEnabled(rainWasOn, false));
 		singleplayer.getServer().runCommand("time set 6000");

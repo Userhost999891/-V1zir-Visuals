@@ -29,39 +29,49 @@ import java.util.function.Supplier;
 
 /**
  * Hand Chams' Arm with items: in first person the player's own arm, with their skin and arm width, holds the item,
- * where vanilla shows the item alone. The item stays where vanilla (and View Model and Swing Animations) puts it, and
- * the arm is placed from it, so it follows every swing, equip and bob: the item's model is looked up as vanilla draws
- * it, the point a hand holds is found on it (the lower end of a tool's handle, the foot of a flat item, the underside
- * of a block) and the fist is set there, the forearm running down and back out of the view.
+ * where vanilla shows the item alone. Vanilla holds items with their handle (or foot) at the very edge of the view,
+ * so the item is raised into it a little, and the arm is placed from the item where vanilla (and View Model and
+ * Swing Animations) then puts it, so it follows every swing, equip and bob: the item's model is looked up as vanilla
+ * draws it, the point a hand holds is found on it (the lower end of a tool's handle, the foot of a flat item, the
+ * underside of a block) and vanilla's own empty hand, in its resting pose, is moved so its fist is there.
  * <p>
  * Called from HeldItemRendererMixin right before vanilla draws a held item; plain arithmetic on reused objects.
  */
 public final class HeldArm {
-	/** From the fist towards the elbow at rest, view space (x right, y up, z towards the eye), for a right hand. */
-	private static final Vector3fc ELBOW = new Vector3f(0.3f, -0.62f, 0.72f).normalize();
+	/** How far the item is raised into the view (blocks, view space) while the arm holds it, so the fist shows. */
+	private static final float LIFT_X = -0.03f;
+	private static final float LIFT_Y = 0.17f;
 	/** How far below a held block the fist's centre sits, blocks: a little less than half a fist, so it rests in the hand. */
 	private static final float UNDER_BLOCK = 0.1f;
+	private static final float DEG = (float) (Math.PI / 180.0);
+	/**
+	 * Vanilla's empty right hand at rest, as HeldItemRenderer.renderArmHoldingItem places it with no swing and no equip
+	 * motion: the matrix it hands to PlayerEntityRenderer.renderRightArm, in view space.
+	 */
+	private static final Matrix4f VANILLA_ARM = new Matrix4f()
+		.translate(0.64f, -0.6f, -0.72f).rotateY(45f * DEG)
+		.translate(-1f, 3.6f, 3.5f).rotateZ(120f * DEG).rotateX(200f * DEG).rotateY(-135f * DEG)
+		.translate(5.6f, 0f, 0f);
 	/**
 	 * From a fist centred on the origin, with the palm along x and the forearm along y (towards the hand), to the arm
 	 * model's own space as PlayerEntityRenderer.renderArm expects it (as KnifeAnimator places the arm on a knife).
 	 */
 	private static final Matrix4f GRIP_TO_ARM = new Matrix4f()
 		.translate(0.75f / 16f, -8.2f / 16f, 0f).rotateZ(-0.1f).translate(5f / 16f, -2.25f / 16f, 0f);
+	/** The centre of that hand's fist, view space. */
+	private static final Vector3fc VANILLA_FIST = VANILLA_ARM.transformPosition(new Matrix4f(GRIP_TO_ARM).invert().transformPosition(new Vector3f()));
 	private static final ItemRenderState STATE = new ItemRenderState();
 	private static final MatrixStack MODEL = new MatrixStack();
 	private static final Matrix4f ARM = new Matrix4f();
 	private static final Vector3f GRIP = new Vector3f();
 	private static final Vector3f AXIS = new Vector3f();
-	private static final Vector3f FOREARM = new Vector3f();
-	private static final Vector3f PALM = new Vector3f();
-	private static final Vector3f SIDE = new Vector3f();
 
 	private HeldArm() {
 	}
 
 	/** How a hand holds the item. */
 	private enum Hold {
-		/** Tools, weapons and rods: the fist round the lower end of the handle, along the sprite's diagonal. */
+		/** Tools, weapons and rods: the fist round the lower end of the handle. */
 		HANDLE,
 		/** Any other flat item: pinched at its foot. */
 		FLAT,
@@ -116,6 +126,9 @@ public final class HeldArm {
 		// A model with no depth to speak of is flat, whatever the item.
 		if (hold == Hold.BLOCK && maxZ - minZ < 0.3f) hold = Hold.FLAT;
 
+		// Raised into the view: vanilla's matrices are these, so the item it draws next rises with the arm.
+		matrices.peek().getPositionMatrix().translateLocal(left ? -LIFT_X : LIFT_X, LIFT_Y, 0f);
+
 		// The model's matrix in the hand's space, as its layer applies it.
 		MODEL.push();
 		MODEL.peek().getPositionMatrix().set(matrices.peek().getPositionMatrix());
@@ -125,30 +138,22 @@ public final class HeldArm {
 		float midX = (minX + maxX) * 0.5f;
 		float midZ = (minZ + maxZ) * 0.5f;
 		switch (hold) {
-			case HANDLE -> {
-				model.transformPosition(GRIP.set(minX + (maxX - minX) * 0.2f, minY + (maxY - minY) * 0.2f, midZ));
-				model.transformDirection(AXIS.set(maxX - minX, maxY - minY, 0f)).normalize();
-			}
-			case FLAT -> {
-				model.transformPosition(GRIP.set(midX, minY + (maxY - minY) * 0.12f, midZ));
-				model.transformDirection(AXIS.set(1f, 0f, 0f)).normalize();
-			}
+			case HANDLE -> model.transformPosition(GRIP.set(minX + (maxX - minX) * 0.2f, minY + (maxY - minY) * 0.2f, midZ));
+			case FLAT -> model.transformPosition(GRIP.set(midX, minY + (maxY - minY) * 0.12f, midZ));
 			case BLOCK -> {
 				model.transformPosition(GRIP.set(midX, minY, midZ));
-				// Here the axis is the palm's: up out of the block's underside.
+				// Under the block, along its own up.
 				model.transformDirection(AXIS.set(0f, 1f, 0f)).normalize();
 				GRIP.sub(AXIS.x * UNDER_BLOCK, AXIS.y * UNDER_BLOCK, AXIS.z * UNDER_BLOCK);
 			}
 		}
 		MODEL.pop();
-		if (!Float.isFinite(GRIP.x) || !Float.isFinite(AXIS.x) || AXIS.lengthSquared() < 0.5f) return;
+		if (!Float.isFinite(GRIP.x) || !Float.isFinite(GRIP.y) || !Float.isFinite(GRIP.z)) return;
 
-		// Worked out for a right hand; a left one is its mirror image across the view.
-		if (left) {
-			GRIP.x = -GRIP.x;
-			AXIS.x = -AXIS.x;
-		}
-		if (!place(hold == Hold.BLOCK)) return;
+		// Vanilla's resting hand, moved so its fist is on the grip. Worked out for a right hand; a left one is its
+		// mirror image across the view.
+		if (left) GRIP.x = -GRIP.x;
+		ARM.translation(GRIP.x - VANILLA_FIST.x(), GRIP.y - VANILLA_FIST.y(), GRIP.z - VANILLA_FIST.z()).mul(VANILLA_ARM);
 		if (left) ARM.scaleLocal(-1f, 1f, 1f).scale(-1f, 1f, 1f);
 
 		matrices.push();
@@ -161,32 +166,6 @@ public final class HeldArm {
 		if (left) renderer.renderLeftArm(matrices, queue, light, skin, player.isModelPartVisible(PlayerModelPart.LEFT_SLEEVE));
 		else renderer.renderRightArm(matrices, queue, light, skin, player.isModelPartVisible(PlayerModelPart.RIGHT_SLEEVE));
 		matrices.pop();
-	}
-
-	/**
-	 * The right arm's matrix into ARM, its fist on GRIP: round the handle along AXIS, or (onPalm) with AXIS as the
-	 * palm's direction. The forearm runs as close to the resting elbow direction as the grip allows.
-	 */
-	private static boolean place(boolean onPalm) {
-		// The forearm, from the fist towards the elbow, square to the axis.
-		float along = ELBOW.dot(AXIS);
-		FOREARM.set(ELBOW).sub(AXIS.x * along, AXIS.y * along, AXIS.z * along);
-		if (FOREARM.lengthSquared() < 0.04f) FOREARM.set(0f, -1f, 0f).sub(AXIS.x * -AXIS.y, AXIS.y * -AXIS.y, AXIS.z * -AXIS.y);
-		if (FOREARM.lengthSquared() < 1.0e-4f) return false;
-		FOREARM.normalize();
-		// The arm's y runs from the shoulder to the hand: from the elbow towards the fist.
-		float yx = -FOREARM.x, yy = -FOREARM.y, yz = -FOREARM.z;
-		if (onPalm) {
-			PALM.set(AXIS);
-		} else {
-			// Round a handle the palm faces across it, in towards the middle of the view.
-			PALM.set(yy * AXIS.z - yz * AXIS.y, yz * AXIS.x - yx * AXIS.z, yx * AXIS.y - yy * AXIS.x).normalize();
-			if (PALM.x > 0f) PALM.negate();
-		}
-		// x (palm) cross y completes the frame.
-		SIDE.set(PALM.y * yz - PALM.z * yy, PALM.z * yx - PALM.x * yz, PALM.x * yy - PALM.y * yx);
-		ARM.set(PALM.x, PALM.y, PALM.z, 0f, yx, yy, yz, 0f, SIDE.x, SIDE.y, SIDE.z, 0f, GRIP.x, GRIP.y, GRIP.z, 1f).mul(GRIP_TO_ARM);
-		return true;
 	}
 
 	/** How a hand holds this item, or null for items vanilla poses itself or a hand cannot plainly hold. */

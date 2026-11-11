@@ -59,7 +59,7 @@ public final class HandChamsModule extends Module {
 	public final NumberSetting rainbowSpeed = add(new NumberSetting("Rainbow speed", 1.0, 0.1, 5.0, 0.05).suffix("x")
 		.visibleIf(() -> skyStyle() && skyColors.is("Rainbow")));
 	/** How much of the hand's own light and shade stays on the sky, so its shape still reads. */
-	public final NumberSetting shading = add(new NumberSetting("Shading", 0.55, 0.0, 1.0, 0.05).visibleIf(this::skyStyle));
+	public final NumberSetting shading = add(new NumberSetting("Shading", 0.45, 0.0, 1.0, 0.05).visibleIf(this::skyStyle));
 	public final NumberSetting skySpeed = add(new NumberSetting("Sky speed", 1.0, 0.0, 4.0, 0.05).suffix("x").visibleIf(this::skyStyle));
 	public final BoolSetting items = add(new BoolSetting("Items", true).visibleIf(() -> !screenStyle()));
 	public final BoolSetting hand = add(new BoolSetting("Hand", true).visibleIf(() -> !screenStyle()));

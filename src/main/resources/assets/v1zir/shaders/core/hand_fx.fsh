@@ -70,7 +70,7 @@ void main() {
 		vec2 tap = d * Screen.xy;
 		outline = max(outline, texture(Sampler0, uv + tap * width).a);
 		glow += texture(Sampler0, uv + tap * width * 3.0).a;
-		if ((i & 1) == 0) inner = min(inner, texture(Sampler0, uv + tap * width * 0.75).a);
+		if ((i & 1) == 0) inner = min(inner, texture(Sampler0, uv + tap * width * 1.75).a);
 		d = TURN * d;
 	}
 	glow /= 16.0;
@@ -83,11 +83,12 @@ void main() {
 		vec3 own = hand.rgb / hand.a;
 		float lum = dot(own, LUMA);
 		vec3 through = v1zirSkyD(rd, gl_FragCoord.xy, rdDx, rdDy);
-		// Some of the hand's own light and shade on the sky, so the arm, the blade and the folds of the skin still read.
-		through *= mix(1.0, 0.3 + 1.3 * lum, Look.z);
+		// Some of the hand's own light and shade on the sky, so the arm, the blade and the folds of the skin still read;
+		// a little brighter than the sky itself, as if lit from inside.
+		through *= mix(1.0, 0.35 + 1.25 * lum, Look.z) * 1.2;
 		// The rim takes the sky's own colour there, brightened, with the edge colour mixed in.
 		vec3 rimColor = mix(through * 2.2 + 0.12, Edge.rgb, 0.45);
-		through += rimColor * rim * Look.w * 0.9;
+		through += rimColor * rim * Look.w * 1.2;
 		col = mix(own, through, Look.y) * hand.a;
 	} else if (!sky) {
 		col += Edge.rgb * rim * Look.w * 0.35;
