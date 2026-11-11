@@ -25,7 +25,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * Hand Chams on the first-person arm: it is submitted through the overload that carries a tint colour,
- * or with an outline submitted next to it.
+ * or captured and drawn as crystal (Outline and Sky work on the picture of the whole hand, render/HandFx).
  * Nametags replaces the vanilla label (name and below-name score) of real players; mannequins keep theirs.
  */
 @Mixin(PlayerEntityRenderer.class)
@@ -47,7 +47,6 @@ public abstract class PlayerEntityRendererMixin {
 		}
 		if (chams == null || !chams.tintsHand()) {
 			original.call(queue, part, matrices, layer, light, overlay, sprite);
-			if (chams != null && chams.outlinesHand()) chams.outlineArm(part, matrices, queue);
 			return;
 		}
 		queue.submitModelPart(part, matrices, layer, chams.handLight(light), overlay, sprite, chams.argb(), null);

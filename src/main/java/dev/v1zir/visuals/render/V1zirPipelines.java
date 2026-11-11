@@ -234,6 +234,25 @@ public final class V1zirPipelines {
 	/** Colour fringes, grain, vignette and letterbox bars over the finished world picture. */
 	public static final RenderPipeline LENS = postPipeline("lens", 1);
 
+	/**
+	 * Hand Chams' screen looks: the first-person hand, drawn into a texture of its own, laid over the frame as an
+	 * outline or a window into a sky preset (render/HandFx). Premultiplied, like the texture.
+	 */
+	public static final RenderPipeline HAND_FX = RenderPipeline.builder()
+		.withLocation(V1zir.id("pipeline/hand_fx"))
+		.withVertexShader(V1zir.id("core/fullscreen"))
+		.withFragmentShader(V1zir.id("core/hand_fx"))
+		.withVertexFormat(VertexFormats.POSITION, VertexFormat.DrawMode.TRIANGLES)
+		.withSampler("Sampler0")
+		.withSampler("CloudNoise")
+		.withUniform("HandParams", UniformType.UNIFORM_BUFFER)
+		.withUniform("SkyParams", UniformType.UNIFORM_BUFFER)
+		.withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST)
+		.withDepthWrite(false)
+		.withBlend(PREMULTIPLIED)
+		.withCull(false)
+		.build();
+
 	/** Click GUI open and close animations: the captured window composited over the frame (render/GuiCapture). */
 	public static final RenderPipeline GUI_TRANSITION = RenderPipeline.builder()
 		.withLocation(V1zir.id("pipeline/gui_transition"))
@@ -496,6 +515,7 @@ public final class V1zirPipelines {
 		RenderPipelines.register(WALLPAPER_BLUR);
 		RenderPipelines.register(ATMOSPHERE);
 		RenderPipelines.register(LENS);
+		RenderPipelines.register(HAND_FX);
 		RenderPipelines.register(SKY_PANORAMA);
 		RenderPipelines.register(SKY_CACHED);
 		RenderPipelines.register(CLOUD_NOISE);

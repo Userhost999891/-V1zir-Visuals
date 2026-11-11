@@ -141,7 +141,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			shootingStars(context, singleplayer);
 			motionBlur(context, singleplayer);
 			atmosphere(context, singleplayer);
-			handOutline(context, singleplayer);
+			handChams(context, singleplayer);
 			knives(context, singleplayer);
 			cosmetics(context, singleplayer);
 			packs(context);
@@ -1160,29 +1160,67 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		look(singleplayer, 0, 0);
 	}
 
-	/** Hand Chams: Outline wraps the held sword in a glowing rim, Crystal turns the empty hand's arm to crystal. */
-	private static void handOutline(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
+	/**
+	 * Hand Chams with the arm holding the item: a diamond sword in every look (Outline round its true silhouette, Sky
+	 * as Nebula, Ink in two picked colours, Plasma as a rainbow and Aurora, Crystal, Tint), the Sky without the arm, the
+	 * arm holding a block and an apple, and the Sky on the empty hand. The sword is raised fully before each shot: a
+	 * newly held sword dips while the attack recharges.
+	 */
+	private static void handChams(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
+		look(singleplayer, 0, 0);
 		singleplayer.getServer().runCommand("item replace entity @a weapon.mainhand with minecraft:diamond_sword");
-		boolean wasOn = context.computeOnClient(client -> {
+		boolean wasOn = context.computeOnClient(client -> ModuleManager.get(HandChamsModule.class).isEnabled());
+		context.runOnClient(client -> ModuleManager.get(HandChamsModule.class).setEnabled(false, false));
+		context.waitTicks(30);
+		context.takeScreenshot("hand-vanilla-sword");
+		handLook(context, "Outline", null, null, "hand-chams-outline");
+		handLook(context, "Sky", "Nebula", "Preset", "hand-chams-sky-nebula");
+		context.runOnClient(client -> {
 			HandChamsModule chams = ModuleManager.get(HandChamsModule.class);
-			boolean on = chams.isEnabled();
-			chams.style.set("Outline");
-			chams.setEnabled(true, false);
-			return on;
+			chams.skyColorA.set(0xFFFF3D9A);
+			chams.skyColorB.set(0xFF3DA5FF);
 		});
-		context.waitTicks(10);
-		context.takeScreenshot("hand-chams-outline");
-		// Crystal changes the arm, which first person shows only with an empty hand.
+		handLook(context, "Sky", "Ink", "Custom", "hand-chams-sky-ink-custom");
+		handLook(context, "Sky", "Plasma", "Rainbow", "hand-chams-sky-plasma-rainbow");
+		handLook(context, "Sky", "Aurora", "Preset", "hand-chams-sky-aurora");
+		handLook(context, "Crystal", null, null, "hand-chams-crystal");
+		handLook(context, "Tint", null, null, "hand-chams-tint");
+		context.runOnClient(client -> ModuleManager.get(HandChamsModule.class).armItems.set(false));
+		handLook(context, "Sky", "Nebula", "Preset", "hand-chams-sky-no-arm");
+		context.runOnClient(client -> ModuleManager.get(HandChamsModule.class).armItems.set(true));
+		singleplayer.getServer().runCommand("item replace entity @a weapon.mainhand with minecraft:grass_block");
+		context.waitTicks(30);
+		handLook(context, "Outline", null, null, "hand-chams-arm-block");
+		singleplayer.getServer().runCommand("item replace entity @a weapon.mainhand with minecraft:apple");
+		context.waitTicks(30);
+		handLook(context, "Outline", null, null, "hand-chams-arm-apple");
 		singleplayer.getServer().runCommand("item replace entity @a weapon.mainhand with minecraft:air");
-		context.runOnClient(client -> ModuleManager.get(HandChamsModule.class).style.set("Crystal"));
 		context.waitTicks(15);
-		context.takeScreenshot("hand-chams-crystal");
+		handLook(context, "Sky", "Nebula", "Preset", "hand-chams-sky-empty");
 		context.runOnClient(client -> {
 			HandChamsModule chams = ModuleManager.get(HandChamsModule.class);
 			chams.setEnabled(wasOn, false);
 			chams.style.reset();
+			chams.sky.reset();
+			chams.skyColors.reset();
+			chams.skyColorA.reset();
+			chams.skyColorB.reset();
+			chams.armItems.reset();
 		});
 		singleplayer.getServer().runCommand("clear @a");
+	}
+
+	/** One Hand Chams look (sky preset and colours for Sky), shot a few frames later. */
+	private static void handLook(ClientGameTestContext context, String style, String sky, String colors, String name) {
+		context.runOnClient(client -> {
+			HandChamsModule chams = ModuleManager.get(HandChamsModule.class);
+			chams.style.set(style);
+			if (sky != null) chams.sky.set(sky);
+			if (colors != null) chams.skyColors.set(colors);
+			chams.setEnabled(true, false);
+		});
+		context.waitTicks(4);
+		context.takeScreenshot(name);
 	}
 
 	/**

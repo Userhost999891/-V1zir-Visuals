@@ -1,6 +1,8 @@
 package dev.v1zir.visuals.mixin;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
+import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import com.llamalad7.mixinextras.sugar.Local;
 import dev.v1zir.visuals.module.ModuleManager;
@@ -12,6 +14,7 @@ import dev.v1zir.visuals.module.impl.visuals.MotionBlurModule;
 import dev.v1zir.visuals.module.impl.visuals.NoRenderModule;
 import dev.v1zir.visuals.module.impl.visuals.ZoomModule;
 import dev.v1zir.visuals.render.world.WorldText;
+import dev.v1zir.visuals.render.HandFx;
 import dev.v1zir.visuals.render.PostFx;
 import net.minecraft.client.render.GameRenderer;
 import net.minecraft.client.util.math.MatrixStack;
@@ -90,12 +93,21 @@ public abstract class GameRendererMixin {
 		if (tweaks != null && tweaks.isEnabled() && tweaks.noHurtShake.on()) ci.cancel();
 	}
 
-	/** No hand while it is fully zoomed away or while the camera glides back into the head. */
-	@Inject(method = "renderHand", at = @At("HEAD"), cancellable = true)
-	private void v1zir$hideHand(float tickProgress, boolean sleeping, Matrix4f positionMatrix, CallbackInfo ci) {
+	/**
+	 * No hand while it is fully zoomed away or while the camera glides back into the head; otherwise, for Hand Chams'
+	 * screen looks, the hand is drawn into a texture of its own and laid over the frame once it is done (HandFx).
+	 */
+	@WrapMethod(method = "renderHand")
+	private void v1zir$hand(float tickProgress, boolean sleeping, Matrix4f positionMatrix, Operation<Void> original) {
 		ZoomModule zoom = ModuleManager.get(ZoomModule.class);
 		CameraTweaksModule tweaks = ModuleManager.get(CameraTweaksModule.class);
-		if (zoom != null && zoom.isEnabled() && zoom.handHidden() || tweaks != null && tweaks.isEnabled() && tweaks.hidesHand()) ci.cancel();
+		if (zoom != null && zoom.isEnabled() && zoom.handHidden() || tweaks != null && tweaks.isEnabled() && tweaks.hidesHand()) return;
+		boolean captured = HandFx.begin();
+		try {
+			original.call(tickProgress, sleeping, positionMatrix);
+		} finally {
+			if (captured) HandFx.end();
+		}
 	}
 
 	@Inject(method = RENDER_WORLD, at = @At(value = "INVOKE", target = WORLD_RENDER, shift = At.Shift.AFTER))

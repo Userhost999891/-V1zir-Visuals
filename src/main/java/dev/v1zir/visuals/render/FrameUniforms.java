@@ -48,6 +48,7 @@ public final class FrameUniforms {
 		MotionBlur.flip();
 		Bloom.flip();
 		PostFx.flip();
+		HandFx.flip();
 		Reflections.flip();
 		WindowTransition.flip();
 		WorldEffectRenderer.flip();

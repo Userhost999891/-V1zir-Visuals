@@ -1619,12 +1619,14 @@ vec3 vSkyCustom(vec3 rd, float t, int quality) {
 //  Entry point
 // ---------------------------------------------------------------------------
 
-vec3 v1zirSky(vec3 rd, vec2 fragCoord) {
+// rdDx and rdDy: how the direction changes to the next pixel, for the stars' anti-aliasing. A host that draws the sky
+// only on some pixels takes them before it branches, where derivatives are still defined.
+vec3 v1zirSkyD(vec3 rd, vec2 fragCoord, vec3 rdDx, vec3 rdDy) {
 	rd = normalize(rd);
 	gStarWeight = 0.0;
 	gStarCluster = 0.0;
-	gRdDx = dFdx(rd);
-	gRdDy = dFdy(rd);
+	gRdDx = rdDx;
+	gRdDy = rdDy;
 	float t = Timing.x;
 	int preset = int(Camera.w + 0.5);
 	int quality = int(Settings.w + 0.5);
@@ -1647,4 +1649,9 @@ vec3 v1zirSky(vec3 rd, vec2 fragCoord) {
 	col += n / 255.0;
 #endif
 	return clamp(col, 0.0, 1.0);
+}
+
+vec3 v1zirSky(vec3 rd, vec2 fragCoord) {
+	vec3 dir = normalize(rd);
+	return v1zirSkyD(dir, fragCoord, dFdx(dir), dFdy(dir));
 }

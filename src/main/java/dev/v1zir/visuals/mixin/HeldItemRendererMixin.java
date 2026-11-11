@@ -5,6 +5,7 @@ import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.visuals.SwingAnimationsModule;
 import dev.v1zir.visuals.module.impl.visuals.ViewModelModule;
 import dev.v1zir.visuals.module.impl.visuals.ZoomModule;
+import dev.v1zir.visuals.render.HeldArm;
 import dev.v1zir.visuals.render.knife.KnifeViewModel;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
 import net.minecraft.client.network.ClientPlayerEntity;
@@ -20,7 +21,10 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** First-person hands: View Model offsets, Swing Animations styles, Zoom's hand slide and the Knives view model. */
+/**
+ * First-person hands: View Model offsets, Swing Animations styles, Zoom's hand slide, the Knives view model and Hand
+ * Chams' arm holding the item.
+ */
 @Mixin(HeldItemRenderer.class)
 public abstract class HeldItemRendererMixin {
 	@Unique
@@ -73,16 +77,21 @@ public abstract class HeldItemRendererMixin {
 		if (v1zir$swingTakesOver()) ci.cancel();
 	}
 
-	/** Swing style, then View Model, right before vanilla renders the held item. */
+	/**
+	 * Swing style, then View Model, right before vanilla renders the held item; then Hand Chams' arm holding it, placed
+	 * from the item where all of them have put it.
+	 */
 	@Inject(method = "renderFirstPersonItem", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/render/item/HeldItemRenderer;renderItem(Lnet/minecraft/entity/LivingEntity;Lnet/minecraft/item/ItemStack;Lnet/minecraft/item/ItemDisplayContext;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/command/OrderedRenderCommandQueue;I)V", shift = At.Shift.BEFORE))
 	private void v1zir$viewModel(AbstractClientPlayerEntity player, float tickProgress, float pitch, Hand hand, float swingProgress, ItemStack item,
 								 float equipProgress, MatrixStack matrices, OrderedRenderCommandQueue queue, int light, CallbackInfo ci) {
 		SwingAnimationsModule swing = ModuleManager.get(SwingAnimationsModule.class);
 		if (swing != null && swing.isEnabled()) swing.apply(matrices, player);
 		ViewModelModule module = ModuleManager.get(ViewModelModule.class);
-		if (module == null || !module.isEnabled()) return;
-		Arm arm = hand == Hand.MAIN_HAND ? player.getMainArm() : player.getMainArm().getOpposite();
-		module.apply(matrices, arm);
+		if (module != null && module.isEnabled()) {
+			Arm arm = hand == Hand.MAIN_HAND ? player.getMainArm() : player.getMainArm().getOpposite();
+			module.apply(matrices, arm);
+		}
+		HeldArm.render(player, hand, item, matrices, queue, light);
 	}
 
 	/** Swing Animations: the held item no longer dips after every hit while the attack recharges. */

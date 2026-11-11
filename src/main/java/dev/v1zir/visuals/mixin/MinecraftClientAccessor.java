@@ -1,6 +1,7 @@
 package dev.v1zir.visuals.mixin;
 
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gl.Framebuffer;
 import net.minecraft.client.session.ProfileKeys;
 import net.minecraft.client.session.Session;
 import org.spongepowered.asm.mixin.Mixin;
@@ -9,7 +10,10 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 
 import java.util.concurrent.CompletableFuture;
 
-/** The account the game plays as (Accounts): its session, chat signing keys and profile. */
+/**
+ * The account the game plays as (Accounts): its session, chat signing keys and profile; and the main framebuffer,
+ * which HandFx points at the hand's own target while the first-person hand is drawn.
+ */
 @Mixin(MinecraftClient.class)
 public interface MinecraftClientAccessor {
 	@Mutable
@@ -29,4 +33,8 @@ public interface MinecraftClientAccessor {
 	@Mutable
 	@Accessor("gameProfileFuture")
 	void v1zir$setGameProfileFuture(CompletableFuture<?> future);
+
+	@Mutable
+	@Accessor("framebuffer")
+	void v1zir$setFramebuffer(Framebuffer framebuffer);
 }
