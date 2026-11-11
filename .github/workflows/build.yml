@@ -1,0 +1,164 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build mod
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build
+        run: ./gradlew build --stacktrace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v1zir-visuals-jar
+          path: build/libs/
+      # Temporary: method signatures of the mapped 1.21.11 classes the mod hooks into, so mixin
+      # targets can be checked against the real game (javap prints declarations and bytecode only).
+      - name: API signatures
+        run: |
+          jar=$(find .gradle ~/.gradle -path '*minecraftMaven*' -name 'minecraft-*.jar' ! -name '*sources*' 2>/dev/null | head -1)
+          echo "mapped jar: $jar"
+          sig() { javap -p -cp "$jar" "$@" 2>&1 || true; }
+          code() { javap -c -p -cp "$jar" "$1" 2>&1 | awk -v m="$2" 'index($0, " " m "(") && /\(/ {p=1} p {print} p && /^$/ {p=0}'; }
+          for c in net.minecraft.client.render.item.HeldItemRenderer net.minecraft.client.render.entity.feature.HeldItemFeatureRenderer \
+                   net.minecraft.client.render.entity.PlayerEntityRenderer net.minecraft.client.render.entity.EntityRenderManager \
+                   net.minecraft.client.render.RenderSetup\$Builder net.minecraft.entity.PlayerLikeEntity \
+                   net.minecraft.client.render.entity.state.BipedEntityRenderState net.minecraft.client.render.entity.state.PlayerEntityRenderState \
+                   net.minecraft.client.render.entity.feature.CapeFeatureRenderer net.minecraft.client.render.entity.feature.FeatureRenderer \
+                   net.minecraft.client.gui.screen.ingame.InventoryScreen; do
+            echo "=== SIG $c"; sig "$c"
+          done
+          echo "=== CODE HeldItemFeatureRenderer.renderItem"; code net.minecraft.client.render.entity.feature.HeldItemFeatureRenderer renderItem
+
+  client:
+    name: Dev client
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install Xvfb and Mesa
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q xvfb libgl1-mesa-dri imagemagick
+      - name: Run dev client (client game test)
+        timeout-minutes: 40
+        env:
+          # Leave CPU for the integrated server; llvmpipe takes every core by default.
+          LP_NUM_THREADS: 2
+        run: |
+          # Two thread dumps of the client JVM if world loading stalls, to diagnose the hang.
+          (log=build/run/clientGameTest/logs/latest.log
+          for _ in $(seq 1 120); do
+            sleep 5
+            if [ -f "$log" ] && [ "$(grep -c 'Preparing spawn area' "$log")" -ge 30 ]; then
+              for i in 1 2; do
+                for p in $(jps -l | awk '/devlaunchinjector|KnotClient/ {print $1}'); do jstack -l "$p" > "/tmp/thread-dump-$i.txt" 2>&1; done
+                sleep 10
+              done
+              break
+            fi
+          done) &
+          xvfb-run -a -s "-screen 0 1920x1080x24" ./gradlew runClientGameTest --stacktrace
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dev-client-screenshots
+          path: build/run/clientGameTest/screenshots/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dev-client-logs
+          path: |
+            build/run/clientGameTest/logs/
+            build/run/clientGameTest/crash-reports/
+            build/run/clientGameTest/v1zir-*.jfr
+      - name: Profile summary
+        if: always()
+        run: |
+          shopt -s nullglob
+          files=(build/run/clientGameTest/v1zir-*.jfr)
+          if [ ${#files[@]} -gt 0 ]; then python3 .github/scripts/jfr_summary.py "${files[@]}"; fi
+      - name: Screenshot previews
+        if: always()
+        run: |
+          shopt -s nullglob
+          for f in build/run/clientGameTest/crash-reports/*.txt; do echo "=== $f"; cat "$f"; done
+          for f in /tmp/thread-dump-*.txt; do echo "=== $f"; cat "$f"; done
+          for f in build/run/clientGameTest/screenshots/*.png; do
+            convert "$f" -resize 800x450 -quality 72 /tmp/preview.jpg
+            echo "V1ZIR-PREVIEW-BEGIN $(basename "$f")"
+            base64 -w 4000 /tmp/preview.jpg
+            echo "V1ZIR-PREVIEW-END"
+          done
+
+  media-bridge:
+    name: Windows media bridge
+    runs-on: windows-latest
+    # Informative only (always passes): the log shows whether the now playing script loads the media controls on a
+    # stock Windows PowerShell; "BRIDGE OK" or "BRIDGE FAILED" with the reason.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run now_playing.ps1 for a few seconds
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+          $info = New-Object System.Diagnostics.ProcessStartInfo $ps
+          # The same arguments as the game (WindowsMediaSource), multi-threaded apartment included.
+          $info.Arguments = '-NoLogo -NoProfile -NonInteractive -MTA -ExecutionPolicy Bypass -File src\main\resources\assets\v1zir\media\now_playing.ps1'
+          $info.RedirectStandardInput = $true
+          $info.RedirectStandardOutput = $true
+          $info.RedirectStandardError = $true
+          $info.UseShellExecute = $false
+          $p = [System.Diagnostics.Process]::Start($info)
+          $out = $p.StandardOutput.ReadLineAsync()
+          if (-not $out.Wait(15000)) { Write-Host 'BRIDGE FAILED: no report within 15 s'; $p.Kill(); Write-Host ('stderr: ' + $p.StandardError.ReadToEnd()); exit 0 }
+          Write-Host ('First report: ' + $out.Result)
+          # It keeps reporting through a refresh command and its own refreshes of the media controls (every second).
+          $p.StandardInput.WriteLine('refresh')
+          $p.StandardInput.Flush()
+          $reports = 0
+          $watch = [System.Diagnostics.Stopwatch]::StartNew()
+          while ($watch.ElapsedMilliseconds -lt 3500) {
+            $next = $p.StandardOutput.ReadLineAsync()
+            if (-not $next.Wait(3000) -or $null -eq $next.Result) { break }
+            $reports++
+          }
+          Write-Host ('Reports in 3.5 s after a refresh: ' + $reports)
+          if ($reports -lt 5) { Write-Host 'BRIDGE FAILED: it stopped reporting after a refresh' }
+          $p.StandardInput.Close()
+          if (-not $p.WaitForExit(5000)) { $p.Kill() }
+          $err = $p.StandardError.ReadToEnd()
+          if ($err) { Write-Host ('stderr: ' + $err) }
+          if ($null -eq $out.Result -or -not $out.Result.StartsWith('{') -or $reports -lt 5) { Write-Host 'BRIDGE FAILED' } else { Write-Host 'BRIDGE OK' }
+          exit 0
+      # Informative too: a fake media player (title, artist, timeline, a cover that comes late, a pause) with the
+      # bridge reading it, as the game runs it and in a single-threaded apartment; the log shows every report.
+      - name: Bridge against a fake player
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+          foreach ($apartment in 'MTA', 'STA') {
+            Write-Host "===== bridge in an $apartment ====="
+            & $ps -NoLogo -NoProfile -ExecutionPolicy Bypass -File .github\media-bridge-test.ps1 -Apartment $apartment
+          }
+          exit 0

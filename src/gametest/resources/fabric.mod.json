@@ -1,0 +1,16 @@
+{
+	"schemaVersion": 1,
+	"id": "v1zir-gametest",
+	"version": "1.0.0",
+	"name": "V1zir Visuals Client Test",
+	"environment": "client",
+	"entrypoints": {
+		"fabric-client-gametest": [
+			"dev.v1zir.visuals.test.V1zirClientGameTest"
+		]
+	},
+	"depends": {
+		"v1zir": "*",
+		"fabric-client-gametest-api-v1": "*"
+	}
+}

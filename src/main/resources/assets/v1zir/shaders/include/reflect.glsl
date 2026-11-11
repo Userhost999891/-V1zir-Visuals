@@ -1,0 +1,475 @@
+// Reflections and rain wetness (render/Reflections): the surface under a pixel, rebuilt from the
+// depth buffer and the block textures of render/SurfaceMap, and what it reflects.
+
+layout(std140) uniform ReflectParams {
+	mat4 ViewProj;    // camera-relative world position to clip space
+	mat4 InvViewProj;
+	vec4 CameraPos;   // xyz = camera position (x and z modulo 4096, for world-space noise), w = camera block Y
+	vec4 CameraBlock; // xyz = camera block modulo 512, 128, 512 (texture wrap), w = bottom of the world
+	vec4 CameraFrac;  // xyz = camera position inside its block, w = time in seconds
+	vec4 Screen;      // xy = screen size, zw = trace texture size
+	vec4 Trace;       // x = march steps, y = refinement steps, z = ray length, w = material grid ready
+	vec4 Shading;     // x = mode (0 rain only, 1 normal, 2 metal), y = strength, z = roughness
+	vec4 Weather;     // x = wetness, y = raindrop rings on water
+	vec4 LightDir;    // xyz = towards the sun or moon, w = its strength
+	vec4 LightColor;
+	vec4 FogColor;    // horizon colour of the frame
+	vec4 Forward;     // xyz = camera forward
+};
+
+uniform sampler2D Sampler0; // the frame
+uniform sampler2D Sampler1; // its depth
+uniform sampler2D Sampler2; // block columns
+uniform sampler2D Sampler3; // material grid
+uniform sampler2D Sampler4; // far block columns
+
+const int AIR = 0;
+const int SOLID = 1;
+const int WATER = 2;
+const int GLOSSY = 3;
+const int METAL = 4;
+const int FOLIAGE = 5;
+const int LAVA = 6;
+
+// Beyond these distances (blocks) water, other shiny surfaces and rain are left alone. Water reaches
+// as far as the far columns do and fades out over its last fifth, so it has no edge.
+const float WATER_DISTANCE = 252.0;
+const float SHINE_DISTANCE = 96.0;
+const float RAIN_DISTANCE = 60.0;
+
+struct SurfaceInfo {
+	vec3 pos;        // camera-relative world position
+	vec3 normal;     // shading normal, waves and ripples included
+	vec3 tint;       // reflection weight per channel: Fresnel, metal tint and strength
+	float diffuse;   // how much of the surface's own colour stays
+	float wet;       // darkening by a water film
+	float pool;      // standing water (puddles, a little along their shores), which darkens what is under it further
+	float metallic;  // 1 where the reflection takes the surface's colour (metal blocks)
+	float roughness;
+	float glint;     // weight of the sun or moon highlight
+	float exposure;  // 1 under the open sky, 0 under a roof
+};
+
+float rDepth(ivec2 p) {
+	return texelFetch(Sampler1, clamp(p, ivec2(0), ivec2(Screen.xy) - 1), 0).r;
+}
+
+vec3 rPosition(vec2 pixel, float depth) {
+	vec4 h = InvViewProj * vec4(pixel / Screen.xy * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
+	return h.xyz / h.w;
+}
+
+vec3 rPosition(ivec2 p) {
+	return rPosition(vec2(p) + 0.5, rDepth(p));
+}
+
+// Clip-space w of the scene at a screen position: what marched rays are compared with.
+float rSceneW(vec2 uv) {
+	float depth = texelFetch(Sampler1, ivec2(uv * Screen.xy), 0).r;
+	vec4 row = vec4(InvViewProj[0][3], InvViewProj[1][3], InvViewProj[2][3], InvViewProj[3][3]);
+	return 1.0 / dot(row, vec4(uv * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0));
+}
+
+// Face normal from the four neighbours: per axis the side with the smaller step wins, so a face
+// never mixes with the one behind an edge. Faces are axis aligned in Minecraft, so a normal close
+// to an axis snaps to it and depth noise cannot ripple flat walls.
+vec3 rNormal(ivec2 p, vec3 center) {
+	ivec2 q = clamp(p, ivec2(1), ivec2(Screen.xy) - 2);
+	vec3 c = q == p ? center : rPosition(q);
+	vec3 l = c - rPosition(q - ivec2(1, 0));
+	vec3 r = rPosition(q + ivec2(1, 0)) - c;
+	vec3 d = c - rPosition(q - ivec2(0, 1));
+	vec3 u = rPosition(q + ivec2(0, 1)) - c;
+	vec3 n = normalize(cross(dot(r, r) < dot(l, l) ? r : l, dot(u, u) < dot(d, d) ? u : d));
+	vec3 a = abs(n);
+	float m = max(a.x, max(a.y, a.z));
+	if (m > 0.94) n = sign(n) * step(vec3(m), a);
+	return dot(n, center) > 0.0 ? -n : n;
+}
+
+int rUnpack(float v) {
+	return int(v * 255.0 + 0.5);
+}
+
+// A far column (render/SurfaceMap), trusted only when its alpha names the 512 block tile the column
+// is in: a texel not refreshed since the camera moved still holds the column from the other side.
+vec2 rFarColumn(ivec2 v) {
+	if (max(abs(v.x), abs(v.y)) > 255) return vec2(-1.0e9, 0.0);
+	vec4 c = texelFetch(Sampler4, (ivec2(CameraBlock.xz) + v + 512) & 511, 0);
+	ivec2 block = (ivec2(floor(CameraPos.xz)) + v + 4096) & 4095;
+	if (rUnpack(c.a) != (128 | (block.x >> 9 & 7) << 3 | (block.y >> 9 & 7))) return vec2(-1.0e9, 0.0);
+	return vec2(float(rUnpack(c.r) * 256 + rUnpack(c.g)) + CameraBlock.w, float(rUnpack(c.b)));
+}
+
+// x = first free Y above the column's highest motion-blocking block, y = that block's material;
+// x is -1e9 while the column is not known. Near the camera from the columns refreshed often,
+// further out from the far ones.
+vec2 rColumn(ivec2 v) {
+	if (max(abs(v.x), abs(v.y)) > 60) return rFarColumn(v);
+	vec4 c = texelFetch(Sampler2, (ivec2(CameraBlock.xz) + v + 256) & 127, 0);
+	if (c.a < 0.5) return vec2(-1.0e9, 0.0);
+	return vec2(float(rUnpack(c.r) * 256 + rUnpack(c.g)) + CameraBlock.w, float(rUnpack(c.b)));
+}
+
+// Material of the block holding a camera-relative point: from the grid near the camera, further
+// out the top block of its column, air above that (entities, plants) and plain blocks below.
+int rMaterial(vec3 rel) {
+	ivec3 v = ivec3(floor(CameraFrac.xyz + rel));
+	if (Trace.w > 0.5 && max(abs(v.x), abs(v.z)) <= 24 && abs(v.y) <= 12) {
+		ivec3 t = ivec3(CameraBlock.xyz) + v + 256;
+		int layer = t.y & 31;
+		vec4 c = texelFetch(Sampler3, ivec2(t.x & 63, (layer >> 2) * 64 + (t.z & 63)), 0);
+		return rUnpack(c[layer & 3]);
+	}
+	vec2 column = rColumn(v.xz);
+	float y = CameraPos.w + float(v.y);
+	if (y >= column.x) return column.x < -1.0e8 ? SOLID : AIR;
+	return y >= column.x - 1.0 ? int(column.y) : SOLID;
+}
+
+float rOpen(ivec2 v, float y) {
+	if (max(abs(v.x), abs(v.y)) > 60) return 1.0;
+	float top = rColumn(v).x;
+	// A step one block up still counts as mostly open; two blocks of cover keep the rain off.
+	return top < -1.0e8 ? 0.0 : clamp((y - top) * 0.6 + 1.2, 0.0, 1.0);
+}
+
+// How open to the sky a camera-relative point in the air is, blended between the four nearest
+// columns so the edge of an overhang stays soft.
+float rExposure(vec3 rel) {
+	vec3 w = CameraFrac.xyz + rel;
+	vec2 q = w.xz - 0.5;
+	vec2 b = floor(q);
+	vec2 f = q - b;
+	ivec2 v = ivec2(b);
+	float y = CameraPos.w + w.y;
+	return mix(mix(rOpen(v, y), rOpen(v + ivec2(1, 0), y), f.x),
+		mix(rOpen(v + ivec2(0, 1), y), rOpen(v + ivec2(1, 1), y), f.x), f.y);
+}
+
+float rHash(vec2 p) {
+	vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+	p3 += dot(p3, p3.yzx + 33.33);
+	return fract((p3.x + p3.y) * p3.z);
+}
+
+float rNoise(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = p - i;
+	f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(rHash(i), rHash(i + vec2(1.0, 0.0)), f.x), mix(rHash(i + vec2(0.0, 1.0)), rHash(i + 1.0), f.x), f.y);
+}
+
+// How much of a pattern of this angular frequency (radians per block) to keep where one pixel covers
+// footprint blocks of the surface: detail finer than a couple of pixels would only shimmer, so it fades.
+float rLod(float frequency, float footprint) {
+	return 1.0 - smoothstep(0.5, 1.5, frequency * footprint);
+}
+
+// Gentle wind waves on water: the slope of four travelling sines, the finer ones fading where a
+// pixel covers more water than their wavelength (far away, at grazing angles).
+vec2 rWaves(vec2 xz, float footprint) {
+	float t = CameraFrac.w;
+	vec2 s = vec2(0.8, 0.6) * (rLod(1.9, footprint) * cos(dot(xz, vec2(0.8, 0.6)) * 1.9 + t * 1.5));
+	s += vec2(-0.5, 0.86) * (0.6 * rLod(3.1, footprint) * cos(dot(xz, vec2(-0.5, 0.86)) * 3.1 + t * 2.0));
+	s += vec2(0.96, -0.28) * (0.35 * rLod(5.3, footprint) * cos(dot(xz, vec2(0.96, -0.28)) * 5.3 + t * 2.7));
+	s += vec2(-0.24, -0.97) * (0.2 * rLod(8.7, footprint) * cos(dot(xz, vec2(-0.24, -0.97)) * 8.7 + t * 3.4));
+	return s * 0.035;
+}
+
+// Raindrop rings: every cell of two offset grids gets one drop at a random spot and time.
+vec2 rRipples(vec2 xz) {
+	vec2 slope = vec2(0.0);
+	for (int i = 0; i < 2; i++) {
+		vec2 q = xz * 1.4 + float(i) * vec2(0.5, 0.37);
+		vec2 cell = floor(q);
+		float seed = rHash(cell + float(i) * 57.0);
+		vec2 d = q - cell - 0.25 - 0.5 * vec2(seed, rHash(cell.yx + 13.0));
+		float phase = fract(CameraFrac.w * 1.1 + seed * 7.0);
+		float dist = length(d);
+		float e = dist - 0.45 * phase;
+		float fade = (1.0 - phase) * (1.0 - phase);
+		slope += d / max(dist, 0.001) * (cos(e * 45.0) * exp(-e * e * 350.0) * fade);
+	}
+	return slope * 0.4 * Weather.y;
+}
+
+// Raindrops on puddles: three offset grids of small rings, denser than on open water, each drop
+// landing somewhere new every time it comes round.
+vec2 rDrops(vec2 xz) {
+	vec2 slope = vec2(0.0);
+	for (int i = 0; i < 3; i++) {
+		vec2 q = xz * 2.6 + float(i) * vec2(0.37, 0.61);
+		vec2 cell = floor(q);
+		float t = CameraFrac.w * 1.4 + rHash(cell + float(i) * 31.0) * 9.0;
+		float turn = floor(t);
+		float phase = t - turn;
+		vec2 d = q - cell - 0.3 - 0.4 * vec2(rHash(cell + turn * 1.37), rHash(cell.yx + turn * 2.11 + float(i)));
+		float dist = length(d);
+		float e = dist - 0.3 * phase;
+		float fade = (1.0 - phase) * (1.0 - phase);
+		slope += d / max(dist, 0.001) * (cos(e * 40.0) * exp(-e * e * 300.0) * fade);
+	}
+	return slope * 0.35 * Weather.y;
+}
+
+// Integer hash of a noise cell (pcg2d), the same on the CPU (render/Puddles.java) to the last bit.
+float rCellHash(uvec2 v) {
+	v = v * 1664525u + 1013904223u;
+	v.x += v.y * 1664525u;
+	v.y += v.x * 1664525u;
+	v ^= v >> 16u;
+	v.x += v.y * 1664525u;
+	v.y += v.x * 1664525u;
+	v ^= v >> 16u;
+	return float((v.x ^ v.y) >> 8u) / 16777216.0;
+}
+
+// Value noise on rCellHash; cells are offset so their coordinates stay positive.
+float rCellNoise(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = p - i;
+	f = f * f * (3.0 - 2.0 * f);
+	uvec2 c = uvec2(ivec2(i) + 8192);
+	float a = rCellHash(c);
+	float b = rCellHash(c + uvec2(1u, 0u));
+	float d = rCellHash(c + uvec2(0u, 1u));
+	float e = rCellHash(c + uvec2(1u, 1u));
+	return mix(mix(a, b, f.x), mix(d, e, f.x), f.y);
+}
+
+// Where puddles lie on open flat ground: soft noise over a few blocks with a little detail, so they
+// are rounded, one to a few blocks across, and lie in the same places every rain (Puddles.java
+// evaluates the same for the splashes).
+float rPuddleShape(vec2 xz) {
+	return 0.68 * rCellNoise(xz * 0.3) + 0.24 * rCellNoise(xz * 0.9 + 17.3) + 0.08 * rCellNoise(xz * 2.6 + 5.7);
+}
+
+// Water stands wherever the shape rises above this level, which sinks as everything gets wetter:
+// a few small puddles in a drizzle, more and larger ones as it pours, shrinking again as it dries.
+float rPuddleLevel() {
+	return mix(0.8, 0.67, clamp((Weather.x - 0.25) / 0.75, 0.0, 1.0)) - 0.07 * max(Weather.x - 1.0, 0.0);
+}
+
+float rSchlick(float f0, float cosTheta) {
+	float m = 1.0 - clamp(cosTheta, 0.0, 1.0);
+	float m2 = m * m;
+	return f0 + (1.0 - f0) * m2 * m2 * m;
+}
+
+// Metal reflects in its own colour: Schlick with F0 from the block's hue (saturated, so grass stays
+// green under a blue sky) and some of its texture. Rough metal keeps little of the bright grazing
+// sky, so the ground towards the horizon does not wash out.
+vec3 rMetal(vec3 albedo, float cosTheta, float roughness) {
+	float peak = max(albedo.r, max(albedo.g, albedo.b));
+	vec3 hue = albedo / max(peak, 0.04) * mix(0.35, 0.9, smoothstep(0.03, 0.6, peak));
+	vec3 f0 = mix(hue, sqrt(albedo) * 0.9, 0.35);
+	float m = 1.0 - clamp(cosTheta, 0.0, 1.0);
+	return f0 + max(vec3(0.75 - 1.5 * roughness) - f0, 0.0) * (m * m * m * m * m);
+}
+
+// Everything the passes need about the surface under a full-resolution pixel; false where nothing
+// changes (sky, too far, air, entities, nothing shiny and dry).
+bool rSurface(ivec2 p, out SurfaceInfo s) {
+	float depth = rDepth(p);
+	if (depth >= 1.0) return false;
+	vec3 pos = rPosition(vec2(p) + 0.5, depth);
+	float dist = length(pos);
+	if (dist > WATER_DISTANCE) return false;
+	vec3 view = pos / dist;
+	// A little further along the view ray is inside the block that was hit.
+	int material = rMaterial(pos + view * 0.04);
+	if (material == AIR || material == LAVA) return false;
+	int mode = int(Shading.x + 0.5);
+	// Fabulous graphics keep water out of the depth buffer: under the water of a column the surface
+	// is where the view ray crosses the water plane.
+	bool plane = false;
+	if (mode != 0 && material != WATER && view.y < 0.0) {
+		float eye = CameraPos.w + CameraFrac.y;
+		// Just in front of the hit, so the side walls of a pool count as under its water.
+		vec2 column = rColumn(ivec2(floor(CameraFrac.xz + pos.xz - view.xz * 0.05)));
+		float surface = column.x - 0.111;
+		if (int(column.y) == WATER && eye > surface && eye + pos.y < surface - 0.05) {
+			vec3 crossing = view * ((surface - eye) / view.y);
+			vec2 above = rColumn(ivec2(floor(CameraFrac.xz + crossing.xz)));
+			if (int(above.y) == WATER && abs(above.x - column.x) < 0.5) {
+				pos = crossing;
+				dist = length(pos);
+				material = WATER;
+				plane = true;
+			}
+		}
+	}
+	bool water = mode != 0 && material == WATER;
+	bool metal = mode == 2 && material != WATER && dist < SHINE_DISTANCE;
+	bool glossy = mode == 1 && (material == GLOSSY || material == METAL) && dist < SHINE_DISTANCE;
+	bool rain = Weather.x > 0.001 && material != WATER && dist < RAIN_DISTANCE;
+	if (!water && !metal && !glossy && !rain) return false;
+	// Measured in the air just in front of the surface.
+	float exposure = rExposure(pos - view * 0.3);
+	float open = exposure * (1.0 - smoothstep(RAIN_DISTANCE - 12.0, RAIN_DISTANCE, dist));
+	if (!water && !metal && !glossy && open < 0.01) return false;
+
+	vec3 n = plane ? vec3(0.0, 1.0, 0.0) : rNormal(p, pos);
+	vec2 xz = CameraPos.xz + pos.xz;
+	// How much surface one pixel covers along the view (blocks), from the projection's vertical scale:
+	// it grows with the distance and towards grazing angles and shrinks with zoom.
+	float pixelAngle = 2.0 / (length(vec3(ViewProj[0][1], ViewProj[1][1], ViewProj[2][1])) * Screen.y);
+	float footprint = dist * pixelAngle / max(abs(view.y), 0.03);
+	float strength = Shading.y;
+	s.pos = pos;
+	s.normal = n;
+	s.tint = vec3(0.0);
+	s.diffuse = 1.0;
+	s.wet = 0.0;
+	s.pool = 0.0;
+	s.metallic = 0.0;
+	s.roughness = 0.0;
+	s.glint = 0.0;
+	s.exposure = exposure;
+	if (water) {
+		// Far away the depth buffer is too coarse for the face normal; the water's top lies at its column's
+		// surface, which tells it apart from the side of a waterfall.
+		bool top = n.y > 0.5;
+		if (!top && !plane) {
+			vec2 column = rColumn(ivec2(floor(CameraFrac.xz + pos.xz)));
+			top = int(column.y) == WATER && abs(CameraPos.w + CameraFrac.y + pos.y - (column.x - 0.111)) < 0.3;
+		}
+		if (top) {
+			vec2 slope = rWaves(xz, footprint) + rRipples(xz) * (exposure * rLod(12.0, footprint));
+			s.normal = normalize(vec3(-slope.x, 1.0, -slope.y));
+		}
+		float fade = 1.0 - smoothstep(WATER_DISTANCE * 0.8, WATER_DISTANCE, dist);
+		float f = min(rSchlick(0.02, dot(-view, s.normal)) * strength, 1.0) * fade;
+		s.tint = vec3(f);
+		s.diffuse = 1.0 - f;
+		s.glint = exposure * fade;
+		return true;
+	}
+	float cosV = dot(-view, n);
+	if (metal) {
+		// Every block as polished metal of its own colour: the texture stays, a blurred
+		// reflection tinted by the block's colour lies over it (Schlick with F0 from its hue),
+		// stronger at grazing angles; leaves and plants only half as shiny.
+		s.roughness = 0.18 + 0.45 * Shading.z;
+		vec3 f = rMetal(texelFetch(Sampler0, p, 0).rgb, cosV, s.roughness) * (material == FOLIAGE ? 0.3 : 0.55) * strength;
+		s.tint = min(f, vec3(1.0));
+		s.diffuse = 1.0 - 0.55 * dot(s.tint, vec3(0.3333));
+		s.metallic = 1.0;
+		s.glint = exposure * 0.6;
+	} else if (glossy) {
+		// Metal blocks keep their colour in the reflection; glass, ice and polished stone a faint sheen.
+		s.roughness = 0.08 + 0.4 * Shading.z;
+		s.tint = min(material == METAL ? rMetal(texelFetch(Sampler0, p, 0).rgb, cosV, s.roughness) * 0.55 : vec3(rSchlick(0.04, cosV) * 0.5), 1.0) * strength;
+		s.tint = min(s.tint, vec3(1.0));
+		s.diffuse = 1.0 - 0.6 * dot(s.tint, vec3(0.3333));
+		s.metallic = material == METAL ? 1.0 : 0.0;
+		s.glint = exposure * 0.5;
+	}
+	if (rain) {
+		// A thin film of water: darker, more saturated, glossy with fairly sharp reflections like a
+		// wet road; tops soak through, walls only get damp, and the gloss varies a little over the
+		// ground in large soft patches.
+		float wet = clamp(Weather.x * open * (n.y > 0.5 ? 1.0 : 0.45), 0.0, 1.0) * (material == FOLIAGE ? 0.5 : 1.0);
+		float gloss = 0.55 + 0.45 * rNoise(xz * 0.3);
+		float f = rSchlick(0.04, cosV) * 0.65 * wet * gloss;
+		float roughness = 0.15;
+		// Puddles on open flat ground: a dark bed under a sharp mirror with a crisp shoreline,
+		// rippled by the raindrops falling into it, in a ring of darker, soaked ground. A puddle
+		// reflects more than water's Fresnel alone would give, so it reads as standing water from
+		// above too.
+		float pool = 0.0;
+		float shore = 0.0;
+		if (n.y > 0.5 && material != FOLIAGE) {
+			float shape = rPuddleShape(xz);
+			float level = rPuddleLevel();
+			pool = smoothstep(level, level + 0.012, shape) * open;
+			shore = smoothstep(level - 0.07, level, shape) * open;
+		}
+		if (pool > 0.001) {
+			vec2 slope = (rDrops(xz) * rLod(8.0, footprint) + rWaves(xz, footprint) * 0.25) * pool;
+			s.normal = normalize(vec3(-slope.x, 1.0, -slope.y));
+			float m = 1.0 - clamp(dot(-view, s.normal), 0.0, 1.0);
+			f = mix(f, 0.3 + 0.7 * m * m * m * m * m, pool);
+			roughness = mix(roughness, 0.0, pool);
+		}
+		if (f > max(s.tint.r, max(s.tint.g, s.tint.b))) {
+			s.tint = vec3(f);
+			s.roughness = metal || glossy ? min(s.roughness, roughness) : roughness;
+		}
+		s.diffuse = min(s.diffuse, 1.0 - f);
+		s.wet = mix(wet, 1.0, max(pool, shore));
+		s.pool = max(pool, shore * 0.35);
+		s.glint = max(s.glint, open * mix(0.3 * wet, 1.0, pool));
+	}
+	return max(s.tint.r, max(s.tint.g, s.tint.b)) > 0.002 || s.wet > 0.002;
+}
+
+// What a ray that finds nothing on screen sees: the sky itself where its direction is on screen
+// and uncovered (the Shader Sky included), otherwise a gradient from the horizon colour.
+vec3 rSky(vec3 dir) {
+	vec4 c = ViewProj * vec4(dir, 0.0);
+	if (c.w > 0.0) {
+		vec2 uv = c.xy / c.w * 0.5 + 0.5;
+		if (all(greaterThan(uv, vec2(0.0))) && all(lessThan(uv, vec2(1.0))) && texelFetch(Sampler1, ivec2(uv * Screen.xy), 0).r >= 1.0) {
+			return texture(Sampler0, uv).rgb;
+		}
+	}
+	vec3 horizon = FogColor.rgb;
+	vec3 zenith = horizon * vec3(0.62, 0.78, 1.0);
+	// Below the horizon: the ground, darker than the sky.
+	return dir.y >= 0.0 ? mix(horizon, zenith, sqrt(dir.y)) : horizon * mix(0.7, 0.3, sqrt(-dir.y));
+}
+
+// Marches a camera-relative ray through the depth buffer in screen space: even steps over the part
+// of the ray that is on screen, then a binary search between the last two. Returns the hit's screen
+// position in xy and its confidence in z (0 = no hit).
+vec3 rMarch(vec3 origin, vec3 dir, float jitter) {
+	const float NEAR = 0.1;
+	vec4 c0 = ViewProj * vec4(origin, 1.0);
+	if (c0.w < NEAR) return vec3(0.0);
+	vec4 c1 = ViewProj * vec4(origin + dir * Trace.z, 1.0);
+	// Keep the end in front of the camera: clip-space w is linear along the ray.
+	if (c1.w < NEAR) c1 = mix(c0, c1, (c0.w - NEAR) / (c0.w - c1.w));
+	vec2 s0 = c0.xy / c0.w * 0.5 + 0.5;
+	vec2 s1 = c1.xy / c1.w * 0.5 + 0.5;
+	// 1/w is linear in screen space.
+	float k0 = 1.0 / c0.w;
+	float k1 = 1.0 / c1.w;
+	vec2 delta = s1 - s0;
+	delta = mix(max(abs(delta), vec2(1.0e-5)), -max(abs(delta), vec2(1.0e-5)), lessThan(delta, vec2(0.0)));
+	vec2 exit = mix((1.0 - s0) / delta, -s0 / delta, lessThan(delta, vec2(0.0)));
+	float end = min(1.0, min(exit.x, exit.y));
+	int steps = int(Trace.x);
+	float stepT = end / float(steps);
+	float t = stepT * jitter;
+	float last = 0.0;
+	float lastW = c0.w;
+	for (int i = 0; i < steps; i++) {
+		t += stepT;
+		vec2 uv = s0 + delta * t;
+		float rayW = 1.0 / mix(k0, k1, t);
+		float behind = rayW - rSceneW(uv);
+		// Behind the scene, but by less than a block plus the step: the ray went into it.
+		if (behind > 0.0 && behind < 1.0 + abs(rayW - lastW) * 1.5 + rayW * 0.02) {
+			float a = last;
+			float b = t;
+			int refinements = int(Trace.y);
+			for (int j = 0; j < refinements; j++) {
+				float m = 0.5 * (a + b);
+				if (1.0 / mix(k0, k1, m) > rSceneW(s0 + delta * m)) b = m;
+				else a = m;
+			}
+			vec2 hit = s0 + delta * b;
+			// Still far behind the surface found: the ray passed behind an object, keep marching.
+			float hitW = 1.0 / mix(k0, k1, b);
+			if (hitW - rSceneW(hit) < 0.35 + hitW * 0.01) {
+				vec2 edge = min(hit, 1.0 - hit);
+				return vec3(hit, smoothstep(0.0, 0.06, min(edge.x, edge.y)));
+			}
+		}
+		last = t;
+		lastW = rayW;
+	}
+	return vec3(0.0);
+}

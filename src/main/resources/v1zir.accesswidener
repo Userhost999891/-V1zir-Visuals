@@ -1,0 +1,13 @@
+accessWidener v2 named
+
+accessible class net/minecraft/client/gui/render/GuiRenderer$Draw
+accessible class net/minecraft/client/gui/DrawContext$ScissorStack
+accessible field net/minecraft/client/gui/DrawContext state Lnet/minecraft/client/gui/render/state/GuiRenderState;
+accessible field net/minecraft/client/gui/DrawContext scissorStack Lnet/minecraft/client/gui/DrawContext$ScissorStack;
+accessible field net/minecraft/client/network/ClientPlayerInteractionManager currentBreakingPos Lnet/minecraft/util/math/BlockPos;
+accessible field net/minecraft/client/network/ClientPlayerInteractionManager currentBreakingProgress F
+accessible field net/minecraft/client/render/WorldRenderer blockBreakingInfos Lit/unimi/dsi/fastutil/ints/Int2ObjectMap;
+accessible field net/minecraft/client/render/OverlayTexture texture Lnet/minecraft/client/texture/NativeImageBackedTexture;
+accessible field net/minecraft/client/model/ModelPart cuboids Ljava/util/List;
+accessible field net/minecraft/client/model/ModelPart children Ljava/util/Map;
+accessible field net/minecraft/client/gui/hud/InGameHud currentBar Lorg/apache/commons/lang3/tuple/Pair;

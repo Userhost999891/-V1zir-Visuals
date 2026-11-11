@@ -1,0 +1,153 @@
+#version 150
+
+layout(std140) uniform WorldParams {
+	mat4 WorldProj;
+	mat4 WorldView;
+	vec4 WorldTime; // x = seconds, y = camera height modulo 64 blocks, z = height of the frame in pixels
+};
+
+in vec2 texCoord0;
+in vec4 vertexColor;
+in vec3 relPos;
+
+out vec4 fragColor;
+
+// Surface height of a water ripple at radius r (0 centre, 1 rim of the disc) and progress p (0..1):
+// a short train of rings behind a front that spreads and slows, smaller further out and as it
+// settles, and a dimple at the centre that bobs a few times. Draw3D.rippleHeight is the same on the CPU
+// (the mesh rises and sinks with it).
+float rippleHeight(float r, float p) {
+	float front = 0.07 + 0.86 * (1.0 - pow(1.0 - p, 1.6));
+	float x = (r - front) / (0.14 + 0.06 * p);
+	float ahead = max(x, 0.0);
+	float behind = min(x, 0.0) / 1.3;
+	float h = cos(x * 6.2831853) * exp(-ahead * ahead * 5.0 - behind * behind) * pow(1.0 - p, 1.2) * inversesqrt(0.3 + r * 1.6);
+	return h + exp(-r * r * 125.0) * cos(p * 22.0) * pow(1.0 - p, 3.0) * 0.9;
+}
+
+// The bright sky a water surface with normal n reflects towards the eye (Fresnel weighted), and the
+// direction it reflects.
+float rippleSky(vec3 view, vec3 n, out vec3 bounce) {
+	float m = 1.0 - clamp(-dot(view, n), 0.0, 1.0);
+	bounce = reflect(view, n);
+	return (0.04 + 0.96 * m * m * m * m * m) * (0.35 + 0.65 * clamp((bounce.y + 0.1) * 2.0, 0.0, 1.0));
+}
+
+float hash21(vec2 p) {
+	vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+	p3 += dot(p3, p3.yzx + 33.33);
+	return fract((p3.x + p3.y) * p3.z);
+}
+
+float valueNoise(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = p - i;
+	f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(hash21(i), hash21(i + vec2(1.0, 0.0)), f.x), mix(hash21(i + vec2(0.0, 1.0)), hash21(i + 1.0), f.x), f.y);
+}
+
+// UV0 selects the falloff of every effect quad:
+//   v < -1.5                 face of a rounded box: glowing rounded border (see Draw3D.roundedBox),
+//                            thin when u < 0
+//   v > 8                    water ripple disc (see Draw3D.ripple)
+//   u in (5, 7)              hologram: scan lines at fixed heights in the world, a band of light
+//                            sweeping up through them (Chams)
+//   u in (7, 9)              window into space: a starfield and drifting nebula fixed to the screen,
+//                            in the vertex colour (Chams)
+//   u > 2                    solid quad, no falloff
+//   v in [2, 4], u in [-1,1] camera facing orb, radial falloff around (0, 3)
+//   otherwise                glowing ribbon, falloff across u in [-1, 1]
+void main() {
+	float a;
+	vec3 rgb = vertexColor.rgb;
+	if (texCoord0.y < -1.5) {
+		// UV0 = (16 qu + px, py - 16 qv - 8): position p on the face around its centre and the
+		// half size h = q / 64, packed so that interpolation keeps both exact. A negative u asks for
+		// the thin border: the same line with only a short glow (Crystal chams).
+		bool thin = texCoord0.x < 0.0;
+		vec2 uv = vec2(abs(texCoord0.x), texCoord0.y);
+		vec2 q = floor(vec2(uv.x, -uv.y - 8.0) / 16.0 + 0.5);
+		vec2 p = vec2(uv.x - 16.0 * q.x, uv.y + 16.0 * q.y + 8.0);
+		vec2 h = q / 64.0;
+		float r = min(0.12, 0.35 * min(h.x, h.y));
+		vec2 e = abs(p) - h + r;
+		float d = length(max(e, 0.0)) + min(max(e.x, e.y), 0.0) - r;
+		// Distance inside the border in pixels: a crisp line and a soft glow of constant screen size,
+		// antialiased outwards so the face corners stay round.
+		float px = -d / max(fwidth(d), 1e-6);
+		float glow = thin ? exp(-max(px, 0.0) * 0.7) * 0.3 : exp(-max(px, 0.0) * 0.16) * 0.5;
+		a = (1.0 - smoothstep(thin ? 0.6 : 1.0, thin ? 1.8 : 2.4, px) + glow) * clamp(px + 1.0, 0.0, 1.0);
+	} else if (texCoord0.y > 8.0) {
+		// UV0 = (4 k + x, 16 + 4 b + y): (x, y) on the disc in [-1, 1], b = 1000 x progress and
+		// k = pass + 2 g with pass 0 for the light the ripple adds (additive) and 1 for its shade
+		// (blended), g = 10 x the shine along the crests.
+		float k = floor(texCoord0.x * 0.25 + 0.5);
+		float b = floor((texCoord0.y - 16.0) * 0.25 + 0.5);
+		vec2 q = vec2(texCoord0.x - 4.0 * k, texCoord0.y - 16.0 - 4.0 * b);
+		float p = b * 0.001;
+		float r = length(q);
+		if (r >= 1.0) discard;
+		float h = rippleHeight(r, p);
+		float slope = (rippleHeight(r + 0.004, p) - rippleHeight(abs(r - 0.004), p)) * 125.0;
+		vec2 radial = q / max(r, 1.0e-5);
+		vec3 n = normalize(vec3(-slope * 0.05 * radial.x, 1.0, -slope * 0.05 * radial.y));
+		// Only what the waves change: flat water adds and takes away nothing, so the disc melts into
+		// the ground under it. Seen low, slopes that turn the reflection towards the sky light up and
+		// the others darken; from any angle the slopes facing a light high in the sky catch it and
+		// the far sides of the rings fall into shade, so every ring shows a lit and a shaded side.
+		vec3 view = normalize(relPos);
+		vec3 bounce;
+		vec3 flatBounce;
+		float sky = rippleSky(view, n, bounce) - rippleSky(view, vec3(0.0, 1.0, 0.0), flatBounce);
+		const vec3 LIGHT = vec3(0.3563, 0.8144, 0.4581);
+		float glint = pow(max(dot(bounce, LIGHT), 0.0), 40.0) - pow(max(dot(flatBounce, LIGHT), 0.0), 40.0);
+		float change = sky * 3.0 + glint * 0.9 + (dot(n, LIGHT) - LIGHT.y) * 2.2;
+		float edge = clamp((1.0 - r) * 8.0, 0.0, 1.0);
+		if (mod(k, 2.0) < 0.5) {
+			float shine = floor(k * 0.5) * 0.1;
+			a = clamp(change + (1.0 - exp(-max(h, 0.0) * 2.0)) * shine, 0.0, 1.0) * edge;
+		} else {
+			a = clamp(-change * 1.3, 0.0, 0.55) * edge;
+		}
+	} else if (texCoord0.x > 7.0) {
+		// Fixed to the screen, so the body is a moving window onto one sky: crisp stars that twinkle, two of
+		// their layers drifting at different speeds, over nebula clouds in the colour and a little of its
+		// neighbouring hue.
+		float t = WorldTime.x;
+		vec2 sp = gl_FragCoord.xy / max(WorldTime.z, 1.0);
+		float clouds = valueNoise(sp * 5.0 + vec2(t * 0.03, 0.0)) * 0.6 + valueNoise(sp * 11.0 - vec2(0.0, t * 0.04)) * 0.4;
+		float veil = valueNoise(sp * 3.0 + vec2(7.3, t * 0.02));
+		rgb = mix(rgb * 0.1, mix(rgb, rgb.brg, 0.55 * veil), smoothstep(0.3, 0.85, clouds));
+		for (int layer = 0; layer < 2; layer++) {
+			vec2 g = sp * (layer == 0 ? 70.0 : 120.0) + vec2(t * (layer == 0 ? 0.25 : 0.12), float(layer) * 17.0);
+			vec2 cell = floor(g);
+			float h = hash21(cell + float(layer) * 31.0);
+			vec2 at = fract(g) - 0.5 - (vec2(hash21(cell + 3.1), hash21(cell + 7.7)) - 0.5) * 0.6;
+			float star = step(0.9, h) * smoothstep(layer == 0 ? 0.16 : 0.11, 0.0, length(at)) * (0.55 + 0.45 * sin(t * 2.5 + h * 60.0));
+			rgb += vec3(star);
+		}
+		a = 1.0;
+	} else if (texCoord0.x > 5.0) {
+		// Scan lines that stand still in the world while the body moves through them, a slow flicker, and
+		// a bright band that sweeps up every few seconds.
+		float t = WorldTime.x;
+		float y = relPos.y + WorldTime.y;
+		float line = 0.5 + 0.5 * sin(y * 88.0 - t * 5.0);
+		float band = exp(-pow((fract(y * 0.4 - t * 0.35) - 0.5) * 9.0, 2.0));
+		float flicker = 0.9 + 0.1 * sin(t * 37.0 + floor(y * 14.0) * 5.0);
+		a = (0.3 + 0.7 * line * line) * flicker + band * 0.9;
+		rgb = mix(rgb, vec3(1.0), band * 0.6);
+	} else if (texCoord0.x > 2.0) {
+		a = 1.0;
+	} else if (texCoord0.y >= 1.5) {
+		float r = length(vec2(texCoord0.x, texCoord0.y - 3.0));
+		a = exp(-r * r * 5.0) * 0.55 + exp(-r * r * 28.0) * 0.9;
+		a *= 1.0 - smoothstep(0.8, 1.0, r);
+	} else {
+		float x = abs(texCoord0.x);
+		a = exp(-x * x * 18.0) + exp(-x * x * 3.0) * 0.45;
+		a *= 1.0 - smoothstep(0.9, 1.0, x);
+	}
+	if (a <= 0.003) discard;
+	fragColor = vec4(min(rgb, vec3(1.0)), vertexColor.a * min(a, 1.0));
+}

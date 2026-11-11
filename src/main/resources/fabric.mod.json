@@ -1,0 +1,23 @@
+{
+	"schemaVersion": 1,
+	"id": "v1zir",
+	"version": "${version}",
+	"name": "V1zir Visuals",
+	"description": "Client-side visuals: shader sky presets, custom main menu, click GUI, HUD and PvP visual effects with crisp SDF font rendering.",
+	"authors": ["V1zir"],
+	"contact": {},
+	"license": "All-Rights-Reserved",
+	"icon": "assets/v1zir/icon.png",
+	"environment": "client",
+	"entrypoints": {
+		"client": ["dev.v1zir.visuals.V1zirClient"]
+	},
+	"mixins": ["v1zir.mixins.json"],
+	"accessWidener": "v1zir.accesswidener",
+	"depends": {
+		"fabricloader": ">=${loader_version}",
+		"minecraft": "~${minecraft_version}",
+		"java": ">=21",
+		"fabric-api": "*"
+	}
+}

@@ -1,0 +1,297 @@
+package dev.v1zir.visuals.render.world;
+
+import dev.v1zir.visuals.util.ColorUtil;
+
+import java.util.function.IntUnaryOperator;
+
+/** Helpers that turn simple shapes into glowing quads. */
+public final class Draw3D {
+	private Draw3D() {
+	}
+
+	/** Flat ring lying on the ground; colorAt receives the segment index (0..segments). */
+	public static void flatRing(WorldEffectRenderer.Mesh mesh, double cx, double y, double cz, double radius, double width,
+								int segments, IntUnaryOperator colorAt) {
+		ring(mesh, cx, y, cz, 1, 0, 0, 0, 0, 1, radius, width, segments, colorAt);
+	}
+
+	/** Ring in the plane spanned by the unit axes a and b; colorAt receives the segment index (0..segments). */
+	public static void ring(WorldEffectRenderer.Mesh mesh, double cx, double cy, double cz, double ax, double ay, double az,
+							double bx, double by, double bz, double radius, double width, int segments, IntUnaryOperator colorAt) {
+		double inner = Math.max(0, radius - width);
+		double outer = radius + width;
+		for (int i = 0; i < segments; i++) {
+			double a0 = Math.PI * 2 * i / segments;
+			double a1 = Math.PI * 2 * (i + 1) / segments;
+			double c0 = Math.cos(a0), s0 = Math.sin(a0), c1 = Math.cos(a1), s1 = Math.sin(a1);
+			// Unit directions of both segment ends in the ring plane.
+			double x0 = ax * c0 + bx * s0, y0 = ay * c0 + by * s0, z0 = az * c0 + bz * s0;
+			double x1 = ax * c1 + bx * s1, y1 = ay * c1 + by * s1, z1 = az * c1 + bz * s1;
+			int col0 = colorAt.applyAsInt(i);
+			int col1 = colorAt.applyAsInt(i + 1);
+			mesh.vertex(cx + x0 * inner, cy + y0 * inner, cz + z0 * inner, -1f, 0f, col0);
+			mesh.vertex(cx + x0 * outer, cy + y0 * outer, cz + z0 * outer, 1f, 0f, col0);
+			mesh.vertex(cx + x1 * outer, cy + y1 * outer, cz + z1 * outer, 1f, 1f, col1);
+			mesh.vertex(cx + x1 * inner, cy + y1 * inner, cz + z1 * inner, -1f, 1f, col1);
+		}
+	}
+
+	/** Vertical glowing band around a column (target ESP ring). */
+	public static void bandRing(WorldEffectRenderer.Mesh mesh, double cx, double y, double cz, double radius, double halfHeight,
+								int segments, IntUnaryOperator colorAt) {
+		for (int i = 0; i < segments; i++) {
+			double a0 = Math.PI * 2 * i / segments;
+			double a1 = Math.PI * 2 * (i + 1) / segments;
+			double x0 = cx + Math.cos(a0) * radius, z0 = cz + Math.sin(a0) * radius;
+			double x1 = cx + Math.cos(a1) * radius, z1 = cz + Math.sin(a1) * radius;
+			int col0 = colorAt.applyAsInt(i);
+			int col1 = colorAt.applyAsInt(i + 1);
+			mesh.vertex(x0, y - halfHeight, z0, -1f, 0f, col0);
+			mesh.vertex(x0, y + halfHeight, z0, 1f, 0f, col0);
+			mesh.vertex(x1, y + halfHeight, z1, 1f, 1f, col1);
+			mesh.vertex(x1, y - halfHeight, z1, -1f, 1f, col1);
+		}
+	}
+
+	/** Camera facing glowing line between two points. */
+	public static void line(WorldEffectRenderer.Mesh mesh, double x0, double y0, double z0, double x1, double y1, double z1,
+							float width, int color0, int color1) {
+		// Perpendicular to both the line and the view direction.
+		double dx = x1 - x0, dy = y1 - y0, dz = z1 - z0;
+		double vx = (x0 + x1) * 0.5 - WorldEffectRenderer.camX;
+		double vy = (y0 + y1) * 0.5 - WorldEffectRenderer.camY;
+		double vz = (z0 + z1) * 0.5 - WorldEffectRenderer.camZ;
+		double px = dy * vz - dz * vy;
+		double py = dz * vx - dx * vz;
+		double pz = dx * vy - dy * vx;
+		double len = Math.sqrt(px * px + py * py + pz * pz);
+		if (len < 1e-6) return;
+		px = px / len * width;
+		py = py / len * width;
+		pz = pz / len * width;
+		mesh.vertex(x0 - px, y0 - py, z0 - pz, -1f, 0f, color0);
+		mesh.vertex(x0 + px, y0 + py, z0 + pz, 1f, 0f, color0);
+		mesh.vertex(x1 + px, y1 + py, z1 + pz, 1f, 1f, color1);
+		mesh.vertex(x1 - px, y1 - py, z1 - pz, -1f, 1f, color1);
+	}
+
+	/**
+	 * Box whose faces carry a glowing rounded border: a crisp line along the edges with a soft glow
+	 * inwards, both of constant screen size, so it reads like a rounded outline from any distance.
+	 * Colours run from bottom to top; faces may be up to 15 blocks across.
+	 */
+	public static void roundedBox(WorldEffectRenderer.Mesh mesh, double minX, double minY, double minZ,
+								  double maxX, double maxY, double maxZ, int bottom, int top) {
+		float hx = (float) (maxX - minX) * 0.5f;
+		float hy = (float) (maxY - minY) * 0.5f;
+		float hz = (float) (maxZ - minZ) * 0.5f;
+		// Each face packs its half size into UV0 next to the position (decoded in world_effect.fsh).
+		float qx = 16f * quantize(hx);
+		float qy = 16f * quantize(hy) + 8f;
+		float qz = 16f * quantize(hz);
+		float qzv = 16f * quantize(hz) + 8f;
+		box(mesh, minX, minY, minZ, maxX, maxY, maxZ, bottom, top,
+			qx - hx, qx + hx, -hz - qzv, hz - qzv,
+			qz - hz, qz + hz, -hy - qy, hy - qy,
+			qx - hx, qx + hx, -hy - qy, hy - qy);
+	}
+
+	/** Box of plain translucent faces (fills), coloured from bottom to top. */
+	public static void solidBox(WorldEffectRenderer.Mesh mesh, double minX, double minY, double minZ,
+								double maxX, double maxY, double maxZ, int bottom, int top) {
+		box(mesh, minX, minY, minZ, maxX, maxY, maxZ, bottom, top, 3f, 3f, 0f, 0f, 3f, 3f, 0f, 0f, 3f, 3f, 0f, 0f);
+	}
+
+	/**
+	 * Cube of half edge {@code half} around (x, y, z), turned so its faces are spanned by the rows of
+	 * {@code basis} (three unit axes, a, b, c as x, y, z each), every face carrying the glowing rounded
+	 * border of {@link #roundedBox}. Half edges from 1/64 to 7.5 blocks.
+	 */
+	public static void cube(WorldEffectRenderer.Mesh mesh, double x, double y, double z, float half, float[] basis, int color) {
+		float q = 16f * quantize(half);
+		float u0 = q - half, u1 = q + half;
+		float v0 = -half - q - 8f, v1 = half - q - 8f;
+		for (int axis = 0; axis < 3; axis++) {
+			// The face normal is this axis, the face is spanned by the other two.
+			int n = axis * 3, a = (axis + 1) % 3 * 3, b = (axis + 2) % 3 * 3;
+			float ax = basis[a] * half, ay = basis[a + 1] * half, az = basis[a + 2] * half;
+			float bx = basis[b] * half, by = basis[b + 1] * half, bz = basis[b + 2] * half;
+			for (int side = -1; side <= 1; side += 2) {
+				double fx = x + basis[n] * half * side, fy = y + basis[n + 1] * half * side, fz = z + basis[n + 2] * half * side;
+				mesh.vertex(fx - ax - bx, fy - ay - by, fz - az - bz, u0, v0, color);
+				mesh.vertex(fx + ax - bx, fy + ay - by, fz + az - bz, u1, v0, color);
+				mesh.vertex(fx + ax + bx, fy + ay + by, fz + az + bz, u1, v1, color);
+				mesh.vertex(fx - ax + bx, fy - ay + by, fz - az + bz, u0, v1, color);
+			}
+		}
+	}
+
+	/** Rotation of angle radians about the unit axis (x, y, z), written into basis as three rows (Rodrigues). */
+	public static void rotation(float[] basis, float x, float y, float z, float angle) {
+		float c = (float) Math.cos(angle), s = (float) Math.sin(angle), k = 1f - c;
+		basis[0] = c + x * x * k;
+		basis[1] = x * y * k + z * s;
+		basis[2] = x * z * k - y * s;
+		basis[3] = y * x * k - z * s;
+		basis[4] = c + y * y * k;
+		basis[5] = y * z * k + x * s;
+		basis[6] = z * x * k + y * s;
+		basis[7] = z * y * k - x * s;
+		basis[8] = c + z * z * k;
+	}
+
+	/**
+	 * Soft glowing ellipse lying flat at height y (the orb falloff on a horizontal quad); (ux, uz) and
+	 * (vx, vz) are its two half axes.
+	 */
+	public static void flatOrb(WorldEffectRenderer.Mesh mesh, double x, double y, double z, float ux, float uz, float vx, float vz, int argb) {
+		mesh.vertex(x - ux - vx, y, z - uz - vz, -1f, 2f, argb);
+		mesh.vertex(x - ux + vx, y, z - uz + vz, -1f, 4f, argb);
+		mesh.vertex(x + ux + vx, y, z + uz + vz, 1f, 4f, argb);
+		mesh.vertex(x + ux - vx, y, z + uz - vz, 1f, 2f, argb);
+	}
+
+	/** Rings and segments of the ripple mesh, and its wave height and lift above the ground per block of radius. */
+	private static final int RIPPLE_RINGS = 36;
+	private static final int RIPPLE_SEGMENTS = 44;
+	private static final double RIPPLE_HEIGHT = 0.014;
+	private static final double RIPPLE_LIFT = 0.028;
+	private static final float[] RIPPLE_COS = new float[RIPPLE_SEGMENTS + 1];
+	private static final float[] RIPPLE_SIN = new float[RIPPLE_SEGMENTS + 1];
+	private static final double[] RIPPLE_Y = new double[RIPPLE_RINGS + 1];
+
+	static {
+		for (int j = 0; j <= RIPPLE_SEGMENTS; j++) {
+			double a = Math.PI * 2.0 * j / RIPPLE_SEGMENTS;
+			RIPPLE_COS[j] = (float) Math.cos(a);
+			RIPPLE_SIN[j] = (float) Math.sin(a);
+		}
+	}
+
+	/**
+	 * Water ripple at height y, rings running out from (x, z) to {@code radius} as {@code progress} goes
+	 * from 0 to 1: a disc of rings whose surface really rises into crests and sinks into troughs (it sits
+	 * a little above the ground for them), shaded by world_effect.fsh from the same wave function. The
+	 * light the waves catch goes into {@code glow} in the colour {@code light}, their shade into
+	 * {@code shade} in the colour {@code dark}; flat water adds nothing, so the disc blends into whatever
+	 * it lies on. {@code shine} (0..1.5) adds a soft glow along the crests on top of the reflections.
+	 */
+	public static void ripple(WorldEffectRenderer.Mesh glow, WorldEffectRenderer.Mesh shade, double x, double y, double z, double radius,
+							  float progress, float shine, int light, int dark) {
+		float p = Math.max(0f, Math.min(1f, progress));
+		int b = Math.round(p * 1000f);
+		int g = Math.round(Math.max(0f, Math.min(1.5f, shine)) * 10f);
+		// The rings' heights, from the wave function the shader shades with (at the packed progress).
+		float packed = b * 0.001f;
+		double lift = y + RIPPLE_LIFT * radius;
+		for (int i = 0; i <= RIPPLE_RINGS; i++) {
+			float h = rippleHeight(i / (float) RIPPLE_RINGS, packed);
+			RIPPLE_Y[i] = lift + RIPPLE_HEIGHT * radius * Math.max(-1.6f, Math.min(1.6f, h));
+		}
+		disc(glow, x, z, radius, 2 * g, b, light);
+		disc(shade, x, z, radius, 2 * g + 1, b, dark);
+	}
+
+	/**
+	 * Surface height of a ripple at radius r (0 centre, 1 rim) and progress p, as rippleHeight in world_effect.fsh:
+	 * a short train of rings behind a front that spreads and slows, smaller further out and as it settles, and a
+	 * dimple at the centre that bobs a few times.
+	 */
+	public static float rippleHeight(float r, float p) {
+		double front = 0.07 + 0.86 * (1.0 - Math.pow(1.0 - p, 1.6));
+		double x = (r - front) / (0.14 + 0.06 * p);
+		double ahead = Math.max(x, 0.0);
+		double behind = Math.min(x, 0.0) / 1.3;
+		double h = Math.cos(x * 6.2831853) * Math.exp(-ahead * ahead * 5.0 - behind * behind) * Math.pow(1.0 - p, 1.2) / Math.sqrt(0.3 + r * 1.6);
+		return (float) (h + Math.exp(-r * r * 125.0) * Math.cos(p * 22.0) * Math.pow(1.0 - p, 3.0) * 0.9);
+	}
+
+	/** One pass of the ripple mesh: each vertex carries its place on the disc next to the packed pass, shine and progress (world_effect.fsh). */
+	private static void disc(WorldEffectRenderer.Mesh mesh, double x, double z, double radius, int k, int b, int argb) {
+		float u = 4f * k;
+		float v = 16f + 4f * b;
+		for (int i = 0; i < RIPPLE_RINGS; i++) {
+			float r0 = i / (float) RIPPLE_RINGS;
+			float r1 = (i + 1) / (float) RIPPLE_RINGS;
+			double y0 = RIPPLE_Y[i];
+			double y1 = RIPPLE_Y[i + 1];
+			for (int j = 0; j < RIPPLE_SEGMENTS; j++) {
+				float c0 = RIPPLE_COS[j], s0 = RIPPLE_SIN[j], c1 = RIPPLE_COS[j + 1], s1 = RIPPLE_SIN[j + 1];
+				mesh.vertex(x + c0 * r0 * radius, y0, z + s0 * r0 * radius, u + c0 * r0, v + s0 * r0, argb);
+				mesh.vertex(x + c0 * r1 * radius, y1, z + s0 * r1 * radius, u + c0 * r1, v + s0 * r1, argb);
+				mesh.vertex(x + c1 * r1 * radius, y1, z + s1 * r1 * radius, u + c1 * r1, v + s1 * r1, argb);
+				mesh.vertex(x + c1 * r0 * radius, y0, z + s1 * r0 * radius, u + c1 * r0, v + s1 * r0, argb);
+			}
+		}
+	}
+
+	private static float quantize(float half) {
+		return Math.max(1, Math.min(480, Math.round(half * 64f)));
+	}
+
+	/** Six faces; the UV ranges are given per face orientation (horizontal: x/z, sides along z: z/y, sides along x: x/y). */
+	private static void box(WorldEffectRenderer.Mesh mesh, double x0, double y0, double z0, double x1, double y1, double z1, int bottom, int top,
+							float hu0, float hu1, float hv0, float hv1, float zu0, float zu1, float zv0, float zv1, float xu0, float xu1, float xv0, float xv1) {
+		for (int side = 0; side < 2; side++) {
+			double y = side == 0 ? y0 : y1;
+			int c = side == 0 ? bottom : top;
+			mesh.vertex(x0, y, z0, hu0, hv0, c);
+			mesh.vertex(x1, y, z0, hu1, hv0, c);
+			mesh.vertex(x1, y, z1, hu1, hv1, c);
+			mesh.vertex(x0, y, z1, hu0, hv1, c);
+
+			double x = side == 0 ? x0 : x1;
+			mesh.vertex(x, y0, z0, zu0, zv0, bottom);
+			mesh.vertex(x, y0, z1, zu1, zv0, bottom);
+			mesh.vertex(x, y1, z1, zu1, zv1, top);
+			mesh.vertex(x, y1, z0, zu0, zv1, top);
+
+			double z = side == 0 ? z0 : z1;
+			mesh.vertex(x0, y0, z, xu0, xv0, bottom);
+			mesh.vertex(x1, y0, z, xu1, xv0, bottom);
+			mesh.vertex(x1, y1, z, xu1, xv1, top);
+			mesh.vertex(x0, y1, z, xu0, xv1, top);
+		}
+	}
+
+	/**
+	 * 0 within {@code near} blocks of the camera, 1 from {@code far} on (smooth in between). Effects
+	 * fade out in front of the eyes, where their quads would otherwise fill the screen.
+	 */
+	public static float cameraFade(double x, double y, double z, float near, float far) {
+		double dx = x - WorldEffectRenderer.camX;
+		double dy = y - WorldEffectRenderer.camY;
+		double dz = z - WorldEffectRenderer.camZ;
+		float t = (float) ((Math.sqrt(dx * dx + dy * dy + dz * dz) - near) / (far - near));
+		t = Math.max(0f, Math.min(1f, t));
+		return t * t * (3f - 2f * t);
+	}
+
+	/**
+	 * Ring colours that wave between two colours around the circle. One instance is kept and set
+	 * again every frame, so drawing rings allocates nothing.
+	 */
+	public static final class Wave implements IntUnaryOperator {
+		private int from;
+		private int to;
+		private float phase;
+		private int alpha;
+		private int segments;
+
+		/** alpha is 0..1; phase turns the wave around the ring (radians). */
+		public Wave set(int from, int to, float phase, float alpha, int segments) {
+			this.from = from;
+			this.to = to;
+			this.phase = phase;
+			this.alpha = Math.round(Math.max(0f, Math.min(1f, alpha)) * 255f);
+			this.segments = segments;
+			return this;
+		}
+
+		@Override
+		public int applyAsInt(int i) {
+			float k = (float) (Math.sin(i * Math.PI * 2 / segments + phase) * 0.5 + 0.5);
+			return ColorUtil.withAlpha(ColorUtil.lerp(from, to, k), alpha);
+		}
+	}
+}
