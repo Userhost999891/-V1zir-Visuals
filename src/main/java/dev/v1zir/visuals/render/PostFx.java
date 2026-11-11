@@ -49,7 +49,7 @@ public final class PostFx {
 	private static final int SIZE = new Std140SizeCalculator().putMat4f()
 		.putVec4().putVec4().putVec4().putVec4().putVec4().putVec4().putVec4().get();
 	/** How far below the eyes the mist's densest layer lies, and how fast (per second) it follows a change of height. */
-	private static final float MIST_BELOW = 2.6f;
+	private static final float MIST_BELOW = 2.0f;
 	private static final float MIST_FOLLOW = 0.35f;
 	private static final Params PARAMS = new Params();
 	private static final Matrix4d INVERSE = new Matrix4d();
@@ -128,7 +128,8 @@ public final class PostFx {
 			if (Float.isNaN(mistBase) || Math.abs(target - mistBase) > 32f) mistBase = target;
 			else mistBase += (target - mistBase) * (1f - (float) Math.exp(-dt * MIST_FOLLOW));
 			int color = mist.color(world, sy);
-			float density = mist.density.f() * 0.011f * (1f + 0.8f * world.getRainGradient(tickDelta));
+			// At the default density a field 10 blocks away is a little hazy, 30 blocks away half gone in it.
+			float density = mist.density.f() * 0.021f * (1f + 0.8f * world.getRainGradient(tickDelta));
 			p.fog.set(ColorUtil.red(color) / 255f, ColorUtil.green(color) / 255f, ColorUtil.blue(color) / 255f, density);
 			p.fogShape.set(1f / mist.height.f(), (float) cam.y - mistBase, mist.drift.on() ? 1f : 0f, 0.92f);
 		} else {
