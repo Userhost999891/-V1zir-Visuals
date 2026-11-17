@@ -57,21 +57,21 @@ public final class VibeModule extends Module implements WorldEffect {
 
 	private static final Mood[] MOODS = {
 		// Sakura
-		new Mood(PETAL, 170, 0xFFFFB7D5, 0xFFFF8FB8, 0xFFFFC9DD, 0.8f, 0x3A1030, 0xFF8FB8, 0xFFF0F5, 0.34f, 0.12f, 0.12f, 1.08f, 1.03f, 1f),
+		new Mood(PETAL, 320, 0xFFFFB7D5, 0xFFFF8FB8, 0xFFFFC9DD, 0.8f, 0x3A1030, 0xFF8FB8, 0xFFF0F5, 0.34f, 0.12f, 0.12f, 1.08f, 1.03f, 1f),
 		// Autumn
-		new Mood(LEAF, 110, 0xFFE8531F, 0xFFFFB13B, 0xFFE8B080, 0.7f, 0x2A1406, 0xE07A2E, 0xFFE8C0, 0.34f, 0.35f, 0f, 1.12f, 1.05f, 1.3f),
+		new Mood(LEAF, 220, 0xFFE8531F, 0xFFFFB13B, 0xFFE8B080, 0.7f, 0x2A1406, 0xE07A2E, 0xFFE8C0, 0.34f, 0.35f, 0f, 1.12f, 1.05f, 1.3f),
 		// Winter
-		new Mood(SNOW, 260, 0xFFFFFFFF, 0xFFE3F1FF, 0xFFDCE8F5, 1.0f, 0x0A1A30, 0x7FB8FF, 0xF0FAFF, 0.3f, -0.35f, 0f, 0.9f, 1.02f, 0.6f),
+		new Mood(SNOW, 460, 0xFFFFFFFF, 0xFFE3F1FF, 0xFFDCE8F5, 1.0f, 0x0A1A30, 0x7FB8FF, 0xF0FAFF, 0.3f, -0.35f, 0f, 0.9f, 1.02f, 0.6f),
 		// Fireflies
-		new Mood(FIREFLY, 90, 0xFFD6FF6A, 0xFFFFE27A, 0xFF1E2C4A, 0.6f, 0x050A1A, 0x3050A0, 0xE0F0FF, 0.3f, -0.1f, 0f, 1.05f, 1.04f, 0.2f),
+		new Mood(FIREFLY, 150, 0xFFD6FF6A, 0xFFFFE27A, 0xFF1E2C4A, 0.6f, 0x050A1A, 0x3050A0, 0xE0F0FF, 0.3f, -0.1f, 0f, 1.05f, 1.04f, 0.2f),
 		// Neon
-		new Mood(NEON, 120, 0xFFFF3DD8, 0xFF3DF2FF, 0xFF6A2A8A, 0.7f, 0x1A0530, 0xFF3DD8, 0x8FF8FF, 0.4f, -0.05f, 0.15f, 1.25f, 1.1f, 0f),
+		new Mood(NEON, 190, 0xFFFF3DD8, 0xFF3DF2FF, 0xFF6A2A8A, 0.7f, 0x1A0530, 0xFF3DD8, 0x8FF8FF, 0.4f, -0.05f, 0.15f, 1.25f, 1.1f, 0f),
 		// Ocean
-		new Mood(BUBBLE, 120, 0xFF7AF2FF, 0xFF3DB8D8, 0xFF7ACFD8, 0.8f, 0x021A24, 0x2FB8C8, 0xE0FFFA, 0.35f, -0.2f, 0f, 1.08f, 1.03f, 0.3f),
+		new Mood(BUBBLE, 210, 0xFF7AF2FF, 0xFF3DB8D8, 0xFF7ACFD8, 0.8f, 0x021A24, 0x2FB8C8, 0xE0FFFA, 0.35f, -0.2f, 0f, 1.08f, 1.03f, 0.3f),
 		// Dreamy
-		new Mood(BOKEH, 60, 0xFFFFC4E1, 0xFFD8B4FF, 0xFFF4DCEC, 0.9f, 0x2A1A3A, 0xD8A0E0, 0xFFF4F0, 0.35f, 0.1f, 0.08f, 0.95f, 0.94f, 0.2f),
+		new Mood(BOKEH, 90, 0xFFFFC4E1, 0xFFD8B4FF, 0xFFF4DCEC, 0.9f, 0x2A1A3A, 0xD8A0E0, 0xFFF4F0, 0.35f, 0.1f, 0.08f, 0.95f, 0.94f, 0.2f),
 		// Stardust
-		new Mood(STAR, 220, 0xFFFFFFFF, 0xFFB9A6FF, 0xFF2A1F4A, 0.6f, 0x0A0620, 0x7A5CFF, 0xF0E8FF, 0.35f, -0.1f, 0.1f, 1.1f, 1.05f, 0.15f),
+		new Mood(STAR, 340, 0xFFFFFFFF, 0xFFB9A6FF, 0xFF2A1F4A, 0.6f, 0x0A0620, 0x7A5CFF, 0xF0E8FF, 0.35f, -0.1f, 0.1f, 1.1f, 1.05f, 0.15f),
 	};
 
 	public final ModeSetting theme = add(new ModeSetting("Theme", "Sakura", "Sakura", "Autumn", "Winter", "Fireflies", "Neon", "Ocean", "Dreamy",
@@ -80,7 +80,7 @@ public final class VibeModule extends Module implements WorldEffect {
 	public final NumberSetting intensity = add(new NumberSetting("Intensity", 1.0, 0.2, 2.0, 0.05).suffix("x"));
 	public final NumberSetting particles = add(new NumberSetting("Particles", 1.0, 0.0, 3.0, 0.05).suffix("x"));
 	public final NumberSetting particleSize = add(new NumberSetting("Particle size", 1.0, 0.4, 2.5, 0.05).suffix("x"));
-	public final NumberSetting radius = add(new NumberSetting("Radius", 22, 8, 48, 1).suffix(" m"));
+	public final NumberSetting radius = add(new NumberSetting("Radius", 15, 8, 48, 1).suffix(" m"));
 	public final NumberSetting wind = add(new NumberSetting("Wind", 1.0, 0.0, 3.0, 0.05).suffix("x"));
 	public final BoolSetting haze = add(new BoolSetting("Haze", true));
 	public final BoolSetting grade = add(new BoolSetting("Color grade", true));
@@ -233,7 +233,7 @@ public final class VibeModule extends Module implements WorldEffect {
 			float dist = (float) Math.sqrt(dist2);
 			// Faded in towards the edge of the radius, and out right in front of the eyes.
 			float near = Math.max(0f, Math.min(1f, (dist - 0.6f) / 1.0f));
-			float alpha = Math.min(1f, (1f - dist / r) * 2.5f) * near * near * (3f - 2f * near);
+			float alpha = Math.min(1f, (1f - dist / r) * 3.5f) * near * near * (3f - 2f * near);
 			if (alpha <= 0.01f) continue;
 			double x = cx + dx;
 			double y = cy + dy;
@@ -356,7 +356,8 @@ public final class VibeModule extends Module implements WorldEffect {
 		boolean falling = kind == PETAL || kind == LEAF || kind == SNOW;
 		boolean rising = kind == NEON || kind == BUBBLE;
 		// Falling ones come back anywhere over the top, rising ones under the bottom, the rest at the edge.
-		double dist = (anywhere || falling || rising ? Math.sqrt(random.nextDouble()) * 0.95 : 0.75 + random.nextDouble() * 0.25) * r;
+		// Weighted towards you, where they are big enough to see; a few further out fill the depth.
+		double dist = (anywhere || falling || rising ? 0.08 + 0.87 * Math.pow(random.nextDouble(), 0.8) : 0.75 + random.nextDouble() * 0.25) * r;
 		data[o] = ox + (float) (Math.cos(theta) * dist);
 		data[o + 2] = oz + (float) (Math.sin(theta) * dist);
 		float y;
@@ -371,14 +372,14 @@ public final class VibeModule extends Module implements WorldEffect {
 		data[o + 6] = random.nextFloat() * 6.283f;
 		data[o + 7] = random.nextFloat();
 		data[o + 8] = switch (kind) {
-			case PETAL -> 0.07f + random.nextFloat() * 0.05f;
-			case LEAF -> 0.1f + random.nextFloat() * 0.08f;
-			case SNOW -> 0.035f + random.nextFloat() * 0.04f;
-			case FIREFLY -> 0.03f + random.nextFloat() * 0.03f;
-			case NEON -> 0.05f + random.nextFloat() * 0.04f;
-			case BUBBLE -> 0.05f + random.nextFloat() * 0.07f;
-			case BOKEH -> 0.15f + random.nextFloat() * 0.2f;
-			default -> 0.02f + random.nextFloat() * 0.03f;
+			case PETAL -> 0.11f + random.nextFloat() * 0.07f;
+			case LEAF -> 0.15f + random.nextFloat() * 0.1f;
+			case SNOW -> 0.05f + random.nextFloat() * 0.05f;
+			case FIREFLY -> 0.04f + random.nextFloat() * 0.035f;
+			case NEON -> 0.07f + random.nextFloat() * 0.05f;
+			case BUBBLE -> 0.07f + random.nextFloat() * 0.08f;
+			case BOKEH -> 0.2f + random.nextFloat() * 0.25f;
+			default -> 0.03f + random.nextFloat() * 0.035f;
 		};
 	}
 }

@@ -1,0 +1,9 @@
+-proc:none
+-implicit:none
+-Xmaxerrs
+1000000
+-cp
+/tmp/claude-0/-home-user--V1zir-Visuals/15f1fe56-9eac-567f-a5b8-21af016a4dce/scratchpad/joml/joml.jar
+-d
+/tmp/claude-0/-home-user--V1zir-Visuals/15f1fe56-9eac-567f-a5b8-21af016a4dce/scratchpad/jc
+@/tmp/claude-0/-home-user--V1zir-Visuals/15f1fe56-9eac-567f-a5b8-21af016a4dce/scratchpad/all.txt

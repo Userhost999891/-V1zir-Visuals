@@ -1176,7 +1176,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		look(singleplayer, 30, -6);
 		for (String theme : List.of("Sakura", "Autumn", "Winter", "Ocean", "Dreamy", "Fireflies", "Neon", "Stardust")) {
 			boolean night = theme.equals("Fireflies") || theme.equals("Neon") || theme.equals("Stardust");
-			singleplayer.getServer().runCommand("time set " + (night ? 18000 : 6000));
+			setTime(context, singleplayer, night ? 18000 : 6000);
 			context.runOnClient(client -> {
 				VibeModule vibe = ModuleManager.get(VibeModule.class);
 				vibe.theme.set(theme);
@@ -1216,7 +1216,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 	/** Wet World without rain: the field soaked, with puddles, then with Drizzle ringing on them. */
 	private static void wetWorld(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
 		look(singleplayer, 20, 22);
-		singleplayer.getServer().runCommand("time set 1000");
+		setTime(context, singleplayer, 1000);
 		context.runOnClient(client -> ModuleManager.get(WetWorldModule.class).setEnabled(true, false));
 		context.waitTicks(40);
 		context.takeScreenshot("wet-world");
@@ -1660,6 +1660,23 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.takeScreenshot("clickgui-close-3d-frost");
 		context.waitTicks(50);
 		context.runOnClient(client -> ModuleManager.get(ClickGuiModule.class).animationSpeed.set(1.0));
+	}
+
+	/**
+	 * Sets the time of day and waits (up to five seconds) until the client's world has it: the server sends the time
+	 * on its own schedule, so a shot right after the command can still show the old one.
+	 */
+	private static void setTime(ClientGameTestContext context, TestSingleplayerContext singleplayer, int time) {
+		singleplayer.getServer().runCommand("time set " + time);
+		for (int i = 0; i < 100; i++) {
+			boolean there = context.computeOnClient(client -> {
+				long now = Math.floorMod(client.world.getTimeOfDay(), 24000L);
+				long diff = Math.abs(now - time);
+				return Math.min(diff, 24000L - diff) < 400L;
+			});
+			if (there) return;
+			context.waitTicks(1);
+		}
 	}
 
 	private static void look(TestSingleplayerContext singleplayer, float yaw, float pitch) {
