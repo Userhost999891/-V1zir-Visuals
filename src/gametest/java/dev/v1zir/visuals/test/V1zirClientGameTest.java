@@ -48,6 +48,7 @@ import dev.v1zir.visuals.module.impl.visuals.FreeLookModule;
 import dev.v1zir.visuals.module.impl.visuals.GodRaysModule;
 import dev.v1zir.visuals.module.impl.visuals.HandChamsModule;
 import dev.v1zir.visuals.module.impl.visuals.MistModule;
+import dev.v1zir.visuals.module.impl.visuals.NametagsModule;
 import dev.v1zir.visuals.module.impl.visuals.MotionBlurModule;
 import dev.v1zir.visuals.module.impl.visuals.RainEffectsModule;
 import dev.v1zir.visuals.module.impl.visuals.ShaderSkyModule;
@@ -146,6 +147,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			motionBlur(context, singleplayer);
 			atmosphere(context, singleplayer);
 			vibe(context, singleplayer);
+			nametags(context);
 			wetWorld(context, singleplayer);
 			handChams(context, singleplayer);
 			knives(context, singleplayer);
@@ -1191,6 +1193,24 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		});
 		singleplayer.getServer().runCommand("time set 6000");
 		look(singleplayer, 0, 0);
+	}
+
+	/** Nametags on your own player in third person (the only player in the test world), as others see it over you. */
+	private static void nametags(ClientGameTestContext context) {
+		context.runOnClient(client -> {
+			NametagsModule tags = ModuleManager.get(NametagsModule.class);
+			tags.self.set(true);
+			tags.setEnabled(true, false);
+			client.options.setPerspective(Perspective.THIRD_PERSON_BACK);
+		});
+		context.waitTicks(10);
+		context.takeScreenshot("nametags-self");
+		context.runOnClient(client -> {
+			NametagsModule tags = ModuleManager.get(NametagsModule.class);
+			tags.setEnabled(false, false);
+			tags.self.reset();
+			client.options.setPerspective(Perspective.FIRST_PERSON);
+		});
 	}
 
 	/** Wet World without rain: the field soaked, with puddles, then with Drizzle ringing on them. */
