@@ -216,23 +216,30 @@ public final class TargetEspModule extends Module implements WorldEffect {
 
 	// ------------------------------------------------------------------ brackets
 
-	/** Thick brackets on the eight corners of the target's box, holding still; they close in a little on every hit. */
+	/**
+	 * A lock-on frame facing the camera around the whole target: thick corner brackets from just above its feet to over
+	 * its head, holding still, each corner lit; the frame closes in a little on every hit.
+	 */
 	private void brackets(Vec3d pos, float w, float h, float s, float hit, int c1, int c2) {
-		double half = (w * 0.5 + 0.14) * s * (1.0 - 0.08 * hit);
-		double minY = pos.y - 0.06;
-		double maxY = pos.y + h + 0.1 * s;
-		double arm = Math.min(half * 0.9, (maxY - minY) * 0.22);
-		for (int i = 0; i < 8; i++) {
-			double sx = (i & 1) == 0 ? -1 : 1, sy = (i & 2) == 0 ? -1 : 1, sz = (i & 4) == 0 ? -1 : 1;
-			double x = pos.x + sx * half, y = sy < 0 ? minY : maxY, z = pos.z + sz * half;
-			float near = Draw3D.cameraFade(x, y, z, 0.5f, 1.4f);
-			if (near <= 0.01f) continue;
+		Vector3f right = WorldEffectRenderer.RIGHT;
+		Vector3f up = WorldEffectRenderer.UP;
+		float tighten = 1f - 0.08f * hit;
+		double bottom = pos.y + 0.04;
+		double top = pos.y + h + 0.16 * s;
+		double cy = (top + bottom) * 0.5;
+		double hh = (top - bottom) * 0.5 * tighten;
+		double hw = (w * 0.5 + 0.24) * s * tighten;
+		double arm = Math.min(hw, hh) * 0.6;
+		for (int i = 0; i < 4; i++) {
+			double sx = (i & 1) == 0 ? -1 : 1;
+			double sy = (i & 2) == 0 ? -1 : 1;
+			double x = pos.x + right.x * sx * hw + up.x * sy * hh;
+			double y = cy + right.y * sx * hw + up.y * sy * hh;
+			double z = pos.z + right.z * sx * hw + up.z * sy * hh;
 			int c = sy < 0 ? c2 : c1;
-			float a = 0.95f * near;
-			line(x, y, z, x - sx * arm, y, z, 0.06f * s, c, a, c, a * 0.35f);
-			line(x, y, z, x, y - sy * arm, z, 0.06f * s, c, a, c, a * 0.35f);
-			line(x, y, z, x, y, z - sz * arm, 0.06f * s, c, a, c, a * 0.35f);
-			orb(x, y, z, 0.085f * s, ColorUtil.lerp(c, 0xFFFFFFFF, 0.5f), 0.85f * near);
+			line(x, y, z, x - right.x * sx * arm, y - right.y * sx * arm, z - right.z * sx * arm, 0.06f * s, c, 0.95f, c, 0.4f);
+			line(x, y, z, x - up.x * sy * arm, y - up.y * sy * arm, z - up.z * sy * arm, 0.06f * s, c, 0.95f, c, 0.4f);
+			orb(x, y, z, 0.08f * s, ColorUtil.lerp(c, 0xFFFFFFFF, 0.5f), 0.8f);
 		}
 	}
 
