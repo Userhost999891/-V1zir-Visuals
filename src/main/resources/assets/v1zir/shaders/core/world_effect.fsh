@@ -110,22 +110,36 @@ void main() {
 			a = clamp(-change * 1.3, 0.0, 0.55) * edge;
 		}
 	} else if (texCoord0.x > 7.0) {
-		// Fixed to the screen, so the body is a moving window onto one sky: crisp stars that twinkle, two of
-		// their layers drifting at different speeds, over nebula clouds in the colour and a little of its
-		// neighbouring hue.
+		// Fixed to the screen, so the body is a moving window onto one sky: deep space, two veils of nebula (in the
+		// colour and in a neighbouring hue) drifting over each other, two layers of small twinkling stars drifting at
+		// different speeds, and here and there a big bright star in a soft glow.
 		float t = WorldTime.x;
 		vec2 sp = gl_FragCoord.xy / max(WorldTime.z, 1.0);
-		float clouds = valueNoise(sp * 5.0 + vec2(t * 0.03, 0.0)) * 0.6 + valueNoise(sp * 11.0 - vec2(0.0, t * 0.04)) * 0.4;
-		float veil = valueNoise(sp * 3.0 + vec2(7.3, t * 0.02));
-		rgb = mix(rgb * 0.1, mix(rgb, rgb.brg, 0.55 * veil), smoothstep(0.3, 0.85, clouds));
+		float n1 = valueNoise(sp * 4.0 + vec2(t * 0.03, 0.0)) * 0.6 + valueNoise(sp * 9.0 - vec2(0.0, t * 0.04)) * 0.3
+			+ valueNoise(sp * 19.0 + t * 0.02) * 0.1;
+		float n2 = valueNoise(sp * 3.0 + vec2(7.3, t * 0.02)) * 0.7 + valueNoise(sp * 7.0 + vec2(t * 0.025, 3.1)) * 0.3;
+		vec3 hueA = rgb;
+		vec3 hueB = mix(rgb.brg, vec3(0.45, 0.25, 1.0), 0.35);
+		vec3 nebula = mix(hueA, hueB, smoothstep(0.3, 0.7, n2));
+		float density = smoothstep(0.32, 0.9, n1);
+		rgb = vec3(0.015, 0.01, 0.04) + nebula * (density * density * 1.15 + 0.07 * n2);
 		for (int layer = 0; layer < 2; layer++) {
 			vec2 g = sp * (layer == 0 ? 70.0 : 120.0) + vec2(t * (layer == 0 ? 0.25 : 0.12), float(layer) * 17.0);
 			vec2 cell = floor(g);
 			float h = hash21(cell + float(layer) * 31.0);
 			vec2 at = fract(g) - 0.5 - (vec2(hash21(cell + 3.1), hash21(cell + 7.7)) - 0.5) * 0.6;
-			float star = step(0.9, h) * smoothstep(layer == 0 ? 0.16 : 0.11, 0.0, length(at)) * (0.55 + 0.45 * sin(t * 2.5 + h * 60.0));
+			float star = step(0.88, h) * smoothstep(layer == 0 ? 0.17 : 0.12, 0.0, length(at)) * (0.55 + 0.45 * sin(t * 2.5 + h * 60.0));
 			rgb += vec3(star);
 		}
+		vec2 bg = sp * 22.0 + vec2(t * 0.06, 0.0);
+		vec2 bcell = floor(bg);
+		float bh = hash21(bcell + 91.0);
+		vec2 bat = fract(bg) - 0.5 - (vec2(hash21(bcell + 5.3), hash21(bcell + 9.1)) - 0.5) * 0.5;
+		float big = step(0.93, bh) * (0.7 + 0.3 * sin(t * 1.7 + bh * 40.0));
+		float core = smoothstep(0.09, 0.0, length(bat));
+		float halo = exp(-length(bat) * 14.0) * 0.6;
+		float spikes = (exp(-abs(bat.x) * 70.0) + exp(-abs(bat.y) * 70.0)) * exp(-length(bat) * 9.0) * 0.5;
+		rgb += big * (vec3(core) + mix(nebula, vec3(1.0), 0.6) * (halo + spikes));
 		a = 1.0;
 	} else if (texCoord0.x > 5.0) {
 		// Scan lines that stand still in the world while the body moves through them, a slow flicker, and
