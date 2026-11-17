@@ -6,6 +6,8 @@ import dev.v1zir.visuals.module.setting.BoolSetting;
 import dev.v1zir.visuals.module.setting.ColorSetting;
 import dev.v1zir.visuals.module.setting.ModeSetting;
 import dev.v1zir.visuals.module.setting.NumberSetting;
+import dev.v1zir.visuals.render.font.Fonts;
+import dev.v1zir.visuals.render.font.SdfFont;
 import dev.v1zir.visuals.render.ui.Render2D;
 import dev.v1zir.visuals.render.world.Draw3D;
 import dev.v1zir.visuals.render.world.WorldEffect;
@@ -47,6 +49,12 @@ public final class EspModule extends Module implements WorldEffect {
 	public final ModeSetting colorMode = add(new ModeSetting("Color", "Theme", "Theme", "Health", "Custom"));
 	public final ColorSetting color = add(new ColorSetting("Custom color", 0xFF5CE1FF, false).visibleIf(() -> colorMode.is("Custom")));
 	public final BoolSetting healthBar = add(new BoolSetting("Health bar", true));
+	/** The name and the distance above the box (Box 2D and Corners). */
+	public final BoolSetting names = add(new BoolSetting("Names", true).visibleIf(() -> !mode.is("Box 3D")));
+	/** Lines of Box 2D and Corners, pixels. */
+	public final NumberSetting thickness = add(new NumberSetting("Thickness", 2.0, 1.0, 4.0, 0.25).suffix(" px").visibleIf(() -> !mode.is("Box 3D")));
+	/** A soft glow along the lines in their colour. */
+	public final BoolSetting glow = add(new BoolSetting("Glow", true));
 	public final BoolSetting fill = add(new BoolSetting("Fill", true));
 	public final BoolSetting throughWalls = add(new BoolSetting("Through walls", true));
 	public final BoolSetting mobs = add(new BoolSetting("Mobs", false));
@@ -57,6 +65,7 @@ public final class EspModule extends Module implements WorldEffect {
 	private final Int2ObjectOpenHashMap<Target> byId = new Int2ObjectOpenHashMap<>();
 	private final Matrix4f viewProjection = new Matrix4f();
 	private final Vector4f corner = new Vector4f();
+	private final Render2D.TextStyle label = new Render2D.TextStyle().shadow();
 	/** Screen rectangle of the last projected box, in GUI pixels. */
 	private float minX, minY, maxX, maxY;
 	/** Entity ids start over in a new world. */
@@ -173,6 +182,8 @@ public final class EspModule extends Module implements WorldEffect {
 		float sw = ctx.getScaledWindowWidth();
 		float sh = ctx.getScaledWindowHeight();
 		boolean corners = mode.index() == CORNERS;
+		float t = thickness.f();
+		SdfFont font = Fonts.semibold();
 		for (int i = 0; i < targets.size(); i++) {
 			Target target = targets.get(i);
 			if (!target.visible || !project(target.entity, tickDelta, sw, sh)) continue;
@@ -180,9 +191,10 @@ public final class EspModule extends Module implements WorldEffect {
 			if (w < 2f || h < 2f || maxX < 0f || maxY < 0f || minX > sw || minY > sh) continue;
 			float health = target.health.get();
 			int top = boxColor(health, true), bottom = boxColor(health, false);
-			if (corners) corners(ctx, x, y, w, h, top, bottom);
-			else box(ctx, x, y, w, h, top, bottom);
-			if (healthBar.on()) bar(ctx, x - 5f, y, h, health);
+			if (corners) corners(ctx, x, y, w, h, t, top, bottom);
+			else box(ctx, x, y, w, h, t, top, bottom);
+			if (healthBar.on()) bar(ctx, x - 4f - t * 1.5f, y, h, t * 1.25f, health);
+			if (names.on()) name(ctx, font, target, x + w * 0.5f, y - 2f - t);
 		}
 	}
 
@@ -209,19 +221,38 @@ public final class EspModule extends Module implements WorldEffect {
 		return true;
 	}
 
-	/** A rounded box: soft glow and fill, a dark contrast line and the coloured line on top. */
-	private void box(DrawContext ctx, float x, float y, float w, float h, int top, int bottom) {
+	/** A rounded box: a soft fill, a glow along its line, a dark contrast line and the coloured line on top. */
+	private void box(DrawContext ctx, float x, float y, float w, float h, float t, int top, int bottom) {
 		float radius = Math.min(4f, Math.min(w, h) * 0.12f);
-		if (fill.on()) Render2D.shadow(ctx, x, y, w, h, radius, 4f, ColorUtil.fade(top, 0.12f));
-		Render2D.outline(ctx, x - 0.75f, y - 0.75f, w + 1.5f, h + 1.5f, radius + 0.75f, 3f, 0x73000000);
-		Render2D.outline(ctx, x, y, w, h, radius, 1.5f, top, top, bottom, bottom);
+		if (fill.on()) Render2D.gradientV(ctx, x, y, w, h, radius, ColorUtil.fade(top, 0.16f), ColorUtil.fade(bottom, 0.05f));
+		if (glow.on()) {
+			// Two wide faint bands along the line read as a soft glow.
+			Render2D.outline(ctx, x - t * 2.5f, y - t * 2.5f, w + t * 5f, h + t * 5f, radius + t * 2.5f, t * 5f,
+				ColorUtil.fade(top, 0.1f), ColorUtil.fade(top, 0.1f), ColorUtil.fade(bottom, 0.1f), ColorUtil.fade(bottom, 0.1f));
+			Render2D.outline(ctx, x - t * 1.25f, y - t * 1.25f, w + t * 2.5f, h + t * 2.5f, radius + t * 1.25f, t * 2.5f,
+				ColorUtil.fade(top, 0.18f), ColorUtil.fade(top, 0.18f), ColorUtil.fade(bottom, 0.18f), ColorUtil.fade(bottom, 0.18f));
+		}
+		Render2D.outline(ctx, x - 0.75f, y - 0.75f, w + 1.5f, h + 1.5f, radius + 0.75f, t + 1.5f, 0x73000000);
+		Render2D.outline(ctx, x, y, w, h, radius, t, top, top, bottom, bottom);
 	}
 
-	/** Corner brackets a quarter of the box long, each over a dark contrast underlay. */
-	private void corners(DrawContext ctx, float x, float y, float w, float h, int top, int bottom) {
+	/** Corner brackets a quarter of the box long, each over a dark contrast underlay (and a glow under that). */
+	private void corners(DrawContext ctx, float x, float y, float w, float h, float t, int top, int bottom) {
 		float lw = Math.max(4f, w * 0.28f);
 		float lh = Math.max(4f, h * 0.22f);
-		float t = 1.5f;
+		if (glow.on()) {
+			float g = t * 2f;
+			int ct = ColorUtil.fade(top, 0.16f);
+			int cb = ColorUtil.fade(bottom, 0.16f);
+			Render2D.round(ctx, x - g, y - g, lw + g * 2f, t + g * 2f, t + g, ct);
+			Render2D.round(ctx, x - g, y - g, t + g * 2f, lh + g * 2f, t + g, ct);
+			Render2D.round(ctx, x + w - lw - g, y - g, lw + g * 2f, t + g * 2f, t + g, ct);
+			Render2D.round(ctx, x + w - t - g, y - g, t + g * 2f, lh + g * 2f, t + g, ct);
+			Render2D.round(ctx, x - g, y + h - t - g, lw + g * 2f, t + g * 2f, t + g, cb);
+			Render2D.round(ctx, x - g, y + h - lh - g, t + g * 2f, lh + g * 2f, t + g, cb);
+			Render2D.round(ctx, x + w - lw - g, y + h - t - g, lw + g * 2f, t + g * 2f, t + g, cb);
+			Render2D.round(ctx, x + w - t - g, y + h - lh - g, t + g * 2f, lh + g * 2f, t + g, cb);
+		}
 		for (int pass = 0; pass < 2; pass++) {
 			// The dark pass is one pixel larger all around.
 			float g = pass == 0 ? 0.75f : 0f;
@@ -239,9 +270,24 @@ public final class EspModule extends Module implements WorldEffect {
 		}
 	}
 
+	/** The name, and how far away, centred above the box over a small dark pill. */
+	private void name(DrawContext ctx, SdfFont font, Target target, float cx, float bottom) {
+		LivingEntity e = target.entity;
+		int meters = Math.round((float) Math.sqrt(e.squaredDistanceTo(mc.player)));
+		if (target.label == null || meters != target.meters) {
+			target.meters = meters;
+			target.label = e.getName().getString() + "  " + meters + "m";
+		}
+		float size = 7f;
+		float tw = font.width(target.label, size);
+		float ph = size + 3f;
+		Render2D.round(ctx, cx - tw * 0.5f - 3f, bottom - ph, tw + 6f, ph, ph * 0.5f, 0x8C0B0C10);
+		label.color = Theme.text();
+		Render2D.textCentered(ctx, font, target.label, cx, bottom - ph + 1.5f, size, label);
+	}
+
 	/** Vertical health bar: a dark track filled from the bottom in the health colour, with a soft glow. */
-	private static void bar(DrawContext ctx, float x, float y, float h, float health) {
-		float w = 2.5f;
+	private static void bar(DrawContext ctx, float x, float y, float h, float w, float health) {
 		Render2D.round(ctx, x - 0.75f, y - 0.75f, w + 1.5f, h + 1.5f, 1.75f, 0x8C000000);
 		float fillH = h * health;
 		if (fillH < 0.5f) return;
@@ -256,5 +302,8 @@ public final class EspModule extends Module implements WorldEffect {
 		boolean visible = true;
 		/** Health fraction, eased so the bar drains smoothly. */
 		final Anim health = new Anim(1f, 7f);
+		/** "Name  12m", rebuilt when the distance changes. */
+		String label;
+		int meters = -1;
 	}
 }
