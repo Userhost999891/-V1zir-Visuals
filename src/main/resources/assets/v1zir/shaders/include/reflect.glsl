@@ -406,14 +406,17 @@ bool rSurface(ivec2 p, out SurfaceInfo s) {
 }
 
 // What a ray that finds nothing on screen sees: the sky itself where its direction is on screen
-// and uncovered (the Shader Sky included), otherwise a gradient from the horizon colour.
+// and uncovered (the Shader Sky included). A direction off the side or the top of the screen takes
+// the sky at the nearest point of its edge, about as high in the sky, so the reflection does not
+// change where its rays leave the screen: the horizon colour can be far from the sky's own (at dusk,
+// under a Shader Sky), and wet ground showed it in wedges along the sides. Covered there too, or
+// behind the camera: a gradient from the horizon colour.
 vec3 rSky(vec3 dir) {
 	vec4 c = ViewProj * vec4(dir, 0.0);
 	if (c.w > 0.0) {
-		vec2 uv = c.xy / c.w * 0.5 + 0.5;
-		if (all(greaterThan(uv, vec2(0.0))) && all(lessThan(uv, vec2(1.0))) && texelFetch(Sampler1, ivec2(uv * Screen.xy), 0).r >= 1.0) {
-			return texture(Sampler0, uv).rgb;
-		}
+		vec2 inset = 0.5 / Screen.xy;
+		vec2 uv = clamp(c.xy / c.w * 0.5 + 0.5, inset, 1.0 - inset);
+		if (texelFetch(Sampler1, ivec2(uv * Screen.xy), 0).r >= 1.0) return texture(Sampler0, uv).rgb;
 	}
 	vec3 horizon = FogColor.rgb;
 	vec3 zenith = horizon * vec3(0.62, 0.78, 1.0);
