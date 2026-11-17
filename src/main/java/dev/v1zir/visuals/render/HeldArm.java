@@ -39,9 +39,10 @@ import java.util.function.Supplier;
  * Called from HeldItemRendererMixin right before vanilla draws a held item; plain arithmetic on reused objects.
  */
 public final class HeldArm {
-	/** How far the item is raised into the view (blocks, view space) while the arm holds it, so the fist shows. */
-	private static final float LIFT_X = -0.03f;
-	private static final float LIFT_Y = 0.17f;
+	/** Vanilla's resting item frame (HeldItemRenderer.applyEquipOffset with nothing in motion), right hand, view space. */
+	private static final float EQUIP_X = 0.56f;
+	private static final float EQUIP_Y = -0.52f;
+	private static final float EQUIP_Z = -0.72f;
 	/** How far below a held block the fist's centre sits, blocks: a little less than half a fist, so it rests in the hand. */
 	private static final float UNDER_BLOCK = 0.1f;
 	private static final float DEG = (float) (Math.PI / 180.0);
@@ -75,6 +76,8 @@ public final class HeldArm {
 	private static final Matrix4f ARM = new Matrix4f();
 	private static final Matrix4f FRAME = new Matrix4f();
 	private static final Vector3f GRIP = new Vector3f();
+	private static final Vector3f REST = new Vector3f();
+	private static final Vector3f HELD = new Vector3f();
 	private static final Vector3f AXIS = new Vector3f();
 
 	private HeldArm() {
@@ -144,35 +147,42 @@ public final class HeldArm {
 		// A model with no depth to speak of is flat, whatever the item.
 		if (hold == Hold.BLOCK && maxZ - minZ < 0.3f) hold = Hold.FLAT;
 
-		// Raised into the view (in the base, so straight up the screen): vanilla's matrices are these, so the item it
-		// draws next rises with the arm.
-		Matrix4f item = matrices.peek().getPositionMatrix();
-		FRAME.set(TO_BASE).mul(item).translateLocal(left ? -LIFT_X : LIFT_X, LIFT_Y, 0f);
-		item.set(BASE).mul(FRAME);
-
-		// The model's matrix in the hand's space, as its layer applies it.
-		MODEL.push();
-		MODEL.peek().getPositionMatrix().set(matrices.peek().getPositionMatrix());
-		if (transform != null) transform.apply(left, MODEL.peek());
-		MODEL.translate(-0.5f, -0.5f, -0.5f);
-		Matrix4f model = MODEL.peek().getPositionMatrix();
+		// The point a hand holds, in the model's own coordinates.
 		float midX = (minX + maxX) * 0.5f;
 		float midZ = (minZ + maxZ) * 0.5f;
 		switch (hold) {
-			case HANDLE -> model.transformPosition(GRIP.set(minX + (maxX - minX) * 0.2f, minY + (maxY - minY) * 0.2f, midZ));
-			case FLAT -> model.transformPosition(GRIP.set(midX, minY + (maxY - minY) * 0.12f, midZ));
-			case BLOCK -> {
-				model.transformPosition(GRIP.set(midX, minY, midZ));
-				// Under the block, along its own up.
-				model.transformDirection(AXIS.set(0f, 1f, 0f)).normalize();
-				GRIP.sub(AXIS.x * UNDER_BLOCK, AXIS.y * UNDER_BLOCK, AXIS.z * UNDER_BLOCK);
-			}
+			case HANDLE -> HELD.set(minX + (maxX - minX) * 0.2f, minY + (maxY - minY) * 0.2f, midZ);
+			case FLAT -> HELD.set(midX, minY + (maxY - minY) * 0.12f, midZ);
+			case BLOCK -> HELD.set(midX, minY, midZ);
+		}
+
+		// Where vanilla would hold that point at rest, and the item moved by as much as puts it in the fist of vanilla's
+		// own empty hand: the arm keeps its natural size and pose and the item lies in it, a little further off and so
+		// a little smaller, as the Knives view model holds a knife. Vanilla's matrices are these, so the item it draws
+		// next moves with it; swings and the equip motion still move both.
+		grip(transform, left, EQUIP_X, EQUIP_Y, EQUIP_Z, hold == Hold.BLOCK, REST);
+		float fistX = left ? -VANILLA_FIST.x() : VANILLA_FIST.x();
+		Matrix4f item = matrices.peek().getPositionMatrix();
+		FRAME.set(TO_BASE).mul(item).translateLocal(fistX - REST.x, VANILLA_FIST.y() - REST.y, VANILLA_FIST.z() - REST.z);
+		item.set(BASE).mul(FRAME);
+
+		// The grip where the item is now (the hand's matrices, then the base): rest plus whatever moves it.
+		MODEL.push();
+		MODEL.peek().getPositionMatrix().set(item);
+		if (transform != null) transform.apply(left, MODEL.peek());
+		MODEL.translate(-0.5f, -0.5f, -0.5f);
+		Matrix4f model = MODEL.peek().getPositionMatrix();
+		model.transformPosition(GRIP.set(HELD));
+		if (hold == Hold.BLOCK) {
+			// Under the block, along its own up.
+			model.transformDirection(AXIS.set(0f, 1f, 0f)).normalize();
+			GRIP.sub(AXIS.x * UNDER_BLOCK, AXIS.y * UNDER_BLOCK, AXIS.z * UNDER_BLOCK);
 		}
 		MODEL.pop();
 		if (!Float.isFinite(GRIP.x) || !Float.isFinite(GRIP.y) || !Float.isFinite(GRIP.z)) return;
 
-		// Vanilla's resting hand, moved so its fist is on the grip, in the base as vanilla places its own. Worked out
-		// for a right hand; a left one is its mirror image across the view.
+		// Vanilla's resting hand, moved along with the grip (only by swings and the equip motion now), in the base as
+		// vanilla places its own. Worked out for a right hand; a left one is its mirror image across the view.
 		TO_BASE.transformPosition(GRIP);
 		if (left) GRIP.x = -GRIP.x;
 		ARM.translation(GRIP.x - VANILLA_FIST.x(), GRIP.y - VANILLA_FIST.y(), GRIP.z - VANILLA_FIST.z()).mul(VANILLA_ARM);
@@ -188,6 +198,24 @@ public final class HeldArm {
 		if (left) renderer.renderLeftArm(matrices, queue, light, skin, player.isModelPartVisible(PlayerModelPart.LEFT_SLEEVE));
 		else renderer.renderRightArm(matrices, queue, light, skin, player.isModelPartVisible(PlayerModelPart.RIGHT_SLEEVE));
 		matrices.pop();
+	}
+
+	/**
+	 * Where the held point HELD (model coordinates) is, in the hand's base, with the item frame at (x, y, z) (mirrored
+	 * for a left hand) and the model placed by its display transform; under a block, the fist's centre below it.
+	 */
+	private static void grip(Transformation transform, boolean left, float x, float y, float z, boolean block, Vector3f out) {
+		MODEL.push();
+		MODEL.peek().getPositionMatrix().translation(left ? -x : x, y, z);
+		if (transform != null) transform.apply(left, MODEL.peek());
+		MODEL.translate(-0.5f, -0.5f, -0.5f);
+		Matrix4f model = MODEL.peek().getPositionMatrix();
+		model.transformPosition(out.set(HELD));
+		if (block) {
+			model.transformDirection(AXIS.set(0f, 1f, 0f)).normalize();
+			out.sub(AXIS.x * UNDER_BLOCK, AXIS.y * UNDER_BLOCK, AXIS.z * UNDER_BLOCK);
+		}
+		MODEL.pop();
 	}
 
 	/** How a hand holds this item, or null for items vanilla poses itself or a hand cannot plainly hold. */
