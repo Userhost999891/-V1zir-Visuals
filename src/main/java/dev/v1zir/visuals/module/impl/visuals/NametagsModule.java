@@ -56,7 +56,7 @@ public final class NametagsModule extends Module implements WorldEffect {
 	/** Distance up to which tags keep their world size; past it Min size takes over. */
 	private static final float NEAR = 6f;
 
-	public final NumberSetting scale = add(new NumberSetting("Scale", 1.0, 0.5, 2.0, 0.05).suffix("x"));
+	public final NumberSetting scale = add(new NumberSetting("Scale", 1.3, 0.5, 2.5, 0.05).suffix("x"));
 	public final NumberSetting minSize = add(new NumberSetting("Min size", 70, 0, 100, 5).suffix("%"));
 	public final BoolSetting healthBar = add(new BoolSetting("Health bar", true));
 	public final ModeSetting barColor = add(new ModeSetting("Bar color", "Health", "Health", "Theme").visibleIf(healthBar::on));
@@ -64,8 +64,10 @@ public final class NametagsModule extends Module implements WorldEffect {
 	public final BoolSetting distance = add(new BoolSetting("Distance", true));
 	public final NumberSetting background = add(new NumberSetting("Background", 0.6, 0.0, 1.0, 0.05));
 	public final BoolSetting throughWalls = add(new BoolSetting("Through walls", true));
+	/** As vanilla does: a sneaking player's tag no longer shows through walls. */
+	public final BoolSetting sneakHides = add(new BoolSetting("Sneak hides", false).visibleIf(throughWalls::on));
 	public final BoolSetting self = add(new BoolSetting("Self", false));
-	public final NumberSetting range = add(new NumberSetting("Range", 64, 16, 128, 4).suffix(" m"));
+	public final NumberSetting range = add(new NumberSetting("Range", 256, 16, 512, 8).suffix(" m"));
 
 	private final Int2ObjectOpenHashMap<Tag> byId = new Int2ObjectOpenHashMap<>();
 	/** The same tags as a list, so drawing iterates without an iterator. */
@@ -147,7 +149,7 @@ public final class NametagsModule extends Module implements WorldEffect {
 				tag.x = MathHelper.lerp(tickDelta, p.lastRenderX, p.getX());
 				tag.y = MathHelper.lerp(tickDelta, p.lastRenderY, p.getY()) + p.getHeight() + 0.25;
 				tag.z = MathHelper.lerp(tickDelta, p.lastRenderZ, p.getZ());
-				tag.seeThrough = throughWalls.on() && !p.isSneaking();
+				tag.seeThrough = throughWalls.on() && !(sneakHides.on() && p.isSneaking());
 			}
 			if (fade > 0.01f) draw(tag, fade);
 		}

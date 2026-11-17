@@ -51,6 +51,8 @@ import dev.v1zir.visuals.module.impl.visuals.BloomModule;
 import dev.v1zir.visuals.module.impl.visuals.CinematicModule;
 import dev.v1zir.visuals.module.impl.visuals.GodRaysModule;
 import dev.v1zir.visuals.module.impl.visuals.MistModule;
+import dev.v1zir.visuals.module.impl.visuals.VibeModule;
+import dev.v1zir.visuals.module.impl.visuals.WetWorldModule;
 import dev.v1zir.visuals.module.impl.visuals.CameraTweaksModule;
 import dev.v1zir.visuals.module.impl.visuals.ColorGradingModule;
 import dev.v1zir.visuals.module.impl.visuals.DamageTintModule;
@@ -121,8 +123,10 @@ public final class ModuleManager {
 		register(new GodRaysModule());
 		register(new MistModule());
 		register(new CinematicModule());
+		register(new VibeModule());
 		register(new BlockReflectionModule());
 		register(new RainEffectsModule());
+		register(new WetWorldModule());
 		register(new EntityGlowModule());
 		register(new NametagsModule());
 		// impl.effects

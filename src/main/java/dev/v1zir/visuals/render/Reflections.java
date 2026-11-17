@@ -14,6 +14,7 @@ import dev.v1zir.visuals.V1zir;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.visuals.BlockReflectionModule;
 import dev.v1zir.visuals.module.impl.visuals.RainEffectsModule;
+import dev.v1zir.visuals.module.impl.visuals.WetWorldModule;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.DynamicUniformStorage;
 import net.minecraft.client.gl.Framebuffer;
@@ -78,7 +79,7 @@ public final class Reflections {
 	public static void tick(MinecraftClient client) {
 		boolean reflections = ModuleManager.isEnabled(BlockReflectionModule.class);
 		RainEffectsModule rain = ModuleManager.get(RainEffectsModule.class);
-		if (client.world == null || !reflections && (rain == null || !rain.isEnabled() || !rain.active())) {
+		if (client.world == null || !reflections && (rain == null || !rain.isEnabled() || !rain.active()) && WetWorldModule.wetness() <= 0f) {
 			SurfaceMap.idle();
 			return;
 		}
@@ -92,21 +93,27 @@ public final class Reflections {
 		RainEffectsModule rain = ModuleManager.get(RainEffectsModule.class);
 		if (settings == null || rain == null) return;
 		boolean reflections = settings.isEnabled();
-		boolean wet = rain.isEnabled() && rain.active();
+		// Rain's own wetness, or Wet World's held on: the wetter of them.
+		boolean raining = rain.isEnabled() && rain.active();
+		float wetness = Math.max(raining ? rain.wetness(tickDelta) : 0f, WetWorldModule.wetness());
+		float drops = Math.max(raining ? rain.rain(tickDelta) : 0f, WetWorldModule.drops());
+		boolean wet = wetness > 0f;
 		// Vanilla renders into other targets for special frames (panorama screenshots): leave those alone.
 		if (!reflections && !wet || !captured || RenderSystem.outputColorTextureOverride != null) return;
 		MinecraftClient mc = V1zir.mc();
 		if (mc.world == null || !SurfaceMap.upload()) return;
 		try {
-			draw(mc, settings, reflections, wet ? rain : null, tickDelta);
+			draw(mc, settings, reflections, wetness, drops, tickDelta);
 		} catch (RuntimeException e) {
 			V1zir.LOGGER.error("Reflections failed, disabling them", e);
 			settings.setEnabled(false, false);
 			rain.setEnabled(false, false);
+			WetWorldModule wetWorld = ModuleManager.get(WetWorldModule.class);
+			if (wetWorld != null) wetWorld.setEnabled(false, false);
 		}
 	}
 
-	private static void draw(MinecraftClient mc, BlockReflectionModule settings, boolean reflections, RainEffectsModule rain, float tickDelta) {
+	private static void draw(MinecraftClient mc, BlockReflectionModule settings, boolean reflections, float wetness, float drops, float tickDelta) {
 		Framebuffer fb = mc.getFramebuffer();
 		int w = fb.textureWidth;
 		int h = fb.textureHeight;
@@ -115,7 +122,7 @@ public final class Reflections {
 		ensureTextures(w, h, Math.max(1, Math.round(w * scale)), Math.max(1, Math.round(h * scale)));
 		if (storage == null) storage = new DynamicUniformStorage<>("V1zir reflections UBO", SIZE, 2);
 
-		fill(mc.world, mc.gameRenderer.getCamera().getCameraPos(), settings, reflections, rain, tickDelta);
+		fill(mc.world, mc.gameRenderer.getCamera().getCameraPos(), settings, reflections, wetness, drops, tickDelta);
 		GpuBufferSlice params = storage.write(PARAMS);
 		GpuSampler nearest = RenderSystem.getSamplerCache().get(FilterMode.NEAREST);
 		GpuSampler linear = RenderSystem.getSamplerCache().get(FilterMode.LINEAR);
@@ -145,7 +152,8 @@ public final class Reflections {
 		pass.bindTexture("Sampler4", SurfaceMap.far(), nearest);
 	}
 
-	private static void fill(ClientWorld world, Vec3d cam, BlockReflectionModule settings, boolean reflections, RainEffectsModule rain, float tickDelta) {
+	private static void fill(ClientWorld world, Vec3d cam, BlockReflectionModule settings, boolean reflections, float wetness, float drops,
+							 float tickDelta) {
 		Params p = PARAMS;
 		p.viewProj.set(PROJECTION).mul(VIEW);
 		p.inverse.set(INVERSE.set(PROJECTION).mul(VIEW).invert());
@@ -162,8 +170,7 @@ public final class Reflections {
 		p.screen.set(width, height, tracedWidth, tracedHeight);
 		p.trace.set(settings.steps(), settings.refinements(), RAY_LENGTH, SurfaceMap.gridReady() && reflections ? 1f : 0f);
 		p.surface.set(reflections ? settings.metal() ? 2f : 1f : 0f, settings.strength.f(), settings.roughness.f(), 0f);
-		if (rain != null) p.weather.set(rain.wetness(tickDelta), rain.rain(tickDelta), 0f, 0f);
-		else p.weather.set(0f, 0f, 0f, 0f);
+		p.weather.set(wetness, drops, 0f, 0f);
 		light(p, world, tickDelta);
 		p.fog.set(FOG.x, FOG.y, FOG.z, 1f);
 		// The camera looks down -Z: its forward axis is the negated third row of the view rotation.

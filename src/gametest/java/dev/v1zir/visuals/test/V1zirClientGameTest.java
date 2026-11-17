@@ -52,6 +52,8 @@ import dev.v1zir.visuals.module.impl.visuals.MotionBlurModule;
 import dev.v1zir.visuals.module.impl.visuals.RainEffectsModule;
 import dev.v1zir.visuals.module.impl.visuals.ShaderSkyModule;
 import dev.v1zir.visuals.module.impl.visuals.ShootingStarsModule;
+import dev.v1zir.visuals.module.impl.visuals.VibeModule;
+import dev.v1zir.visuals.module.impl.visuals.WetWorldModule;
 import dev.v1zir.visuals.module.impl.visuals.WorldParticlesModule;
 import dev.v1zir.visuals.module.impl.visuals.ZoomModule;
 import dev.v1zir.visuals.pack.PackMixer;
@@ -143,6 +145,8 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			shootingStars(context, singleplayer);
 			motionBlur(context, singleplayer);
 			atmosphere(context, singleplayer);
+			vibe(context, singleplayer);
+			wetWorld(context, singleplayer);
 			handChams(context, singleplayer);
 			knives(context, singleplayer);
 			cosmetics(context, singleplayer);
@@ -1158,6 +1162,53 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			cinematic.fringes.reset();
 		});
 		singleplayer.getServer().runCommand("execute as @a at @s run fill ~-17 ~ ~-12 ~-12 ~8 ~11 minecraft:air");
+		singleplayer.getServer().runCommand("time set 6000");
+		look(singleplayer, 0, 0);
+	}
+
+	/**
+	 * VIBE in every theme: by day Sakura, Autumn, Winter, Ocean and Dreamy, at night Fireflies, Neon and Stardust, each
+	 * with its particles, haze and grade, looking out over the field.
+	 */
+	private static void vibe(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
+		look(singleplayer, 30, -6);
+		for (String theme : List.of("Sakura", "Autumn", "Winter", "Ocean", "Dreamy", "Fireflies", "Neon", "Stardust")) {
+			boolean night = theme.equals("Fireflies") || theme.equals("Neon") || theme.equals("Stardust");
+			singleplayer.getServer().runCommand("time set " + (night ? 18000 : 6000));
+			context.runOnClient(client -> {
+				VibeModule vibe = ModuleManager.get(VibeModule.class);
+				vibe.theme.set(theme);
+				vibe.setEnabled(true, false);
+			});
+			context.waitTicks(25);
+			context.takeScreenshot("vibe-" + theme.toLowerCase(Locale.ROOT));
+		}
+		bench(context, "vibe");
+		context.runOnClient(client -> {
+			VibeModule vibe = ModuleManager.get(VibeModule.class);
+			vibe.setEnabled(false, false);
+			vibe.theme.reset();
+		});
+		singleplayer.getServer().runCommand("time set 6000");
+		look(singleplayer, 0, 0);
+	}
+
+	/** Wet World without rain: the field soaked, with puddles, then with Drizzle ringing on them. */
+	private static void wetWorld(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
+		look(singleplayer, 20, 22);
+		singleplayer.getServer().runCommand("time set 1000");
+		context.runOnClient(client -> ModuleManager.get(WetWorldModule.class).setEnabled(true, false));
+		context.waitTicks(40);
+		context.takeScreenshot("wet-world");
+		bench(context, "wet-world");
+		context.runOnClient(client -> ModuleManager.get(WetWorldModule.class).drizzle.set(true));
+		context.waitTicks(10);
+		context.takeScreenshot("wet-world-drizzle");
+		context.runOnClient(client -> {
+			WetWorldModule wet = ModuleManager.get(WetWorldModule.class);
+			wet.setEnabled(false, false);
+			wet.drizzle.reset();
+		});
 		singleplayer.getServer().runCommand("time set 6000");
 		look(singleplayer, 0, 0);
 	}

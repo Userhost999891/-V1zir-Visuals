@@ -36,7 +36,9 @@ import java.util.List;
  * missing health, ten to a row; past two rows a single row stands for "xN" each. Vanilla's own heart sprites, crisp at
  * any distance (WorldSprites), facing the camera above the name tag (above the Nametags plate while that is on) and
  * growing with distance so they stay readable. Health the client does not know shows nothing: on a server that hides
- * it (hits that never take anything off) the hearts stay off until the next world.
+ * it (hits that never take anything off, and no health ever seen changing) the hearts stay off until the next world.
+ * A hit on someone blocking or using an item, or in creative, proves nothing, and once any health is seen changing
+ * the server plainly sends it.
  */
 public final class HealthIndicatorModule extends Module implements WorldEffect {
 	private static final Identifier CONTAINER = Identifier.ofVanilla("hud/heart/container");
@@ -54,11 +56,14 @@ public final class HealthIndicatorModule extends Module implements WorldEffect {
 	private static final int PER_ROW = 10;
 	private static final int MAX_ROWS = 2;
 	/** Hits that took nothing off before the server counts as hiding health. */
-	private static final int HIDDEN_AFTER = 2;
+	private static final int HIDDEN_AFTER = 4;
+	private static final int NOTHING = 0;
+	private static final int EMPTY_HIT = 1;
+	private static final int CHANGED = 2;
 
 	public final BoolSetting mobs = add(new BoolSetting("Mobs", false));
-	public final NumberSetting range = add(new NumberSetting("Range", 32, 8, 64, 2).suffix(" m"));
-	public final BoolSetting throughWalls = add(new BoolSetting("Through walls", false));
+	public final NumberSetting range = add(new NumberSetting("Range", 64, 8, 256, 4).suffix(" m"));
+	public final BoolSetting throughWalls = add(new BoolSetting("Through walls", true));
 	public final NumberSetting scale = add(new NumberSetting("Scale", 1.0, 0.5, 2.0, 0.05).suffix("x"));
 	public final BoolSetting number = add(new BoolSetting("Number", false));
 
@@ -71,6 +76,8 @@ public final class HealthIndicatorModule extends Module implements WorldEffect {
 	/** Entity ids start over in a new world, and so does the verdict on hidden health. */
 	private ClientWorld world;
 	private int emptyHits;
+	/** Some health was seen changing in this world: the server sends real health, so it is never taken as hidden. */
+	private boolean honest;
 	// This frame's sprites of the GUI atlas.
 	private Sprite container;
 	private Sprite full;
@@ -96,6 +103,7 @@ public final class HealthIndicatorModule extends Module implements WorldEffect {
 		if (mc.world != world) {
 			world = mc.world;
 			emptyHits = 0;
+			honest = false;
 			onDisable();
 		}
 		for (int i = 0; i < entries.size(); i++) entries.get(i).seen = false;
@@ -134,7 +142,13 @@ public final class HealthIndicatorModule extends Module implements WorldEffect {
 		}
 		entry.entity = e;
 		entry.seen = true;
-		if (entry.update(e, hp, max)) emptyHits++;
+		int result = entry.update(e, hp, max);
+		if (result == CHANGED) {
+			honest = true;
+			emptyHits = 0;
+		} else if (result == EMPTY_HIT && !honest && !e.isUsingItem() && !(e instanceof PlayerEntity player && player.isCreative())) {
+			emptyHits++;
+		}
 	}
 
 	@Override
@@ -243,6 +257,8 @@ public final class HealthIndicatorModule extends Module implements WorldEffect {
 		/** Health and absorption before the hit being watched (-1 when none) and the lowest they went since. */
 		private float before = -1f;
 		private float lowest;
+		/** Whether lastTotal holds a value read from the entity yet. */
+		private boolean primed;
 		private String label;
 		private int labelHalves = -1;
 		private int labelFactor;
@@ -252,14 +268,18 @@ public final class HealthIndicatorModule extends Module implements WorldEffect {
 			this.entity = entity;
 		}
 
-		/** Takes the new numbers; true when a hit has just ended without taking any health or absorption off. */
-		boolean update(LivingEntity e, float hp, float max) {
+		/**
+		 * Takes the new numbers: CHANGED when health or absorption moved since the last tick, EMPTY_HIT when a hit has
+		 * just ended without taking any of them off, else NOTHING.
+		 */
+		int update(LivingEntity e, float hp, float max) {
 			float absorption = e.getAbsorptionAmount();
 			healthHalves = MathHelper.ceil(hp);
 			maxHalves = MathHelper.ceil(max);
 			absorptionHalves = MathHelper.ceil(absorption);
 			frozen = e.isFrozen();
 			float total = hp + absorption;
+			boolean changed = primed && Math.abs(total - lastTotal) > 0.01f;
 			boolean empty = false;
 			if (e.hurtTime > lastHurt) {
 				before = lastTotal;
@@ -273,7 +293,8 @@ public final class HealthIndicatorModule extends Module implements WorldEffect {
 			}
 			lastHurt = e.hurtTime;
 			lastTotal = total;
-			return empty;
+			primed = true;
+			return changed ? CHANGED : empty ? EMPTY_HIT : NOTHING;
 		}
 
 		/** "9.5" hearts with Number on, "xN" when one heart stands for several; null for neither. Rebuilt on change only. */

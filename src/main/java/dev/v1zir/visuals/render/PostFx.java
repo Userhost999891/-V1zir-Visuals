@@ -16,6 +16,7 @@ import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.visuals.CinematicModule;
 import dev.v1zir.visuals.module.impl.visuals.GodRaysModule;
 import dev.v1zir.visuals.module.impl.visuals.MistModule;
+import dev.v1zir.visuals.module.impl.visuals.VibeModule;
 import dev.v1zir.visuals.render.sky.SkyRenderer;
 import dev.v1zir.visuals.render.world.WorldEffectRenderer;
 import dev.v1zir.visuals.util.ColorUtil;
@@ -76,8 +77,11 @@ public final class PostFx {
 		MinecraftClient mc = V1zir.mc();
 		GodRaysModule rays = ModuleManager.get(GodRaysModule.class);
 		MistModule mist = ModuleManager.get(MistModule.class);
+		if (mist != null && !mist.isEnabled()) mist = null;
+		// VIBE's haze is the Mist's, in the theme's colours, while Mist itself is off.
+		VibeModule vibe = mist == null ? VibeModule.hazing() : null;
 		boolean shafts = rays != null && rays.isEnabled();
-		boolean fog = mist != null && mist.isEnabled();
+		boolean fog = mist != null || vibe != null;
 		if (!shafts && !fog || mc.world == null || mc.player == null) return;
 		// Under water the game's own fog fills the view.
 		if (mc.player.isSubmergedInWater()) return;
@@ -127,11 +131,14 @@ public final class PostFx {
 			float target = (float) cam.y - MIST_BELOW;
 			if (Float.isNaN(mistBase) || Math.abs(target - mistBase) > 32f) mistBase = target;
 			else mistBase += (target - mistBase) * (1f - (float) Math.exp(-dt * MIST_FOLLOW));
-			int color = mist.color(world, sy);
+			int color = mist != null ? mist.color(world, sy) : vibe.hazeColor(world, sy);
+			float amount = mist != null ? mist.density.f() : vibe.hazeDensity();
+			float thins = mist != null ? mist.height.f() : vibe.hazeHeight();
+			boolean drift = mist == null || mist.drift.on();
 			// At the default density a field 10 blocks away is a little hazy, 30 blocks away half gone in it.
-			float density = mist.density.f() * 0.021f * (1f + 0.8f * world.getRainGradient(tickDelta));
+			float density = amount * 0.021f * (1f + 0.8f * world.getRainGradient(tickDelta));
 			p.fog.set(ColorUtil.red(color) / 255f, ColorUtil.green(color) / 255f, ColorUtil.blue(color) / 255f, density);
-			p.fogShape.set(1f / mist.height.f(), (float) cam.y - mistBase, mist.drift.on() ? 1f : 0f, 0.92f);
+			p.fogShape.set(1f / thins, (float) cam.y - mistBase, drift ? 1f : 0f, 0.92f);
 		} else {
 			mistBase = Float.NaN;
 			lastNanos = 0L;

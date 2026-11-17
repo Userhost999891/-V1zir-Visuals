@@ -12,6 +12,7 @@ import dev.v1zir.visuals.module.impl.visuals.CameraTweaksModule;
 import dev.v1zir.visuals.module.impl.visuals.ColorGradingModule;
 import dev.v1zir.visuals.module.impl.visuals.MotionBlurModule;
 import dev.v1zir.visuals.module.impl.visuals.NoRenderModule;
+import dev.v1zir.visuals.module.impl.visuals.VibeModule;
 import dev.v1zir.visuals.module.impl.visuals.ZoomModule;
 import dev.v1zir.visuals.render.world.WorldText;
 import dev.v1zir.visuals.render.HandFx;
@@ -122,6 +123,7 @@ public abstract class GameRendererMixin {
 	private void v1zir$colorGrade(CallbackInfo ci) {
 		BloomModule.renderIfEnabled();
 		ColorGradingModule.renderIfEnabled();
+		VibeModule.gradeIfEnabled();
 		PostFx.lens();
 	}
 
