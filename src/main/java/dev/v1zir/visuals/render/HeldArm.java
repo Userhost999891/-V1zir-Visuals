@@ -120,7 +120,8 @@ public final class HeldArm {
 		boolean left = arm == Arm.LEFT;
 		ItemDisplayContext context = left ? ItemDisplayContext.FIRST_PERSON_LEFT_HAND : ItemDisplayContext.FIRST_PERSON_RIGHT_HAND;
 
-		// The item's model as vanilla is about to draw it: its first layer's display transform and its corners.
+		// The item's model as vanilla is about to draw it: its first layer's display transform and its corners (centred
+		// on the model's middle, as the model is drawn right after the display transform).
 		MinecraftClient mc = MinecraftClient.getInstance();
 		STATE.clear();
 		mc.getItemModelManager().updateForLivingEntity(STATE, stack, context, player);
@@ -129,7 +130,7 @@ public final class HeldArm {
 		if (state.v1zir$layerCount() <= 0 || layers == null || layers.length == 0 || layers[0] == null) return;
 		LayerRenderStateAccessor layer = (LayerRenderStateAccessor) layers[0];
 		Transformation transform = layer.v1zir$transform();
-		float minX = 0f, minY = 0f, minZ = 0f, maxX = 1f, maxY = 1f, maxZ = 1f;
+		float minX = -0.5f, minY = -0.5f, minZ = -0.5f, maxX = 0.5f, maxY = 0.5f, maxZ = 0.5f;
 		Supplier<Vector3fc[]> vertices = layer.v1zir$vertices();
 		Vector3fc[] corners = vertices != null ? vertices.get() : null;
 		if (corners != null && corners.length > 0) {
@@ -170,7 +171,6 @@ public final class HeldArm {
 		MODEL.push();
 		MODEL.peek().getPositionMatrix().set(item);
 		if (transform != null) transform.apply(left, MODEL.peek());
-		MODEL.translate(-0.5f, -0.5f, -0.5f);
 		Matrix4f model = MODEL.peek().getPositionMatrix();
 		model.transformPosition(GRIP.set(HELD));
 		if (hold == Hold.BLOCK) {
@@ -208,7 +208,6 @@ public final class HeldArm {
 		MODEL.push();
 		MODEL.peek().getPositionMatrix().translation(left ? -x : x, y, z);
 		if (transform != null) transform.apply(left, MODEL.peek());
-		MODEL.translate(-0.5f, -0.5f, -0.5f);
 		Matrix4f model = MODEL.peek().getPositionMatrix();
 		model.transformPosition(out.set(HELD));
 		if (block) {
