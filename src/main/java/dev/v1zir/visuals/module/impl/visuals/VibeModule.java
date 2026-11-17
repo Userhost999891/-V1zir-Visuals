@@ -31,8 +31,9 @@ import java.util.concurrent.ThreadLocalRandom;
  *   <li>Dreamy: soft pastel bokeh floating in a pale haze, gentle contrast;</li>
  *   <li>Stardust: tiny twinkling stars drifting, violet night light.</li>
  * </ul>
- * The particles live in the world (you walk through them) and those that leave the radius come back at its edge, so a
- * few hundred quads a frame are all it costs.
+ * The particles live in the world (you walk through them) and those that leave the air around you (out of the radius,
+ * down to the ground, or risen high above it) come back, mostly where you look, so a few hundred quads a frame are all
+ * it costs and most of them are seen.
  */
 public final class VibeModule extends Module implements WorldEffect {
 	private static final int PETAL = 0;
@@ -45,6 +46,10 @@ public final class VibeModule extends Module implements WorldEffect {
 	private static final int STAR = 7;
 	/** Per particle: position relative to the anchor (3), wander velocity (3), phase, variety, size. */
 	private static final int STRIDE = 9;
+	/** How far below the eyes the air the particles live in ends: a little under the feet of someone on level ground. */
+	private static final float FLOOR = -2.2f;
+	/** How far to either side of where the camera looks (radians, across the ground) most particles come back. */
+	private static final double VIEW_SPREAD = 1.2;
 
 	/**
 	 * A theme: its particle, how many at Particles 1x, two particle colours, the haze colour (night and day share it,
@@ -96,6 +101,8 @@ public final class VibeModule extends Module implements WorldEffect {
 	private double lastCamX;
 	private double lastCamY;
 	private double lastCamZ;
+	/** Where the camera looks across the ground this frame (radians from +x towards +z). */
+	private double lookAngle;
 
 	public VibeModule() {
 		super("VIBE", "A whole mood at once: Sakura, Autumn, Winter, Fireflies, Neon and more", Category.SHADERS);
@@ -180,6 +187,8 @@ public final class VibeModule extends Module implements WorldEffect {
 		lastCamY = cy;
 		lastCamZ = cz;
 		if (n <= 0) return;
+		// Where the camera looks across the ground: particles mostly come back there, where they are seen.
+		lookAngle = Math.atan2(-WorldEffectRenderer.RIGHT.x, WorldEffectRenderer.RIGHT.z);
 		if (data.length != n * STRIDE || theme.index() != shownTheme || teleported) {
 			// A new count, theme or a jump far away: start over around the camera.
 			data = new float[n * STRIDE];
@@ -226,7 +235,7 @@ public final class VibeModule extends Module implements WorldEffect {
 			float dy = data[o + 1] - oy;
 			float dz = data[o + 2] - oz;
 			float dist2 = dx * dx + dy * dy + dz * dz;
-			if (dist2 > r * r * 1.1f) {
+			if (dist2 > r * r * 1.1f || (kind == NEON || kind == BUBBLE ? dy > r * 0.45f : dy < FLOOR)) {
 				respawn(i, kind, ox, oy, oz, r, false);
 				continue;
 			}
@@ -352,19 +361,22 @@ public final class VibeModule extends Module implements WorldEffect {
 	private void respawn(int i, int kind, float ox, float oy, float oz, float r, boolean anywhere) {
 		ThreadLocalRandom random = ThreadLocalRandom.current();
 		int o = i * STRIDE;
-		double theta = random.nextDouble() * Math.PI * 2;
+		// Most come back where the camera looks, the rest anywhere round.
+		double theta = random.nextFloat() < 0.7f ? lookAngle + (random.nextDouble() * 2 - 1) * VIEW_SPREAD : random.nextDouble() * Math.PI * 2;
 		boolean falling = kind == PETAL || kind == LEAF || kind == SNOW;
 		boolean rising = kind == NEON || kind == BUBBLE;
-		// Falling ones come back anywhere over the top, rising ones under the bottom, the rest at the edge.
+		// Falling ones come back anywhere over the top, rising ones just under the ground, the rest at the edge.
 		// Weighted towards you, where they are big enough to see; a few further out fill the depth.
 		double dist = (anywhere || falling || rising ? 0.08 + 0.87 * Math.pow(random.nextDouble(), 0.8) : 0.75 + random.nextDouble() * 0.25) * r;
 		data[o] = ox + (float) (Math.cos(theta) * dist);
 		data[o + 2] = oz + (float) (Math.sin(theta) * dist);
+		// Only in the air around the eyes: from a little under the feet up to some way overhead.
+		float u = random.nextFloat();
 		float y;
-		if (anywhere) y = (random.nextFloat() * 2f - 1f) * r * 0.45f;
-		else if (falling) y = r * (0.3f + random.nextFloat() * 0.15f);
-		else if (rising) y = -r * (0.3f + random.nextFloat() * 0.15f);
-		else y = (random.nextFloat() * 2f - 1f) * r * 0.35f;
+		if (falling) y = anywhere ? FLOOR + u * (r * 0.45f - FLOOR) : r * (0.3f + u * 0.15f);
+		else if (rising) y = anywhere ? FLOOR + u * (r * 0.45f - FLOOR) : FLOOR - u;
+		else if (kind == FIREFLY) y = -1.3f + u * u * (r * 0.3f + 1.3f);
+		else y = -1.4f + u * (r * 0.35f + 1.4f);
 		data[o + 1] = oy + y;
 		data[o + 3] = (random.nextFloat() - 0.5f) * 0.5f;
 		data[o + 4] = (random.nextFloat() - 0.5f) * 0.2f;
@@ -372,14 +384,14 @@ public final class VibeModule extends Module implements WorldEffect {
 		data[o + 6] = random.nextFloat() * 6.283f;
 		data[o + 7] = random.nextFloat();
 		data[o + 8] = switch (kind) {
-			case PETAL -> 0.11f + random.nextFloat() * 0.07f;
+			case PETAL -> 0.12f + random.nextFloat() * 0.08f;
 			case LEAF -> 0.15f + random.nextFloat() * 0.1f;
-			case SNOW -> 0.05f + random.nextFloat() * 0.05f;
-			case FIREFLY -> 0.04f + random.nextFloat() * 0.035f;
+			case SNOW -> 0.055f + random.nextFloat() * 0.055f;
+			case FIREFLY -> 0.045f + random.nextFloat() * 0.04f;
 			case NEON -> 0.07f + random.nextFloat() * 0.05f;
 			case BUBBLE -> 0.07f + random.nextFloat() * 0.08f;
 			case BOKEH -> 0.2f + random.nextFloat() * 0.25f;
-			default -> 0.03f + random.nextFloat() * 0.035f;
+			default -> 0.035f + random.nextFloat() * 0.04f;
 		};
 	}
 }
