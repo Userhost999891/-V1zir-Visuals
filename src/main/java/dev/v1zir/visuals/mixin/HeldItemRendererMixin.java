@@ -59,6 +59,7 @@ public abstract class HeldItemRendererMixin {
 								  float equipProgress, MatrixStack matrices, OrderedRenderCommandQueue queue, int light, CallbackInfo ci) {
 		SwingAnimationsModule swing = ModuleManager.get(SwingAnimationsModule.class);
 		if (swing != null && swing.isEnabled()) swing.begin(player, hand, swingProgress, item);
+		HeldArm.begin(matrices);
 	}
 
 	/**

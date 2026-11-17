@@ -21,6 +21,7 @@ import net.minecraft.registry.tag.ItemTags;
 import net.minecraft.util.Arm;
 import net.minecraft.util.Hand;
 import net.minecraft.util.Identifier;
+import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector3fc;
@@ -62,7 +63,17 @@ public final class HeldArm {
 	private static final Vector3fc VANILLA_FIST = VANILLA_ARM.transformPosition(new Matrix4f(GRIP_TO_ARM).invert().transformPosition(new Vector3f()));
 	private static final ItemRenderState STATE = new ItemRenderState();
 	private static final MatrixStack MODEL = new MatrixStack();
+	/**
+	 * The hand's base, as renderFirstPersonItem starts from it: the view (with its bob and hurt tilt) as the hand's
+	 * matrices see it. They do not start from the view itself (renderHand turns them by the inverse of the camera's
+	 * rotation and the shader turns them back), so everything placed in the view goes through this.
+	 */
+	private static final Matrix4f BASE = new Matrix4f();
+	private static final Matrix4f TO_BASE = new Matrix4f();
+	private static final Matrix3f BASE_NORMAL = new Matrix3f();
+	private static final Matrix3f TURN = new Matrix3f();
 	private static final Matrix4f ARM = new Matrix4f();
+	private static final Matrix4f FRAME = new Matrix4f();
 	private static final Vector3f GRIP = new Vector3f();
 	private static final Vector3f AXIS = new Vector3f();
 
@@ -77,6 +88,13 @@ public final class HeldArm {
 		FLAT,
 		/** Block models: resting on the palm. */
 		BLOCK
+	}
+
+	/** Start of renderFirstPersonItem (HeldItemRendererMixin): the matrices as they are there are the hand's base. */
+	public static void begin(MatrixStack matrices) {
+		BASE.set(matrices.peek().getPositionMatrix());
+		BASE_NORMAL.set(matrices.peek().getNormalMatrix());
+		TO_BASE.set(BASE).invert();
 	}
 
 	/**
@@ -126,8 +144,11 @@ public final class HeldArm {
 		// A model with no depth to speak of is flat, whatever the item.
 		if (hold == Hold.BLOCK && maxZ - minZ < 0.3f) hold = Hold.FLAT;
 
-		// Raised into the view: vanilla's matrices are these, so the item it draws next rises with the arm.
-		matrices.peek().getPositionMatrix().translateLocal(left ? -LIFT_X : LIFT_X, LIFT_Y, 0f);
+		// Raised into the view (in the base, so straight up the screen): vanilla's matrices are these, so the item it
+		// draws next rises with the arm.
+		Matrix4f item = matrices.peek().getPositionMatrix();
+		FRAME.set(TO_BASE).mul(item).translateLocal(left ? -LIFT_X : LIFT_X, LIFT_Y, 0f);
+		item.set(BASE).mul(FRAME);
 
 		// The model's matrix in the hand's space, as its layer applies it.
 		MODEL.push();
@@ -150,17 +171,18 @@ public final class HeldArm {
 		MODEL.pop();
 		if (!Float.isFinite(GRIP.x) || !Float.isFinite(GRIP.y) || !Float.isFinite(GRIP.z)) return;
 
-		// Vanilla's resting hand, moved so its fist is on the grip. Worked out for a right hand; a left one is its
-		// mirror image across the view.
+		// Vanilla's resting hand, moved so its fist is on the grip, in the base as vanilla places its own. Worked out
+		// for a right hand; a left one is its mirror image across the view.
+		TO_BASE.transformPosition(GRIP);
 		if (left) GRIP.x = -GRIP.x;
 		ARM.translation(GRIP.x - VANILLA_FIST.x(), GRIP.y - VANILLA_FIST.y(), GRIP.z - VANILLA_FIST.z()).mul(VANILLA_ARM);
 		if (left) ARM.scaleLocal(-1f, 1f, 1f).scale(-1f, 1f, 1f);
 
 		matrices.push();
 		MatrixStack.Entry entry = matrices.peek();
-		entry.getPositionMatrix().set(ARM);
-		// A rotation (a mirrored one is one too): its normals turn with it.
-		entry.getNormalMatrix().set(ARM);
+		// The arm's rotation (a mirrored one is one too) turns its normals, after the base's own.
+		entry.getNormalMatrix().set(BASE_NORMAL).mul(TURN.set(ARM));
+		entry.getPositionMatrix().set(BASE).mul(ARM);
 		PlayerEntityRenderer<AbstractClientPlayerEntity> renderer = mc.getEntityRenderDispatcher().getPlayerRenderer(player);
 		Identifier skin = player.getSkin().body().texturePath();
 		if (left) renderer.renderLeftArm(matrices, queue, light, skin, player.isModelPartVisible(PlayerModelPart.LEFT_SLEEVE));
