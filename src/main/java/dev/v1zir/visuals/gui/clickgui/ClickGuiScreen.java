@@ -285,7 +285,15 @@ public final class ClickGuiScreen extends Screen {
 		}
 
 		Render2D.panelShadow(ctx, winX, winY + 6f, winW, winH, Ui.RADIUS, 28f, 0x8C000000, winX, winY, winW, winH);
+		// A faint glow of the accent all around the window, the light of the theme on the glass.
+		Render2D.glow(ctx, winX, winY, winW, winH, Ui.RADIUS, 22f, ColorUtil.withAlpha(Theme.accent(), 26), ColorUtil.withAlpha(Theme.accent2(), 18));
 		Render2D.panel(ctx, winX, winY, winW, winH, Ui.RADIUS, 0, Ui.LIT);
+		// A thin line of the accents along the top edge, fading out towards the corners.
+		float lineW = winW * 0.55f;
+		Render2D.gradientH(ctx, winX + (winW - lineW) * 0.5f, winY, lineW * 0.5f, 1f, 0f, ColorUtil.withAlpha(Theme.accent(), 0),
+			ColorUtil.withAlpha(Theme.accent(), 170));
+		Render2D.gradientH(ctx, winX + winW * 0.5f, winY, lineW * 0.5f, 1f, 0f, ColorUtil.withAlpha(Theme.accent2(), 170),
+			ColorUtil.withAlpha(Theme.accent2(), 0));
 		topBar.render(ctx, winX, winY, winW, mx, my, search, searchFocused);
 		sidebar.render(ctx, winX + Ui.PAD, contentY, Sidebar.width(winW), contentH, tab, searching(), mx, my);
 

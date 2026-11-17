@@ -112,6 +112,8 @@ final class ModuleCard {
 		Render2D.rim(ctx, x, cy, w, ch, r, rim, Ui.LIT);
 		if (f > 0.01f) Render2D.outline(ctx, x - 1.5f, cy - 1.5f, w + 3f, ch + 3f, r + 1.5f, 1.2f, ColorUtil.withAlpha(accent, Math.round(210 * f)));
 		if (e > 0.01f) {
+			// An enabled card carries a faint wash of the accent from its edge across half of it.
+			Render2D.gradientH(ctx, x, cy, w * 0.55f, ch, r, ColorUtil.withAlpha(accent, Math.round(34 * e)), ColorUtil.withAlpha(accent, 0));
 			// The edge line grows from its middle as the module turns on.
 			float lh = (ch - 24f) * e;
 			Render2D.round(ctx, x + 1f, cy + ch / 2f - lh / 2f, 2f, lh, 1f, ColorUtil.fade(accent, e));
