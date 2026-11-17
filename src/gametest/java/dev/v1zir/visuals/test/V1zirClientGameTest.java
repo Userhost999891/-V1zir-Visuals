@@ -813,7 +813,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 	private static void targetEsp(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
 		look(singleplayer, 0, 4);
 		plainFov(context, true);
-		singleplayer.getServer().runCommand("execute as @a at @s run summon minecraft:husk ^ ^ ^3.2 "
+		singleplayer.getServer().runCommand("execute as @a at @s rotated ~ 0 run summon minecraft:husk ^ ^ ^3.2 "
 			+ "{NoAI:1b,Silent:1b,PersistenceRequired:1b,Tags:[\"v1zir_esp\"],DeathLootTable:\"minecraft:empty\"}");
 		context.waitTicks(15);
 		boolean wasOn = context.computeOnClient(client -> {
@@ -918,9 +918,9 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			hearts.number.set(true);
 			hearts.setEnabled(true, false);
 		});
-		singleplayer.getServer().runCommand("execute as @a at @s run summon minecraft:husk ^0.8 ^ ^4 "
+		singleplayer.getServer().runCommand("execute as @a at @s rotated ~ 0 run summon minecraft:husk ^0.8 ^ ^4 "
 			+ "{NoAI:1b,Silent:1b,PersistenceRequired:1b,Health:13f,Tags:[\"v1zir_hearts\"],DeathLootTable:\"minecraft:empty\"}");
-		singleplayer.getServer().runCommand("execute as @a at @s run summon minecraft:iron_golem ^-1.8 ^ ^5.5 "
+		singleplayer.getServer().runCommand("execute as @a at @s rotated ~ 0 run summon minecraft:iron_golem ^-1.8 ^ ^5.5 "
 			+ "{NoAI:1b,Silent:1b,Health:73f,Tags:[\"v1zir_hearts\"],DeathLootTable:\"minecraft:empty\"}");
 		singleplayer.getServer().runCommand("execute as @a at @s anchored eyes run tp @s ~ ~ ~ facing entity @e[tag=v1zir_hearts,sort=nearest,limit=1] eyes");
 		context.waitTicks(30);
@@ -943,9 +943,9 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		singleplayer.getServer().runCommand("time set 6000");
 		look(singleplayer, 0, 8);
 		for (String command : List.of(
-			"execute as @a at @s run summon minecraft:husk ^-0.6 ^ ^4 {NoAI:1b,Silent:1b,PersistenceRequired:1b,Tags:[\"v1zir_chams\"],DeathLootTable:\"minecraft:empty\"}",
-			"execute as @a at @s run summon minecraft:pig ^1.6 ^ ^6.5 {NoAI:1b,Silent:1b,Tags:[\"v1zir_chams\"],DeathLootTable:\"minecraft:empty\"}",
-			"execute as @a at @s run fill ^1 ^ ^5 ^2 ^1 ^5 minecraft:stone")) {
+			"execute as @a at @s rotated ~ 0 run summon minecraft:husk ^-0.6 ^ ^4 {NoAI:1b,Silent:1b,PersistenceRequired:1b,Tags:[\"v1zir_chams\"],DeathLootTable:\"minecraft:empty\"}",
+			"execute as @a at @s rotated ~ 0 run summon minecraft:pig ^1.6 ^ ^6.5 {NoAI:1b,Silent:1b,Tags:[\"v1zir_chams\"],DeathLootTable:\"minecraft:empty\"}",
+			"execute as @a at @s rotated ~ 0 run fill ^1 ^ ^5 ^2 ^1 ^5 minecraft:stone")) {
 			singleplayer.getServer().runCommand(command);
 		}
 		context.runOnClient(client -> {
@@ -996,7 +996,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			esp.mode.reset();
 		});
 		singleplayer.getServer().runCommand("kill @e[tag=v1zir_chams]");
-		singleplayer.getServer().runCommand("execute as @a at @s run fill ^1 ^ ^5 ^2 ^1 ^5 minecraft:air");
+		singleplayer.getServer().runCommand("execute as @a at @s rotated ~ 0 run fill ^1 ^ ^5 ^2 ^1 ^5 minecraft:air");
 		context.waitTicks(25);
 	}
 
@@ -1015,7 +1015,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		});
 		for (String mode : List.of("Light Pillar", "Shatter")) {
 			context.runOnClient(client -> ModuleManager.get(KillEffectsModule.class).mode.set(mode));
-			singleplayer.getServer().runCommand("execute as @a at @s run summon minecraft:husk ^ ^ ^5 "
+			singleplayer.getServer().runCommand("execute as @a at @s rotated ~ 0 run summon minecraft:husk ^ ^ ^5 "
 				+ "{NoAI:1b,Silent:1b,PersistenceRequired:1b,Tags:[\"v1zir_kill\"],DeathLootTable:\"minecraft:empty\"}");
 			context.waitTicks(15);
 			singleplayer.getServer().runCommand("kill @e[tag=v1zir_kill]");

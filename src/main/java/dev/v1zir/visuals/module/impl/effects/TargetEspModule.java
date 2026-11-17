@@ -224,7 +224,8 @@ public final class TargetEspModule extends Module implements WorldEffect {
 		Vector3f right = WorldEffectRenderer.RIGHT;
 		Vector3f up = WorldEffectRenderer.UP;
 		float tighten = 1f - 0.08f * hit;
-		double bottom = pos.y + 0.04;
+		// A little above the feet, clear of grass and snow at them.
+		double bottom = pos.y + 0.1 * s;
 		double top = pos.y + h + 0.16 * s;
 		double cy = (top + bottom) * 0.5;
 		double hh = (top - bottom) * 0.5 * tighten;
