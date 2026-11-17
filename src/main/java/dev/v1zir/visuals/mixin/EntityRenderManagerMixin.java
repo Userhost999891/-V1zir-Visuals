@@ -17,8 +17,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * No Render: far armour stands (often server holograms) are culled before a render state is built
- * for them. Entity Glow: the finished render state of an outlined entity takes its colour. The
- * effects mark the state for the frame (MarkedRenderState).
+ * for them. Chams: their targets are drawn as far as the chams reach. Entity Glow: the finished render
+ * state of an outlined entity takes its colour. The effects mark the state for the frame (MarkedRenderState).
  */
 @Mixin(EntityRenderManager.class)
 public abstract class EntityRenderManagerMixin {
@@ -28,6 +28,15 @@ public abstract class EntityRenderManagerMixin {
 		if (!(entity instanceof ArmorStandEntity)) return;
 		NoRenderModule noRender = NoRenderModule.active();
 		if (noRender != null && noRender.hidesArmorStand(entity.squaredDistanceTo(x, y, z))) cir.setReturnValue(false);
+	}
+
+	/**
+	 * Chams: a target in the chams' range and in view is drawn, however far (vanilla stops at 64 blocks for a player)
+	 * and even behind walls, where the occlusion culler would skip it; the chams show through walls.
+	 */
+	@Inject(method = "shouldRender", at = @At("HEAD"), cancellable = true)
+	private void v1zir$farChams(Entity entity, Frustum frustum, double x, double y, double z, CallbackInfoReturnable<Boolean> cir) {
+		if (ChamsModule.reaches(entity, frustum, x, y, z)) cir.setReturnValue(true);
 	}
 
 	/** Runs after every renderer's updateRenderState, so nothing overwrites the colour afterwards. */

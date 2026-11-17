@@ -823,7 +823,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			hud.setEnabled(false, false);
 			return on;
 		});
-		for (String mode : List.of("Ghosts", "Ring", "Marker", "Helix", "Orbit", "Crystals")) {
+		for (String mode : List.of("Target", "Brackets", "Ghosts", "Ring", "Marker", "Helix", "Orbit", "Crystals")) {
 			context.runOnClient(client -> {
 				ModuleManager.get(TargetEspModule.class).mode.set(mode);
 				// Hit again: a fight ends after eight seconds without one.

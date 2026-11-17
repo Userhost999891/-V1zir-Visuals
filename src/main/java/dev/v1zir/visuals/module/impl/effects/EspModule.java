@@ -50,7 +50,8 @@ public final class EspModule extends Module implements WorldEffect {
 	public final BoolSetting fill = add(new BoolSetting("Fill", true));
 	public final BoolSetting throughWalls = add(new BoolSetting("Through walls", true));
 	public final BoolSetting mobs = add(new BoolSetting("Mobs", false));
-	public final NumberSetting range = add(new NumberSetting("Range", 96, 16, 256, 8).suffix(" m"));
+	/** As far as the server sends entities (many servers stop at 48 to 128 blocks); the boxes do not need vanilla to draw them. */
+	public final NumberSetting range = add(new NumberSetting("Range", 256, 16, 512, 8).suffix(" m"));
 
 	private final List<Target> targets = new ArrayList<>();
 	private final Int2ObjectOpenHashMap<Target> byId = new Int2ObjectOpenHashMap<>();

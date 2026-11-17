@@ -16,6 +16,7 @@ import dev.v1zir.visuals.util.Theme;
 import net.minecraft.client.model.Model;
 import net.minecraft.client.render.entity.state.PlayerEntityRenderState;
 import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.client.render.Frustum;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.decoration.ArmorStandEntity;
@@ -63,6 +64,8 @@ public final class ChamsModule extends Module implements WorldEffect {
 
 	public final ModeSetting style = add(new ModeSetting("Style", "Glass", "Glass", "Crystal", "Glow", "Flat", "Hologram", "Galaxy", "Wireframe", "Rainbow"));
 	public final BoolSetting throughWalls = add(new BoolSetting("Through walls", true));
+	/** Vanilla draws a player only up to 64 blocks away (small mobs less); chams make it draw their targets this far. */
+	public final NumberSetting range = add(new NumberSetting("Range", 256, 16, 512, 8).suffix(" m"));
 	public final NumberSetting opacity = add(new NumberSetting("Opacity", 0.75, 0.1, 1.0, 0.05));
 	public final BoolSetting aura = add(new BoolSetting("Aura", true).visibleIf(() -> style.is("Crystal")));
 	public final BoolSetting mobs = add(new BoolSetting("Mobs", false));
@@ -99,6 +102,17 @@ public final class ChamsModule extends Module implements WorldEffect {
 	public static int color(Entity entity) {
 		ChamsModule module = ModuleManager.get(ChamsModule.class);
 		return module != null && module.isEnabled() ? module.colorFor(entity) : 0;
+	}
+
+	/**
+	 * Whether vanilla has to draw this entity for its chams though it would not (EntityRenderManagerMixin): further
+	 * than it draws entities, or hidden by the occlusion culler, but in the chams' range and in view.
+	 */
+	public static boolean reaches(Entity entity, Frustum frustum, double x, double y, double z) {
+		ChamsModule module = ModuleManager.get(ChamsModule.class);
+		if (module == null || !module.isEnabled() || module.colorFor(entity) == 0) return false;
+		double range = module.range.get();
+		return entity.squaredDistanceTo(x, y, z) <= range * range && frustum.isVisible(entity.getBoundingBox().expand(0.5));
 	}
 
 	private int colorFor(Entity entity) {

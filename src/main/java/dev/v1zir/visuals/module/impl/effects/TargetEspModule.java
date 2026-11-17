@@ -22,10 +22,11 @@ import org.joml.Vector3f;
 import java.util.function.IntUnaryOperator;
 
 /**
- * Animated marker around the entity you are fighting (or, if asked, the one you aim at): souls circling it with
- * comet tails (Ghosts), a ring gliding up and down it (Ring), lock-on brackets (Marker), a double helix of light
- * winding up around it (Helix), three tilted rings with a spark racing along each like an atom (Orbit), or glowing
- * cubes tumbling around it (Crystals). It grows in when the fight starts, fades out after it, and on every hit it
+ * Marker on the entity you are fighting (or, if asked, the one you aim at): a lock-on reticle over it that holds
+ * still (Target), thick corner brackets on its box (Brackets), souls circling it with comet tails (Ghosts), a ring
+ * gliding up and down it (Ring), turning lock-on brackets (Marker), a double helix of light winding up around it
+ * (Helix), three tilted rings with a spark racing along each like an atom (Orbit), or glowing cubes tumbling around
+ * it (Crystals). Thickness widens every line and ring. It grows in when the fight starts, fades out after it, and on every hit it
  * swells and flashes towards red. Everything is drawn twice: as light added to the scene, which glows at night,
  * and as a blended body of the colour under it, which is what shows against a bright sky or snow. Everything is a
  * closed formula of the time, so it costs a few hundred quads per frame.
@@ -41,10 +42,12 @@ public final class TargetEspModule extends Module implements WorldEffect {
 	private static final int ORBIT_SEGMENTS = 44;
 	private static final int CRYSTALS = 5;
 
-	public final ModeSetting mode = add(new ModeSetting("Mode", "Ghosts", "Ghosts", "Ring", "Marker", "Helix", "Orbit", "Crystals"));
+	public final ModeSetting mode = add(new ModeSetting("Mode", "Target", "Target", "Brackets", "Ghosts", "Ring", "Marker", "Helix", "Orbit", "Crystals"));
 	public final ModeSetting targets = add(new ModeSetting("Target", "Attacked", "Attacked", "Attacked or aimed at"));
 	public final NumberSetting speed = add(new NumberSetting("Speed", 1.0, 0.2, 3.0, 0.05).suffix("x"));
 	public final NumberSetting size = add(new NumberSetting("Size", 1.0, 0.5, 2.0, 0.05).suffix("x"));
+	/** How thick every line, ring and bracket is drawn. */
+	public final NumberSetting thickness = add(new NumberSetting("Thickness", 1.6, 0.5, 3.0, 0.05).suffix("x"));
 	public final NumberSetting brightness = add(new NumberSetting("Brightness", 1.0, 0.2, 2.0, 0.05));
 	public final BoolSetting throughWalls = add(new BoolSetting("Through walls", false));
 	public final BoolSetting hitFlash = add(new BoolSetting("Hit flash", true));
@@ -129,6 +132,8 @@ public final class TargetEspModule extends Module implements WorldEffect {
 		solid = through ? WorldEffectRenderer.translucentThrough() : WorldEffectRenderer.translucent();
 		WorldEffectRenderer.Mesh mesh = glow;
 		switch (mode.get()) {
+			case "Target" -> reticle(pos, h, t, s, hit, c1, c2);
+			case "Brackets" -> brackets(pos, w, h, s, hit, c1, c2);
 			case "Ring" -> ring(mesh, pos, w, h, t, s, c1, c2);
 			case "Marker" -> marker(mesh, pos, h, t, s, hit, c1, c2);
 			case "Helix" -> helix(mesh, pos, w, h, t, s, c1, c2);
@@ -148,10 +153,87 @@ public final class TargetEspModule extends Module implements WorldEffect {
 		solid.orb(x, y, z, size * 0.6f, alpha(color, Math.min(1f, a * 1.1f)));
 	}
 
-	/** A glowing line with a thinner blended body of its colours in it. */
+	/** A glowing line with a thinner blended body of its colours in it, as thick as Thickness makes it. */
 	private void line(double x0, double y0, double z0, double x1, double y1, double z1, float width, int c0, float a0, int c1, float a1) {
-		Draw3D.line(glow, x0, y0, z0, x1, y1, z1, width, alpha(c0, a0), alpha(c1, a1));
-		Draw3D.line(solid, x0, y0, z0, x1, y1, z1, width * 0.62f, alpha(c0, Math.min(1f, a0 * 1.1f)), alpha(c1, Math.min(1f, a1 * 1.1f)));
+		float w = width * thickness.f();
+		Draw3D.line(glow, x0, y0, z0, x1, y1, z1, w, alpha(c0, a0), alpha(c1, a1));
+		Draw3D.line(solid, x0, y0, z0, x1, y1, z1, w * 0.62f, alpha(c0, Math.min(1f, a0 * 1.1f)), alpha(c1, Math.min(1f, a1 * 1.1f)));
+	}
+
+	// ------------------------------------------------------------------ target
+
+	/**
+	 * A lock-on reticle facing the camera over the target's chest: a thick outer ring broken into four arcs, a thin
+	 * inner ring, four ticks pointing in at the centre and a bright dot. It holds still, only breathing a little, and
+	 * closes in on every hit.
+	 */
+	private void reticle(Vec3d pos, float h, float t, float s, float hit, int c1, int c2) {
+		double cx = pos.x, cy = pos.y + h * 0.55, cz = pos.z;
+		Vector3f right = WorldEffectRenderer.RIGHT;
+		Vector3f up = WorldEffectRenderer.UP;
+		float th = thickness.f();
+		double outer = (h * 0.38 + 0.25) * s * (1.0 - 0.18 * hit) * (1.0 + 0.025 * Math.sin(t * 2.6));
+		double inner = outer * 0.55;
+		// The outer ring: four arcs of 60 degrees on the diagonals.
+		for (int q = 0; q < 4; q++) {
+			double mid = Math.PI / 4 + q * Math.PI / 2;
+			arc(cx, cy, cz, right, up, outer, mid - Math.PI / 6, mid + Math.PI / 6, 0.065f * s, q % 2 == 0 ? c1 : c2);
+		}
+		// The inner ring, thin and whole.
+		ringColor = alpha(ColorUtil.lerp(c1, c2, 0.5f), 0.75f);
+		Draw3D.ring(glow, cx, cy, cz, right.x, right.y, right.z, up.x, up.y, up.z, inner, 0.014 * s * th, 40, ringColorAt);
+		Draw3D.ring(solid, cx, cy, cz, right.x, right.y, right.z, up.x, up.y, up.z, inner, 0.009 * s * th, 40, ringColorAt);
+		// Ticks on the four axes, from outside the outer ring in to the inner one.
+		for (int q = 0; q < 4; q++) {
+			double a = q * Math.PI / 2;
+			double dx = Math.cos(a), dy = Math.sin(a);
+			double ux = right.x * dx + up.x * dy, uy = right.y * dx + up.y * dy, uz = right.z * dx + up.z * dy;
+			double r0 = outer * 1.22, r1 = inner * 1.12;
+			int c = q % 2 == 0 ? c2 : c1;
+			line(cx + ux * r0, cy + uy * r0, cz + uz * r0, cx + ux * r1, cy + uy * r1, cz + uz * r1, 0.055f * s, c, 0.95f, c, 0.6f);
+		}
+		orb(cx, cy, cz, (0.1f + 0.1f * hit) * s, ColorUtil.lerp(c1, 0xFFFFFFFF, 0.5f), 0.7f + 0.3f * hit);
+		orb(cx, cy, cz, 0.04f * s, 0xFFFFFFFF, 0.95f);
+	}
+
+	/** An arc in the camera's plane, as a run of glowing segments that thins out towards its ends. */
+	private void arc(double cx, double cy, double cz, Vector3f right, Vector3f up, double radius, double from, double to, float width, int color) {
+		int steps = 9;
+		double px = 0, py = 0, pz = 0;
+		float pa = 0f;
+		for (int i = 0; i <= steps; i++) {
+			double angle = from + (to - from) * i / steps;
+			double dx = Math.cos(angle) * radius, dy = Math.sin(angle) * radius;
+			double x = cx + right.x * dx + up.x * dy, y = cy + right.y * dx + up.y * dy, z = cz + right.z * dx + up.z * dy;
+			float a = 0.45f + 0.5f * Math.min(1f, Math.min(i, steps - i) / 2f);
+			if (i > 0) line(px, py, pz, x, y, z, width, color, pa, color, a);
+			px = x;
+			py = y;
+			pz = z;
+			pa = a;
+		}
+	}
+
+	// ------------------------------------------------------------------ brackets
+
+	/** Thick brackets on the eight corners of the target's box, holding still; they close in a little on every hit. */
+	private void brackets(Vec3d pos, float w, float h, float s, float hit, int c1, int c2) {
+		double half = (w * 0.5 + 0.14) * s * (1.0 - 0.08 * hit);
+		double minY = pos.y - 0.06;
+		double maxY = pos.y + h + 0.1 * s;
+		double arm = Math.min(half * 0.9, (maxY - minY) * 0.22);
+		for (int i = 0; i < 8; i++) {
+			double sx = (i & 1) == 0 ? -1 : 1, sy = (i & 2) == 0 ? -1 : 1, sz = (i & 4) == 0 ? -1 : 1;
+			double x = pos.x + sx * half, y = sy < 0 ? minY : maxY, z = pos.z + sz * half;
+			float near = Draw3D.cameraFade(x, y, z, 0.5f, 1.4f);
+			if (near <= 0.01f) continue;
+			int c = sy < 0 ? c2 : c1;
+			float a = 0.95f * near;
+			line(x, y, z, x - sx * arm, y, z, 0.06f * s, c, a, c, a * 0.35f);
+			line(x, y, z, x, y - sy * arm, z, 0.06f * s, c, a, c, a * 0.35f);
+			line(x, y, z, x, y, z - sz * arm, 0.06f * s, c, a, c, a * 0.35f);
+			orb(x, y, z, 0.085f * s, ColorUtil.lerp(c, 0xFFFFFFFF, 0.5f), 0.85f * near);
+		}
 	}
 
 	// ------------------------------------------------------------------ ghosts
@@ -208,7 +290,7 @@ public final class TargetEspModule extends Module implements WorldEffect {
 		float velocity = (float) Math.cos(t * 2.0);
 		double y = pos.y + 0.05 + wave * (h - 0.1);
 		double tail = y - velocity * h * 0.32;
-		double rim = 0.05 * s;
+		double rim = 0.05 * s * thickness.f();
 		float spin = t * 0.6f;
 		for (int i = 0; i < SEGMENTS; i++) {
 			double a0 = TAU * i / SEGMENTS;
@@ -356,8 +438,8 @@ public final class TargetEspModule extends Module implements WorldEffect {
 			axisB.set(-su * ct, st, cu * ct);
 			int base = j == 0 ? c1 : j == 1 ? c2 : ColorUtil.lerp(c1, c2, 0.5f);
 			ringColor = alpha(base, 0.45f);
-			Draw3D.ring(mesh, cx, cy, cz, axisA.x, axisA.y, axisA.z, axisB.x, axisB.y, axisB.z, radius, 0.03 * s, ORBIT_SEGMENTS, ringColorAt);
-			Draw3D.ring(solid, cx, cy, cz, axisA.x, axisA.y, axisA.z, axisB.x, axisB.y, axisB.z, radius, 0.018 * s, ORBIT_SEGMENTS, ringColorAt);
+			Draw3D.ring(mesh, cx, cy, cz, axisA.x, axisA.y, axisA.z, axisB.x, axisB.y, axisB.z, radius, 0.03 * s * thickness.f(), ORBIT_SEGMENTS, ringColorAt);
+			Draw3D.ring(solid, cx, cy, cz, axisA.x, axisA.y, axisA.z, axisB.x, axisB.y, axisB.z, radius, 0.018 * s * thickness.f(), ORBIT_SEGMENTS, ringColorAt);
 			double e = t * (2.6 + 0.5 * j) + j * 2.1;
 			for (int k = 0; k < 7; k++) {
 				double a = e - k * 0.11;
