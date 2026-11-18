@@ -6,7 +6,7 @@ import com.google.gson.JsonPrimitive;
 import java.util.List;
 
 public class ModeSetting extends Setting<String> {
-	private final List<String> modes;
+	private List<String> modes;
 
 	public ModeSetting(String name, String defaultValue, String... modes) {
 		super(name, defaultValue);
@@ -16,6 +16,13 @@ public class ModeSetting extends Setting<String> {
 
 	public List<String> modes() {
 		return modes;
+	}
+
+	/** Replaces the choices (when they change, as the files of a folder do); the value stays if it is still one of them. */
+	public void setModes(List<String> next) {
+		if (next.isEmpty()) return;
+		modes = List.copyOf(next);
+		if (!modes.contains(value)) value = modes.contains(defaultValue()) ? defaultValue() : modes.get(0);
 	}
 
 	public boolean is(String mode) {

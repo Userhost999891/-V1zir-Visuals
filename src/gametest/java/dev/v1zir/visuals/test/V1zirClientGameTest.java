@@ -2,6 +2,9 @@ package dev.v1zir.visuals.test;
 
 import dev.v1zir.visuals.account.Accounts;
 import dev.v1zir.visuals.gui.clickgui.ClickGuiScreen;
+import dev.v1zir.visuals.audio.AudioFiles;
+import dev.v1zir.visuals.audio.Pcm;
+import dev.v1zir.visuals.compat.voicechat.MusicFeed;
 import dev.v1zir.visuals.gui.menu.ConsoleMenu;
 import dev.v1zir.visuals.gui.menu.LockScreen;
 import dev.v1zir.visuals.gui.menu.MainMenus;
@@ -21,6 +24,7 @@ import dev.v1zir.visuals.module.impl.effects.CrosshairModule;
 import dev.v1zir.visuals.module.impl.effects.EspModule;
 import dev.v1zir.visuals.module.impl.effects.HealthIndicatorModule;
 import dev.v1zir.visuals.module.impl.effects.JumpCirclesModule;
+import dev.v1zir.visuals.module.impl.effects.HitSoundModule;
 import dev.v1zir.visuals.module.impl.effects.KillEffectsModule;
 import dev.v1zir.visuals.module.impl.effects.TargetEspModule;
 import dev.v1zir.visuals.module.impl.hud.ArmorModule;
@@ -103,9 +107,11 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -131,6 +137,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		mainMenu(context);
 		vanillaMenuNeverShows(context);
 		loadingAndPs5(context);
+		audio(context);
 
 		// Software rendering in CI is slow: load the world in a small window so the integrated
 		// server gets enough CPU, then go back to a large window for the screenshots.
@@ -589,6 +596,70 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.setScreen(MainMenus::create);
 		context.waitTicks(10);
 		assertMainMenu(context, "going back to the Normal style theme");
+	}
+
+	/**
+	 * The audio of Hit Sound and Voice Chat Music decodes: a built-in sample whole and streamed as voice chat audio
+	 * (48 kHz mono), then the same as a WAV file; and a hit sound plays without an error, sound device or not.
+	 */
+	private static void audio(ClientGameTestContext context) {
+		String result = context.computeOnClient(client -> {
+			try (InputStream in = V1zirClientGameTest.class.getResourceAsStream("/assets/v1zir/sounds/hit/bubble.ogg")) {
+				byte[] bytes = in.readAllBytes();
+				Pcm pcm = AudioFiles.decode(bytes, "bubble.ogg");
+				Path ogg = Files.createTempFile("v1zir-audio", ".ogg");
+				Files.write(ogg, bytes);
+				int streamed = streamed(ogg);
+				// The same sound as a WAV file, through Java's own audio.
+				Path wav = Files.createTempFile("v1zir-audio", ".wav");
+				byte[] raw = new byte[pcm.samples().length * 2];
+				for (int i = 0; i < pcm.samples().length; i++) {
+					raw[i * 2] = (byte) pcm.samples()[i];
+					raw[i * 2 + 1] = (byte) (pcm.samples()[i] >> 8);
+				}
+				javax.sound.sampled.AudioFormat format = new javax.sound.sampled.AudioFormat(pcm.rate(), 16, pcm.channels(), true, false);
+				try (javax.sound.sampled.AudioInputStream stream = new javax.sound.sampled.AudioInputStream(new java.io.ByteArrayInputStream(raw), format,
+					pcm.samples().length / pcm.channels())) {
+					javax.sound.sampled.AudioSystem.write(stream, javax.sound.sampled.AudioFileFormat.Type.WAVE, wav.toFile());
+				}
+				Pcm fromWav = AudioFiles.decode(wav);
+				int streamedWav = streamed(wav);
+				Files.deleteIfExists(ogg);
+				Files.deleteIfExists(wav);
+				return pcm.samples().length + " " + pcm.rate() + " " + pcm.channels() + " " + streamed + " " + fromWav.samples().length + " " + streamedWav;
+			} catch (IOException | RuntimeException e) {
+				return "failed " + e;
+			}
+		});
+		System.out.println("V1ZIR-AUDIO samples, rate, channels, streamed at 48 kHz, WAV samples, WAV streamed: " + result);
+		if (result.startsWith("failed")) throw new AssertionError("The audio did not decode: " + result);
+		String[] parts = result.split(" ");
+		int samples = Integer.parseInt(parts[0]);
+		int rate = Integer.parseInt(parts[1]);
+		int streamed = Integer.parseInt(parts[3]);
+		int expected = Math.round(samples / (float) Integer.parseInt(parts[2]) * MusicFeed.RATE / rate);
+		if (samples < 5000 || Math.abs(streamed - expected) > 64 || Integer.parseInt(parts[4]) != samples || Math.abs(Integer.parseInt(parts[5]) - expected) > 64) {
+			throw new AssertionError("The audio decoded wrong: " + result + " (streamed should be about " + expected + ")");
+		}
+		context.runOnClient(client -> {
+			HitSoundModule hit = ModuleManager.get(HitSoundModule.class);
+			boolean was = hit.isEnabled();
+			hit.setEnabled(true, false);
+			hit.onHit();
+			hit.sound.set("Custom");
+			hit.onHit();
+			hit.sound.reset();
+			hit.setEnabled(was, false);
+		});
+	}
+
+	private static int streamed(Path file) throws IOException {
+		int total = 0;
+		short[] buffer = new short[MusicFeed.FRAME];
+		try (AudioFiles.MonoStream stream = AudioFiles.open(file, MusicFeed.RATE)) {
+			for (int n; (n = stream.read(buffer, 0, buffer.length)) >= 0; ) total += n;
+		}
+		return total;
 	}
 
 	/** Reloads the resource packs, shoots the loading screen once it has come in, then waits for the load to end. */

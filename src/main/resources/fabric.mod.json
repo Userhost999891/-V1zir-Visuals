@@ -9,8 +9,12 @@
 	"license": "All-Rights-Reserved",
 	"icon": "assets/v1zir/icon.png",
 	"environment": "client",
+	"languageAdapters": {
+		"v1zir_voicechat": "dev.v1zir.visuals.compat.voicechat.VoiceChatAdapter"
+	},
 	"entrypoints": {
-		"client": ["dev.v1zir.visuals.V1zirClient"]
+		"client": ["dev.v1zir.visuals.V1zirClient"],
+		"voicechat": [{"adapter": "v1zir_voicechat", "value": "dev.v1zir.visuals.compat.voicechat.VoiceChatBridge"}]
 	},
 	"mixins": ["v1zir.mixins.json"],
 	"accessWidener": "v1zir.accesswidener",

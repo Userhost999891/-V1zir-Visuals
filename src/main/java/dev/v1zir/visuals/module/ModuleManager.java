@@ -18,6 +18,7 @@ import dev.v1zir.visuals.module.impl.effects.HitMarkerModule;
 import dev.v1zir.visuals.module.impl.effects.HealthIndicatorModule;
 import dev.v1zir.visuals.module.impl.effects.HitParticlesModule;
 import dev.v1zir.visuals.module.impl.effects.JumpCirclesModule;
+import dev.v1zir.visuals.module.impl.effects.HitSoundModule;
 import dev.v1zir.visuals.module.impl.effects.KillEffectsModule;
 import dev.v1zir.visuals.module.impl.effects.PopChamsModule;
 import dev.v1zir.visuals.module.impl.effects.TargetEspModule;
@@ -41,6 +42,7 @@ import dev.v1zir.visuals.module.impl.hud.ServerInfoModule;
 import dev.v1zir.visuals.module.impl.hud.SpeedModule;
 import dev.v1zir.visuals.module.impl.hud.SpotifyLyricsModule;
 import dev.v1zir.visuals.module.impl.hud.SpotifyModule;
+import dev.v1zir.visuals.module.impl.hud.VoiceChatMusicModule;
 import dev.v1zir.visuals.module.impl.hud.TargetHudModule;
 import dev.v1zir.visuals.module.impl.hud.WatermarkModule;
 import dev.v1zir.visuals.module.impl.cosmetics.CosmeticsModule;
@@ -145,6 +147,7 @@ public final class ModuleManager {
 		register(new HealthIndicatorModule());
 		register(new HitMarkerModule());
 		register(new KillEffectsModule());
+		register(new HitSoundModule());
 		register(new PopChamsModule());
 		register(new TotemAnimationModule());
 		register(new CrystalChamsModule());
@@ -174,6 +177,7 @@ public final class ModuleManager {
 		register(new ItemCounterModule());
 		register(new NotificationsModule());
 		register(new SpotifyModule());
+		register(new VoiceChatMusicModule());
 		register(new SpotifyLyricsModule());
 		// impl.knives
 		register(new KnivesModule());

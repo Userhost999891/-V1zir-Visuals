@@ -3,6 +3,7 @@ package dev.v1zir.visuals.render.world;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.effects.BloodModule;
 import dev.v1zir.visuals.module.impl.effects.HitMarkerModule;
+import dev.v1zir.visuals.module.impl.effects.HitSoundModule;
 import dev.v1zir.visuals.module.impl.effects.HitParticlesModule;
 import dev.v1zir.visuals.module.impl.effects.KillEffectsModule;
 import dev.v1zir.visuals.module.impl.effects.PopChamsModule;
@@ -49,6 +50,8 @@ public final class Effects {
 		if (blood != null && blood.isEnabled()) blood.spawn(entity);
 		HitMarkerModule marker = ModuleManager.get(HitMarkerModule.class);
 		if (marker != null && marker.isEnabled()) marker.onHit();
+		HitSoundModule sound = ModuleManager.get(HitSoundModule.class);
+		if (sound != null && sound.isEnabled()) sound.onHit();
 	}
 
 	/** A totem of undying was used (ClientPlayNetworkHandlerMixin, entity status 35). */
