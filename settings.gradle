@@ -5,6 +5,11 @@ pluginManagement {
 			url = 'https://maven.fabricmc.net/'
 		}
 		mavenCentral()
+		// The same artifacts as Maven Central, for when it answers a CI runner "not found" (it did for ASM's parent POM).
+		maven {
+			name = 'Maven Central mirror'
+			url = 'https://maven-central.storage-download.googleapis.com/maven2/'
+		}
 		gradlePluginPortal()
 	}
 }

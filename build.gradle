@@ -11,6 +11,11 @@ base {
 
 repositories {
 	mavenCentral()
+	// See settings.gradle: Maven Central's artifacts again, for when it answers a CI runner "not found".
+	maven {
+		name = 'Maven Central mirror'
+		url = 'https://maven-central.storage-download.googleapis.com/maven2/'
+	}
 }
 
 loom {
