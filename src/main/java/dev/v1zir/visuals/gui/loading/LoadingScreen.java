@@ -1,6 +1,7 @@
 package dev.v1zir.visuals.gui.loading;
 
 import dev.v1zir.visuals.V1zir;
+import dev.v1zir.visuals.gui.UiSounds;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.client.ThemeModule;
 import dev.v1zir.visuals.util.Anim;
@@ -58,6 +59,8 @@ public final class LoadingScreen {
 	private static Object overlay;
 	private static long shownAt;
 	private static long lastFrame;
+	/** The game's first load has played its sound (the PS5 style's swell as the load is done). */
+	private static boolean booted;
 	/** The progress the bar shows: it follows the game's, never back, and runs full once the load is done. */
 	private static float shown;
 	/** What the textures were made for: the screen's size in pixels and the style theme. */
@@ -117,6 +120,10 @@ public final class LoadingScreen {
 		if (cover <= 0.002f) {
 			if (f >= 2f) release();
 			return;
+		}
+		if (f >= 0f && !reloading && !booted) {
+			booted = true;
+			UiSounds.play(UiSounds.BOOT);
 		}
 		shown = Math.max(shown, shown + (progress - shown) * Math.min(1f, dt * 6f));
 		if (f >= 0f) shown += (1f - shown) * Math.min(1f, dt * 9f);

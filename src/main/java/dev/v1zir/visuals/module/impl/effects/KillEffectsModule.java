@@ -856,10 +856,10 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 			float near = Draw3D.cameraFade(x, y, z, 0.5f, 1.3f);
 			if (near <= 0.01f) continue;
 			Draw3D.rotation(basis, d[o + 6], d[o + 7], d[o + 8], d[o + 9]);
-			int face = ColorUtil.lerp(k.colors[i], glowing, 0.55f * hot);
+			int face = ColorUtil.lerp(k.colors[i], glowing, 0.4f * hot);
 			chunk(fill, x, y, z, half, basis, ColorUtil.fade(face, fade * near));
-			int edge = ColorUtil.lerp(ColorUtil.lerp(a1, a2, d[o + 12]), 0xFFFFFFFF, 0.6f * hot);
-			Draw3D.cube(glow, x, y, z, half * 1.01f, basis, ColorUtil.fade(edge, (0.3f + 0.7f * hot) * fade * near));
+			int edge = ColorUtil.lerp(ColorUtil.lerp(a1, a2, d[o + 12]), 0xFFFFFFFF, 0.4f * hot);
+			Draw3D.cube(glow, x, y, z, half * 1.01f, basis, ColorUtil.fade(edge, (0.25f + 0.5f * hot) * fade * near));
 		}
 	}
 

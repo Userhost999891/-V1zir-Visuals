@@ -4,6 +4,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import dev.v1zir.visuals.V1zir;
 import dev.v1zir.visuals.account.Accounts;
+import dev.v1zir.visuals.gui.UiSounds;
 import dev.v1zir.visuals.gui.messages.MessageBanners;
 import dev.v1zir.visuals.gui.messages.MessagesScreen;
 import dev.v1zir.visuals.module.ModuleManager;
@@ -151,7 +152,9 @@ public final class Messages {
 		boolean shown = client.currentScreen instanceof MessagesScreen screen && screen.showing(conversation);
 		if (!shown && module.notifications.on()) MessageBanners.push(conversation, message);
 		if (module.sound.on()) {
-			client.getSoundManager().play(PositionedSoundInstance.master(SoundEvents.BLOCK_NOTE_BLOCK_CHIME.value(), shown ? 1.8f : 1.5f, shown ? 0.2f : 0.4f));
+			// The PS5 style has its own two bells.
+			if (UiSounds.on()) UiSounds.play(UiSounds.NOTIFY, shown ? 1.12f : 1f);
+			else client.getSoundManager().play(PositionedSoundInstance.master(SoundEvents.BLOCK_NOTE_BLOCK_CHIME.value(), shown ? 1.8f : 1.5f, shown ? 0.2f : 0.4f));
 		}
 	}
 

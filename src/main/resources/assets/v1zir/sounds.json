@@ -38,5 +38,35 @@
 		"sounds": [
 			"v1zir:hit/zap"
 		]
+	},
+	"ui.move": {
+		"sounds": [
+			"v1zir:ui/move"
+		]
+	},
+	"ui.tab": {
+		"sounds": [
+			"v1zir:ui/tab"
+		]
+	},
+	"ui.confirm": {
+		"sounds": [
+			"v1zir:ui/confirm"
+		]
+	},
+	"ui.back": {
+		"sounds": [
+			"v1zir:ui/back"
+		]
+	},
+	"ui.notify": {
+		"sounds": [
+			"v1zir:ui/notify"
+		]
+	},
+	"ui.boot": {
+		"sounds": [
+			"v1zir:ui/boot"
+		]
 	}
 }

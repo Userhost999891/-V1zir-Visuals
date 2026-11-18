@@ -8,6 +8,7 @@ import dev.v1zir.visuals.chat.ChatService;
 import dev.v1zir.visuals.chat.Conversation;
 import dev.v1zir.visuals.chat.Message;
 import dev.v1zir.visuals.chat.Messages;
+import dev.v1zir.visuals.gui.UiSounds;
 import dev.v1zir.visuals.gui.clickgui.Ui;
 import dev.v1zir.visuals.gui.loading.Backdrop;
 import dev.v1zir.visuals.gui.messages.MessagesScreen;
@@ -248,11 +249,13 @@ public final class ConsoleMenu extends Screen {
 		if (next != selected[tab]) {
 			selected[tab] = next;
 			hero.snap(0f);
+			UiSounds.play(UiSounds.MOVE);
 		}
 	}
 
 	private void switchTab(int next) {
 		if (next == tab || next < 0 || next > 1) return;
+		UiSounds.play(UiSounds.TAB);
 		tab = next;
 		lastTab = next;
 		cursor.snap(selected[tab]);
@@ -265,6 +268,7 @@ public final class ConsoleMenu extends Screen {
 		List<Item> items = items();
 		if (items.isEmpty()) return;
 		Item item = items.get(selected[tab]);
+		UiSounds.play(UiSounds.CONFIRM);
 		switch (item.kind) {
 			case WORLD -> client.createIntegratedServerLoader().start(item.target, () -> client.setScreen(this));
 			case SERVER -> {
@@ -578,6 +582,7 @@ public final class ConsoleMenu extends Screen {
 			return true;
 		}
 		if (Ui.inside(mx, my, avatarX, avatarY, avatarS, avatarS)) {
+			UiSounds.play(accounts.shown() ? UiSounds.BACK : UiSounds.TAB);
 			accounts.toggle();
 			return true;
 		}
@@ -589,6 +594,7 @@ public final class ConsoleMenu extends Screen {
 		}
 		for (TopIcon icon : icons) {
 			if ((mx - icon.cx) * (mx - icon.cx) + (my - icon.cy) * (my - icon.cy) <= icon.r * icon.r) {
+				UiSounds.play(UiSounds.CONFIRM);
 				icon.action.run();
 				return true;
 			}
@@ -606,10 +612,12 @@ public final class ConsoleMenu extends Screen {
 			return true;
 		}
 		if ((mx - moreX) * (mx - moreX) + (my - moreY) * (my - moreY) <= moreR * moreR) {
+			UiSounds.play(UiSounds.CONFIRM);
 			openList();
 			return true;
 		}
 		if (cardsW > 0f && Ui.inside(mx, my, cardsX, cardsY, cardsW, cardsH)) {
+			UiSounds.play(UiSounds.CONFIRM);
 			client.setScreen(new MessagesScreen(this, null, null));
 			return true;
 		}

@@ -2,6 +2,7 @@ package dev.v1zir.visuals.gui.clickgui;
 
 import com.google.gson.JsonObject;
 import dev.v1zir.visuals.config.ConfigManager;
+import dev.v1zir.visuals.gui.UiSounds;
 import dev.v1zir.visuals.module.Category;
 import dev.v1zir.visuals.module.Module;
 import dev.v1zir.visuals.module.ModuleManager;
@@ -447,11 +448,18 @@ public final class ClickGuiScreen extends Screen {
 
 	// ------------------------------------------------------------------ input
 
+	/** Turns a module on or off from its card, with the PS5 style's sound. */
+	private static void toggle(ModuleCard card) {
+		card.module.toggle();
+		UiSounds.play(card.module.isEnabled() ? UiSounds.CONFIRM : UiSounds.BACK);
+	}
+
 	private void selectTab(int index) {
 		search = "";
 		searchFocused = false;
 		drawer.close();
 		if (index == tab) return;
+		UiSounds.play(UiSounds.TAB);
 		tabSlide.snap(index > tab ? 1f : -1f);
 		tabSlide.target(0f);
 		tab = index;
@@ -587,7 +595,7 @@ public final class ClickGuiScreen extends Screen {
 			pressedCard = null;
 			if (card.release(mx, my)) {
 				if (card.overStar(mx, my)) card.toggleFavourite();
-				else if (card.module.canToggle() && !card.overChevron(mx, my)) card.module.toggle();
+				else if (card.module.canToggle() && !card.overChevron(mx, my)) toggle(card);
 				else drawer.show(card.module);
 			}
 		}
@@ -694,7 +702,7 @@ public final class ClickGuiScreen extends Screen {
 			case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER -> {
 				ModuleCard card = grid.focused();
 				if (card == null) return false;
-				if (!shift && card.module.canToggle()) card.module.toggle();
+				if (!shift && card.module.canToggle()) toggle(card);
 				else if (card.hasSettings()) drawer.show(card.module);
 			}
 			default -> {
