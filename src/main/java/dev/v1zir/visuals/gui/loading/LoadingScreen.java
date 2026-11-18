@@ -46,8 +46,9 @@ public final class LoadingScreen {
 	private static final String STARTING = "Starting the game";
 	private static final String RELOADING = "Loading resource packs";
 	private static final String DIGITS = "0123456789%";
-	private static final String BOLD = "/assets/v1zir/fonts/inter_display_bold.ttf";
-	private static final String LIGHT = "/assets/v1zir/fonts/inter_display_light.ttf";
+	/** Full fonts: the display cuts only hold what the clocks need (digits). */
+	private static final String BOLD = "/assets/v1zir/fonts/inter_bold.ttf";
+	private static final String REGULAR = "/assets/v1zir/fonts/inter_regular.ttf";
 	private static final String MEDIUM = "/assets/v1zir/fonts/inter_medium.ttf";
 	private static final String LOGO = "/assets/v1zir/textures/gui/logo.png";
 	private static final int BAR_SEGMENTS = 24;
@@ -300,7 +301,7 @@ public final class LoadingScreen {
 		madePs5 = ps5;
 		try {
 			float mark = mark(Math.min(w, h));
-			title = Glyphs.make(V1zir.id("loading/title"), ps5 ? LIGHT : BOLD, distinct(NAME), Math.max(10f, mark * 0.26f));
+			title = Glyphs.make(V1zir.id("loading/title"), ps5 ? REGULAR : BOLD, distinct(NAME), Math.max(10f, mark * 0.26f));
 			caption = Glyphs.make(V1zir.id("loading/caption"), MEDIUM, distinct(STARTING + RELOADING + DIGITS), Math.max(8f, mark * 0.115f));
 			int size = Math.round(mark);
 			NativeImage source = readLogo();
@@ -465,6 +466,12 @@ public final class LoadingScreen {
 					int cp = chars.charAt(i);
 					STBTruetype.stbtt_GetCodepointHMetrics(info, cp, adv, lsb);
 					advance[i] = adv[0] * scale;
+					if (cp != ' ' && STBTruetype.stbtt_FindGlyphIndex(info, cp) == 0) {
+						// Not in the font: a gap, never the box of a missing glyph.
+						advance[i] = size * 0.3f;
+						stripX[i] = stripW;
+						continue;
+					}
 					STBTruetype.stbtt_GetCodepointBitmapBox(info, cp, scale, scale, x0, y0, x1, y1);
 					left[i] = x0[0];
 					top[i] = y0[0];
