@@ -5,6 +5,7 @@ import dev.v1zir.visuals.config.ConfigManager;
 import dev.v1zir.visuals.module.Category;
 import dev.v1zir.visuals.module.Module;
 import dev.v1zir.visuals.module.ModuleManager;
+import dev.v1zir.visuals.pack.PackMixer;
 import dev.v1zir.visuals.module.impl.client.ClickGuiModule;
 import dev.v1zir.visuals.module.impl.client.ThemeModule;
 import dev.v1zir.visuals.module.impl.hud.HudModule;
@@ -123,6 +124,7 @@ public final class ClickGuiScreen extends Screen {
 		knivesPage = new KnivesPage(drawer::show);
 		cosmeticsPage = new CosmeticsPage(drawer::show);
 		packsPage = new PacksPage();
+		if (category() == Category.PACKS) PackMixer.refresh();
 		boolean animate = gui == null || gui.animations.on();
 		for (ModuleGrid grid : grids) if (grid != null) grid.show(animate);
 	}
@@ -455,6 +457,8 @@ public final class ClickGuiScreen extends Screen {
 		tab = index;
 		if (grids[tab] != null) grids[tab].show(true);
 		else settingsPage.reset();
+		// Packs put in the folder since the game started show up too.
+		if (category() == Category.PACKS) PackMixer.refresh();
 	}
 
 	@Override

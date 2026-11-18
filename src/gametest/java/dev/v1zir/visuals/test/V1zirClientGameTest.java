@@ -159,7 +159,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			handChams(context, singleplayer);
 			knives(context, singleplayer);
 			cosmetics(context, singleplayer);
-			packs(context);
+			packs(context, singleplayer);
 			reflections(context, singleplayer);
 			farWater(context, singleplayer);
 			clickGui(context);
@@ -1518,7 +1518,17 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 	 * person, then the Cosmetics tab with the player preview.
 	 */
 	/** The Packs tab: every texture of the loaded packs as tiles with their previews. */
-	private static void packs(ClientGameTestContext context) {
+	/**
+	 * The Pack Mixer with two packs in the folder that are not enabled: a current one with a magenta diamond sword and
+	 * a 1.8 one with a blue sword where packs of that time keep it (textures/items). Both must show as versions of the
+	 * sword; the 1.8 one is picked and applied, and the sword in hand must be blue. Then everything goes back.
+	 */
+	private static void packs(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
+		context.runOnClient(client -> {
+			Path folder = client.runDirectory.toPath().resolve("resourcepacks");
+			testPack(folder.resolve("v1zir-test-modern"), 46, "item/diamond_sword", new Color(235, 40, 200));
+			testPack(folder.resolve("v1zir-test-legacy"), 1, "items/diamond_sword", new Color(40, 110, 255));
+		});
 		context.runOnClient(client -> setStatic(ClickGuiScreen.class, "tab", Category.PACKS.ordinal()));
 		context.setScreen(ClickGuiScreen::new);
 		context.waitTicks(40);
@@ -1544,7 +1554,61 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		});
 		context.waitTicks(20);
 		context.takeScreenshot("clickgui-tab-packs-swords");
+		String packs = context.computeOnClient(client -> {
+			PackMixer.Entry sword = PackMixer.find("item/diamond_sword");
+			StringBuilder ids = new StringBuilder();
+			if (sword != null) for (PackMixer.Version v : sword.versions()) ids.append(v.packId()).append(", ");
+			return ids.toString();
+		});
+		System.out.println("V1ZIR-PACKS diamond_sword versions: " + packs);
+		if (!packs.contains("file/v1zir-test-modern") || !packs.contains("file/v1zir-test-legacy")) {
+			throw new AssertionError("The Pack Mixer should offer the sword of both test packs (not enabled, one from 1.8), it has: " + packs);
+		}
+		context.runOnClient(client -> {
+			PackMixer.choose(PackMixer.find("item/diamond_sword"), "file/v1zir-test-legacy");
+			PackMixer.apply();
+		});
+		waitForReload(context);
 		context.setScreen(() -> null);
+		singleplayer.getServer().runCommand("item replace entity @a weapon.mainhand with minecraft:diamond_sword");
+		look(singleplayer, 0, 0);
+		context.waitTicks(30);
+		context.takeScreenshot("pack-mixer-applied");
+		context.runOnClient(client -> {
+			PackMixer.resetAll();
+			PackMixer.apply();
+		});
+		waitForReload(context);
+		singleplayer.getServer().runCommand("item replace entity @a weapon.mainhand with minecraft:air");
+	}
+
+	private static void waitForReload(ClientGameTestContext context) {
+		context.waitTicks(5);
+		for (int i = 0; i < 1200 && context.computeOnClient(client -> PackMixer.reloading()); i++) context.waitTick();
+		context.waitTicks(10);
+	}
+
+	/** A folder pack of that pack format with one 16x16 sword of that colour at textures/{path}.png. */
+	private static void testPack(Path dir, int format, String path, Color color) {
+		try {
+			java.nio.file.Files.createDirectories(dir.resolve("assets/minecraft/textures").resolve(path).getParent());
+			java.nio.file.Files.writeString(dir.resolve("pack.mcmeta"),
+				"{\"pack\":{\"pack_format\":" + format + ",\"description\":\"V1zir test pack\"}}");
+			BufferedImage image = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
+			int rgb = color.getRGB();
+			int dark = color.darker().getRGB();
+			for (int i = 3; i <= 14; i++) {
+				// The blade along the diagonal, two pixels wide, the handle at the bottom left.
+				image.setRGB(i, 15 - i, rgb);
+				if (i < 14) image.setRGB(i + 1, 15 - i, dark);
+			}
+			for (int i = 0; i < 3; i++) image.setRGB(1 + i, 14 - i, 0xFF6B4A2B);
+			image.setRGB(2, 11, rgb);
+			image.setRGB(4, 13, rgb);
+			ImageIO.write(image, "png", dir.resolve("assets/minecraft/textures").resolve(path + ".png").toFile());
+		} catch (IOException e) {
+			throw new UncheckedIOException(e);
+		}
 	}
 
 	private static void cosmetics(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
