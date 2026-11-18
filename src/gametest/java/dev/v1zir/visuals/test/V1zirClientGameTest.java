@@ -1147,8 +1147,9 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 	}
 
 	/**
-	 * Kill Effects on husks killed with a command (every death nearby counts here): Light Pillar just after the strike,
-	 * then Shatter, then the Ghost of a mannequin.
+	 * Kill Effects on husks killed with a command (every death nearby counts here): Light Pillar, Lightning, Shatter and
+	 * Firework each just after the blow and a little later (Lightning also once the game has taken the body away, where
+	 * motes rise instead of its puff of smoke), then the Ghost of a mannequin.
 	 */
 	private static void killEffects(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
 		look(singleplayer, 0, 2);
@@ -1159,14 +1160,21 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			kills.setEnabled(true, false);
 			return on;
 		});
-		for (String mode : List.of("Light Pillar", "Shatter")) {
+		for (String mode : List.of("Light Pillar", "Lightning", "Shatter", "Firework")) {
 			context.runOnClient(client -> ModuleManager.get(KillEffectsModule.class).mode.set(mode));
 			singleplayer.getServer().runCommand("execute as @a at @s rotated ~ 0 run summon minecraft:husk ^ ^ ^5 "
 				+ "{NoAI:1b,Silent:1b,PersistenceRequired:1b,Tags:[\"v1zir_kill\"],DeathLootTable:\"minecraft:empty\"}");
 			context.waitTicks(15);
 			singleplayer.getServer().runCommand("kill @e[tag=v1zir_kill]");
+			String name = "kill-" + mode.toLowerCase(Locale.ROOT).replace(' ', '-');
 			context.waitTicks(3);
-			context.takeScreenshot("kill-" + mode.toLowerCase(Locale.ROOT).replace(' ', '-'));
+			context.takeScreenshot(name);
+			context.waitTicks(9);
+			context.takeScreenshot(name + "-later");
+			if (mode.equals("Lightning")) {
+				context.waitTicks(12);
+				context.takeScreenshot(name + "-taken");
+			}
 			context.waitTicks(40);
 		}
 		// Ghost, on a mannequin (a player's model and skin): just after the death, lifted and whole, then falling apart.

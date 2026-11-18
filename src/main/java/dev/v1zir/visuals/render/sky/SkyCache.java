@@ -56,7 +56,7 @@ public final class SkyCache {
 	 */
 	private static final float RUSH = 4f;
 	private static final float RUSH_DT = 1f / 45f;
-	/** A sun or moon jump larger than this (a /time set) rebuilds the cache from scratch. */
+	/** A sun that moved more than this since the last frame (a /time set, a night slept through) rebuilds the cache at once. */
 	private static final float JUMP_COS = (float) Math.cos(Math.toRadians(2.0));
 
 	private static final Panorama[] upper = new Panorama[3];
@@ -80,6 +80,8 @@ public final class SkyCache {
 	/** Counts the frames, and the frame the cache last drew the sky in. */
 	private static long frame;
 	private static long drawnFrame = -1L;
+	/** The sun of the last frame the cache drew: a skip in time moves it far at once, its own course only a little. */
+	private static float lastSunX, lastSunY, lastSunZ;
 
 	private SkyCache() {
 	}
@@ -113,8 +115,12 @@ public final class SkyCache {
 		lastNanos = now;
 
 		sign(data, signature);
-		if (valid && (!Arrays.equals(signature, built) || jumped(data))) {
-			// Settings changed or time skipped: start a fresh build (no history) that runs a few
+		boolean skipped = valid && skipped(data);
+		lastSunX = data.sunDir.x;
+		lastSunY = data.sunDir.y;
+		lastSunZ = data.sunDir.z;
+		if (valid && !skipped && (!Arrays.equals(signature, built) || data.moonDir.w != building.moonDir.w)) {
+			// Settings changed (or the moon's phase): start a fresh build (no history) that runs a few
 			// times faster than a refresh, spread over frames instead of one long hitch, while the
 			// old sky stays on screen; it then crossfades in like any other build.
 			// The crossfade restarts too, so hold the newest complete build instead of jumping back.
@@ -124,9 +130,11 @@ public final class SkyCache {
 			rush = true;
 			previousValid = false;
 		}
-		if (!valid) {
-			// Nothing is cached yet: build the current panorama in full right now and start the
-			// next one from here.
+		if (!valid || skipped) {
+			// Nothing is cached yet, or the time was set: the cached sky is of another time of day.
+			// Build the current panorama in full right now and start the next one from here. A build
+			// spread over frames would show the old sky meanwhile, at a low frame rate for many seconds,
+			// and Wet World's puddles would mirror it.
 			GpuBufferSlice snapshot = SkyUniforms.write(data);
 			jitterX = 0f;
 			jitterY = 0f;
@@ -135,6 +143,7 @@ public final class SkyCache {
 			System.arraycopy(signature, 0, built, 0, built.length);
 			valid = true;
 			previousValid = false;
+			rush = false;
 			startBuild(data);
 		} else {
 			float from = progress;
@@ -242,9 +251,9 @@ public final class SkyCache {
 		out[16] = d.timing.w;
 	}
 
-	private static boolean jumped(SkyUniforms.Data d) {
-		float sun = d.sunDir.x * building.sunDir.x + d.sunDir.y * building.sunDir.y + d.sunDir.z * building.sunDir.z;
-		return sun < JUMP_COS || d.moonDir.w != building.moonDir.w;
+	/** Whether the sun moved too far since the last frame the cache drew to be its own course: the time was set. */
+	private static boolean skipped(SkyUniforms.Data d) {
+		return d.sunDir.x * lastSunX + d.sunDir.y * lastSunY + d.sunDir.z * lastSunZ < JUMP_COS;
 	}
 
 	private static void ensureTextures() {

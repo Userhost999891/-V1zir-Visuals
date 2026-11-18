@@ -1,6 +1,7 @@
 package dev.v1zir.visuals.mixin;
 
 import dev.v1zir.visuals.module.ModuleManager;
+import dev.v1zir.visuals.module.impl.effects.KillEffectsModule;
 import dev.v1zir.visuals.module.impl.hud.ServerInfoModule;
 import dev.v1zir.visuals.module.impl.visuals.AmbienceModule;
 import dev.v1zir.visuals.render.world.Effects;
@@ -17,7 +18,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * Server packets, client side only: Server Info measures the tick rate from world time updates,
- * Ambience keeps its custom time, and the combat effects hear about totem pops and deaths.
+ * Ambience keeps its custom time, and the combat effects hear about totem pops, deaths and bodies taken away (Kill
+ * Effects replaces their puff of smoke).
  */
 @Mixin(ClientPlayNetworkHandler.class)
 public abstract class ClientPlayNetworkHandlerMixin {
@@ -30,16 +32,23 @@ public abstract class ClientPlayNetworkHandlerMixin {
 		if (ambience != null && ambience.isEnabled() && ambience.onServerTime(packet.timeOfDay())) ci.cancel();
 	}
 
-	@Inject(method = "onEntityStatus", at = @At("HEAD"))
+	@Inject(method = "onEntityStatus", at = @At("HEAD"), cancellable = true)
 	private void v1zir$onEntityStatus(EntityStatusS2CPacket packet, CallbackInfo ci) {
 		byte status = packet.getStatus();
 		boolean totem = status == EntityStatuses.USE_TOTEM_OF_UNDYING;
-		if (!totem && status != EntityStatuses.PLAY_DEATH_SOUND_OR_ADD_PROJECTILE_HIT_PARTICLES) return;
+		boolean removed = status == EntityStatuses.ADD_DEATH_PARTICLES;
+		if (!totem && !removed && status != EntityStatuses.PLAY_DEATH_SOUND_OR_ADD_PROJECTILE_HIT_PARTICLES) return;
 		// The handler first runs on the network thread, which hands the packet over to the client thread.
 		MinecraftClient mc = MinecraftClient.getInstance();
 		if (!mc.isOnThread() || mc.world == null) return;
 		Entity entity = packet.getEntity(mc.world);
-		if (totem) Effects.onTotemPop(entity);
-		else Effects.onDeath(entity);
+		if (removed) {
+			// The body is taken away: Kill Effects shows it go its own way instead of the puff of smoke.
+			if (entity != null && KillEffectsModule.replacesDeathPuff(entity)) ci.cancel();
+		} else if (totem) {
+			Effects.onTotemPop(entity);
+		} else {
+			Effects.onDeath(entity);
+		}
 	}
 }

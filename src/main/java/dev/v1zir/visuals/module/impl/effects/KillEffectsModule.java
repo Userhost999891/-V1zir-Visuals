@@ -38,18 +38,24 @@ import net.minecraft.util.math.Vec3d;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.WeakHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.IntUnaryOperator;
 
 /**
- * A finishing effect where an entity dies: its ghost, still in the pose it died in and wearing its
- * skin, lifted up and falling apart pixel by pixel; a pillar of light from the sky, a branching
- * lightning strike, the body shattering into glowing cubes, a soul rising with a trailing wisp, a
- * burst of blood or a firework. It plays for your kills, or for every death nearby. Everything is
- * client side and purely visual. Paths are closed formulas of the age where they can be; only shards
- * and blood, which land and bounce, are stepped each frame. A soft screen edge flash and a sound are
- * optional.
+ * A finishing effect where an entity dies: its ghost, still in the pose it died in and wearing its skin, lifted up and
+ * burning away pixel by pixel; a pillar of light from the sky that takes the body up with it, a branching lightning
+ * strike that leaves a scorch mark, the body shattering into chunks of its own skin, a soul rising with a trailing
+ * wisp, a burst of blood or a firework. All but Blood Burst land with a blow: a flash with rays of light bursting out
+ * of it, two shockwaves over the ground and sparks that streak away. Every layer lays its colour down alpha blended
+ * under the light it adds, so the effects keep their colour in daylight, where added light alone washes out to white.
+ * Where the game takes the body away with its puff of smoke, motes of light rise instead (or nothing, where the body
+ * is gone already). It plays for your kills, or for every death nearby. Everything is client side and purely visual.
+ * Paths are closed formulas of the age where they can be; only shards and blood, which land and bounce, are stepped
+ * each frame. A soft screen edge flash and a sound are optional.
  */
 public final class KillEffectsModule extends Module implements WorldEffect {
 	private static final int PILLAR = 0;
@@ -60,9 +66,13 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 	private static final int FIREWORK = 5;
 	private static final int GHOST = 6;
 	/** Lifetime of each mode in seconds at Duration 1. */
-	private static final float[] LIFE = {2.6f, 1.8f, 3.2f, 3.0f, 0.6f, 2.8f, 4.2f};
+	private static final float[] LIFE = {2.8f, 1.9f, 3.2f, 3.0f, 0.6f, 2.8f, 4.2f};
 	/** The most cells a ghost is cut into: a whole player skin, every pixel of both layers. */
 	private static final int GHOST_CELLS = 3600;
+	/** Cells of the body the light pillar takes up: fewer, as they only rise and go out. */
+	private static final int PILLAR_CELLS = 1500;
+	/** Cells of the skin the chunks of a shattered body take their colours from. */
+	private static final int SKIN_CELLS = 2400;
 	private static final int MAX_EFFECTS = 8;
 	private static final int FULL_BRIGHT = 0xF000F0;
 	private static final float TAU = (float) (Math.PI * 2);
@@ -72,19 +82,37 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 	private static final float BEAM = 64f;
 	private static final float[] BEAM_STOPS = {0f, 2.5f, 10f, 28f, BEAM};
 	private static final float[] BEAM_ALPHA = {1f, 0.85f, 0.5f, 0.2f, 0f};
+	/** Seconds the light pillar takes to come down. */
+	private static final float STRIKE = 0.12f;
+	private static final int HELIX_STEPS = 36;
 	private static final int MOTES = 24;
 	/** Lightning segment: two ends (x, y, z), width, order (0 main channel, 1 fork, 2 fork of a fork). */
 	private static final int SEG = 8;
 	private static final int MAX_SEGMENTS = 220;
-	private static final int SPARKS = 16;
 	/** Shard: position and velocity relative to the death spot, spin axis, angle, spin speed, half edge, tint. */
 	private static final int SHARD = 13;
-	private static final int MAX_SHARDS = 96;
+	private static final int MAX_SHARDS = 110;
 	/** Edge length of the pieces the body breaks into, in blocks. */
-	private static final float CELL = 0.24f;
+	private static final float CELL = 0.27f;
+	/** Direction of the light that shades the chunks of a shattered body: high up and to one side. */
+	private static final float LIGHT_X = 0.37f;
+	private static final float LIGHT_Y = 0.86f;
+	private static final float LIGHT_Z = 0.35f;
 	private static final int SOUL_TAIL = 18;
 	private static final int FIREWORK_SPARKS = 84;
 	private static final int RING_SPARKS = 24;
+	/** The blow: rays of its flash, and per spark a unit direction (x, y, z), speed and size. */
+	private static final int RAYS = 10;
+	private static final int IMPACT_SPARKS = 24;
+	private static final int SPARK = 5;
+	private static final float SPARK_DRAG = 2.8f;
+	private static final float SPARK_GRAVITY = 11f;
+	/** Motes where the game takes a body away, how long they last, and how many such places are kept. */
+	private static final int PUFF_MOTES = 18;
+	private static final float PUFF_LIFE = 1.2f;
+	private static final int MAX_PUFFS = 12;
+	/** How long after a death the game may still take its body away (its puff of smoke), in nanoseconds. */
+	private static final long CLAIM = 8_000_000_000L;
 
 	public final ModeSetting mode = add(new ModeSetting("Mode", "Ghost", "Light Pillar", "Lightning", "Shatter", "Soul", "Blood Burst", "Firework", "Ghost"));
 	public final ModeSetting trigger = add(new ModeSetting("Trigger", "Your kills", "Your kills", "All deaths"));
@@ -101,10 +129,17 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 	public final BoolSetting sound = add(new BoolSetting("Sound", false));
 
 	private final List<Kill> kills = new ArrayList<>();
+	private final List<Puff> puffs = new ArrayList<>();
+	/** Bodies whose death played an effect, and when (System.nanoTime): the game's puff of smoke for them is replaced. */
+	private final Map<Entity, Long> claimed = new WeakHashMap<>();
 	private final ModelCapture capture = new ModelCapture();
 	private final Splatter blood = new Splatter();
 	private final float[] basis = new float[9];
 	private final double[] point = new double[3];
+	private final double[] tail = new double[3];
+	/** Shatter: the chunks from far to near, and their squared distances to the camera. */
+	private int[] order = new int[MAX_SHARDS];
+	private float[] depth = new float[MAX_SHARDS];
 	private final Anim flashAmount = new Anim(0f, 5f);
 	private int flashColor;
 	private boolean flashSky;
@@ -125,6 +160,8 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 	@Override
 	protected void onDisable() {
 		kills.clear();
+		puffs.clear();
+		claimed.clear();
 		blood.clear();
 		flashAmount.snap(0f);
 	}
@@ -133,16 +170,36 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 		return trigger.is("All deaths");
 	}
 
-	/** Whether the entity's body is not drawn this frame because it shattered or left as a ghost (EntityRenderManagerMixin). */
+	/**
+	 * Whether the entity's body is not drawn this frame: it shattered, left as a ghost or was taken up by the light
+	 * pillar (EntityRenderManagerMixin).
+	 */
 	public static boolean hides(Entity entity) {
 		KillEffectsModule module = ModuleManager.get(KillEffectsModule.class);
 		if (module == null || !module.isEnabled()) return false;
 		List<Kill> list = module.kills;
 		for (int i = 0; i < list.size(); i++) {
 			Kill kill = list.get(i);
-			if ((kill.type == SHATTER || kill.type == GHOST && kill.body != null) && kill.entity == entity) return true;
+			if (kill.entity != entity) continue;
+			if (kill.type == SHATTER || kill.type == GHOST && kill.body != null) return true;
+			// The light takes the body the moment it strikes.
+			if (kill.type == PILLAR && kill.body != null && System.nanoTime() - kill.born >= (long) (STRIKE * 1.0e9f)) return true;
 		}
 		return false;
+	}
+
+	/**
+	 * The game takes a dead body away (entity status 60) with a puff of smoke: true when an effect played for this
+	 * death, which then shows the body go its own way instead (ClientPlayNetworkHandlerMixin).
+	 */
+	public static boolean replacesDeathPuff(Entity entity) {
+		KillEffectsModule module = ModuleManager.get(KillEffectsModule.class);
+		if (module == null || !module.isEnabled()) return false;
+		Long died = module.claimed.remove(entity);
+		if (died == null || System.nanoTime() - died > CLAIM) return false;
+		// Shattered, lifted as a ghost or taken by the light: there is no body left to go.
+		if (!hides(entity) && entity instanceof LivingEntity living) module.puff(living);
+		return true;
 	}
 
 	/** The entity died: your kill (Effects), or any death nearby in All deaths mode. */
@@ -162,12 +219,10 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 		if (Double.isNaN(ground)) ground = entity.getY();
 		Kill kill = new Kill(type, entity, entity.getX(), entity.getY(), entity.getZ(), ground, entity.getWidth(), h, s,
 			LIFE[type] * duration.f(), random.nextFloat() * 100f, System.nanoTime());
+		if (type != BLOOD) kill.sparks = impactSparks(random, s);
 		switch (type) {
 			case PILLAR, GHOST -> kill.data = motes(random, s);
-			case LIGHTNING -> {
-				kill.data = bolt(random, s);
-				kill.extra = sparks(random, s);
-			}
+			case LIGHTNING -> kill.data = bolt(random, s);
 			case FIREWORK -> {
 				kill.data = fireworkSparks(random);
 				int base = themeColor.on() ? Theme.accent() : color.argb();
@@ -184,11 +239,20 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 		}
 		if (kills.size() == MAX_EFFECTS) kills.remove(0);
 		kills.add(kill);
+		claim(entity, kill.born);
 		effectFlash(kill, type);
 		if (sound.on() && mc.world != null) {
 			mc.world.playSoundClient(entity.getX(), entity.getY(), entity.getZ(), sound(type), type == LIGHTNING ? SoundCategory.WEATHER : SoundCategory.PLAYERS,
 				0.85f, 0.9f + random.nextFloat() * 0.2f, false);
 		}
+	}
+
+	/** Remembers the death for when the game takes the body away, forgetting those long past. */
+	private void claim(Entity entity, long now) {
+		for (Iterator<Map.Entry<Entity, Long>> it = claimed.entrySet().iterator(); it.hasNext(); ) {
+			if (now - it.next().getValue() > CLAIM) it.remove();
+		}
+		claimed.put(entity, now);
 	}
 
 	private static SoundEvent sound(int type) {
@@ -239,6 +303,7 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 		float dt = Math.min((now - lastFrame) / 1.0e9f, 0.05f);
 		lastFrame = now;
 		blood.render(dt, bloodColor.argb(), 6f * duration.f());
+		renderPuffs(now);
 		if (kills.isEmpty()) return;
 		int a1 = themeColor.on() ? Theme.accent() : color.argb();
 		int a2 = themeColor.on() ? Theme.accent2() : ColorUtil.brighten(a1, 0.45f);
@@ -249,13 +314,23 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 				kills.remove(i);
 				continue;
 			}
+			double middle = kill.y + kill.height * 0.5;
 			switch (kill.type) {
-				case PILLAR -> pillar(kill, age, a1, a2);
+				case PILLAR -> pillar(kill, age, tickDelta, a1, a2);
 				case LIGHTNING -> lightning(kill, age, a1, a2);
-				case SHATTER -> shatter(kill, age, dt, tickDelta, a1, a2);
-				case SOUL -> soul(kill, age, a1, a2);
+				case SHATTER -> {
+					shatter(kill, age, dt, tickDelta, a1, a2);
+					impact(kill, age, middle, 1f, a1, a2);
+				}
+				case SOUL -> {
+					soul(kill, age, a1, a2);
+					impact(kill, age, middle, 0.7f, a1, a2);
+				}
 				case BLOOD -> mist(kill, age);
-				case GHOST -> ghost(kill, age, tickDelta, a1, a2);
+				case GHOST -> {
+					ghost(kill, age, tickDelta, a1, a2);
+					impact(kill, age, middle, 0.8f, a1, a2);
+				}
 				default -> firework(kill, age, a1, a2);
 			}
 		}
@@ -269,6 +344,178 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 	/** 1 until the effect is past {@code from} of its life, then smoothly down to 0 at its end. */
 	private static float fadeOut(float p, float from) {
 		return 1f - smooth((p - from) / (1f - from));
+	}
+
+	// ------------------------------------------------------------------ the blow
+
+	/** Per spark of the blow: unit direction (x, y, z) outwards and up, speed and size. */
+	private static float[] impactSparks(ThreadLocalRandom random, float s) {
+		float[] d = new float[IMPACT_SPARKS * SPARK];
+		for (int i = 0; i < IMPACT_SPARKS; i++) {
+			double angle = TAU * (i + random.nextFloat() * 0.8f) / IMPACT_SPARKS;
+			float up = 0.15f + random.nextFloat() * 0.85f;
+			float side = (float) Math.sqrt(1f - up * up);
+			int o = i * SPARK;
+			d[o] = (float) Math.cos(angle) * side;
+			d[o + 1] = up;
+			d[o + 2] = (float) Math.sin(angle) * side;
+			d[o + 3] = (3.5f + random.nextFloat() * 4.5f) * s;
+			d[o + 4] = 0.6f + random.nextFloat() * 0.6f;
+		}
+		return d;
+	}
+
+	/** The blow an effect lands with, t seconds after it, centred at height cy; power scales it. */
+	private void impact(Kill k, float t, double cy, float power, int a1, int a2) {
+		if (t < 0f) return;
+		flash(k, t, k.x, cy, k.z, power, a1, a2);
+		shockwave(k, t, power, a1, a2);
+		sparks(k, t, cy, power, a1, a2);
+	}
+
+	/**
+	 * A flash of light at (x, y, z) for the first third of a second, and rays of light bursting out of it across the
+	 * view, long and short in turn.
+	 */
+	private void flash(Kill k, float t, double x, double y, double z, float power, int a1, int a2) {
+		float u = t / 0.34f;
+		if (u >= 1f) return;
+		WorldEffectRenderer.Mesh fill = WorldEffectRenderer.translucent();
+		WorldEffectRenderer.Mesh glow = WorldEffectRenderer.glow();
+		float s = k.size * power;
+		float out = 1f - u;
+		float grow = Anim.easeOutCubic(u);
+		// Right in front of the eyes it would fill the view.
+		float near = Draw3D.cameraFade(x, y, z, 1.2f, 3f);
+		if (near <= 0.01f) return;
+		int hot = ColorUtil.lerp(a2, 0xFFFFFFFF, 0.7f);
+		fill.orb(x, y, z, (0.9f + 1.5f * grow) * s + k.width * 0.5f, ColorUtil.fade(a1, 0.55f * out * out * near));
+		glow.orb(x, y, z, (0.7f + 1.1f * grow) * s, ColorUtil.fade(hot, out * out * out * near));
+		float reach = Anim.easeOutQuart(u);
+		float rx = WorldEffectRenderer.RIGHT.x, ry = WorldEffectRenderer.RIGHT.y, rz = WorldEffectRenderer.RIGHT.z;
+		float ux = WorldEffectRenderer.UP.x, uy = WorldEffectRenderer.UP.y, uz = WorldEffectRenderer.UP.z;
+		for (int i = 0; i < RAYS; i++) {
+			float jitter = hash(k.seed + i * 3.7f);
+			double angle = k.seed * 5f + (i + (jitter - 0.5f) * 0.5f) * TAU / RAYS;
+			float c = (float) Math.cos(angle), sn = (float) Math.sin(angle);
+			double dx = rx * c + ux * sn, dy = ry * c + uy * sn, dz = rz * c + uz * sn;
+			float length = ((i % 2 == 0 ? 2.4f : 1.5f) + 0.7f * jitter) * s * reach;
+			float start = 0.2f * s * reach;
+			float width = (i % 2 == 0 ? 0.13f : 0.09f) * s * (1f - 0.5f * u);
+			double x0 = x + dx * start, y0 = y + dy * start, z0 = z + dz * start;
+			double x1 = x + dx * length, y1 = y + dy * length, z1 = z + dz * length;
+			Draw3D.line(fill, x0, y0, z0, x1, y1, z1, width * 1.8f, ColorUtil.fade(a1, 0.6f * out * near), ColorUtil.fade(a1, 0f));
+			Draw3D.line(glow, x0, y0, z0, x1, y1, z1, width, ColorUtil.fade(hot, 0.95f * out * near), ColorUtil.fade(a2, 0f));
+		}
+	}
+
+	/** Two shockwaves running out over the ground, the second later and slower, and the ground lit around them. */
+	private void shockwave(Kill k, float t, float power, int a1, int a2) {
+		WorldEffectRenderer.Mesh fill = WorldEffectRenderer.translucent();
+		WorldEffectRenderer.Mesh glow = WorldEffectRenderer.glow();
+		float s = k.size * power;
+		int hot = ColorUtil.lerp(a2, 0xFFFFFFFF, 0.5f);
+		for (int r = 0; r < 2; r++) {
+			float u = (t - r * 0.12f) / (0.62f + r * 0.32f);
+			if (u <= 0f || u >= 1f) continue;
+			float out = 1f - u;
+			double radius = (0.35f + (3.8f - 1.2f * r) * Anim.easeOutCubic(u)) * s;
+			double width = (0.26f - 0.08f * r) * (1f - 0.55f * u) * s;
+			ringColor = ColorUtil.fade(r == 0 ? a1 : a2, 0.7f * out);
+			Draw3D.flatRing(fill, k.x, k.ground + 0.03, k.z, radius, width * 1.5, 64, ringColorAt);
+			ringColor = ColorUtil.fade(r == 0 ? hot : a2, 0.95f * out * out);
+			Draw3D.flatRing(glow, k.x, k.ground + 0.04, k.z, radius, width * 0.7, 64, ringColorAt);
+		}
+		float lit = 1f - t / 0.8f;
+		if (lit > 0f) {
+			float pool = (1.6f + 1.4f * Anim.easeOutCubic(t / 0.8f)) * s;
+			Draw3D.flatOrb(fill, k.x, k.ground + 0.02, k.z, pool, 0f, 0f, pool, ColorUtil.fade(a1, 0.35f * lit * lit));
+			Draw3D.flatOrb(glow, k.x, k.ground + 0.025, k.z, pool * 0.8f, 0f, 0f, pool * 0.8f, ColorUtil.fade(a2, 0.5f * lit * lit));
+		}
+	}
+
+	/** The sparks of the blow: thrown out from the body's middle, slowed by the air, falling and skidding along the ground. */
+	private void sparks(Kill k, float t, double cy, float power, int a1, int a2) {
+		float[] d = k.sparks;
+		if (d == null || t > 1.2f) return;
+		WorldEffectRenderer.Mesh fill = WorldEffectRenderer.translucent();
+		WorldEffectRenderer.Mesh glow = WorldEffectRenderer.glow();
+		float s = k.size * power;
+		int hot = ColorUtil.lerp(a2, 0xFFFFFFFF, 0.75f);
+		for (int o = 0; o < d.length; o += SPARK) {
+			float life = 0.45f + 0.4f * d[o + 4];
+			if (t >= life) continue;
+			float u = t / life;
+			float fade = (1f - u) * Math.min(1f, t * 30f);
+			sparkAt(k, d, o, t, cy, power, point);
+			sparkAt(k, d, o, Math.max(0f, t - 0.055f), cy, power, tail);
+			float w = d[o + 4] * s;
+			int head = ColorUtil.lerp(hot, a2, u);
+			Draw3D.line(fill, point[0], point[1], point[2], tail[0], tail[1], tail[2], 0.075f * w, ColorUtil.fade(a1, 0.75f * fade), ColorUtil.fade(a1, 0f));
+			Draw3D.line(glow, point[0], point[1], point[2], tail[0], tail[1], tail[2], 0.032f * w, ColorUtil.fade(head, fade), ColorUtil.fade(a2, 0f));
+			glow.orb(point[0], point[1], point[2], 0.075f * w, ColorUtil.fade(head, 0.8f * fade));
+		}
+	}
+
+	/** Where spark o of the blow is t seconds after it. */
+	private static void sparkAt(Kill k, float[] d, int o, float t, double cy, float power, double[] out) {
+		float travel = (1f - (float) Math.exp(-SPARK_DRAG * t)) / SPARK_DRAG;
+		float v = d[o + 3] * power;
+		out[0] = k.x + d[o] * v * travel;
+		out[1] = Math.max(k.ground + 0.04, cy + d[o + 1] * v * travel - SPARK_GRAVITY / SPARK_DRAG * (t - travel));
+		out[2] = k.z + d[o + 2] * v * travel;
+	}
+
+	// ------------------------------------------------------------------ where the game takes the body away
+
+	private void puff(LivingEntity entity) {
+		int type = mode.index();
+		for (int i = 0; i < kills.size(); i++) {
+			if (kills.get(i).entity == entity) type = kills.get(i).type;
+		}
+		int tint = type == BLOOD ? bloodColor.argb() : themeColor.on() ? Theme.accent() : color.argb();
+		if (puffs.size() == MAX_PUFFS) puffs.remove(0);
+		puffs.add(new Puff(entity.getX(), entity.getY(), entity.getZ(), entity.getWidth(), entity.getHeight(), size.f(), tint, type != BLOOD,
+			ThreadLocalRandom.current().nextFloat() * 100f, System.nanoTime()));
+	}
+
+	/** Motes of light rising from where a body lay and going out; a red haze after Blood Burst. */
+	private void renderPuffs(long now) {
+		if (puffs.isEmpty()) return;
+		WorldEffectRenderer.Mesh fill = WorldEffectRenderer.translucent();
+		WorldEffectRenderer.Mesh glow = WorldEffectRenderer.glow();
+		for (int i = puffs.size() - 1; i >= 0; i--) {
+			Puff puff = puffs.get(i);
+			float t = (now - puff.born) / 1.0e9f;
+			if (t >= PUFF_LIFE) {
+				puffs.remove(i);
+				continue;
+			}
+			float s = puff.size;
+			if (!puff.glowing) {
+				float u = t / PUFF_LIFE;
+				fill.orb(puff.x, puff.y + Math.min(puff.height, 1.2f) * 0.3, puff.z, (0.6f + puff.width * 0.6f + 0.8f * u) * s,
+					ColorUtil.fade(puff.color, 0.45f * (1f - u) * (1f - u)));
+				continue;
+			}
+			int light = ColorUtil.lerp(puff.color, 0xFFFFFFFF, 0.45f);
+			float lying = Math.min(puff.height, 1.2f);
+			for (int m = 0; m < PUFF_MOTES; m++) {
+				float h1 = hash(puff.seed + m * 1.7f), h2 = hash(puff.seed + m * 2.9f + 5f), h3 = hash(puff.seed + m * 4.3f + 11f);
+				float delay = h3 * 0.3f;
+				float u = (t - delay) / (PUFF_LIFE - 0.3f);
+				if (u <= 0f || u >= 1f) continue;
+				// In quickly, out slowly.
+				float alpha = (float) Math.sin(Math.PI * 0.5 * Math.min(1f, u * 3f)) * (1f - u);
+				double angle = h1 * TAU + u * 1.4f;
+				double r = (0.15f + 0.5f * h2) * puff.width * 1.2f + 0.25f * u * s;
+				double x = puff.x + Math.cos(angle) * r, z = puff.z + Math.sin(angle) * r;
+				double y = puff.y + 0.1 + h2 * lying * 0.45 + (0.7f + 0.9f * h3) * s * Anim.easeOutCubic(u);
+				float mote = (0.05f + 0.05f * h1) * s;
+				fill.orb(x, y, z, mote * 2.6f, ColorUtil.fade(puff.color, 0.4f * alpha));
+				glow.orb(x, y, z, mote * 1.4f, ColorUtil.fade(light, 0.85f * alpha));
+			}
+		}
 	}
 
 	// ------------------------------------------------------------------ light pillar
@@ -287,57 +534,70 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 	}
 
 	/**
-	 * A beam strikes down from high in the sky in a tenth of a second, a shockwave runs over the ground,
-	 * and the beam holds, thinning out, while motes of light spiral up around its foot.
+	 * A beam strikes down from high in the sky in a tenth of a second and lands with a blow. It takes the body: a body
+	 * of light now, which from the feet up comes apart pixel by pixel into the beam. The beam holds, thinning out,
+	 * two ribbons of light winding up around it and motes spiralling up around its foot.
 	 */
-	private void pillar(Kill k, float age, int a1, int a2) {
-		WorldEffectRenderer.Mesh mesh = WorldEffectRenderer.glow();
+	private void pillar(Kill k, float age, float tickDelta, int a1, int a2) {
+		if (!k.captured) {
+			k.captured = true;
+			k.body = PixelBody.capture(k.entity, tickDelta, PILLAR_CELLS);
+		}
+		WorldEffectRenderer.Mesh fill = WorldEffectRenderer.translucent();
+		WorldEffectRenderer.Mesh glow = WorldEffectRenderer.glow();
 		float s = k.size;
 		float p = age / k.life;
-		float strike = Anim.easeOutCubic(age / 0.12f);
-		float hit = age < 0.12f ? 0f : (float) Math.exp(-(age - 0.12f) * 5f);
+		float strike = Anim.easeOutCubic(age / STRIKE);
+		float hit = age < STRIKE ? 0f : (float) Math.exp(-(age - STRIKE) * 4f);
 		float fade = fadeOut(p, 0.45f);
 		double ground = k.ground;
 		double bottom = ground + BEAM * (1f - strike);
-		int core = ColorUtil.lerp(0xFFFFFFFF, a2, 0.2f);
-		float glowWidth = 0.42f * s * (0.55f + 0.45f * fade) * (1f + 0.6f * hit);
-		float coreWidth = 0.065f * s * (0.6f + 0.4f * fade) * (1f + hit);
+		int core = ColorUtil.lerp(0xFFFFFFFF, a2, 0.15f);
+		float breathe = 1f + 0.07f * (float) Math.sin(age * 10f);
+		float outer = 1.15f * s * (0.6f + 0.4f * fade) * (1f + 0.5f * hit) * breathe;
+		float glowWidth = 0.6f * s * (0.55f + 0.45f * fade) * (1f + 0.6f * hit) * breathe;
+		float coreWidth = 0.12f * s * (0.6f + 0.4f * fade) * (1f + hit);
 		for (int i = 0; i < BEAM_STOPS.length - 1; i++) {
 			double y0 = Math.max(bottom, ground + BEAM_STOPS[i]);
 			double y1 = ground + BEAM_STOPS[i + 1];
 			if (y1 <= y0) continue;
 			float f0 = BEAM_ALPHA[i] * fade, f1 = BEAM_ALPHA[i + 1] * fade;
-			Draw3D.line(mesh, k.x, y0, k.z, k.x, y1, k.z, glowWidth, ColorUtil.fade(a1, 0.7f * f0 + 0.3f * hit), ColorUtil.fade(a1, 0.7f * f1));
-			Draw3D.line(mesh, k.x, y0, k.z, k.x, y1, k.z, coreWidth, ColorUtil.fade(core, f0), ColorUtil.fade(core, f1));
+			Draw3D.line(fill, k.x, y0, k.z, k.x, y1, k.z, outer, ColorUtil.fade(a1, 0.5f * f0 + 0.2f * hit), ColorUtil.fade(a1, 0.5f * f1));
+			Draw3D.line(glow, k.x, y0, k.z, k.x, y1, k.z, glowWidth, ColorUtil.fade(a1, 0.75f * f0 + 0.25f * hit), ColorUtil.fade(a1, 0.75f * f1));
+			Draw3D.line(glow, k.x, y0, k.z, k.x, y1, k.z, coreWidth, ColorUtil.fade(core, f0), ColorUtil.fade(core, f1));
 		}
-		if (strike < 1f) mesh.orb(k.x, bottom, k.z, 0.8f * s, ColorUtil.fade(core, 0.9f));
-		if (hit <= 0f) return;
+		if (strike < 1f) {
+			fill.orb(k.x, bottom, k.z, 1.2f * s, ColorUtil.fade(a1, 0.55f));
+			glow.orb(k.x, bottom, k.z, 0.85f * s, ColorUtil.fade(core, 0.95f));
+		}
+		if (age < STRIKE) return;
+		float t = age - STRIKE;
+		impact(k, t, k.y + k.height * 0.5, 1.15f, a1, a2);
+		ascend(k, t, a1, a2);
 
 		// A column of light around the foot of the beam, bright at the ground and gone at its top.
-		double radius = (0.35f + k.width * 0.4f) * s;
-		double top = ground + 2.4f * s;
+		double radius = (0.4f + k.width * 0.4f) * s;
+		double top = ground + 2.6f * s;
 		int foot = ColorUtil.fade(a1, 0.32f * fade + 0.25f * hit);
+		int footFill = ColorUtil.fade(a1, 0.2f * fade + 0.15f * hit);
 		int clear = ColorUtil.withAlpha(a1, 0);
 		for (int i = 0; i < 20; i++) {
 			double a0 = TAU * i / 20, b0 = TAU * (i + 1) / 20;
 			double x0 = k.x + Math.cos(a0) * radius, z0 = k.z + Math.sin(a0) * radius;
 			double x1 = k.x + Math.cos(b0) * radius, z1 = k.z + Math.sin(b0) * radius;
-			mesh.vertex(x0, ground, z0, 3f, 0f, foot);
-			mesh.vertex(x0, top, z0, 3f, 0f, clear);
-			mesh.vertex(x1, top, z1, 3f, 0f, clear);
-			mesh.vertex(x1, ground, z1, 3f, 0f, foot);
+			fill.vertex(x0, ground, z0, 3f, 0f, footFill);
+			fill.vertex(x0, top, z0, 3f, 0f, clear);
+			fill.vertex(x1, top, z1, 3f, 0f, clear);
+			fill.vertex(x1, ground, z1, 3f, 0f, footFill);
+			glow.vertex(x0, ground, z0, 3f, 0f, foot);
+			glow.vertex(x0, top, z0, 3f, 0f, clear);
+			glow.vertex(x1, top, z1, 3f, 0f, clear);
+			glow.vertex(x1, ground, z1, 3f, 0f, foot);
 		}
-		float pool = (1.3f + 0.9f * hit) * s;
-		Draw3D.flatOrb(mesh, k.x, ground + 0.02, k.z, pool, 0f, 0f, pool, ColorUtil.fade(a1, 0.5f * fade + 0.4f * hit));
-		mesh.orb(k.x, ground + 0.9, k.z, 2.6f * s, ColorUtil.fade(a2, 0.65f * hit * hit));
-
-		// Two shockwaves, the second one later and slower.
-		for (int r = 0; r < 2; r++) {
-			float t = (age - 0.12f - r * 0.16f) / (0.7f + r * 0.35f);
-			if (t <= 0f || t >= 1f) continue;
-			ringColor = ColorUtil.fade(r == 0 ? a1 : a2, 0.95f * (1f - t));
-			Draw3D.flatRing(mesh, k.x, ground + 0.04, k.z, (0.3f + (3.4f - r) * Anim.easeOutCubic(t)) * s, 0.13f * (1f - t * 0.7f), 56, ringColorAt);
-		}
+		float pool = (1.2f + 0.6f * hit) * s;
+		Draw3D.flatOrb(fill, k.x, ground + 0.02, k.z, pool, 0f, 0f, pool, ColorUtil.fade(a1, 0.3f * fade));
+		Draw3D.flatOrb(glow, k.x, ground + 0.025, k.z, pool, 0f, 0f, pool, ColorUtil.fade(a1, 0.45f * fade + 0.3f * hit));
+		helices(k, age, t, fade, hit, a1, a2);
 
 		// Motes spiral up around the beam, looping until the pillar fades.
 		float[] d = k.data;
@@ -345,17 +605,88 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 		int light = ColorUtil.lerp(a1, 0xFFFFFFFF, 0.3f);
 		for (int i = 0; i < MOTES; i++) {
 			int o = i * 5;
-			float t = age - 0.12f - d[o + 3];
-			if (t <= 0f) continue;
-			float rise = (t * d[o + 2]) % span;
+			float mt = t - d[o + 3];
+			if (mt <= 0f) continue;
+			float rise = (mt * d[o + 2]) % span;
 			float along = rise / span;
 			float alpha = fade * (float) Math.sin(Math.PI * along);
 			if (alpha <= 0.01f) continue;
-			double angle = d[o] + t * (i % 2 == 0 ? 1.7 : -1.7);
+			double angle = d[o] + mt * (i % 2 == 0 ? 1.7 : -1.7);
 			double r = d[o + 1] * (1f - 0.4f * along);
 			double x = k.x + Math.cos(angle) * r, y = ground + 0.1 + rise, z = k.z + Math.sin(angle) * r;
-			mesh.orb(x, y, z, d[o + 4] * 2.4f, ColorUtil.fade(i % 3 == 0 ? a2 : a1, 0.55f * alpha));
-			mesh.orb(x, y, z, d[o + 4] * 0.7f, ColorUtil.fade(light, 0.9f * alpha));
+			fill.orb(x, y, z, d[o + 4] * 2.6f, ColorUtil.fade(a1, 0.4f * alpha));
+			glow.orb(x, y, z, d[o + 4] * 2.4f, ColorUtil.fade(i % 3 == 0 ? a2 : a1, 0.55f * alpha));
+			glow.orb(x, y, z, d[o + 4] * 0.7f, ColorUtil.fade(light, 0.9f * alpha));
+		}
+	}
+
+	/**
+	 * The body the light takes, t seconds after the strike: a body of light in its own shape, white hot at first, and
+	 * from the feet up it comes apart pixel by pixel, the pixels spiralling in towards the beam and up it, going out.
+	 */
+	private void ascend(Kill k, float t, int a1, int a2) {
+		PixelBody body = k.body;
+		if (body == null) return;
+		WorldEffectRenderer.Mesh fill = WorldEffectRenderer.translucent();
+		WorldEffectRenderer.Mesh glow = WorldEffectRenderer.glow();
+		float s = k.size;
+		float heat = (float) Math.exp(-t * 6f);
+		float camX = (float) (WorldEffectRenderer.camX - k.x), camY = (float) (WorldEffectRenderer.camY - k.y), camZ = (float) (WorldEffectRenderer.camZ - k.z);
+		float[] c = body.cells;
+		int[] colors = body.colors;
+		for (int i = 0; i < body.count; i++) {
+			int o = i * PixelBody.STRIDE;
+			float u = Anim.clamp01((t - 0.08f - c[o + 12] * 0.5f) / 0.85f);
+			if (u >= 1f) continue;
+			int tint = ColorUtil.lerp(a1, a2, c[o + 13]);
+			float x = c[o], y = c[o + 1], z = c[o + 2];
+			float ax = c[o + 3], ay = c[o + 4], az = c[o + 5], bx = c[o + 6], by = c[o + 7], bz = c[o + 8];
+			if (u <= 0f) {
+				// Still the body: the faces turned to the camera, lit from within.
+				if ((camX - x) * c[o + 9] + (camY - y) * c[o + 10] + (camZ - z) * c[o + 11] <= 0f) continue;
+				quad(fill, k.x + x, k.y + y, k.z + z, ax, ay, az, bx, by, bz, ColorUtil.fade(ColorUtil.lerp(colors[i], tint, 0.55f), 0.75f));
+				quad(glow, k.x + x, k.y + y, k.z + z, ax, ay, az, bx, by, bz,
+					ColorUtil.fade(ColorUtil.lerp(tint, 0xFFFFFFFF, 0.3f + 0.7f * heat), 0.35f + 0.6f * heat));
+				continue;
+			}
+			float pull = 1f - 0.85f * Anim.easeOutCubic(u);
+			double angle = u * (2.2f + c[o + 12] * 1.5f) * (i % 2 == 0 ? 1f : -1f);
+			float cos = (float) Math.cos(angle), sin = (float) Math.sin(angle);
+			float px = (x * cos - z * sin) * pull, pz = (x * sin + z * cos) * pull;
+			float py = y + u * u * 6.5f * s + u * 0.4f;
+			float small = 1f - 0.7f * u;
+			float out = 1f - u;
+			int ember = ColorUtil.lerp(tint, 0xFFFFFFFF, 0.45f * out);
+			quad(fill, k.x + px, k.y + py, k.z + pz, ax * small, ay * small, az * small, bx * small, by * small, bz * small, ColorUtil.fade(tint, 0.7f * out));
+			quad(glow, k.x + px, k.y + py, k.z + pz, ax * small, ay * small, az * small, bx * small, by * small, bz * small, ColorUtil.fade(ember, 0.75f * out));
+		}
+	}
+
+	/** Two ribbons of light winding up around the beam from its foot, climbing fast after the strike and turning. */
+	private void helices(Kill k, float age, float t, float fade, float hit, int a1, int a2) {
+		WorldEffectRenderer.Mesh fill = WorldEffectRenderer.translucent();
+		WorldEffectRenderer.Mesh glow = WorldEffectRenderer.glow();
+		float s = k.size;
+		float height = (1f + 7f * Anim.easeOutCubic(t / 0.7f)) * s;
+		for (int h = 0; h < 2; h++) {
+			int c = h == 0 ? a2 : a1;
+			double px = 0, py = 0, pz = 0;
+			float pa = 0f;
+			for (int j = 0; j <= HELIX_STEPS; j++) {
+				float f = j / (float) HELIX_STEPS;
+				double angle = k.seed + h * Math.PI + f * 10.0 - age * 5.0;
+				double r = (0.8f - 0.4f * f) * s;
+				double x = k.x + Math.cos(angle) * r, y = k.ground + 0.05 + height * f, z = k.z + Math.sin(angle) * r;
+				float alpha = fade * (1f - f) * (1f - f) * (0.65f + 0.35f * hit) * Math.min(1f, f * 8f);
+				if (j > 0 && (pa > 0.01f || alpha > 0.01f)) {
+					Draw3D.line(fill, px, py, pz, x, y, z, 0.13f * s, ColorUtil.fade(c, 0.4f * pa), ColorUtil.fade(c, 0.4f * alpha));
+					Draw3D.line(glow, px, py, pz, x, y, z, 0.06f * s, ColorUtil.fade(c, 0.9f * pa), ColorUtil.fade(c, 0.9f * alpha));
+				}
+				px = x;
+				py = y;
+				pz = z;
+				pa = alpha;
+			}
 		}
 	}
 
@@ -404,24 +735,13 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 		return channel(out, o, random, mx, my, mz, x1, y1, z1, width, order, depth - 1);
 	}
 
-	/** Per spark of the impact: direction (x, z), speed, upward speed. */
-	private static float[] sparks(ThreadLocalRandom random, float s) {
-		float[] d = new float[SPARKS * 4];
-		for (int i = 0; i < SPARKS; i++) {
-			double angle = TAU * (i + random.nextFloat() * 0.7f) / SPARKS;
-			d[i * 4] = (float) Math.cos(angle);
-			d[i * 4 + 1] = (float) Math.sin(angle);
-			d[i * 4 + 2] = (3f + random.nextFloat() * 3f) * s;
-			d[i * 4 + 3] = (1.5f + random.nextFloat() * 3.5f) * s;
-		}
-		return d;
-	}
-
 	/**
-	 * The leader runs down in a few frames, then the bolt strobes three times like real lightning and
-	 * leaves a fading afterglow of its channel; the sky flashes, a ring runs over the ground and sparks fly.
+	 * The leader runs down in a few frames, then the bolt strobes three times like real lightning and leaves a fading
+	 * afterglow of its channel; the sky flashes, the strike lands with a blow and leaves a scorch mark glowing with
+	 * embers at first.
 	 */
 	private void lightning(Kill k, float age, int a1, int a2) {
+		WorldEffectRenderer.Mesh fill = WorldEffectRenderer.translucent();
 		WorldEffectRenderer.Mesh mesh = WorldEffectRenderer.glow();
 		float s = k.size;
 		float leader = Anim.clamp01(age / 0.07f);
@@ -445,6 +765,9 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 			if (bright <= 0.01f) continue;
 			double x0 = k.x + seg[o], y0 = k.ground + seg[o + 1], z0 = k.z + seg[o + 2];
 			double x1 = k.x + seg[o + 3], y1 = k.ground + seg[o + 4], z1 = k.z + seg[o + 5];
+			// Its colour around the channel, which added light alone loses against a bright sky.
+			int tinted = ColorUtil.fade(a1, 0.4f * Math.min(1f, bright));
+			Draw3D.line(fill, x0, y0, z0, x1, y1, z1, 0.75f * s * w, tinted, tinted);
 			int glow = ColorUtil.fade(strobe > 0.2f ? a1 : ember, 0.8f * bright);
 			Draw3D.line(mesh, x0, y0, z0, x1, y1, z1, 0.4f * s * w * (0.7f + 0.3f * strobe), glow, glow);
 			int white = ColorUtil.fade(core, Math.min(1f, bright * 1.2f));
@@ -455,45 +778,41 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 		float pool = (1.6f + 1.2f * strobe) * s;
 		Draw3D.flatOrb(mesh, k.x, k.ground + 0.02, k.z, pool, 0f, 0f, pool, ColorUtil.fade(a1, 0.6f * strobe + 0.25f * after));
 		mesh.orb(k.x, k.ground + 0.2, k.z, 1.1f * s, ColorUtil.fade(core, 0.8f * strobe));
-		float ring = (age - 0.07f) / 0.55f;
-		if (ring < 1f) {
-			ringColor = ColorUtil.fade(a1, 0.9f * (1f - ring));
-			Draw3D.flatRing(mesh, k.x, k.ground + 0.04, k.z, (0.3f + 3.2f * Anim.easeOutCubic(ring)) * s, 0.1f * (1f - ring * 0.6f), 48, ringColorAt);
-		}
-		float[] d = k.extra;
-		float t = age - 0.07f;
-		if (t > 0.8f) return;
-		float spark = 1f - t / 0.8f;
-		float travel = (1f - (float) Math.exp(-3f * t)) / 3f;
-		float before = Math.max(0f, t - 0.03f);
-		float travelBefore = (1f - (float) Math.exp(-3f * before)) / 3f;
-		for (int i = 0; i < SPARKS; i++) {
-			int o = i * 4;
-			double x = k.x + d[o] * d[o + 2] * travel, z = k.z + d[o + 1] * d[o + 2] * travel;
-			double y = Math.max(k.ground + 0.05, k.ground + 0.15 + d[o + 3] * t - 7f * t * t);
-			double px = k.x + d[o] * d[o + 2] * travelBefore, pz = k.z + d[o + 1] * d[o + 2] * travelBefore;
-			double py = Math.max(k.ground + 0.05, k.ground + 0.15 + d[o + 3] * before - 7f * before * before);
-			Draw3D.line(mesh, x, y, z, px, py, pz, 0.035f * s, ColorUtil.fade(core, spark), ColorUtil.fade(a1, 0f));
-		}
+		// The scorch mark, and the embers glowing in it at first.
+		float burnt = Anim.clamp01((age - 0.07f) / 0.1f) * fadeOut(age / k.life, 0.5f);
+		float scorch = 1.25f * s;
+		Draw3D.flatOrb(fill, k.x, k.ground + 0.02, k.z, scorch, 0f, 0f, scorch, ColorUtil.fade(0xFF120E0B, 0.62f * burnt));
+		float embers = (float) Math.exp(-(age - 0.07f) * 2.2f) * burnt;
+		Draw3D.flatOrb(mesh, k.x, k.ground + 0.025, k.z, scorch * 0.75f, 0f, 0f, scorch * 0.75f, ColorUtil.fade(ColorUtil.lerp(a1, 0xFFFFFFFF, 0.2f), 0.6f * embers));
+		impact(k, age - 0.07f, k.y + Math.min(k.height * 0.5, 1.0), 1.1f, a1, a2);
 	}
 
 	// ------------------------------------------------------------------ shatter
 
 	/**
-	 * The body bursts into glowing cubes cut from its own model in its pose: they fly outwards, tumble,
-	 * bounce on the ground and cool from white hot to the accent colour before they fade. The body
-	 * itself is not drawn meanwhile (LivingEntityRendererMixin).
+	 * The body bursts into chunks cut from its own model in its pose, each in the colour of its skin where it was cut
+	 * and glowing hot along its edges from the blow: they fly outwards, tumble, bounce on the ground and cool before
+	 * they shrink away. The body itself is not drawn meanwhile (EntityRenderManagerMixin).
 	 */
 	private void shatter(Kill k, float age, float dt, float tickDelta, int a1, int a2) {
-		if (k.data == null) k.data = shards(k, tickDelta);
-		WorldEffectRenderer.Mesh mesh = WorldEffectRenderer.glow();
-		float s = k.size;
+		if (k.data == null) {
+			k.data = shards(k, tickDelta);
+			k.colors = shardColors(k, tickDelta, k.data, a1, a2);
+		}
+		WorldEffectRenderer.Mesh fill = WorldEffectRenderer.translucent();
+		WorldEffectRenderer.Mesh glow = WorldEffectRenderer.glow();
 		float p = age / k.life;
 		float fade = fadeOut(p, 0.6f);
-		float hot = (float) Math.exp(-age * 3.5f);
+		float hot = (float) Math.exp(-age * 3f);
 		float floor = (float) (k.ground - k.y);
 		float[] d = k.data;
-		for (int o = 0; o < d.length; o += SHARD) {
+		int n = d.length / SHARD;
+		if (order.length < n) {
+			order = new int[n];
+			depth = new float[n];
+		}
+		for (int i = 0; i < n; i++) {
+			int o = i * SHARD;
 			float half = d[o + 11] * (0.35f + 0.65f * fade);
 			d[o + 4] -= 16f * dt;
 			float drag = 1f - 0.6f * dt;
@@ -513,22 +832,87 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 				}
 			}
 			d[o + 9] += d[o + 10] * dt;
+			double dx = k.x + d[o] - WorldEffectRenderer.camX, dy = k.y + d[o + 1] - WorldEffectRenderer.camY, dz = k.z + d[o + 2] - WorldEffectRenderer.camZ;
+			depth[i] = (float) (dx * dx + dy * dy + dz * dz);
+			order[i] = i;
+		}
+		// Far to near: their faces are solid, so the nearer chunks must cover the farther ones.
+		for (int i = 1; i < n; i++) {
+			int index = order[i];
+			float key = depth[index];
+			int j = i - 1;
+			while (j >= 0 && depth[order[j]] < key) {
+				order[j + 1] = order[j];
+				j--;
+			}
+			order[j + 1] = index;
+		}
+		int glowing = ColorUtil.lerp(a1, 0xFFFFFFFF, 0.35f);
+		for (int j = 0; j < n; j++) {
+			int i = order[j];
+			int o = i * SHARD;
+			float half = d[o + 11] * (0.35f + 0.65f * fade);
 			double x = k.x + d[o], y = k.y + d[o + 1], z = k.z + d[o + 2];
 			float near = Draw3D.cameraFade(x, y, z, 0.5f, 1.3f);
 			if (near <= 0.01f) continue;
 			Draw3D.rotation(basis, d[o + 6], d[o + 7], d[o + 8], d[o + 9]);
-			int base = ColorUtil.lerp(a1, a2, d[o + 12]);
-			int c = ColorUtil.fade(ColorUtil.lerp(base, 0xFFFFFFFF, 0.7f * hot), 0.95f * fade * near);
-			Draw3D.cube(mesh, x, y, z, half, basis, c);
-			if (hot > 0.12f) mesh.orb(x, y, z, half * 2.6f, ColorUtil.fade(0xFFFFFFFF, 0.55f * hot * near));
+			int face = ColorUtil.lerp(k.colors[i], glowing, 0.55f * hot);
+			chunk(fill, x, y, z, half, basis, ColorUtil.fade(face, fade * near));
+			int edge = ColorUtil.lerp(ColorUtil.lerp(a1, a2, d[o + 12]), 0xFFFFFFFF, 0.6f * hot);
+			Draw3D.cube(glow, x, y, z, half * 1.01f, basis, ColorUtil.fade(edge, (0.3f + 0.7f * hot) * fade * near));
 		}
-		float burst = 1f - age / 0.3f;
-		if (burst > 0f) mesh.orb(k.x, k.y + k.height * 0.5, k.z, (1.2f + k.width) * s, ColorUtil.fade(a2, 0.8f * burst));
-		float ring = age / 0.6f;
-		if (ring < 1f) {
-			ringColor = ColorUtil.fade(a1, 0.85f * (1f - ring));
-			Draw3D.flatRing(mesh, k.x, k.ground + 0.04, k.z, (0.3f + 2.6f * Anim.easeOutCubic(ring)) * s, 0.1f * (1f - ring * 0.6f), 48, ringColorAt);
+	}
+
+	/**
+	 * The faces of a cube turned to the camera, solid, each shaded by how much it faces a light high up to one side:
+	 * a chunk of the body. Faces turned away are left out, so none of its faces can cover a nearer one of its own.
+	 */
+	private static void chunk(WorldEffectRenderer.Mesh mesh, double x, double y, double z, float half, float[] basis, int argb) {
+		double vx = WorldEffectRenderer.camX - x, vy = WorldEffectRenderer.camY - y, vz = WorldEffectRenderer.camZ - z;
+		for (int axis = 0; axis < 3; axis++) {
+			int n = axis * 3, a = (axis + 1) % 3 * 3, b = (axis + 2) % 3 * 3;
+			float nx = basis[n], ny = basis[n + 1], nz = basis[n + 2];
+			double towards = nx * vx + ny * vy + nz * vz;
+			// Seen only from outside the plane of its face.
+			if (Math.abs(towards) <= half) continue;
+			float side = towards > 0 ? 1f : -1f;
+			float light = side * (nx * LIGHT_X + ny * LIGHT_Y + nz * LIGHT_Z);
+			int c = ColorUtil.darken(argb, 0.42f * (1f - Math.max(0f, light)));
+			double fx = x + nx * half * side, fy = y + ny * half * side, fz = z + nz * half * side;
+			float ax = basis[a] * half, ay = basis[a + 1] * half, az = basis[a + 2] * half;
+			float bx = basis[b] * half, by = basis[b + 1] * half, bz = basis[b + 2] * half;
+			mesh.vertex(fx - ax - bx, fy - ay - by, fz - az - bz, 3f, 0f, c);
+			mesh.vertex(fx + ax - bx, fy + ay - by, fz + az - bz, 3f, 0f, c);
+			mesh.vertex(fx + ax + bx, fy + ay + by, fz + az + bz, 3f, 0f, c);
+			mesh.vertex(fx - ax + bx, fy - ay + by, fz - az + bz, 3f, 0f, c);
 		}
+	}
+
+	/** The colour of the body's skin where each shard was cut (its nearest pixel); the effect's colours where it has none. */
+	private static int[] shardColors(Kill k, float tickDelta, float[] d, int a1, int a2) {
+		int n = d.length / SHARD;
+		int[] out = new int[n];
+		PixelBody skin = PixelBody.capture(k.entity, tickDelta, SKIN_CELLS);
+		boolean textured = skin != null && skin.textured;
+		for (int i = 0; i < n; i++) {
+			int o = i * SHARD;
+			int color = ColorUtil.lerp(a1, a2, d[o + 12]);
+			if (textured) {
+				float best = Float.MAX_VALUE;
+				float[] c = skin.cells;
+				for (int j = 0; j < skin.count; j++) {
+					int q = j * PixelBody.STRIDE;
+					float dx = c[q] - d[o], dy = c[q + 1] - d[o + 1], dz = c[q + 2] - d[o + 2];
+					float distance = dx * dx + dy * dy + dz * dz;
+					if (distance < best) {
+						best = distance;
+						color = skin.colors[j];
+					}
+				}
+			}
+			out[i] = color | 0xFF000000;
+		}
+		return out;
 	}
 
 	/** Cuts the body's model, captured in its pose, into cubes; a box of cubes for entities without a model. */
@@ -620,7 +1004,7 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 		return n + SHARD;
 	}
 
-	/** Renders the entity's model in vanilla's pose and transforms into the capture, relative to its feet. */
+	/** Renders the entity's model, upright, in vanilla's transforms into the capture, relative to its feet. */
 	@SuppressWarnings({"unchecked", "rawtypes"})
 	private void captureBody(LivingEntity entity, float tickDelta) {
 		EntityRenderer<?, ?> base = mc.getEntityRenderDispatcher().getRenderer(entity);
@@ -628,6 +1012,8 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 		try {
 			LivingEntityRenderState state = (LivingEntityRenderState) renderer.createRenderState();
 			renderer.updateRenderState(entity, state, tickDelta);
+			// As it stood, like the skin the chunks take their colours from (PixelBody).
+			state.deathTime = 0f;
 			if (state instanceof PlayerEntityRenderState player) {
 				// The outer skin layers are slightly larger copies of the body; they would only double the pieces.
 				player.hatVisible = false;
@@ -671,12 +1057,11 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 
 	/** A ghost leaves the body and rises: a bright head over a softer body, a tapering wisp trailing below it and sparkles circling it. */
 	private void soul(Kill k, float age, int a1, int a2) {
+		WorldEffectRenderer.Mesh fill = WorldEffectRenderer.translucent();
 		WorldEffectRenderer.Mesh mesh = WorldEffectRenderer.glow();
 		float s = k.size;
 		float p = age / k.life;
 		float alpha = Anim.clamp01(age / 0.25f) * fadeOut(p, 0.55f);
-		float release = 1f - age / 0.6f;
-		if (release > 0f) mesh.orb(k.x, k.y + k.height * 0.5, k.z, (0.7f + k.width) * s, ColorUtil.fade(a1, 0.5f * release));
 		if (alpha <= 0.01f) return;
 		double[] at = point;
 		// The wisp: the path the soul just took, thinning and fading away from it.
@@ -686,14 +1071,16 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 			soulPath(k, Math.max(0f, age - j * 0.045f), at);
 			double x = at[0], y = at[1] - 0.3f * s, z = at[2];
 			float f0 = 1f - (j - 1) / (float) SOUL_TAIL, f1 = 1f - j / (float) SOUL_TAIL;
-			Draw3D.line(mesh, px, py, pz, x, y, z, 0.3f * s * f0, ColorUtil.fade(ColorUtil.lerp(a1, a2, 1f - f0), 0.75f * alpha * f0 * f0),
-				ColorUtil.fade(ColorUtil.lerp(a1, a2, 1f - f1), 0.75f * alpha * f1 * f1));
+			int c0 = ColorUtil.lerp(a1, a2, 1f - f0), c1 = ColorUtil.lerp(a1, a2, 1f - f1);
+			Draw3D.line(fill, px, py, pz, x, y, z, 0.42f * s * f0, ColorUtil.fade(c0, 0.45f * alpha * f0 * f0), ColorUtil.fade(c1, 0.45f * alpha * f1 * f1));
+			Draw3D.line(mesh, px, py, pz, x, y, z, 0.3f * s * f0, ColorUtil.fade(c0, 0.75f * alpha * f0 * f0), ColorUtil.fade(c1, 0.75f * alpha * f1 * f1));
 			px = x;
 			py = y;
 			pz = z;
 		}
 		soulPath(k, age, at);
 		double x = at[0], y = at[1], z = at[2];
+		fill.orb(x, y - 0.15f * s, z, 0.75f * s, ColorUtil.fade(a1, 0.5f * alpha));
 		mesh.orb(x, y - 0.3f * s, z, 0.55f * s, ColorUtil.fade(a1, 0.5f * alpha));
 		mesh.orb(x, y, z, 0.38f * s, ColorUtil.fade(a2, 0.85f * alpha));
 		mesh.orb(x, y, z, 0.13f * s, ColorUtil.fade(0xFFFFFFFF, alpha));
@@ -703,6 +1090,7 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 			double sy = y - 0.15f * s + Math.sin(age * 2f + m * 1.7f) * 0.25f * s;
 			float twinkle = 0.55f + 0.45f * (float) Math.sin(age * 9f + m * 2.3f);
 			double sx = x + Math.cos(angle) * r, sz = z + Math.sin(angle) * r;
+			fill.orb(sx, sy, sz, 0.14f * s, ColorUtil.fade(a1, 0.4f * alpha * twinkle));
 			mesh.orb(sx, sy, sz, 0.12f * s, ColorUtil.fade(a2, 0.6f * alpha * twinkle));
 			mesh.orb(sx, sy, sz, 0.04f * s, ColorUtil.fade(0xFFFFFFFF, 0.9f * alpha * twinkle));
 		}
@@ -713,8 +1101,9 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 	/**
 	 * The body turns into its own ghost: still in the pose it died in and wearing its skin, see-through and rimmed
 	 * with light. It is lifted slowly, turning a little as it goes, motes of light spiralling up around it, and from
-	 * the feet up it falls apart pixel by pixel into embers that drift off and go out. The body itself is not drawn
-	 * meanwhile (LivingEntityRendererMixin). Only the faces turned to the camera are drawn while they are whole.
+	 * the feet up it burns away: a glowing edge climbs the body and behind it the pixels break off as embers in the
+	 * effect's colour that drift off and go out. The body itself is not drawn meanwhile (EntityRenderManagerMixin).
+	 * Only the faces turned to the camera are drawn while they are whole.
 	 */
 	private void ghost(Kill k, float age, float tickDelta, int a1, int a2) {
 		if (!k.captured) {
@@ -742,14 +1131,16 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 		float turn = 0.45f * (hash(k.seed) < 0.5f ? -1f : 1f) * Anim.easeInOutSine(p);
 		float cos = (float) Math.cos(turn), sin = (float) Math.sin(turn);
 		float keep = ghostSkin.f();
+		int sparkle = ColorUtil.lerp(a2, 0xFFFFFFFF, 0.5f);
 		// The camera as the ghost sees it, to tell which faces are turned to it.
 		float camX = (float) (WorldEffectRenderer.camX - ox), camY = (float) (WorldEffectRenderer.camY - oy), camZ = (float) (WorldEffectRenderer.camZ - oz);
 		float[] c = body.cells;
 		int[] colors = body.colors;
 		for (int i = 0; i < body.count; i++) {
 			int o = i * PixelBody.STRIDE;
+			float breaks = 0.34f + c[o + 12] * 0.44f;
 			// 0 while the cell is part of the body, 1 once it has broken off and gone out.
-			float d = Anim.clamp01((p - 0.34f - c[o + 12] * 0.44f) / 0.15f);
+			float d = Anim.clamp01((p - breaks) / 0.15f);
 			if (d >= 1f) continue;
 			float x = c[o] * cos - c[o + 2] * sin, y = c[o + 1], z = c[o] * sin + c[o + 2] * cos;
 			float nx = c[o + 9] * cos - c[o + 11] * sin, ny = c[o + 10], nz = c[o + 9] * sin + c[o + 11] * cos;
@@ -765,10 +1156,15 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 				float rim = (1f - facing) * (1f - facing);
 				quad(fill, ox + x, oy + y, oz + z, ax, ay, az, bx, by, bz, ColorUtil.fade(base, appear * (0.5f + 0.4f * rim)));
 				if (rim > 0.18f) quad(glow, ox + x, oy + y, oz + z, ax, ay, az, bx, by, bz, ColorUtil.fade(tint, appear * 0.55f * rim));
+				// The edge burning its way up: the pixels about to break off glow hot.
+				float burn = Anim.clamp01(1f + (p - breaks) / 0.06f);
+				if (burn > 0.02f) {
+					quad(glow, ox + x, oy + y, oz + z, ax, ay, az, bx, by, bz, ColorUtil.fade(ColorUtil.lerp(tint, 0xFFFFFFFF, 0.45f * burn), 0.85f * burn * burn));
+				}
 				continue;
 			}
-			// Broken off: it drifts up and away from the body, swirling, shrinking, white hot at first and then an
-			// ember of the effect's colour that goes out.
+			// Broken off: it drifts up and away from the body, swirling and shrinking, from its own colour to an ember
+			// of the effect's colour that goes out.
 			float e = d * d;
 			float swirl = c[o + 12] * 40f + age * 3f;
 			float px = x + nx * e * 0.4f + (float) Math.sin(swirl) * e * 0.16f;
@@ -776,28 +1172,23 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 			float pz = z + nz * e * 0.4f + (float) Math.cos(swirl * 1.3f) * e * 0.16f;
 			float small = 1f - 0.78f * d;
 			float out = 1f - d;
-			int ember = ColorUtil.lerp(tint, 0xFFFFFFFF, 0.6f * out * out);
-			quad(fill, ox + px, oy + py, oz + pz, ax * small, ay * small, az * small, bx * small, by * small, bz * small, ColorUtil.fade(base, 0.55f * out));
-			quad(glow, ox + px, oy + py, oz + pz, ax * small, ay * small, az * small, bx * small, by * small, bz * small, ColorUtil.fade(ember, 0.9f * out));
+			int ember = ColorUtil.lerp(tint, 0xFFFFFFFF, 0.3f * out * out);
+			int ash = ColorUtil.lerp(base, tint, Math.min(1f, d * 1.8f));
+			quad(fill, ox + px, oy + py, oz + pz, ax * small, ay * small, az * small, bx * small, by * small, bz * small, ColorUtil.fade(ash, 0.8f * out));
+			quad(glow, ox + px, oy + py, oz + pz, ax * small, ay * small, az * small, bx * small, by * small, bz * small, ColorUtil.fade(ember, 0.6f * out));
+			if (i % 6 == 0) glow.orb(ox + px, oy + py, oz + pz, (0.03f + 0.05f * out) * s, ColorUtil.fade(sparkle, 0.8f * out));
 		}
 
-		// The light it leaves in: a flash where it stood and a ring over the ground, a soft halo around the ghost and a
-		// faint shaft down to the spot it left.
-		float release = 1f - age / 0.5f;
-		if (release > 0f) glow.orb(k.x, k.y + k.height * 0.5, k.z, (0.9f + k.width) * s, ColorUtil.fade(a2, 0.6f * release));
-		for (int r = 0; r < 2; r++) {
-			float t = (age - r * 0.18f) / (0.75f + r * 0.3f);
-			if (t <= 0f || t >= 1f) continue;
-			ringColor = ColorUtil.fade(r == 0 ? a1 : a2, 0.85f * (1f - t));
-			Draw3D.flatRing(glow, k.x, k.ground + 0.04, k.z, (0.25f + (2.2f - r * 0.6f) * Anim.easeOutCubic(t)) * s, 0.09f * (1f - t * 0.6f), 48, ringColorAt);
-		}
+		// A soft halo around the ghost and a faint shaft down to the spot it left.
 		float glowing = appear * whole;
 		if (glowing > 0.01f) {
 			double middle = oy + body.height * 0.55;
 			glow.orb(ox, middle, oz, (0.85f + k.width) * s, ColorUtil.fade(a1, 0.2f * glowing));
 			Draw3D.line(glow, k.x, k.ground + 0.02, k.z, ox, middle, oz, 0.45f * s, ColorUtil.fade(a1, 0f), ColorUtil.fade(a1, 0.16f * glowing));
 			float pool = (0.9f + 0.4f * k.width) * s;
-			Draw3D.flatOrb(glow, k.x, k.ground + 0.02, k.z, pool, 0f, 0f, pool, ColorUtil.fade(a1, 0.32f * glowing * (1f - 0.6f * Anim.clamp01(lift / Math.max(0.5f, rise)))));
+			int ground = ColorUtil.fade(a1, 0.32f * glowing * (1f - 0.6f * Anim.clamp01(lift / Math.max(0.5f, rise))));
+			Draw3D.flatOrb(fill, k.x, k.ground + 0.02, k.z, pool, 0f, 0f, pool, ColorUtil.fade(ground, 0.7f));
+			Draw3D.flatOrb(glow, k.x, k.ground + 0.025, k.z, pool, 0f, 0f, pool, ground);
 		}
 
 		// Motes spiral up around it from the ground, until the last of the body is gone.
@@ -816,6 +1207,7 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 			double angle = m[o] + t * (i % 4 == 0 ? 1.5 : -1.5);
 			double r = (0.35f + m[o + 1] * 0.55f) * (1f - 0.35f * along);
 			double x = ox + Math.cos(angle) * r, y = k.ground + 0.1 + climbed, z = oz + Math.sin(angle) * r;
+			fill.orb(x, y, z, m[o + 4] * 2.4f, ColorUtil.fade(a1, 0.4f * alpha));
 			glow.orb(x, y, z, m[o + 4] * 2.2f, ColorUtil.fade(i % 3 == 0 ? a2 : a1, 0.5f * alpha));
 			glow.orb(x, y, z, m[o + 4] * 0.65f, ColorUtil.fade(light, 0.9f * alpha));
 		}
@@ -870,8 +1262,9 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 		return d;
 	}
 
-	/** A rocket climbs from the body and bursts into a shell of coloured sparks with a ring around it; the sparks streak, sag and crackle out. */
+	/** A rocket climbs from the body and bursts with a flash into a shell of coloured sparks with a ring around it; the sparks streak, sag and crackle out. */
 	private void firework(Kill k, float age, int a1, int a2) {
+		WorldEffectRenderer.Mesh fill = WorldEffectRenderer.translucent();
 		WorldEffectRenderer.Mesh mesh = WorldEffectRenderer.glow();
 		float s = k.size;
 		float climb = 0.42f;
@@ -883,16 +1276,18 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 			for (int j = 1; j <= 8; j++) {
 				float uj = Math.max(0f, u - j * 0.05f);
 				double ty = baseY + apex * Anim.easeOutCubic(uj);
-				mesh.orb(k.x, ty, k.z, 0.1f * s * (1f - j / 9f), ColorUtil.fade(a1, 0.7f * (1f - j / 9f)));
+				float f = 1f - j / 9f;
+				fill.orb(k.x, ty, k.z, 0.16f * s * f, ColorUtil.fade(a1, 0.5f * f));
+				mesh.orb(k.x, ty, k.z, 0.1f * s * f, ColorUtil.fade(a1, 0.7f * f));
 			}
+			fill.orb(k.x, y, k.z, 0.32f * s, ColorUtil.fade(a1, 0.6f));
 			mesh.orb(k.x, y, k.z, 0.22f * s, ColorUtil.fade(0xFFFFFFFF, 0.95f));
 			return;
 		}
 		float t = age - climb;
 		float life = k.life - climb;
 		double cy = baseY + apex;
-		float flashLeft = 1f - t / 0.18f;
-		if (flashLeft > 0f) mesh.orb(k.x, cy, k.z, 2.6f * s, ColorUtil.fade(0xFFFFFFFF, 0.7f * flashLeft));
+		flash(k, t, k.x, cy, k.z, 1.3f, a1, a2);
 		float fade = fadeOut(t / life, 0.5f);
 		float drag = 2.4f;
 		float travel = (1f - (float) Math.exp(-drag * t)) / drag;
@@ -911,6 +1306,8 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 			double x = k.x + d[o] * v * travel, y = cy + d[o + 1] * v * travel - fall, z = k.z + d[o + 2] * v * travel;
 			double bx = k.x + d[o] * v * travelBack, by = cy + d[o + 1] * v * travelBack - fallBack, bz = k.z + d[o + 2] * v * travelBack;
 			int c = group == 0 ? a1 : group == 1 ? a2 : group == 2 ? k.third : ColorUtil.lerp(a2, 0xFFFFFFFF, 0.5f);
+			Draw3D.line(fill, x, y, z, bx, by, bz, 0.08f * s, ColorUtil.fade(c, 0.6f * alpha), ColorUtil.fade(c, 0f));
+			fill.orb(x, y, z, 0.15f * s, ColorUtil.fade(c, 0.45f * alpha));
 			Draw3D.line(mesh, x, y, z, bx, by, bz, 0.045f * s, ColorUtil.fade(c, 0.9f * alpha), ColorUtil.fade(c, 0f));
 			mesh.orb(x, y, z, 0.1f * s, ColorUtil.fade(c, 0.7f * alpha));
 			mesh.orb(x, y, z, 0.035f * s, ColorUtil.fade(0xFFFFFFFF, 0.9f * alpha));
@@ -932,11 +1329,13 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 		final long born;
 		/** Per mode layout (motes, bolt segments, shards, sparks); shards are filled on the first frame. */
 		float[] data;
-		/** Lightning: impact sparks. */
-		float[] extra;
+		/** The sparks of the blow it lands with (none for Blood Burst). */
+		float[] sparks;
+		/** Shatter: the colour of every shard. */
+		int[] colors;
 		/** Firework: the third colour of the shell. */
 		int third;
-		/** Ghost: the body as coloured cells, captured on the first frame (null when it could not be). */
+		/** Ghost and light pillar: the body as coloured cells, captured on the first frame (null when it could not be). */
 		PixelBody body;
 		boolean captured;
 
@@ -955,5 +1354,9 @@ public final class KillEffectsModule extends Module implements WorldEffect {
 			this.seed = seed;
 			this.born = born;
 		}
+	}
+
+	/** Where the game took a body away: its feet and size, the motes' colour, and whether they glow (not after Blood Burst). */
+	private record Puff(double x, double y, double z, float width, float height, float size, int color, boolean glowing, float seed, long born) {
 	}
 }
