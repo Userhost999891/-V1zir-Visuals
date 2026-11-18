@@ -635,6 +635,8 @@ public final class ConsoleMenu extends Screen {
 	@Override
 	public boolean keyPressed(KeyInput input) {
 		if (accounts.keyPressed(client, input.key(), input.modifiers())) return true;
+		// While the accounts panel is open, letters go into its name field.
+		if (accounts.shown()) return super.keyPressed(input);
 		int key = input.key();
 		switch (key) {
 			case GLFW.GLFW_KEY_LEFT, GLFW.GLFW_KEY_A -> select(selected[tab] - 1);
