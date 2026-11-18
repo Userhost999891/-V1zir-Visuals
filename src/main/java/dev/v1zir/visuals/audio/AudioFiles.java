@@ -4,7 +4,6 @@ import org.lwjgl.stb.STBVorbis;
 import org.lwjgl.stb.STBVorbisInfo;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
-import org.lwjgl.system.libc.LibCStdlib;
 
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioInputStream;
@@ -22,6 +21,7 @@ import java.nio.ShortBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.stream.Stream;
@@ -67,23 +67,23 @@ public final class AudioFiles {
 		return name.toLowerCase(Locale.ROOT).endsWith(".ogg") ? ogg(bytes) : sampled(new ByteArrayInputStream(bytes));
 	}
 
+	/**
+	 * Decodes a whole Ogg file through the same stream as music, into buffers of its own: what stb_vorbis allocates for a
+	 * whole-file decode belongs to LWJGL's allocator, and freeing it any other way crashes the game.
+	 */
 	private static Pcm ogg(byte[] bytes) throws IOException {
-		ByteBuffer data = MemoryUtil.memAlloc(bytes.length);
-		try (MemoryStack stack = MemoryStack.stackPush()) {
-			data.put(bytes).flip();
-			IntBuffer channels = stack.mallocInt(1);
-			IntBuffer rate = stack.mallocInt(1);
-			ShortBuffer pcm = STBVorbis.stb_vorbis_decode_memory(data, channels, rate);
-			if (pcm == null) throw new IOException("Not an Ogg Vorbis file");
-			try {
-				short[] samples = new short[pcm.remaining()];
-				pcm.get(samples);
-				return new Pcm(samples, channels.get(0), rate.get(0));
-			} finally {
-				LibCStdlib.free(pcm);
+		try (OggSource source = new OggSource(bytes)) {
+			int channels = source.channels();
+			short[] chunk = new short[4096 * channels];
+			short[] samples = new short[Math.max(4096, bytes.length * 4)];
+			int length = 0;
+			for (int frames; (frames = source.frames(chunk)) > 0; ) {
+				int n = frames * channels;
+				if (length + n > samples.length) samples = Arrays.copyOf(samples, Math.max(samples.length * 2, length + n));
+				System.arraycopy(chunk, 0, samples, length, n);
+				length += n;
 			}
-		} finally {
-			MemoryUtil.memFree(data);
+			return new Pcm(Arrays.copyOf(samples, length), channels, source.rate());
 		}
 	}
 

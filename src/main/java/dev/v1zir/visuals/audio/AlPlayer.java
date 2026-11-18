@@ -26,9 +26,18 @@ public final class AlPlayer {
 	private AlPlayer() {
 	}
 
+	/** The game's audio context, 0 when there is none (no sound device, or OpenAL not loaded at all). */
+	static long current() {
+		try {
+			return ALC10.alcGetCurrentContext();
+		} catch (RuntimeException | LinkageError e) {
+			return 0L;
+		}
+	}
+
 	/** Whether there is an audio context to play in (none when the game has no sound device). */
 	private static boolean ready() {
-		long current = ALC10.alcGetCurrentContext();
+		long current = current();
 		if (current == 0L) return false;
 		if (current != context) {
 			// A new context: what was made in the old one is gone with it.
@@ -126,7 +135,7 @@ public final class AlPlayer {
 		private final ArrayDeque<Integer> free = new ArrayDeque<>();
 
 		public synchronized void queue(short[] frame, int rate, float gain) {
-			long current = ALC10.alcGetCurrentContext();
+			long current = current();
 			if (current == 0L) return;
 			if (current != streamContext) {
 				streamContext = current;
@@ -158,7 +167,7 @@ public final class AlPlayer {
 
 		/** Stops and frees the source. */
 		public synchronized void stop() {
-			if (source == 0 || ALC10.alcGetCurrentContext() != streamContext) {
+			if (source == 0 || current() != streamContext) {
 				source = 0;
 				free.clear();
 				return;
