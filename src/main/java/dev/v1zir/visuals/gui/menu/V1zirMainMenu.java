@@ -165,11 +165,12 @@ public final class V1zirMainMenu extends Screen {
 		language.cy = height - 12f - language.radius;
 		buttons.add(language);
 
-		// Messages, in the top right corner across from the account pill, with the unread count on it.
+		// Messages, beside the account pill (placed against it as drawn, see renderMenu): the top right corner is where
+		// new messages slide in. The unread count sits on it.
 		chat = new RoundButton(Icons.MESSAGE_CIRCLE, () -> open(() -> new MessagesScreen(this, null, null)), false);
-		chat.radius = Math.max(10f, size * 0.3f);
-		chat.cx = width - 12f - chat.radius;
-		chat.cy = 9f + chat.radius;
+		chat.radius = 10f;
+		chat.cx = 10f + 60f;
+		chat.cy = 18f;
 		buttons.add(chat);
 		if (focused >= buttons.size()) focused = -1;
 
@@ -401,6 +402,10 @@ public final class V1zirMainMenu extends Screen {
 		int by = panel ? -10000 : mouseY;
 		float controls = Anim.easeOutCubic(Anim.progress(t, 0.8f, 0.55f)) * shown;
 		Render2D.setAlpha(controls);
+		if (chat != null && pillW > 0f) {
+			chat.cx = pillX + pillW + 6f + chat.radius;
+			chat.cy = pillY + pillH / 2f;
+		}
 		for (int i = 0; i < buttons.size(); i++) {
 			RoundButton button = buttons.get(i);
 			button.render(ctx, bx, by, i == focused, button == pressed);

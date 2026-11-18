@@ -187,8 +187,22 @@ public final class TargetEspModule extends Module implements WorldEffect {
 		double cx = pos.x, cy = pos.y + h * 0.55, cz = pos.z;
 		Vector3f right = WorldEffectRenderer.RIGHT;
 		Vector3f up = WorldEffectRenderer.UP;
+		// In front of the target as the camera sees it, so its own head and legs do not hide the arcs above and below
+		// it, and as much smaller as that brings it nearer: on screen it is the size it would be around the target.
+		double tx = WorldEffectRenderer.camX - cx;
+		double ty = WorldEffectRenderer.camY - cy;
+		double tz = WorldEffectRenderer.camZ - cz;
+		double toCamera = Math.sqrt(tx * tx + ty * ty + tz * tz);
+		double nearer = 1.0;
+		if (toCamera > 1e-3) {
+			double forward = Math.min(w * 0.6 + 0.25, toCamera * 0.5);
+			cx += tx / toCamera * forward;
+			cy += ty / toCamera * forward;
+			cz += tz / toCamera * forward;
+			nearer = (toCamera - forward) / toCamera;
+		}
 		double grow = Math.pow(Math.max(1.0, dist / 4.0), 0.85);
-		double radius = (w * 0.55 + 0.2) * s * grow * (1.0 - 0.15 * hit) * (1.0 + 0.025 * Math.sin(t * 2.6));
+		double radius = (w * 0.55 + 0.2) * s * grow * nearer * (1.0 - 0.15 * hit) * (1.0 + 0.025 * Math.sin(t * 2.6));
 		float width = (float) (radius * 0.16);
 		double spin = t * 0.5;
 		for (int q = 0; q < 4; q++) {
