@@ -809,7 +809,10 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.waitTicks(25);
 	}
 
-	/** Target ESP around a husk the player "hit": every mode in turn, then Ghosts again right after a hit (swollen, flashing red). */
+	/**
+	 * Target ESP around a husk the player "hit": every mode in turn, then Ghosts again right after a hit (swollen,
+	 * flashing red), then Target with the husk fourteen blocks away.
+	 */
 	private static void targetEsp(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
 		look(singleplayer, 0, 4);
 		plainFov(context, true);
@@ -847,6 +850,14 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		});
 		context.waitTicks(1);
 		context.takeScreenshot("target-esp-hit");
+		// Target fourteen blocks away: the marker keeps about its size on screen while the husk gets small.
+		singleplayer.getServer().runCommand("execute as @a at @s rotated ~ 0 run tp @e[tag=v1zir_esp] ^ ^ ^14");
+		context.runOnClient(client -> {
+			ModuleManager.get(TargetEspModule.class).mode.set("Target");
+			Effects.onAttack(nearestMob(client));
+		});
+		context.waitTicks(15);
+		context.takeScreenshot("target-esp-target-far");
 		context.runOnClient(client -> {
 			TargetEspModule esp = ModuleManager.get(TargetEspModule.class);
 			esp.mode.reset();
