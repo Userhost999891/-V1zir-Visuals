@@ -102,7 +102,7 @@ public final class ConsolePause {
 			x += wide * shrink + GAP * shrink;
 		}
 		for (ClickableWidget button : buttons) {
-			place(button, x, rowY, CARD_W * shrink, CARD_H, icon(button));
+			place(button, x, rowY, CARD_W * shrink, CARD_H, iconFor(button));
 			x += (CARD_W + GAP) * shrink;
 		}
 	}
@@ -124,7 +124,7 @@ public final class ConsolePause {
 		return text != null && text.getContent() instanceof TranslatableTextContent translatable ? translatable.getKey() : "";
 	}
 
-	private static int icon(ClickableWidget widget) {
+	private static int iconFor(ClickableWidget widget) {
 		String key = key(widget.getMessage());
 		return switch (key) {
 			case "gui.advancements" -> Icons.STAR;
