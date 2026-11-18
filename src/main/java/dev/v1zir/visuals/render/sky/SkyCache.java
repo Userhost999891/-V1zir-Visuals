@@ -77,12 +77,24 @@ public final class SkyCache {
 	private static boolean rush;
 	private static long lastNanos;
 	private static DynamicUniformStorage<CacheData> storage;
+	/** Counts the frames, and the frame the cache last drew the sky in. */
+	private static long frame;
+	private static long drawnFrame = -1L;
 
 	private SkyCache() {
 	}
 
 	public static void flip() {
 		if (storage != null) storage.clear();
+		frame++;
+	}
+
+	/**
+	 * The newest complete panorama of the sky above the horizon, when this frame's sky was drawn from the cache; null
+	 * otherwise. Directions map to it as vHemiOctEncode does (sky_cache.glsl). Reflections look the sky up in it.
+	 */
+	public static GpuTextureView upperSky() {
+		return drawnFrame == frame && valid && upper[current] != null ? upper[current].view : null;
 	}
 
 	/**
@@ -94,6 +106,7 @@ public final class SkyCache {
 	 */
 	public static void render(SkyUniforms.Data data, GpuBufferSlice params, GpuTextureView target, float period) {
 		ensureTextures();
+		drawnFrame = frame;
 		if (storage == null) storage = new DynamicUniformStorage<>("V1zir sky cache UBO", UBO_SIZE, 4);
 		long now = System.nanoTime();
 		float dt = lastNanos == 0 ? 0f : Math.min((now - lastNanos) / 1.0e9f, 0.25f);

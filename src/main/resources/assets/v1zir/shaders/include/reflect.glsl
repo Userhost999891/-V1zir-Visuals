@@ -15,6 +15,7 @@ layout(std140) uniform ReflectParams {
 	vec4 LightColor;
 	vec4 FogColor;    // horizon colour of the frame
 	vec4 Forward;     // xyz = camera forward
+	vec4 SkyInfo;     // x = 1 while the trace pass has the Shader Sky's panorama (reflect_trace.fsh)
 };
 
 uniform sampler2D Sampler0; // the frame
@@ -403,25 +404,6 @@ bool rSurface(ivec2 p, out SurfaceInfo s) {
 		s.glint = max(s.glint, open * mix(0.3 * wet, 1.0, pool));
 	}
 	return max(s.tint.r, max(s.tint.g, s.tint.b)) > 0.002 || s.wet > 0.002;
-}
-
-// What a ray that finds nothing on screen sees: the sky itself where its direction is on screen
-// and uncovered (the Shader Sky included). A direction off the side or the top of the screen takes
-// the sky at the nearest point of its edge, about as high in the sky, so the reflection does not
-// change where its rays leave the screen: the horizon colour can be far from the sky's own (at dusk,
-// under a Shader Sky), and wet ground showed it in wedges along the sides. Covered there too, or
-// behind the camera: a gradient from the horizon colour.
-vec3 rSky(vec3 dir) {
-	vec4 c = ViewProj * vec4(dir, 0.0);
-	if (c.w > 0.0) {
-		vec2 inset = 0.5 / Screen.xy;
-		vec2 uv = clamp(c.xy / c.w * 0.5 + 0.5, inset, 1.0 - inset);
-		if (texelFetch(Sampler1, ivec2(uv * Screen.xy), 0).r >= 1.0) return texture(Sampler0, uv).rgb;
-	}
-	vec3 horizon = FogColor.rgb;
-	vec3 zenith = horizon * vec3(0.62, 0.78, 1.0);
-	// Below the horizon: the ground, darker than the sky.
-	return dir.y >= 0.0 ? mix(horizon, zenith, sqrt(dir.y)) : horizon * mix(0.7, 0.3, sqrt(-dir.y));
 }
 
 // Marches a camera-relative ray through the depth buffer in screen space: even steps over the part

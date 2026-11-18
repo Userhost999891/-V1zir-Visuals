@@ -1359,14 +1359,22 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		});
 	}
 
-	/** Wet World without rain: the field soaked, with puddles, then with Drizzle ringing on them. */
+	/**
+	 * Wet World without rain, in the morning: the field soaked, with puddles mirroring the sky, then looking down at the
+	 * puddles near by, then with Drizzle ringing on them.
+	 */
 	private static void wetWorld(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
 		look(singleplayer, 20, 22);
-		setTime(context, singleplayer, 1000);
+		setTime(context, singleplayer, 3000);
 		context.runOnClient(client -> ModuleManager.get(WetWorldModule.class).setEnabled(true, false));
 		context.waitTicks(40);
+		System.out.println("V1ZIR-TIME wet-world " + context.computeOnClient(client -> client.world.getTimeOfDay() % 24000L));
 		context.takeScreenshot("wet-world");
 		bench(context, "wet-world");
+		look(singleplayer, 200, 48);
+		context.waitTicks(20);
+		context.takeScreenshot("wet-world-near");
+		look(singleplayer, 20, 22);
 		context.runOnClient(client -> ModuleManager.get(WetWorldModule.class).drizzle.set(true));
 		context.waitTicks(10);
 		context.takeScreenshot("wet-world-drizzle");

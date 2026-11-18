@@ -15,6 +15,9 @@ import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.visuals.BlockReflectionModule;
 import dev.v1zir.visuals.module.impl.visuals.RainEffectsModule;
 import dev.v1zir.visuals.module.impl.visuals.WetWorldModule;
+import dev.v1zir.visuals.gui.hud.Notifications;
+import dev.v1zir.visuals.render.font.Icons;
+import dev.v1zir.visuals.render.sky.SkyCache;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.DynamicUniformStorage;
 import net.minecraft.client.gl.Framebuffer;
@@ -40,7 +43,7 @@ import java.util.OptionalInt;
  */
 public final class Reflections {
 	private static final int SIZE = new Std140SizeCalculator().putMat4f().putMat4f()
-		.putVec4().putVec4().putVec4().putVec4().putVec4().putVec4().putVec4().putVec4().putVec4().putVec4().putVec4().get();
+		.putVec4().putVec4().putVec4().putVec4().putVec4().putVec4().putVec4().putVec4().putVec4().putVec4().putVec4().putVec4().get();
 	/** Longest reflected ray, in blocks. */
 	private static final float RAY_LENGTH = 64f;
 	private static final Matrix4f VIEW = new Matrix4f();
@@ -110,6 +113,9 @@ public final class Reflections {
 			rain.setEnabled(false, false);
 			WetWorldModule wetWorld = ModuleManager.get(WetWorldModule.class);
 			if (wetWorld != null) wetWorld.setEnabled(false, false);
+			// Said where it shows, not only in the log: otherwise the modules just seem to switch themselves off.
+			String reason = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+			Notifications.push(Icons.INFO, "Reflections turned off", reason.length() > 60 ? reason.substring(0, 60) + "…" : reason, false);
 		}
 	}
 
@@ -119,10 +125,13 @@ public final class Reflections {
 		int h = fb.textureHeight;
 		if (w <= 0 || h <= 0) return;
 		float scale = settings.halfResolution.on() ? 0.5f : 1f;
-		ensureTextures(w, h, Math.max(1, Math.round(w * scale)), Math.max(1, Math.round(h * scale)));
+		ensureTextures(w, h, Math.max(1, Math.round(w * scale)), Math.max(1, Math.round(h * scale)), fb.getColorAttachment().getFormat());
 		if (storage == null) storage = new DynamicUniformStorage<>("V1zir reflections UBO", SIZE, 2);
 
+		// The Shader Sky's panorama, where rays that leave the screen look the sky up (else the sky on screen and a gradient).
+		GpuTextureView sky = SkyCache.upperSky();
 		fill(mc.world, mc.gameRenderer.getCamera().getCameraPos(), settings, reflections, wetness, drops, tickDelta);
+		PARAMS.skyInfo.set(sky != null ? 1f : 0f, 0f, 0f, 0f);
 		GpuBufferSlice params = storage.write(PARAMS);
 		GpuSampler nearest = RenderSystem.getSamplerCache().get(FilterMode.NEAREST);
 		GpuSampler linear = RenderSystem.getSamplerCache().get(FilterMode.LINEAR);
@@ -131,6 +140,7 @@ public final class Reflections {
 		try (RenderPass pass = encoder.createRenderPass(() -> "V1zir reflection trace", tracedView, OptionalInt.empty())) {
 			pass.setPipeline(V1zirPipelines.REFLECT_TRACE);
 			bindScene(pass, params, linear, nearest);
+			pass.bindTexture("Sampler5", sky != null ? sky : copyView, linear);
 			pass.setVertexBuffer(0, Fullscreen.buffer());
 			pass.draw(0, 3);
 		}
@@ -202,11 +212,12 @@ public final class Reflections {
 		}
 	}
 
-	private static void ensureTextures(int w, int h, int tw, int th) {
-		if (w != width || h != height || copy == null) {
+	/** The copy of the frame is made in the frame's own format: a copy between two formats fails. */
+	private static void ensureTextures(int w, int h, int tw, int th, TextureFormat format) {
+		if (w != width || h != height || copy == null || copy.getFormat() != format) {
 			if (copyView != null) copyView.close();
 			if (copy != null) copy.close();
-			copy = RenderSystem.getDevice().createTexture("V1zir reflections source", 15, TextureFormat.RGBA8, w, h, 1, 1);
+			copy = RenderSystem.getDevice().createTexture("V1zir reflections source", 15, format, w, h, 1, 1);
 			copyView = RenderSystem.getDevice().createTextureView(copy);
 			width = w;
 			height = h;
@@ -236,6 +247,8 @@ public final class Reflections {
 		final Vector4f lightColor = new Vector4f();
 		final Vector4f fog = new Vector4f();
 		final Vector4f forward = new Vector4f();
+		/** x = 1 while the trace pass's Sampler5 holds the Shader Sky's panorama. */
+		final Vector4f skyInfo = new Vector4f();
 
 		@Override
 		public void write(ByteBuffer buffer) {
@@ -252,7 +265,8 @@ public final class Reflections {
 				.putVec4(lightDir)
 				.putVec4(lightColor)
 				.putVec4(fog)
-				.putVec4(forward);
+				.putVec4(forward)
+				.putVec4(skyInfo);
 		}
 
 		@Override

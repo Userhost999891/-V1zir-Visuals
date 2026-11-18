@@ -225,7 +225,7 @@ public final class V1zirPipelines {
 		.build();
 
 	/** Reflections and rain (render/Reflections): traces the reflected rays, usually at half resolution. */
-	public static final RenderPipeline REFLECT_TRACE = reflectPipeline("reflect_trace", 5);
+	public static final RenderPipeline REFLECT_TRACE = reflectPipeline("reflect_trace", 6);
 	/** Composites the traced reflections and the wet look back onto the frame. */
 	public static final RenderPipeline REFLECT_COMPOSITE = reflectPipeline("reflect_composite", 6);
 

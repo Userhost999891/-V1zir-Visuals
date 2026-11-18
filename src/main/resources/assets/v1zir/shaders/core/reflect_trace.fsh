@@ -4,7 +4,34 @@
 // colour of every pixel that reflects, alpha 1 there and 0 everywhere else.
 #moj_import <v1zir:reflect.glsl>
 
+// The Shader Sky's panorama of the sky above the horizon (render/sky/SkyCache) while SkyInfo.x is 1, a stand-in otherwise.
+uniform sampler2D Sampler5;
+
 out vec4 fragColor;
+
+// A direction above the horizon to its place in the panorama (vHemiOctEncode of sky_cache.glsl).
+vec2 rHemiOct(vec3 d) {
+	vec2 p = d.xz / (abs(d.x) + abs(d.y) + abs(d.z));
+	return vec2(p.x + p.y, p.x - p.y) * 0.5 + 0.5;
+}
+
+// What a ray that finds nothing on screen sees. Above the horizon, under the Shader Sky, its own panorama: the real
+// sky in every direction, on screen or not, clouds and all. Otherwise the sky on screen in its direction where it is
+// uncovered, and past that a gradient from the horizon colour (the vanilla sky's own fog colour, close to it).
+vec3 rSky(vec3 dir) {
+	if (SkyInfo.x > 0.5 && dir.y > 0.0) return texture(Sampler5, rHemiOct(dir)).rgb;
+	vec4 c = ViewProj * vec4(dir, 0.0);
+	if (c.w > 0.0) {
+		vec2 uv = c.xy / c.w * 0.5 + 0.5;
+		if (all(greaterThan(uv, vec2(0.0))) && all(lessThan(uv, vec2(1.0))) && texelFetch(Sampler1, ivec2(uv * Screen.xy), 0).r >= 1.0) {
+			return texture(Sampler0, uv).rgb;
+		}
+	}
+	vec3 horizon = FogColor.rgb;
+	vec3 zenith = horizon * vec3(0.62, 0.78, 1.0);
+	// Below the horizon: the ground, darker than the sky.
+	return dir.y >= 0.0 ? mix(horizon, zenith, sqrt(dir.y)) : horizon * mix(0.7, 0.3, sqrt(-dir.y));
+}
 
 void main() {
 	// The full-resolution pixel this texel stands for.
