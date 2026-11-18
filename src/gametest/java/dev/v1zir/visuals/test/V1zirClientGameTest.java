@@ -167,6 +167,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			atmosphere(context, singleplayer);
 			vibe(context, singleplayer);
 			nametags(context);
+			ps5InGame(context);
 			wetWorld(context, singleplayer);
 			handChams(context, singleplayer);
 			knives(context, singleplayer);
@@ -1486,6 +1487,25 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		});
 		singleplayer.getServer().runCommand("time set 6000");
 		look(singleplayer, 0, 0);
+	}
+
+	/** The PS5 style theme in a world: the pause menu as a control center, Options, the inventory and the hotbar. */
+	private static void ps5InGame(ClientGameTestContext context) {
+		context.runOnClient(client -> ModuleManager.get(ThemeModule.class).styleTheme.set("PS5"));
+		context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+		context.waitTicks(15);
+		context.takeScreenshot("pause-ps5");
+		context.setScreen(() -> new OptionsScreen(MinecraftClient.getInstance().currentScreen, MinecraftClient.getInstance().options));
+		context.waitTicks(12);
+		context.takeScreenshot("options-ps5");
+		context.setScreen(() -> new InventoryScreen(MinecraftClient.getInstance().player));
+		context.waitTicks(12);
+		context.takeScreenshot("inventory-ps5");
+		context.setScreen(() -> null);
+		context.waitTicks(12);
+		context.takeScreenshot("hotbar-ps5");
+		context.runOnClient(client -> ModuleManager.get(ThemeModule.class).styleTheme.reset());
+		context.waitTicks(2);
 	}
 
 	/** Nametags on your own player in third person (the only player in the test world), as others see it over you. */

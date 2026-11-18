@@ -46,18 +46,28 @@ public final class CustomHotbar {
 		// Bar and slots.
 		float barX = cx - 91f;
 		float barY = h - 23f;
-		Render2D.shadow(ctx, barX, barY + 1.5f, 182f, 22f, 7f, 10f, 0x50000000);
-		Render2D.panel(ctx, barX, barY, 182f, 22f, 7f);
+		boolean ps5 = Theme.ps5();
+		if (ps5) {
+			ConsoleUi.bar(ctx, barX, barY, 182f, 22f);
+		} else {
+			Render2D.shadow(ctx, barX, barY + 1.5f, 182f, 22f, 7f, 10f, 0x50000000);
+			Render2D.panel(ctx, barX, barY, 182f, 22f, 7f);
+		}
 		for (int i = 0; i < 9; i++) slot(ctx, cx - 89 + i * 20, h - 21);
-		selection(ctx, cx - 89 + sel * 20f, h - 21);
+		if (ps5) ConsoleUi.selection(ctx, cx - 89 + sel * 20f, h - 21);
+		else selection(ctx, cx - 89 + sel * 20f, h - 21);
 
 		// Off hand, on the side vanilla puts it.
 		ItemStack offHand = player.getOffHandStack();
 		Arm offSide = player.getMainArm().getOpposite();
 		if (!offHand.isEmpty()) {
 			float ox = offSide == Arm.LEFT ? cx - 120f : cx + 98f;
-			Render2D.shadow(ctx, ox, barY + 1.5f, 22f, 22f, 7f, 10f, 0x50000000);
-			Render2D.panel(ctx, ox, barY, 22f, 22f, 7f);
+			if (ps5) {
+				ConsoleUi.bar(ctx, ox, barY, 22f, 22f);
+			} else {
+				Render2D.shadow(ctx, ox, barY + 1.5f, 22f, 22f, 7f, 10f, 0x50000000);
+				Render2D.panel(ctx, ox, barY, 22f, 22f, 7f);
+			}
 			slot(ctx, ox + 2f, h - 21);
 		}
 

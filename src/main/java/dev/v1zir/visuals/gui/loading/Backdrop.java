@@ -20,10 +20,10 @@ import org.joml.Matrix3x2fStack;
  */
 public final class Backdrop {
 	/** The PS5 style theme's backdrop, light and stars. */
-	public static final int PS5_TOP = 0xFF02030A;
-	public static final int PS5_BOTTOM = 0xFF0A1036;
-	public static final int PS5_BEAM = 0xFF8C63FF;
-	public static final int PS5_BEAM_2 = 0xFF3B6BFF;
+	public static final int PS5_TOP = 0xFF01030C;
+	public static final int PS5_BOTTOM = 0xFF08163F;
+	public static final int PS5_BEAM = 0xFF6479FF;
+	public static final int PS5_BEAM_2 = 0xFF8A63FF;
 	public static final int PS5_STAR = 0xFFC9D6FF;
 	private static final int STARS = 90;
 	private static final long EPOCH = System.nanoTime();
@@ -45,7 +45,7 @@ public final class Backdrop {
 
 	/** The PS5 style backdrop over w x h pixels. */
 	public static void ps5(DrawContext ctx, int w, int h, float scale, float lightIn, float starsIn, float alpha) {
-		draw(ctx, w, h, scale, PS5_TOP, PS5_BOTTOM, PS5_BEAM, PS5_BEAM_2, 0.95f, 0.32f, PS5_STAR, lightIn, starsIn, alpha);
+		draw(ctx, w, h, scale, PS5_TOP, PS5_BOTTOM, PS5_BEAM, PS5_BEAM_2, 0.85f, 0.34f, PS5_STAR, lightIn, starsIn, alpha);
 	}
 
 	/**

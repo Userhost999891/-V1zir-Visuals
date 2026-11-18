@@ -60,6 +60,8 @@ public final class MessagesUi {
 	}
 
 	private static boolean overPauseButton(Screen screen, double mx, double my) {
+		// The PS5 style's pause menu has Messages among its cards.
+		if (Theme.ps5()) return false;
 		double dx = mx - centerX(screen);
 		double dy = my - centerY(screen);
 		float r = radius(screen);
@@ -68,7 +70,7 @@ public final class MessagesUi {
 
 	/** A round frosted button like the main menu's, with its name under it and the unread count on its corner. */
 	private static void renderPauseButton(DrawContext ctx, Screen screen, int mouseX, int mouseY) {
-		if (Messages.service() == null) return;
+		if (Messages.service() == null || Theme.ps5()) return;
 		float r0 = radius(screen);
 		float cx = centerX(screen);
 		float cy = centerY(screen);

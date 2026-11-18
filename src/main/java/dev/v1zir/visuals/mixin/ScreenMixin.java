@@ -1,6 +1,7 @@
 package dev.v1zir.visuals.mixin;
 
 import dev.v1zir.visuals.gui.loading.Backdrop;
+import dev.v1zir.visuals.gui.menu.ConsolePause;
 import dev.v1zir.visuals.gui.menu.ScreenTransition;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.client.MainMenuModule;
@@ -62,6 +63,12 @@ public abstract class ScreenMixin {
 		v1zir$entering = false;
 		context.getMatrices().popMatrix();
 		Render2D.rect(context, 0f, 0f, width, height, ColorUtil.withAlpha(0x000000, Math.round(200f * v1zir$veil)));
+	}
+
+	/** The PS5 style's pause menu draws its panel over the blurred game, under the buttons. */
+	@Inject(method = "renderBackground", at = @At("TAIL"))
+	private void v1zir$consolePanel(DrawContext context, int mouseX, int mouseY, float deltaTicks, CallbackInfo ci) {
+		ConsolePause.background(context, (Screen) (Object) this);
 	}
 
 	@Inject(method = "renderPanoramaBackground", at = @At("HEAD"), cancellable = true)

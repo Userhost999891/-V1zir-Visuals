@@ -13,7 +13,8 @@ import net.minecraft.text.Text;
 
 /**
  * Drawing of the restyled vanilla widgets (Custom UI module). Every surface follows the Theme
- * style; hover only lights the widget up, nothing moves.
+ * style; hover only lights the widget up, nothing moves. With the PS5 style theme they are all restyled, Custom UI
+ * or not, in that style's look ({@link ConsoleUi}).
  */
 public final class CustomUi {
 	private CustomUi() {
@@ -25,31 +26,43 @@ public final class CustomUi {
 	}
 
 	public static boolean buttons() {
+		// The PS5 style restyles them all, Custom UI or not.
+		if (Theme.ps5()) return true;
 		CustomUiModule m = module();
 		return m != null && m.buttons.on();
 	}
 
 	public static boolean sliders() {
+		// The PS5 style restyles them all, Custom UI or not.
+		if (Theme.ps5()) return true;
 		CustomUiModule m = module();
 		return m != null && m.sliders.on();
 	}
 
 	public static boolean textFields() {
+		// The PS5 style restyles them all, Custom UI or not.
+		if (Theme.ps5()) return true;
 		CustomUiModule m = module();
 		return m != null && m.textFields.on();
 	}
 
 	public static boolean inventory() {
+		// The PS5 style restyles them all, Custom UI or not.
+		if (Theme.ps5()) return true;
 		CustomUiModule m = module();
 		return m != null && m.inventory.on();
 	}
 
 	public static boolean hotbar() {
+		// The PS5 style restyles them all, Custom UI or not.
+		if (Theme.ps5()) return true;
 		CustomUiModule m = module();
 		return m != null && m.hotbar.on();
 	}
 
 	public static boolean tooltips() {
+		// The PS5 style restyles them all, Custom UI or not.
+		if (Theme.ps5()) return true;
 		CustomUiModule m = module();
 		return m != null && m.tooltips.on();
 	}
@@ -62,6 +75,10 @@ public final class CustomUi {
 	/** Rounded button with a centred SDF label. */
 	public static void button(DrawContext ctx, int x, int y, int w, int h, Text message, boolean hovered, boolean active) {
 		applyTheme();
+		if (Theme.ps5()) {
+			ConsoleUi.button(ctx, x, y, w, h, label(message), hovered, active);
+			return;
+		}
 		float r = Math.min(6f, h / 2f);
 		int accent = Theme.accent();
 		Render2D.shadow(ctx, x, y + 1f, w, h, r, 6f, 0x3A000000);
@@ -77,6 +94,10 @@ public final class CustomUi {
 	/** Slider: the filled part shows the value, a slim handle marks it. */
 	public static void slider(DrawContext ctx, int x, int y, int w, int h, double value, Text message, boolean hovered, boolean active) {
 		applyTheme();
+		if (Theme.ps5()) {
+			ConsoleUi.slider(ctx, x, y, w, h, value, label(message), hovered, active);
+			return;
+		}
 		float r = Math.min(6f, h / 2f);
 		int accent = Theme.accent();
 		int accent2 = Theme.accent2();
@@ -95,6 +116,10 @@ public final class CustomUi {
 	/** Background of a text field; vanilla still draws the text, selection and cursor on top. */
 	public static void textField(DrawContext ctx, int x, int y, int w, int h, boolean focused, boolean hovered, boolean active) {
 		applyTheme();
+		if (Theme.ps5()) {
+			ConsoleUi.textField(ctx, x, y, w, h, focused, hovered, active);
+			return;
+		}
 		float r = Math.min(5f, h / 2f);
 		int accent = Theme.accent();
 		if (focused) Render2D.shadow(ctx, x, y, w, h, r, 7f, ColorUtil.withAlpha(accent, 70));
@@ -109,6 +134,10 @@ public final class CustomUi {
 	/** Tooltip background (x, y, w, h are the text area, as vanilla passes them). */
 	public static void tooltip(DrawContext ctx, int x, int y, int w, int h) {
 		applyTheme();
+		if (Theme.ps5()) {
+			ConsoleUi.tooltip(ctx, x, y, w, h);
+			return;
+		}
 		float pad = 4f;
 		float bx = x - pad;
 		float by = y - pad;
@@ -124,6 +153,10 @@ public final class CustomUi {
 	/** Container panel behind an inventory screen. */
 	public static void containerPanel(DrawContext ctx, int x, int y, int w, int h) {
 		applyTheme();
+		if (Theme.ps5()) {
+			ConsoleUi.panel(ctx, x, y, w, h);
+			return;
+		}
 		Render2D.shadow(ctx, x, y + 3f, w, h, 8f, 18f, 0x70000000);
 		Render2D.panel(ctx, x, y, w, h, 8f);
 	}
@@ -138,12 +171,20 @@ public final class CustomUi {
 	 * while the bottom edge catches the light.
 	 */
 	public static void well(DrawContext ctx, float x, float y, float w, float h, float radius) {
+		if (Theme.ps5()) {
+			ConsoleUi.well(ctx, x, y, w, h, radius);
+			return;
+		}
 		Render2D.gradientV(ctx, x, y, w, h, radius, 0x7A000000, 0x4C000000);
 		Render2D.outline(ctx, x, y, w, h, radius, 1f, 0x42000000, 0x42000000, 0x1EFFFFFF, 0x1EFFFFFF);
 	}
 
 	/** Hover highlight of a slot at the given strength (0..1); it only lights up, nothing moves. */
 	public static void slotHighlight(DrawContext ctx, float x, float y, float strength) {
+		if (Theme.ps5()) {
+			ConsoleUi.slotHighlight(ctx, x, y, strength);
+			return;
+		}
 		int accent = Theme.accent();
 		int accent2 = Theme.accent2();
 		Render2D.shadow(ctx, x - 1f, y - 1f, 18f, 18f, 4f, 5f, ColorUtil.withAlpha(accent, Math.round(80 * strength)));
@@ -165,6 +206,11 @@ public final class CustomUi {
 	 */
 	private static final Text[] LABEL_KEYS = new Text[64];
 	private static final String[] LABEL_TEXTS = new String[64];
+
+	/** A widget's message as a string, kept between frames. */
+	public static String label(Text message) {
+		return message == null ? "" : string(message);
+	}
 
 	private static String string(Text message) {
 		int slot = System.identityHashCode(message) & (LABEL_KEYS.length - 1);
