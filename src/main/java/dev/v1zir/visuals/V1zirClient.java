@@ -9,7 +9,6 @@ import dev.v1zir.visuals.gui.clickgui.ClickGuiScreen;
 import dev.v1zir.visuals.chat.Messages;
 import dev.v1zir.visuals.gui.hud.HudRenderer;
 import dev.v1zir.visuals.gui.messages.MessagesUi;
-import dev.v1zir.visuals.gui.menu.ConsolePause;
 import dev.v1zir.visuals.gui.menu.MainMenus;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.pack.PackMixer;
@@ -37,7 +36,6 @@ public final class V1zirClient implements ClientModInitializer {
 		Optimizations.logCompatibility();
 		HudRenderer.register();
 		MessagesUi.register();
-		ConsolePause.register();
 		// Cosmetics ride on the player model as one more feature of the player renderers.
 		LivingEntityFeatureRendererRegistrationCallback.EVENT.register((entityType, renderer, helper, context) -> {
 			if (entityType == EntityType.PLAYER && renderer instanceof PlayerEntityRenderer<?> players) helper.register(new CosmeticsFeature(players));
@@ -54,6 +52,8 @@ public final class V1zirClient implements ClientModInitializer {
 			HudRenderer.tick(client);
 			Messages.tick(client);
 		});
+		// Once the game has started (its options are loaded): Unlock frame rate, a single time.
+		ClientLifecycleEvents.CLIENT_STARTED.register(Optimizations::unlockFrameRate);
 		ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
 			ConfigManager.save();
 			// Contacts see this account go offline now, not when the relay notices the dropped connection.

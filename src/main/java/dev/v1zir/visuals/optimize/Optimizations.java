@@ -3,9 +3,12 @@ package dev.v1zir.visuals.optimize;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import dev.v1zir.visuals.V1zir;
+import dev.v1zir.visuals.config.ConfigManager;
 import dev.v1zir.visuals.module.setting.BoolSetting;
 import dev.v1zir.visuals.module.setting.Setting;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.option.GameOptions;
 
 import java.util.List;
 
@@ -20,7 +23,13 @@ public final class Optimizations {
 	public static final BoolSetting PARTICLES = new BoolSetting("Particle limit", true);
 	public static final BoolSetting BACKGROUND = new BoolSetting("Background FPS limit", true);
 	public static final BoolSetting UPLOADS = new BoolSetting("Chunk upload pacing", true);
-	private static final List<Setting<?>> SETTINGS = List.of(OCCLUSION, DISTANCE, PARTICLES, BACKGROUND, UPLOADS);
+	/** Once: VSync off and no frame rate limit, the two settings that hold a fast computer at its screen's 60 Hz. */
+	public static final BoolSetting UNLOCK = new BoolSetting("Unlock frame rate", true);
+	private static final List<Setting<?>> SETTINGS = List.of(OCCLUSION, DISTANCE, PARTICLES, BACKGROUND, UPLOADS, UNLOCK);
+	/** The highest Max Framerate the game offers, which it shows as Unlimited. */
+	private static final int UNLIMITED = 260;
+	/** The frame rate was unlocked once already: what the player sets after that is theirs. */
+	private static boolean unlocked;
 
 	// Mods that already do a job, or patch the same code: the optimisation then stands down.
 	private static final boolean ENTITY_CULLING_MOD = loaded("entityculling");
@@ -81,9 +90,35 @@ public final class Optimizations {
 		if (SODIUM) V1zir.LOGGER.info("Chunk upload pacing stands down: Sodium renders the chunks");
 	}
 
+	/**
+	 * Unlock frame rate, once (the client has started and loaded its options): VSync off, which holds the frame rate
+	 * at the screen's refresh rate (60 on most), and Max Framerate at Unlimited. Nothing looks different. Afterwards the
+	 * player's own choice of either setting stays.
+	 */
+	public static void unlockFrameRate(MinecraftClient client) {
+		if (unlocked || !UNLOCK.on()) return;
+		unlocked = true;
+		GameOptions options = client.options;
+		boolean changed = false;
+		if (options.getEnableVsync().getValue()) {
+			options.getEnableVsync().setValue(false);
+			changed = true;
+		}
+		if (options.getMaxFps().getValue() < UNLIMITED) {
+			options.getMaxFps().setValue(UNLIMITED);
+			changed = true;
+		}
+		if (changed) {
+			options.write();
+			V1zir.LOGGER.info("Unlock frame rate: VSync off, Max Framerate Unlimited (once; change them in Video Settings)");
+		}
+		ConfigManager.save();
+	}
+
 	public static JsonObject toJson() {
 		JsonObject json = new JsonObject();
 		for (Setting<?> setting : SETTINGS) json.add(setting.name(), setting.toJson());
+		json.addProperty("frameRateUnlocked", unlocked);
 		return json;
 	}
 
@@ -92,5 +127,7 @@ public final class Optimizations {
 			JsonElement value = json.get(setting.name());
 			if (value != null) setting.fromJson(value);
 		}
+		JsonElement done = json.get("frameRateUnlocked");
+		if (done != null && done.isJsonPrimitive()) unlocked = done.getAsBoolean();
 	}
 }

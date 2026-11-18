@@ -9,8 +9,8 @@ import net.minecraft.client.gui.DrawContext;
 /**
  * The game's widgets in the PS5 style theme: dark blue translucent surfaces with a faint edge, white text, and the
  * focus of a console's menus: what the pointer is on turns white with dark text and a soft white glow around it.
- * Buttons are pills, the pause menu's buttons cards with an icon; sliders have a white knob, text fields a white
- * ring when typed into, slots light up with a white ring. CustomUi draws through these while the style is on.
+ * Buttons are pills; sliders have a white knob, text fields a white ring when typed into, slots light up with a white
+ * ring. CustomUi draws through these while the style is on.
  */
 public final class ConsoleUi {
 	/** Surfaces, their edge, text on them, and the dark text on a white focused surface. */
@@ -40,26 +40,6 @@ public final class ConsoleUi {
 			Render2D.outline(ctx, x, y, w, h, r, 1f, EDGE);
 		}
 		label(ctx, label, x + w / 2f, y + h / 2f, w - 10f, 8f, lit ? INK : active ? TEXT : TEXT_DIM);
-	}
-
-	/** A card with an icon over its name (the pause menu's buttons); focused it turns white and lifts a little. */
-	public static void card(DrawContext ctx, float x, float y, float w, float h, String label, int icon, boolean focused, boolean active) {
-		float r = Math.min(10f, h * 0.18f);
-		boolean lit = focused && active;
-		float lift = lit ? 1.5f : 0f;
-		y -= lift;
-		if (lit) {
-			Render2D.shadow(ctx, x, y, w, h, r, 11f, GLOW);
-			Render2D.round(ctx, x, y, w, h, r, FOCUS);
-		} else {
-			Render2D.shadow(ctx, x, y + 2f, w, h, r, 10f, 0x5A000000);
-			Render2D.round(ctx, x, y, w, h, r, active ? SURFACE : SURFACE_DIM);
-			Render2D.outline(ctx, x, y, w, h, r, 1f, EDGE);
-		}
-		int color = lit ? INK : active ? TEXT : TEXT_DIM;
-		float iconSize = Math.min(16f, h * 0.3f);
-		Render2D.icon(ctx, icon, x + w / 2f, y + h * 0.42f, iconSize, color);
-		label(ctx, label, x + w / 2f, y + h - Math.min(11f, h * 0.2f), w - 8f, 6.8f, color);
 	}
 
 	/** A slider: a pill whose filled part runs to a white knob. */

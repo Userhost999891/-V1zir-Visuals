@@ -1,9 +1,6 @@
 package dev.v1zir.visuals.mixin;
 
-import dev.v1zir.visuals.gui.custom.ConsoleUi;
 import dev.v1zir.visuals.gui.custom.CustomUi;
-import dev.v1zir.visuals.gui.menu.ConsolePause;
-import dev.v1zir.visuals.util.Theme;
 import net.minecraft.client.font.DrawnTextConsumer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.widget.ButtonWidget;
@@ -16,7 +13,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** Custom UI: vanilla buttons get the rounded Theme-style look with an SDF label (cards in the PS5 style's pause menu). */
+/** Custom UI: vanilla buttons get the rounded Theme-style look with an SDF label. */
 @Mixin(PressableWidget.class)
 public abstract class PressableWidgetMixin {
 	@Unique
@@ -28,15 +25,8 @@ public abstract class PressableWidgetMixin {
 		v1zir$styled = CustomUi.buttons() && (self instanceof ButtonWidget || self instanceof CyclingButtonWidget);
 		if (!v1zir$styled) return;
 		ClickableWidget widget = (ClickableWidget) self;
-		// The PS5 style's pause menu draws its buttons as cards with icons.
-		Integer icon = ConsolePause.icon(widget);
-		if (icon != null && Theme.ps5()) {
-			ConsoleUi.card(context, widget.getX(), widget.getY(), widget.getWidth(), widget.getHeight(), CustomUi.label(widget.getMessage()), icon,
-				widget.isSelected(), widget.active);
-		} else {
-			CustomUi.button(context, widget.getX(), widget.getY(), widget.getWidth(), widget.getHeight(), widget.getMessage(),
-				widget.isSelected(), widget.active);
-		}
+		CustomUi.button(context, widget.getX(), widget.getY(), widget.getWidth(), widget.getHeight(), widget.getMessage(),
+			widget.isSelected(), widget.active);
 		ci.cancel();
 	}
 
