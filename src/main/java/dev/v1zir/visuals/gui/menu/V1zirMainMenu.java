@@ -1,6 +1,9 @@
 package dev.v1zir.visuals.gui.menu;
 
 import dev.v1zir.visuals.V1zir;
+import dev.v1zir.visuals.chat.Messages;
+import dev.v1zir.visuals.gui.messages.MessagesScreen;
+import dev.v1zir.visuals.gui.messages.MessagesUi;
 import dev.v1zir.visuals.account.Accounts;
 import dev.v1zir.visuals.gui.clickgui.Ui;
 import dev.v1zir.visuals.module.ModuleManager;
@@ -83,6 +86,8 @@ public final class V1zirMainMenu extends Screen {
 	/** The button the left mouse button went down on; it fires when released over it. */
 	@Nullable
 	private RoundButton pressed;
+	/** The Messages button, which carries the unread count. */
+	private RoundButton chat;
 	/** Button selected with the keyboard (Tab or the arrow keys), or -1. */
 	private int focused = -1;
 	/** The screen the menu is leaving for (null when staying), how far it has left (0 to 1) and whether it is set. */
@@ -159,6 +164,13 @@ public final class V1zirMainMenu extends Screen {
 		language.cx = width - 12f - language.radius;
 		language.cy = height - 12f - language.radius;
 		buttons.add(language);
+
+		// Messages, in the top right corner across from the account pill, with the unread count on it.
+		chat = new RoundButton(Icons.MESSAGE_CIRCLE, () -> open(() -> new MessagesScreen(this, null, null)), false);
+		chat.radius = Math.max(10f, size * 0.3f);
+		chat.cx = width - 12f - chat.radius;
+		chat.cy = 9f + chat.radius;
+		buttons.add(chat);
 		if (focused >= buttons.size()) focused = -1;
 
 		// The world or server played last, if it is still there, one click away under the buttons.
@@ -393,6 +405,7 @@ public final class V1zirMainMenu extends Screen {
 			RoundButton button = buttons.get(i);
 			button.render(ctx, bx, by, i == focused, button == pressed);
 		}
+		if (chat != null) MessagesUi.badge(ctx, chat.cx + chat.radius * 0.72f, chat.cy - chat.radius * 0.72f, Messages.unread());
 		renderContinue(ctx, bx, by, Anim.easeOutCubic(Anim.progress(t, 0.95f, 0.55f)) * shown);
 		Render2D.setAlpha(controls);
 		renderFooter(ctx, mouseX, mouseY);

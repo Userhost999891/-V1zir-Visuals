@@ -60,6 +60,13 @@ import dev.v1zir.visuals.module.impl.visuals.ZoomModule;
 import dev.v1zir.visuals.pack.PackMixer;
 import dev.v1zir.visuals.render.knife.KnifeViewModel;
 import dev.v1zir.visuals.render.world.Effects;
+import dev.v1zir.visuals.chat.ChatService;
+import dev.v1zir.visuals.chat.Conversation;
+import dev.v1zir.visuals.chat.LoopbackTransport;
+import dev.v1zir.visuals.chat.Message;
+import dev.v1zir.visuals.chat.Messages;
+import dev.v1zir.visuals.chat.MqttTransport;
+import dev.v1zir.visuals.gui.messages.MessagesScreen;
 import dev.v1zir.visuals.render.sky.SkyPreset;
 import dev.v1zir.visuals.util.Theme;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
@@ -157,6 +164,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			farWater(context, singleplayer);
 			clickGui(context);
 			clickGuiFavourites(context);
+			messages(context);
 
 			// The test runner expects to end on the vanilla title screen.
 			context.runOnClient(client -> MainMenuModule.suspended = true);
@@ -179,11 +187,138 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.getInput().pressKey(GLFW.GLFW_KEY_SPACE);
 		context.waitTicks(40);
 		context.takeScreenshot("main-menu-continue");
+		// A message while the menu is open: its banner, and the count on the Messages button in the corner.
+		context.runOnClient(client -> {
+			if (bot != null) bot.send(bot.open(client.getSession().getUsername()), "Jestem na serwerze, wbijaj!");
+		});
+		context.waitTicks(20);
+		context.takeScreenshot("main-menu-messages");
+		context.runOnClient(client -> {
+			if (bot != null) bot.stop();
+			if (kuba != null) kuba.stop();
+			Messages.useTransport(null);
+		});
 		context.runOnClient(client -> {
 			MainMenuModule.suspended = true;
 			client.setScreen(new TitleScreen());
 		});
 		context.waitForScreen(TitleScreen.class);
+	}
+
+	/** The in-game relay of the Messages steps and the two players on it besides this one. */
+	private static final LoopbackTransport.Bus BUS = new LoopbackTransport.Bus();
+	private static ChatService bot;
+	private static ChatService kuba;
+
+	/**
+	 * Messages over an in-game relay, with two more players on it: Kuba_PL's message and V1zirBot's come as banners in
+	 * game, then over the pause menu with its Messages button; a click on V1zirBot's banner opens that conversation at the
+	 * message; a reply goes out and comes back delivered, then read; V1zirBot types; the field for a new conversation.
+	 * Then the real relay is tried once (the result is logged, it does not fail the test).
+	 */
+	private static void messages(ClientGameTestContext context) {
+		Path dir = context.computeOnClient(client -> client.runDirectory.toPath().resolve("v1zir-test-messages"));
+		context.runOnClient(client -> Messages.useTransport(() -> new LoopbackTransport(BUS)));
+		context.waitTicks(5);
+		String me = context.computeOnClient(client -> client.getSession().getUsername());
+		context.runOnClient(client -> {
+			bot = Messages.peer("V1zirBot", new LoopbackTransport(BUS), dir, (conversation, message) -> {});
+			bot.start(true);
+			kuba = Messages.peer("Kuba_PL", new LoopbackTransport(BUS), dir, (conversation, message) -> {});
+			kuba.start(true);
+		});
+		context.waitTicks(10);
+		context.runOnClient(client -> kuba.send(kuba.open(me), "gg wp, rewanż jutro o 18?"));
+		context.waitTicks(10);
+		context.runOnClient(client -> bot.send(bot.open(me), "Hej! Wbijasz dziś na serwer? Mam nowy preset nieba"));
+		context.waitTicks(20);
+		context.takeScreenshot("messages-banner");
+
+		// The pause menu: the Messages button on the left with the unread count, the banners over it.
+		context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+		context.waitTicks(12);
+		context.takeScreenshot("messages-pause");
+
+		// A click on the newest banner (top right) opens its conversation at that message.
+		context.getInput().setCursorPos(1060, 56);
+		context.getInput().holdMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+		context.waitTicks(2);
+		context.getInput().releaseMouse(GLFW.GLFW_MOUSE_BUTTON_LEFT);
+		context.waitTicks(15);
+		context.takeScreenshot("messages-from-banner");
+		String opened = context.computeOnClient(client -> client.currentScreen instanceof MessagesScreen screen && screen.selected() != null
+			? screen.selected().contact().name() : String.valueOf(client.currentScreen));
+		if (!"V1zirBot".equals(opened)) throw new AssertionError("The banner opened " + opened + " instead of V1zirBot's conversation");
+
+		context.runOnClient(client -> ((MessagesScreen) client.currentScreen).sendText("Jasne, za 5 minut jestem. Który serwer?"));
+		context.waitTicks(10);
+		context.runOnClient(client -> bot.viewing(bot.find(me)));
+		context.waitTicks(10);
+		context.runOnClient(client -> bot.typing(bot.find(me)));
+		context.waitTicks(6);
+		context.takeScreenshot("messages-conversation");
+		int state = context.computeOnClient(client -> {
+			Conversation conversation = Messages.service().find("V1zirBot");
+			Message last = conversation == null ? null : conversation.last();
+			return last == null ? -1 : last.state();
+		});
+		if (state != Message.READ) throw new AssertionError("The reply should show as read, its state is " + state);
+
+		context.runOnClient(client -> bot.send(bot.find(me), "Play.v1zir.pl, czekam przy spawnie"));
+		context.waitTicks(10);
+		context.runOnClient(client -> ((MessagesScreen) client.currentScreen).newConversation());
+		context.getInput().typeChars("Steve_");
+		context.waitTicks(6);
+		context.takeScreenshot("messages-new");
+		context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+		context.waitTicks(3);
+		context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+		context.waitTicks(5);
+		context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+		context.waitTicks(10);
+		relayCheck(context);
+	}
+
+	/**
+	 * Two throwaway players on the real relay (EMQX, over TLS): one writes, the other must get it. Logged as
+	 * V1ZIR-RELAY-CHECK; the network of a CI runner is not the mod's to fail the test over.
+	 */
+	private static void relayCheck(ClientGameTestContext context) {
+		Path dir = context.computeOnClient(client -> client.runDirectory.toPath().resolve("v1zir-relay-check"));
+		String tag = Long.toHexString(System.nanoTime() & 0xFFFFFFFL);
+		List<Message> received = new java.util.concurrent.CopyOnWriteArrayList<>();
+		ChatService[] pair = context.computeOnClient(client -> new ChatService[]{
+			Messages.peer("cia" + tag, new MqttTransport("broker.emqx.io", 8883, true), dir, (conversation, message) -> {}),
+			Messages.peer("cib" + tag, new MqttTransport("broker.emqx.io", 8883, true), dir, (conversation, message) -> received.add(message))});
+		context.runOnClient(client -> {
+			pair[0].start(false);
+			pair[1].start(false);
+		});
+		long started = System.currentTimeMillis();
+		int ticks = 0;
+		while (ticks < 400 && !context.computeOnClient(client -> pair[0].status() == ChatService.Status.ONLINE && pair[1].status() == ChatService.Status.ONLINE)) {
+			context.waitTick();
+			ticks++;
+		}
+		String result;
+		if (ticks >= 400) {
+			result = "failed: no connection (" + context.computeOnClient(client -> pair[0].status() + " " + pair[0].error()) + ")";
+		} else {
+			long connected = System.currentTimeMillis() - started;
+			context.waitTicks(10);
+			context.runOnClient(client -> pair[0].send(pair[0].open("cib" + tag), "relay check " + tag));
+			ticks = 0;
+			while (ticks < 400 && received.isEmpty()) {
+				context.waitTick();
+				ticks++;
+			}
+			result = received.isEmpty() ? "failed: nothing arrived" : "ok, connected in " + connected + " ms, message in " + ticks * 50 + " ms";
+		}
+		System.out.println("V1ZIR-RELAY-CHECK " + result);
+		context.runOnClient(client -> {
+			pair[0].stop();
+			pair[1].stop();
+		});
 	}
 
 	private static void resize(ClientGameTestContext context, int width, int height) {

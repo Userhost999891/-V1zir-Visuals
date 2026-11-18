@@ -146,6 +146,15 @@ public final class Icons {
 	public static final int SKIP_BACK = 0xe15f;
 	public static final int MIC_VOCAL = 0xe349;
 	public static final int DISC_3 = 0xe494;
+	public static final int MESSAGE_CIRCLE = 0xe116;
+	public static final int MESSAGE_CIRCLE_PLUS = 0xe567;
+	public static final int SEND_HORIZONTAL = 0xe4f2;
+	public static final int CHECK_CHECK = 0xe38e;
+	public static final int USER_PLUS = 0xe1a2;
+	public static final int WIFI_OFF = 0xe1af;
+	public static final int SMILE = 0xe164;
+	public static final int ARROW_LEFT = 0xe048;
+	public static final int CIRCLE_USER = 0xe461;
 
 	private static final Int2ObjectOpenHashMap<String> STRINGS = new Int2ObjectOpenHashMap<>();
 

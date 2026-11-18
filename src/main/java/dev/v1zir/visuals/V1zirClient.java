@@ -6,7 +6,9 @@ import net.minecraft.client.render.entity.PlayerEntityRenderer;
 import net.minecraft.entity.EntityType;
 import dev.v1zir.visuals.config.ConfigManager;
 import dev.v1zir.visuals.gui.clickgui.ClickGuiScreen;
+import dev.v1zir.visuals.chat.Messages;
 import dev.v1zir.visuals.gui.hud.HudRenderer;
+import dev.v1zir.visuals.gui.messages.MessagesUi;
 import dev.v1zir.visuals.gui.menu.V1zirMainMenu;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.pack.PackMixer;
@@ -33,6 +35,7 @@ public final class V1zirClient implements ClientModInitializer {
 		PackMixer.load();
 		Optimizations.logCompatibility();
 		HudRenderer.register();
+		MessagesUi.register();
 		// Cosmetics ride on the player model as one more feature of the player renderers.
 		LivingEntityFeatureRendererRegistrationCallback.EVENT.register((entityType, renderer, helper, context) -> {
 			if (entityType == EntityType.PLAYER && renderer instanceof PlayerEntityRenderer<?> players) helper.register(new CosmeticsFeature(players));
@@ -47,8 +50,13 @@ public final class V1zirClient implements ClientModInitializer {
 			Reflections.tick(client);
 			Effects.tick(client);
 			HudRenderer.tick(client);
+			Messages.tick(client);
 		});
-		ClientLifecycleEvents.CLIENT_STOPPING.register(client -> ConfigManager.save());
+		ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
+			ConfigManager.save();
+			// Contacts see this account go offline now, not when the relay notices the dropped connection.
+			Messages.stop();
+		});
 		V1zir.LOGGER.info("{} {} loaded", V1zir.NAME, V1zir.version());
 	}
 

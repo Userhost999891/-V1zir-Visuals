@@ -2,6 +2,7 @@ package dev.v1zir.visuals.gui.hud;
 
 import dev.v1zir.visuals.V1zir;
 import dev.v1zir.visuals.gui.clickgui.ClickGuiScreen;
+import dev.v1zir.visuals.gui.messages.MessageBanners;
 import dev.v1zir.visuals.gui.custom.CustomHotbar;
 import dev.v1zir.visuals.gui.custom.CustomUi;
 import dev.v1zir.visuals.module.ModuleManager;
@@ -123,6 +124,8 @@ public final class HudRenderer {
 		}
 		CameraIndicator.render(ctx, w, h);
 		Notifications.render(ctx, w, h);
+		// With a screen open they are drawn over it instead (MessagesUi), where they can be clicked.
+		if (mc.currentScreen == null) MessageBanners.render(ctx, w, -1, -1, false);
 		Render2D.setAlpha(1f);
 	}
 }

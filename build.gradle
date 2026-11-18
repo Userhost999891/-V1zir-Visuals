@@ -38,6 +38,8 @@ loom {
 		clientGameTest {
 			// As in Fabric API's own CI; with the packet synchronizer on, world loading stalls at "Preparing spawn area".
 			vmArg '-Dfabric.client.gametest.disableNetworkSynchronizer=true'
+			// Messages stays off the network: the test gives it an in-game relay (and tries the real one on its own).
+			vmArg '-Dv1zir.messages.relay=loopback'
 		}
 	}
 }

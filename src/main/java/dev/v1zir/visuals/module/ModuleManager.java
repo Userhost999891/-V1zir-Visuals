@@ -4,6 +4,7 @@ import dev.v1zir.visuals.V1zir;
 import dev.v1zir.visuals.module.impl.client.ClickGuiModule;
 import dev.v1zir.visuals.module.impl.client.CustomUiModule;
 import dev.v1zir.visuals.module.impl.client.MainMenuModule;
+import dev.v1zir.visuals.module.impl.client.MessagesModule;
 import dev.v1zir.visuals.module.impl.client.ThemeModule;
 import dev.v1zir.visuals.module.impl.effects.BloodModule;
 import dev.v1zir.visuals.module.impl.effects.ChamsModule;
@@ -181,6 +182,7 @@ public final class ModuleManager {
 		register(new ClickGuiModule());
 		register(new ThemeModule());
 		register(new MainMenuModule());
+		register(new MessagesModule());
 		register(new CustomUiModule());
 		List<HudModule> hudModules = new ArrayList<>();
 		List<Module> effects = new ArrayList<>();
