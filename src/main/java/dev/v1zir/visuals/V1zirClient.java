@@ -9,7 +9,7 @@ import dev.v1zir.visuals.gui.clickgui.ClickGuiScreen;
 import dev.v1zir.visuals.chat.Messages;
 import dev.v1zir.visuals.gui.hud.HudRenderer;
 import dev.v1zir.visuals.gui.messages.MessagesUi;
-import dev.v1zir.visuals.gui.menu.V1zirMainMenu;
+import dev.v1zir.visuals.gui.menu.MainMenus;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.pack.PackMixer;
 import dev.v1zir.visuals.module.impl.client.ClickGuiModule;
@@ -44,7 +44,7 @@ public final class V1zirClient implements ClientModInitializer {
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			// Safety net for any code path that shows the vanilla title screen without setScreen.
 			if (client.currentScreen instanceof TitleScreen && MainMenuModule.active()) {
-				client.setScreen(new V1zirMainMenu());
+				client.setScreen(MainMenus.create());
 			}
 			ModuleManager.tick();
 			Reflections.tick(client);

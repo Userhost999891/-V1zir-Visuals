@@ -11,6 +11,8 @@ import dev.v1zir.visuals.util.Theme;
 
 /** Colours, glass and font of the whole UI. Always enabled. */
 public final class ThemeModule extends Module {
+	/** The look of the menus and screens: the client's own, or that of a console's home screen (PS5). The game itself stays as it is. */
+	public final ModeSetting styleTheme = add(new ModeSetting("Style theme", "Normal", "Normal", "PS5"));
 	public final ModeSetting preset = add(new ModeSetting("Preset", Theme.Preset.V1ZIR.title(), Theme.Preset.titles()));
 	public final ColorSetting accent = add(new ColorSetting("Accent", 0xFFF6A64B, false).visibleIf(this::custom));
 	public final ColorSetting accent2 = add(new ColorSetting("Accent 2", 0xFFE8693F, false).visibleIf(this::custom));
@@ -20,6 +22,8 @@ public final class ThemeModule extends Module {
 	public final NumberSetting blurStrength = add(new NumberSetting("Blur strength", 0.75, 0.0, 1.0, 0.05).visibleIf(() -> !style.is(Theme.Style.NORMAL.title())));
 	public final ModeSetting font = add(new ModeSetting("Font", "Inter", "Inter", "Montserrat", "Rubik", "Nunito", "Comfortaa"));
 	public final BoolSetting textShadow = add(new BoolSetting("Text shadow", true));
+	/** The game's loading screen (at start and when the resource packs reload) in the client's style instead of Mojang's. */
+	public final BoolSetting loadingScreen = add(new BoolSetting("Loading screen", true));
 	private String appliedFont;
 
 	public ThemeModule() {

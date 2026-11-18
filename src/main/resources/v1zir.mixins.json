@@ -45,6 +45,8 @@
     "ScreenMixin",
     "SkyRenderingMixin",
     "SliderWidgetMixin",
+    "SplashOverlayAccessor",
+    "SplashOverlayMixin",
     "TextFieldWidgetMixin",
     "TextureTransformMixin",
     "TooltipBackgroundRendererMixin",

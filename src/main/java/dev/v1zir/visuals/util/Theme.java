@@ -113,6 +113,31 @@ public final class Theme {
 		return module;
 	}
 
+	/** The accents of the PS5 style theme, which the menus and screens take while it is on. */
+	private static final int PS5_ACCENT = 0xFF7B8CFF;
+	private static final int PS5_ACCENT_2 = 0xFF9A6BFF;
+	/** Set while a screen draws (ScreenMixin): the PS5 style colours the menus and screens, not the HUD or the world. */
+	private static boolean inScreen;
+	private static String styleThemeTitle;
+	private static boolean ps5;
+
+	/** Whether the PS5 style theme is on: the menus and screens take the look of a console's home screen. */
+	public static boolean ps5() {
+		ThemeModule m = module();
+		if (m == null) return false;
+		String title = m.styleTheme.get();
+		if (title != styleThemeTitle) {
+			styleThemeTitle = title;
+			ps5 = "PS5".equals(title);
+		}
+		return ps5;
+	}
+
+	/** A screen begins (true) or ends (false) drawing (ScreenMixin). */
+	public static void screen(boolean drawing) {
+		inScreen = drawing;
+	}
+
 	public static Preset preset() {
 		ThemeModule m = module();
 		if (m == null) return Preset.V1ZIR;
@@ -125,12 +150,14 @@ public final class Theme {
 	}
 
 	public static int accent() {
+		if (inScreen && ps5()) return PS5_ACCENT;
 		Preset p = preset();
 		ThemeModule m = module();
 		return p == Preset.CUSTOM && m != null ? m.accent.argb() : p.accent();
 	}
 
 	public static int accent2() {
+		if (inScreen && ps5()) return PS5_ACCENT_2;
 		Preset p = preset();
 		ThemeModule m = module();
 		return p == Preset.CUSTOM && m != null ? m.accent2.argb() : p.accent2();

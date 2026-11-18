@@ -122,6 +122,11 @@ public final class V1zirMainMenu extends Screen {
 
 	@Override
 	protected void init() {
+		if (Theme.ps5()) {
+			// The PS5 style theme was picked: its own menu.
+			client.setScreen(MainMenus.create());
+			return;
+		}
 		buttons.clear();
 		pressed = null;
 		if (left) {

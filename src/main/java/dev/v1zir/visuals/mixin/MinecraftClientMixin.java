@@ -2,7 +2,7 @@ package dev.v1zir.visuals.mixin;
 
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import com.llamalad7.mixinextras.sugar.Local;
-import dev.v1zir.visuals.gui.menu.V1zirMainMenu;
+import dev.v1zir.visuals.gui.menu.MainMenus;
 import dev.v1zir.visuals.module.impl.client.MainMenuModule;
 import dev.v1zir.visuals.module.impl.visuals.EntityGlowModule;
 import net.minecraft.client.MinecraftClient;
@@ -34,11 +34,11 @@ public abstract class MinecraftClientMixin {
 		// vanilla buttons) before the title screen; mark it as seen and go straight to ours.
 		if (screen instanceof AccessibilityOnboardingScreen) {
 			options.setAccessibilityOnboarded();
-			return new V1zirMainMenu();
+			return MainMenus.create();
 		}
 		// setScreen(null) outside a world makes vanilla build a new TitleScreen further down in
 		// this method, after this hook, so that case is replaced here as well.
-		if (screen instanceof TitleScreen || screen == null && world == null) return new V1zirMainMenu();
+		if (screen instanceof TitleScreen || screen == null && world == null) return MainMenus.create();
 		return screen;
 	}
 

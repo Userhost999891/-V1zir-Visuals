@@ -2,7 +2,9 @@ package dev.v1zir.visuals.test;
 
 import dev.v1zir.visuals.account.Accounts;
 import dev.v1zir.visuals.gui.clickgui.ClickGuiScreen;
+import dev.v1zir.visuals.gui.menu.ConsoleMenu;
 import dev.v1zir.visuals.gui.menu.LockScreen;
+import dev.v1zir.visuals.gui.menu.MainMenus;
 import dev.v1zir.visuals.gui.menu.V1zirMainMenu;
 import dev.v1zir.visuals.media.Media;
 import dev.v1zir.visuals.media.NowPlaying;
@@ -79,9 +81,11 @@ import net.minecraft.client.gui.screen.TitleScreen;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.client.gui.screen.multiplayer.MultiplayerScreen;
 import net.minecraft.client.gui.screen.option.OptionsScreen;
+import net.minecraft.client.network.ServerInfo;
 import net.minecraft.client.option.GameOptions;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.option.Perspective;
+import net.minecraft.client.option.ServerList;
 import net.minecraft.client.session.ProfileKeys;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
@@ -126,6 +130,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		resize(context, 1280, 720);
 		mainMenu(context);
 		vanillaMenuNeverShows(context);
+		loadingAndPs5(context);
 
 		// Software rendering in CI is slow: load the world in a small window so the integrated
 		// server gets enough CPU, then go back to a large window for the screenshots.
@@ -193,6 +198,17 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		});
 		context.waitTicks(20);
 		context.takeScreenshot("main-menu-messages");
+		// The PS5 style menu now that a world was played: its tile comes after home, and home offers to continue it.
+		context.runOnClient(client -> {
+			ModuleManager.get(ThemeModule.class).styleTheme.set("PS5");
+			client.setScreen(MainMenus.create());
+		});
+		context.waitTicks(40);
+		context.takeScreenshot("main-menu-ps5-worlds");
+		context.getInput().pressKey(GLFW.GLFW_KEY_RIGHT);
+		context.waitTicks(15);
+		context.takeScreenshot("main-menu-ps5-world");
+		context.runOnClient(client -> ModuleManager.get(ThemeModule.class).styleTheme.reset());
 		context.runOnClient(client -> {
 			if (bot != null) bot.stop();
 			if (kuba != null) kuba.stop();
@@ -533,6 +549,58 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.setScreen(() -> new AccessibilityOnboardingScreen(MinecraftClient.getInstance().options, () -> {}));
 		context.waitTicks(2);
 		assertMainMenu(context, "the first-launch accessibility onboarding screen");
+	}
+
+	/**
+	 * The loading screen while the resource packs reload, in the client's style and then in the PS5 style, and the PS5
+	 * style menu: home picked, then the next tile, then the Multiplayer tab with two servers in the list.
+	 */
+	private static void loadingAndPs5(ClientGameTestContext context) {
+		reloadShot(context, "loading-screen");
+		context.runOnClient(client -> {
+			ServerList list = new ServerList(client);
+			list.loadFile();
+			list.add(new ServerInfo("V1zir Test", "play.example.net", ServerInfo.ServerType.OTHER), false);
+			list.add(new ServerInfo("Lobby", "lobby.example.net:25566", ServerInfo.ServerType.OTHER), false);
+			list.saveFile();
+			ModuleManager.get(ThemeModule.class).styleTheme.set("PS5");
+		});
+		context.setScreen(MainMenus::create);
+		context.waitTicks(40);
+		String screen = context.computeOnClient(client -> client.currentScreen == null ? "null" : client.currentScreen.getClass().getName());
+		if (!screen.equals(ConsoleMenu.class.getName())) throw new AssertionError("With the PS5 style theme the menu is " + screen);
+		context.takeScreenshot("main-menu-ps5");
+		context.getInput().pressKey(GLFW.GLFW_KEY_RIGHT);
+		context.waitTicks(15);
+		context.takeScreenshot("main-menu-ps5-next");
+		context.getInput().pressKey(GLFW.GLFW_KEY_TAB);
+		context.waitTicks(10);
+		context.getInput().pressKey(GLFW.GLFW_KEY_RIGHT);
+		context.waitTicks(15);
+		context.takeScreenshot("main-menu-ps5-multiplayer");
+		reloadShot(context, "loading-screen-ps5");
+		context.runOnClient(client -> {
+			ServerList list = new ServerList(client);
+			list.loadFile();
+			while (list.size() > 0) list.remove(list.get(0));
+			list.saveFile();
+			ModuleManager.get(ThemeModule.class).styleTheme.reset();
+		});
+		context.setScreen(MainMenus::create);
+		context.waitTicks(10);
+		assertMainMenu(context, "going back to the Normal style theme");
+	}
+
+	/** Reloads the resource packs, shoots the loading screen once it has come in, then waits for the load to end. */
+	private static void reloadShot(ClientGameTestContext context, String name) {
+		context.runOnClient(client -> client.reloadResources());
+		for (int i = 0; i < 200 && context.computeOnClient(client -> client.getOverlay() == null); i++) context.waitTick();
+		context.waitTicks(14);
+		boolean loading = context.computeOnClient(client -> client.getOverlay() != null);
+		context.takeScreenshot(name);
+		System.out.println("V1ZIR-LOADING " + name + " overlay shown: " + loading);
+		for (int i = 0; i < 3000 && context.computeOnClient(client -> client.getOverlay() != null); i++) context.waitTick();
+		context.waitTicks(5);
 	}
 
 	private static void assertMainMenu(ClientGameTestContext context, String action) {
