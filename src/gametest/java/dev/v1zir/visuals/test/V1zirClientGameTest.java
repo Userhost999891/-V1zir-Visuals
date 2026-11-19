@@ -214,7 +214,12 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			ModuleManager.get(ThemeModule.class).styleTheme.set("PS5");
 			client.setScreen(MainMenus.create());
 		});
-		context.waitTicks(40);
+		context.waitTicks(20);
+		// The menu remembers the tab shown last (Multiplayer, from the start of the test): back to the worlds.
+		if (context.computeOnClient(client -> client.currentScreen instanceof ConsoleMenu menu && menu.tab() == 1)) {
+			context.getInput().pressKey(GLFW.GLFW_KEY_TAB);
+		}
+		context.waitTicks(20);
 		context.takeScreenshot("main-menu-ps5-worlds");
 		context.getInput().pressKey(GLFW.GLFW_KEY_RIGHT);
 		// Its picture, taken in the world, read and faded in behind it.

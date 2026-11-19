@@ -190,6 +190,11 @@ public final class ConsoleMenu extends Screen {
 		showArt();
 	}
 
+	/** The tab shown: 0 Singleplayer, 1 Multiplayer. */
+	public int tab() {
+		return tab;
+	}
+
 	private void openModMenu() {
 		try {
 			Class<?> screen = Class.forName("com.terraformersmc.modmenu.gui.ModsScreen");

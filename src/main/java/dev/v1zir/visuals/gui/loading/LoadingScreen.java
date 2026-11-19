@@ -358,7 +358,7 @@ public final class LoadingScreen {
 	private static void versionLine(DrawContext ctx, float cx, float baseline, float t, boolean ps5, float cover) {
 		Glyphs glyphs = small;
 		if (glyphs == null) return;
-		float e = in(t, 1.05f, 0.6f) * cover;
+		float e = in(t, 0.8f, 0.5f) * cover;
 		if (e <= 0.01f) return;
 		String text = versionLine();
 		float spacing = glyphs.size * 0.36f;
