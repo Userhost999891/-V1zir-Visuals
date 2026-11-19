@@ -35,6 +35,7 @@ import net.minecraft.client.gui.screen.option.OptionsScreen;
 import net.minecraft.client.gui.screen.world.SelectWorldScreen;
 import net.minecraft.client.input.CharInput;
 import net.minecraft.client.input.KeyInput;
+import net.minecraft.client.network.MultiplayerServerListPinger;
 import net.minecraft.client.network.ServerAddress;
 import net.minecraft.client.network.ServerInfo;
 import net.minecraft.client.option.ServerList;
@@ -42,12 +43,17 @@ import net.minecraft.client.texture.NativeImage;
 import net.minecraft.client.texture.NativeImageBackedTexture;
 import net.minecraft.client.texture.TextureSetup;
 import net.minecraft.entity.player.SkinTextures;
+import net.minecraft.network.NetworkingBackend;
+import net.minecraft.server.ServerMetadata;
 import net.minecraft.text.Text;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix3x2fStack;
 import org.lwjgl.glfw.GLFW;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.net.UnknownHostException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalTime;
@@ -55,6 +61,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Stream;
 
 /**
@@ -98,6 +106,14 @@ public final class ConsoleMenu extends Screen {
 	private static final int MESSAGE_DOT = 0xFF4C8DFF;
 	/** The tab shown last, kept for when the menu comes back. */
 	private static int lastTab;
+	/** Finding a server's address can take a while: the pings start off the render thread, as the server list's do. */
+	private static final ExecutorService PINGS = Executors.newFixedThreadPool(2, task -> {
+		Thread thread = new Thread(task, "V1zir menu pings");
+		thread.setDaemon(true);
+		return thread;
+	});
+	/** How long a ping may take before its server shows as offline. */
+	private static final long PING_TIMEOUT = 8_000_000_000L;
 
 	private final List<List<Item>> tabs = new ArrayList<>();
 	private final int[] selected = new int[2];
@@ -113,6 +129,9 @@ public final class ConsoleMenu extends Screen {
 	private final Anim[] iconHover = {new Anim(0f, 20f), new Anim(0f, 20f), new Anim(0f, 20f), new Anim(0f, 20f), new Anim(0f, 20f)};
 	private final AccountsPanel accounts = new AccountsPanel();
 	private final ConsolePopup popup = new ConsolePopup();
+	/** Asks the servers of the list how many are on them, as the server list does. */
+	private final MultiplayerServerListPinger pinger = new MultiplayerServerListPinger();
+	private boolean pinged;
 	/** Pictures shown, the one picked last at the end (on top); those under it go once it covers them. */
 	private final List<Item> art = new ArrayList<>();
 	private int swapDirection = 1;
@@ -153,6 +172,8 @@ public final class ConsoleMenu extends Screen {
 		}
 		Accounts.init(client);
 		release();
+		pinger.cancel();
+		pinged = false;
 		tabs.clear();
 		tabs.add(load(false));
 		tabs.add(load(true));
@@ -314,6 +335,54 @@ public final class ConsoleMenu extends Screen {
 		item.shownAt = System.nanoTime();
 	}
 
+	/** Pings the servers of the list once the Multiplayer tab shows (once for each time the menu is laid out). */
+	private void ping() {
+		if (pinged || tabs.size() < 2) return;
+		pinged = true;
+		NetworkingBackend backend = backend();
+		if (backend == null) return;
+		for (Item item : tabs.get(1)) {
+			ServerInfo info = item.server;
+			if (info == null) continue;
+			info.setStatus(ServerInfo.Status.PINGING);
+			item.pingAt = System.nanoTime();
+			PINGS.execute(() -> {
+				try {
+					pinger.add(info, () -> {
+					}, () -> info.setStatus(ServerInfo.Status.SUCCESSFUL), backend);
+				} catch (UnknownHostException e) {
+					info.setStatus(ServerInfo.Status.UNREACHABLE);
+				} catch (Exception e) {
+					V1zir.LOGGER.debug("Could not ping {}", info.address, e);
+					info.setStatus(ServerInfo.Status.UNREACHABLE);
+				}
+			});
+		}
+	}
+
+	/** How the game reaches servers from here: found by its shape, a factory taking whether to use native transport. */
+	@Nullable
+	private NetworkingBackend backend() {
+		try {
+			for (Method method : NetworkingBackend.class.getMethods()) {
+				if (Modifier.isStatic(method.getModifiers()) && NetworkingBackend.class.isAssignableFrom(method.getReturnType())
+					&& method.getParameterCount() == 1 && method.getParameterTypes()[0] == boolean.class) {
+					return (NetworkingBackend) method.invoke(null, client.options.shouldUseNativeTransport());
+				}
+			}
+			Object[] values = NetworkingBackend.class.getEnumConstants();
+			if (values != null && values.length > 0) return (NetworkingBackend) values[0];
+		} catch (ReflectiveOperationException | RuntimeException e) {
+			V1zir.LOGGER.debug("No networking backend for the menu's pings", e);
+		}
+		return null;
+	}
+
+	@Override
+	public void tick() {
+		pinger.tick();
+	}
+
 	/** Plays the picked tile: its world, its server, the last one played (home) or the whole list. */
 	private void play() {
 		Item item = picked();
@@ -396,6 +465,7 @@ public final class ConsoleMenu extends Screen {
 		m.popMatrix();
 		Item item = picked();
 		if (item == null) return;
+		if (tab == 1) ping();
 		float t = openedAt < 0L ? 1f : (System.nanoTime() - openedAt) / 1.0e9f;
 		boolean blocked = popup.shown() || accounts.shown();
 		int mx = blocked ? -1000 : mouseX, my = blocked ? -1000 : mouseY;
@@ -668,7 +738,9 @@ public final class ConsoleMenu extends Screen {
 			float cw = font.width(chip, chipSize) + chipH * 1.35f;
 			float cy = height * 0.68f + (1f - e) * 8f;
 			Render2D.round(ctx, x, cy, cw, chipH, chipH * 0.3f, ColorUtil.fade(CHIP, e));
-			Render2D.circle(ctx, x + chipH * 0.45f, cy + chipH / 2f, chipH * 0.12f, ColorUtil.fade(item.kind == SERVER ? ONLINE : RING, e));
+			int dot = chipDot(item);
+			if (dot == 0) dot = ColorUtil.withAlpha(0xFFFFFF, Math.round(90 + 80 * (0.5f + 0.5f * (float) Math.sin(t * 6f))));
+			Render2D.circle(ctx, x + chipH * 0.45f, cy + chipH / 2f, chipH * 0.12f, ColorUtil.fade(dot, e));
 			Render2D.textMiddle(ctx, font, chip, x + chipH * 0.75f, cy + chipH / 2f, chipSize, ColorUtil.fade(0xE6FFFFFF, e));
 		}
 		// The buttons.
@@ -732,19 +804,32 @@ public final class ConsoleMenu extends Screen {
 		return Anim.easeOutCubic(Anim.clamp01((base - delay) / (1f - delay)));
 	}
 
-	/** The chip under the name: a server's last visit (when its picture was taken), or what a world is. */
+	/**
+	 * The chip under the name: for a server how many are on it of how many it takes (pinged as the menu opens), or
+	 * that it is being asked or cannot be reached; for a world what it is.
+	 */
 	private String chip(Item item) {
 		if (item.kind == WORLD) return "Singleplayer";
-		if (item.kind != SERVER) return "";
-		if (item.pictureKey != null) {
-			try {
-				Path file = MenuShots.file(item.pictureKey);
-				if (Files.isRegularFile(file)) return "Played " + ago(Files.getLastModifiedTime(file).toMillis());
-			} catch (IOException ignored) {
-				// No time to show.
-			}
+		if (item.kind != SERVER || item.server == null) return "";
+		ServerInfo info = item.server;
+		ServerMetadata.Players players = info.players;
+		ServerInfo.Status status = info.getStatus();
+		if ((status == ServerInfo.Status.SUCCESSFUL || status == ServerInfo.Status.INCOMPATIBLE) && players != null) {
+			return players.online() + " / " + players.max();
 		}
-		return "Multiplayer";
+		if (status == ServerInfo.Status.PINGING && System.nanoTime() - item.pingAt < PING_TIMEOUT) return "Pinging…";
+		if (status == ServerInfo.Status.INITIAL) return "Multiplayer";
+		return "Offline";
+	}
+
+	/** The dot of the chip: green for a server that answered, red-grey for one that did not, 0 (pulsing) while asked. */
+	private int chipDot(Item item) {
+		if (item.kind != SERVER || item.server == null) return RING;
+		ServerInfo.Status status = item.server.getStatus();
+		if (status == ServerInfo.Status.SUCCESSFUL && item.server.players != null) return ONLINE;
+		if (status == ServerInfo.Status.INCOMPATIBLE) return 0xFFF2B84B;
+		if (status == ServerInfo.Status.PINGING && System.nanoTime() - item.pingAt < PING_TIMEOUT) return 0;
+		return status == ServerInfo.Status.INITIAL ? RING : 0xFFB0566A;
 	}
 
 	/**
@@ -973,6 +1058,8 @@ public final class ConsoleMenu extends Screen {
 	@Override
 	public void removed() {
 		release();
+		pinger.cancel();
+		pinged = false;
 		// Coming back to the menu plays its short intro again.
 		openedAt = -1L;
 	}
@@ -1026,6 +1113,7 @@ public final class ConsoleMenu extends Screen {
 		boolean pictureChecked;
 		final Anim artAlpha = new Anim(0f, 6f);
 		long shownAt;
+		long pingAt;
 		@Nullable
 		private NativeImageBackedTexture backing;
 		@Nullable

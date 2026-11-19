@@ -42,10 +42,12 @@ jobs:
                    net.minecraft.client.render.entity.feature.CapeFeatureRenderer net.minecraft.client.render.entity.feature.FeatureRenderer \
                    net.minecraft.client.gui.screen.ingame.InventoryScreen net.minecraft.client.util.ScreenshotRecorder \
                    net.minecraft.client.texture.NativeImage net.minecraft.client.network.MultiplayerServerListPinger \
-                   net.minecraft.client.network.ServerInfo; do
+                   net.minecraft.client.network.ServerInfo net.minecraft.network.NetworkingBackend 'net.minecraft.client.network.ServerInfo$Status'; do
             echo "=== SIG $c"; sig "$c"
           done
           echo "=== CODE HeldItemFeatureRenderer.renderItem"; code net.minecraft.client.render.entity.feature.HeldItemFeatureRenderer renderItem
+          echo "=== CODE where the server list pings"
+          javap -c -p -cp "$jar" 'net.minecraft.client.gui.screen.multiplayer.MultiplayerServerListWidget$ServerEntry' 2>&1 | grep -n -B4 -A2 "NetworkingBackend" | head -40 || true
 
   client:
     name: Dev client
