@@ -133,6 +133,10 @@ public final class ConsoleMenu extends Screen {
 	private boolean pinged;
 	/** Whether there is something to continue, read from the disk once per layout (not every frame). */
 	private boolean canContinue;
+	/** What was picked before the pick moved: its words fade out before those of the new one fade in. */
+	@Nullable
+	private Item leaving;
+	private final Anim leave = new Anim(0f, 18f);
 	/** Pictures shown, the one picked last at the end (on top); those under it go once it covers them. */
 	private final List<Item> art = new ArrayList<>();
 	private int swapDirection = 1;
@@ -303,6 +307,8 @@ public final class ConsoleMenu extends Screen {
 		if (items.isEmpty()) return;
 		int next = Math.max(0, Math.min(items.size() - 1, index));
 		if (next != selected[tab]) {
+			leaving = picked();
+			leave.snap(1f);
 			selected[tab] = next;
 			hero.snap(0f);
 			focus = ROW;
@@ -314,6 +320,8 @@ public final class ConsoleMenu extends Screen {
 	private void switchTab(int next) {
 		if (next == tab || next < 0 || next > 1) return;
 		UiSounds.play(UiSounds.TAB);
+		leaving = picked();
+		leave.snap(1f);
 		swapDirection = next > tab ? 1 : -1;
 		tab = next;
 		lastTab = next;
@@ -487,12 +495,20 @@ public final class ConsoleMenu extends Screen {
 		renderTop(ctx, mx, my, t, pad);
 		float rowTop = tabY + tabH + Math.max(8f, height * 0.075f);
 		renderRow(ctx, mx, my, t, pad, rowTop, pictured);
+		// What was picked fades out first (it takes no clicks), then the new pick's words come in.
+		float out = leaving != null ? leave.target(0f).get() : 0f;
+		if (out <= 0.01f) leaving = null;
+		if (leaving != null) {
+			if (leaving.kind == HOME) renderCards(ctx, -1000, -1000, t, out, false);
+			else renderHero(ctx, leaving, -1000, -1000, t, pad, pictured, out, false);
+		}
+		float fadeIn = 1f - out;
 		if (item.kind == HOME) {
 			cardsShown = true;
-			renderCards(ctx, mx, my, t);
+			renderCards(ctx, mx, my, t, fadeIn, true);
 		} else {
 			cardsShown = false;
-			renderHero(ctx, item, mx, my, t, pad, pictured);
+			renderHero(ctx, item, mx, my, t, pad, pictured, fadeIn, true);
 		}
 		popup.render(ctx, width, height, mouseX, mouseY);
 		accounts.render(ctx, client, Math.min(width - pad - AccountsPanel.WIDTH, avatarX), avatarY + avatarS + 6f, height, mouseX, mouseY);
@@ -648,7 +664,8 @@ public final class ConsoleMenu extends Screen {
 				tile(ctx, items.get(i), x + dx, ty, size, focus, e, hovered, pictured);
 			}
 			tileBounds.add(new float[]{x, ty, size, size});
-			if (i == Math.round(at)) labelX = x + size + gap;
+			// The name follows the picked tile as it grows into place.
+			if (i == selected[tab]) labelX = x + size + gap;
 			x += size + gap;
 		}
 		Item picked = items.get(selected[tab]);
@@ -724,8 +741,25 @@ public final class ConsoleMenu extends Screen {
 	 * What the picked tile is, large: its name, what it is and a chip, and its Play pill with the round "..." beside it;
 	 * with no picture behind it, its icon large at the right.
 	 */
-	private void renderHero(DrawContext ctx, Item item, int mouseX, int mouseY, float t, float pad, float pictured) {
-		float base = Anim.easeOutCubic(hero.target(1f).get()) * in(t, 0.45f, 0.45f) * Anim.easeOutCubic(tabSwap.get());
+	private void renderHero(DrawContext ctx, Item item, int mouseX, int mouseY, float t, float pad, float pictured, float fade, boolean live) {
+		if (live) {
+			heroBody(ctx, item, mouseX, mouseY, t, pad, pictured, fade, true);
+			return;
+		}
+		// Fading out: drawn only; the buttons' bounds stay those of the new pick.
+		float[] kept = {playX, playY, playW, playH, moreX, moreY, moreR};
+		heroBody(ctx, item, mouseX, mouseY, t, pad, pictured, fade, false);
+		playX = kept[0];
+		playY = kept[1];
+		playW = kept[2];
+		playH = kept[3];
+		moreX = kept[4];
+		moreY = kept[5];
+		moreR = kept[6];
+	}
+
+	private void heroBody(DrawContext ctx, Item item, int mouseX, int mouseY, float t, float pad, float pictured, float fade, boolean live) {
+		float base = live ? Anim.easeOutCubic(hero.target(1f).get()) * in(t, 0.45f, 0.45f) * Anim.easeOutCubic(tabSwap.get()) * fade : fade;
 		if (base <= 0.01f) {
 			playW = 0f;
 			moreR = 0f;
@@ -765,7 +799,7 @@ public final class ConsoleMenu extends Screen {
 		playX = x;
 		playY = Math.min(height * 0.85f, height - height * 0.05f - playH) + (1f - e) * 8f;
 		boolean overPlay = Ui.inside(mouseX, mouseY, playX, playY, playW, playH);
-		float hv = buttonHover[0].target(overPlay || focus == 1 ? 1f : 0f).get();
+		float hv = live ? buttonHover[0].target(overPlay || focus == 1 ? 1f : 0f).get() : 0f;
 		Render2D.shadow(ctx, playX, playY + 2f, playW, playH, playH / 2f, 9f, ColorUtil.withAlpha(0x000000, Math.round(110 * e)));
 		if (hv > 0.01f) {
 			// Picked, the pill gets a ring of its own a little outside it, as a console marks what the keys are on.
@@ -783,7 +817,7 @@ public final class ConsoleMenu extends Screen {
 		moreX = playX + playW + playH * 0.35f + moreR;
 		moreY = playY + moreR;
 		boolean overMore = (mouseX - moreX) * (mouseX - moreX) + (mouseY - moreY) * (mouseY - moreY) <= moreR * moreR;
-		float mh = buttonHover[1].target(overMore || focus == 2 ? 1f : 0f).get();
+		float mh = live ? buttonHover[1].target(overMore || focus == 2 ? 1f : 0f).get() : 0f;
 		Render2D.circle(ctx, moreX, moreY, moreR, ColorUtil.fade(ColorUtil.lerp(0x38FFFFFF, 0xFFFFFFFF, mh), e));
 		Render2D.icon(ctx, Icons.ELLIPSIS, moreX, moreY, playSize * 1.25f, ColorUtil.fade(ColorUtil.lerp(TEXT, INK, mh), e));
 
@@ -849,7 +883,7 @@ public final class ConsoleMenu extends Screen {
 	 * Home's cards at the bottom right, as a console's widgets: Messages (the newest conversation, the unread count by a
 	 * blue dot), what was played last (to continue it) and who is online (by a green dot).
 	 */
-	private void renderCards(DrawContext ctx, int mouseX, int mouseY, float t) {
+	private void renderCards(DrawContext ctx, int mouseX, int mouseY, float t, float fade, boolean live) {
 		ChatService service = Messages.service();
 		Conversation newest = null;
 		int online = 0;
@@ -876,10 +910,11 @@ public final class ConsoleMenu extends Screen {
 		set(cards[1], w * 0.636f, h * 0.586f, w * 0.336f, h * 0.2f);
 		set(cards[0], w * 0.196f, h * 0.785f, w * 0.427f, bottom - h * 0.785f);
 		set(cards[2], w * 0.636f, h * 0.816f, w * 0.336f, bottom - h * 0.816f);
-		card(ctx, cards[1], 0.6f, t, Icons.MESSAGE_CIRCLE, "Messages", latest, Messages.unread(), MESSAGE_DOT, true, mouseX, mouseY, focus == 2);
-		card(ctx, cards[0], 0.66f, t, Icons.GAMEPAD_2, "Recent activity", activity, 0, 0, false, mouseX, mouseY, focus == 1);
+		card(ctx, cards[1], 0.6f, t, Icons.MESSAGE_CIRCLE, "Messages", latest, Messages.unread(), MESSAGE_DOT, true, mouseX, mouseY, live && focus == 2,
+			fade, live);
+		card(ctx, cards[0], 0.66f, t, Icons.GAMEPAD_2, "Recent activity", activity, 0, 0, false, mouseX, mouseY, live && focus == 1, fade, live);
 		card(ctx, cards[2], 0.72f, t, Icons.USERS, "Online", online > 0 ? names.toString() : "Nobody is online", online, ONLINE, true, mouseX, mouseY,
-			focus == 3);
+			live && focus == 3, fade, live);
 	}
 
 	private static void set(float[] bounds, float x, float y, float w, float h) {
@@ -890,8 +925,8 @@ public final class ConsoleMenu extends Screen {
 	}
 
 	private void card(DrawContext ctx, float[] b, float delay, float t, int icon, String title, String line, int count, int dot, boolean showCount,
-					  int mouseX, int mouseY, boolean keyed) {
-		float e = in(t, delay, 0.5f) * Anim.easeOutCubic(hero.target(1f).get()) * Anim.easeOutCubic(tabSwap.get());
+					  int mouseX, int mouseY, boolean keyed, float fade, boolean live) {
+		float e = live ? in(t, delay, 0.5f) * Anim.easeOutCubic(hero.target(1f).get()) * Anim.easeOutCubic(tabSwap.get()) * fade : fade;
 		if (e <= 0.01f) return;
 		float x = b[0], y = b[1] + (1f - e) * 12f, w = b[2], h = b[3];
 		boolean hovered = Ui.inside(mouseX, mouseY, x, y, w, h) || keyed;
@@ -1090,6 +1125,7 @@ public final class ConsoleMenu extends Screen {
 	private void release() {
 		for (List<Item> items : tabs) for (Item item : items) item.release();
 		art.clear();
+		leaving = null;
 	}
 
 	/** A round icon at the top right. */
@@ -1149,7 +1185,7 @@ public final class ConsoleMenu extends Screen {
 			icon = null;
 			NativeImage image = null;
 			try {
-				image = NativeImage.read(bytes);
+				image = enlarge(NativeImage.read(bytes));
 				backing = new NativeImageBackedTexture(() -> "V1zir menu tile", image);
 				setup = TextureSetup.of(backing.getGlTextureView(), RenderSystem.getSamplerCache().get(FilterMode.LINEAR));
 			} catch (IOException | RuntimeException e) {
@@ -1157,6 +1193,31 @@ public final class ConsoleMenu extends Screen {
 				releaseIcon();
 			}
 			return setup;
+		}
+
+		/**
+		 * A small icon (a server's or world's is 64 pixels) made larger by a whole number of times, each pixel a square
+		 * block of the same colour (nearest neighbour), so it stays crisp when shown large and smooth while it grows;
+		 * the image given is closed when a new one is made.
+		 */
+		private static NativeImage enlarge(NativeImage image) {
+			int w = image.getWidth(), h = image.getHeight();
+			int k = Math.min(8, 256 / Math.max(1, Math.max(w, h)));
+			if (k <= 1) return image;
+			NativeImage out = new NativeImage(NativeImage.Format.RGBA, w * k, h * k, false);
+			try {
+				for (int y = 0; y < h; y++) {
+					for (int x = 0; x < w; x++) {
+						int color = image.getColorArgb(x, y);
+						for (int j = 0; j < k; j++) for (int i = 0; i < k; i++) out.setColorArgb(x * k + i, y * k + j, color);
+					}
+				}
+			} catch (RuntimeException e) {
+				out.close();
+				return image;
+			}
+			image.close();
+			return out;
 		}
 
 		private void releaseIcon() {

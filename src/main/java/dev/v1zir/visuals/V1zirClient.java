@@ -15,6 +15,7 @@ import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.pack.PackMixer;
 import dev.v1zir.visuals.module.impl.client.ClickGuiModule;
 import dev.v1zir.visuals.module.impl.client.MainMenuModule;
+import dev.v1zir.visuals.optimize.HitchMonitor;
 import dev.v1zir.visuals.optimize.Optimizations;
 import dev.v1zir.visuals.render.Reflections;
 import dev.v1zir.visuals.render.V1zirPipelines;
@@ -42,7 +43,9 @@ public final class V1zirClient implements ClientModInitializer {
 			if (entityType == EntityType.PLAYER && renderer instanceof PlayerEntityRenderer<?> players) helper.register(new CosmeticsFeature(players));
 		});
 
+		HitchMonitor.start();
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
+			long begun = HitchMonitor.begin();
 			// Safety net for any code path that shows the vanilla title screen without setScreen.
 			if (client.currentScreen instanceof TitleScreen && MainMenuModule.active()) {
 				client.setScreen(MainMenus.create());
@@ -53,6 +56,7 @@ public final class V1zirClient implements ClientModInitializer {
 			HudRenderer.tick(client);
 			Messages.tick(client);
 			MenuShots.tick(client);
+			HitchMonitor.end(HitchMonitor.TICK, begun);
 		});
 		// Once the game has started (its options are loaded): Unlock frame rate, a single time.
 		ClientLifecycleEvents.CLIENT_STARTED.register(Optimizations::unlockFrameRate);

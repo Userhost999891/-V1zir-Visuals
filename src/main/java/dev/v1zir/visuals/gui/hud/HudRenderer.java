@@ -14,6 +14,7 @@ import dev.v1zir.visuals.module.impl.effects.KillEffectsModule;
 import dev.v1zir.visuals.module.impl.hud.CustomIndicatorsModule;
 import dev.v1zir.visuals.module.impl.hud.HudModule;
 import dev.v1zir.visuals.module.impl.visuals.DamageTintModule;
+import dev.v1zir.visuals.optimize.HitchMonitor;
 import dev.v1zir.visuals.render.ui.Render2D;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
@@ -103,6 +104,15 @@ public final class HudRenderer {
 	}
 
 	private static void render(DrawContext ctx, RenderTickCounter tickCounter) {
+		long begun = HitchMonitor.begin();
+		try {
+			draw(ctx, tickCounter);
+		} finally {
+			HitchMonitor.end(HitchMonitor.HUD, begun);
+		}
+	}
+
+	private static void draw(DrawContext ctx, RenderTickCounter tickCounter) {
 		MinecraftClient mc = V1zir.mc();
 		if (mc.options.hudHidden || mc.player == null) return;
 		ThemeModule theme = ModuleManager.get(ThemeModule.class);

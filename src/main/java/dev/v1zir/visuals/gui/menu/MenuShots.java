@@ -32,16 +32,15 @@ import java.util.concurrent.Executors;
 /**
  * Pictures of the worlds and servers played, for the PS5 style home screen: as a console shows a game's art behind its
  * tile, the menu shows the world or server picked as it looked when it was played last. The client takes the picture
- * itself, a while after joining and again every quarter of an hour of play, at a moment the view is clear (no screen
- * open, looking ahead, not under water), right after the world is drawn: no hand, no HUD, no chat. It goes into
+ * itself, once each time a place is joined (and not again within a few minutes), a while after joining, at a moment
+ * the view is clear (no screen open, looking ahead, not under water), right after the world is drawn: no hand, no
+ * HUD, no chat. Taking it costs one longer frame, so it is not repeated while playing. It goes into
  * config/v1zir/menu-pictures, one file per world folder or server address, at most 1280 pixels wide.
  */
 public final class MenuShots {
 	private static final int MAX_WIDTH = 1280;
 	/** Ticks in a world before its first picture: the terrain around has loaded by then. */
 	private static final int FIRST_DELAY = 20 * 20;
-	/** Ticks of play between two pictures of the same world or server. */
-	private static final int REFRESH = 20 * 60 * 15;
 	/** However often the world changes (dimensions, a server's lobbies), a new picture of the same place waits this long. */
 	private static final long MIN_AGE_MILLIS = 5L * 60L * 1000L;
 	private static final ExecutorService IO = Executors.newSingleThreadExecutor(task -> {
@@ -128,7 +127,7 @@ public final class MenuShots {
 		if (!auto || pending != null || ticks < nextAt || !enabled() || !clearView(client)) return;
 		String key = currentKey(client);
 		if (key == null || recent(key)) {
-			nextAt = ticks + REFRESH;
+			nextAt = Integer.MAX_VALUE;
 			return;
 		}
 		pending = key;
@@ -167,7 +166,8 @@ public final class MenuShots {
 		String key = pending;
 		if (key == null) return;
 		pending = null;
-		nextAt = ticks + REFRESH;
+		// One picture per visit: the next when this place is joined again.
+		nextAt = Integer.MAX_VALUE;
 		MinecraftClient client = MinecraftClient.getInstance();
 		if (client.currentScreen != null) return;
 		try {

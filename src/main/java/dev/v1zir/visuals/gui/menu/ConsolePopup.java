@@ -15,8 +15,8 @@ import java.util.List;
 
 /**
  * A small menu over the PS5 style home screen (a tile's "..."): its choices as large frosted pills on a dark frosted
- * panel, the one under the pointer or picked with the arrow keys lighter, with blue light under it. It scales in from
- * its middle over the dimmed screen; Escape, Backspace or a click beside it closes it.
+ * panel, the one under the pointer or picked with the arrow keys lighter, with a white rim and a soft light around it.
+ * It scales in from its middle over the dimmed screen; Escape, Backspace or a click beside it closes it.
  */
 final class ConsolePopup {
 	/** One choice: its words, its icon (0 for none) and what it does. */
@@ -26,7 +26,6 @@ final class ConsolePopup {
 	private static final int PANEL = 0xE01A1726;
 	private static final int PILL = 0x38FFFFFF;
 	private static final int PILL_HOT = 0x75FFFFFF;
-	private static final int BLUE = 0xFF5F8DFF;
 
 	private final List<Choice> choices = new ArrayList<>();
 	private final List<Anim> hover = new ArrayList<>();
@@ -91,7 +90,8 @@ final class ConsolePopup {
 		rowY = panelY + pad + titleH;
 		Matrix3x2fStack m = ctx.getMatrices();
 		m.pushMatrix();
-		float s = 0.92f + 0.08f * Anim.easeOutBack(Math.min(1f, e));
+		// Opening it springs a little past its size; closing it just shrinks back.
+		float s = 0.92f + 0.08f * (shown ? Anim.easeOutBack(Math.min(1f, e)) : e);
 		float cx = panelX + panelW / 2f, cy = panelY + panelH / 2f;
 		m.translate(cx, cy);
 		m.scale(s, s);
@@ -112,11 +112,11 @@ final class ConsolePopup {
 			Choice choice = choices.get(i);
 			float y = rowY + i * (rowH + rowGap);
 			float hv = hover.get(i).target(i == picked ? 1f : 0f).get();
-			if (hv > 0.01f) {
-				Render2D.glow(ctx, rowX + rowW * 0.1f, y + rowH * 0.55f, rowW * 0.8f, rowH * 0.7f, rowH / 2f, 10f, ColorUtil.withAlpha(BLUE, Math.round(170 * hv * e)),
-					ColorUtil.withAlpha(BLUE, Math.round(90 * hv * e)));
-			}
+			// Picked, the pill is lighter, with a white rim and a soft light evenly around it.
+			if (hv > 0.01f) Render2D.glow(ctx, rowX, y, rowW, rowH, rowH / 2f, 9f, ColorUtil.withAlpha(0xFFFFFF, Math.round(60 * hv * e)),
+				ColorUtil.withAlpha(0xFFFFFF, Math.round(60 * hv * e)));
 			Render2D.round(ctx, rowX, y, rowW, rowH, rowH / 2f, ColorUtil.fade(ColorUtil.lerp(PILL, PILL_HOT, hv), e));
+			if (hv > 0.01f) Render2D.outline(ctx, rowX, y, rowW, rowH, rowH / 2f, 1.25f, ColorUtil.withAlpha(0xFFFFFF, Math.round(170 * hv * e)));
 			String label = fit(font, choice.label(), size, rowW - rowH * 1.6f);
 			float tw = font.width(label, size);
 			float iconW = choice.icon() != 0 ? size * 1.5f : 0f;

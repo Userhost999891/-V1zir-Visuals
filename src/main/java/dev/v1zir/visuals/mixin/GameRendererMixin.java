@@ -7,6 +7,7 @@ import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import com.llamalad7.mixinextras.sugar.Local;
 import dev.v1zir.visuals.gui.menu.MenuShots;
 import dev.v1zir.visuals.module.ModuleManager;
+import dev.v1zir.visuals.optimize.HitchMonitor;
 import dev.v1zir.visuals.module.impl.visuals.AspectRatioModule;
 import dev.v1zir.visuals.module.impl.visuals.BloomModule;
 import dev.v1zir.visuals.module.impl.visuals.CameraTweaksModule;
@@ -116,18 +117,22 @@ public abstract class GameRendererMixin {
 	private void v1zir$motionBlur(CallbackInfo ci) {
 		// The mist and the light shafts read the world's depth, which is cleared for the hand right after this; they
 		// go before the blur, so it smears them with the rest.
+		long begun = HitchMonitor.begin();
 		PostFx.atmosphere();
 		// The PS5 style menu's picture of this world or server, when one is due: the world alone, not yet smeared.
 		MenuShots.afterWorld();
 		MotionBlurModule.renderIfEnabled();
+		HitchMonitor.end(HitchMonitor.WORLD, begun);
 	}
 
 	@Inject(method = RENDER_WORLD, at = @At("RETURN"))
 	private void v1zir$colorGrade(CallbackInfo ci) {
+		long begun = HitchMonitor.begin();
 		BloomModule.renderIfEnabled();
 		ColorGradingModule.renderIfEnabled();
 		VibeModule.gradeIfEnabled();
 		PostFx.lens();
+		HitchMonitor.end(HitchMonitor.POST, begun);
 	}
 
 	/** World text on the overlay layer (3D lyrics) goes on top of everything once the world and the hand are drawn. */

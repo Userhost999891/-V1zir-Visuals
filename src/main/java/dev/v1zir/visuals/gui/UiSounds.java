@@ -3,6 +3,7 @@ package dev.v1zir.visuals.gui;
 import dev.v1zir.visuals.V1zir;
 import dev.v1zir.visuals.audio.AlPlayer;
 import dev.v1zir.visuals.audio.AudioFiles;
+import dev.v1zir.visuals.audio.Pcm;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.client.ThemeModule;
 import dev.v1zir.visuals.util.Theme;
@@ -22,6 +23,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * The PS5 style theme's sounds: a soft tick as the selection moves, an airy brush between tabs, a warm bloom to confirm,
@@ -62,6 +67,17 @@ public final class UiSounds {
 		Or pick a file for each sound under Theme. Short sounds work best (a few seconds at most).
 		""";
 
+	/** The player's files are decoded here ahead of their first play, so playing one never waits on decoding it. */
+	private static final ExecutorService DECODE = Executors.newSingleThreadExecutor(task -> {
+		Thread thread = new Thread(task, "V1zir UI sounds");
+		thread.setDaemon(true);
+		return thread;
+	});
+	private static final Map<String, CompletableFuture<Pcm>> DECODED = new ConcurrentHashMap<>();
+	/** Files (by version) handed to the audio device already: it keeps them, so they are not decoded again. */
+	private static final java.util.Set<String> UPLOADED = new java.util.HashSet<>();
+	/** Files up to this size are decoded ahead; a longer one only when it first plays. */
+	private static final long DECODE_AHEAD = 1L << 20;
 	/** The folder's files as last read, which sound each one is, and when the folder last changed. */
 	private static List<Path> files = List.of();
 	private static final Map<String, Path> guessed = new HashMap<>();
@@ -112,8 +128,30 @@ public final class UiSounds {
 		}
 		float master = mc.options.getSoundVolume(SoundCategory.MASTER);
 		// Keyed by the file's time too, so an edited file is read again.
-		AlPlayer.play(file + "@" + stamp, () -> AudioFiles.decode(file), volume * master, 1f);
+		String key = file + "@" + stamp;
+		if (UPLOADED.contains(key)) {
+			AlPlayer.play(key, () -> AudioFiles.decode(file), volume * master, 1f);
+			return true;
+		}
+		CompletableFuture<Pcm> decoding = decode(key, file);
+		// Still being decoded (the folder just changed), or it cannot be: the client's own sound this time.
+		if (!decoding.isDone() || decoding.isCompletedExceptionally()) return false;
+		UPLOADED.add(key);
+		// The audio device keeps it from now on; the decoded samples need not stay in memory.
+		DECODED.remove(key);
+		AlPlayer.play(key, decoding::join, volume * master, 1f);
 		return true;
+	}
+
+	/** Decodes a file in the background, once for each version of it. */
+	private static CompletableFuture<Pcm> decode(String key, Path file) {
+		return DECODED.computeIfAbsent(key, k -> CompletableFuture.supplyAsync(() -> {
+			try {
+				return AudioFiles.decode(file);
+			} catch (IOException e) {
+				throw new RuntimeException(e);
+			}
+		}, DECODE));
 	}
 
 	/** The file picked for a sound on Auto: the first whose name says it is that sound, null when none does. */
@@ -160,6 +198,16 @@ public final class UiSounds {
 		for (Path file : files) {
 			String sound = guess(file.getFileName().toString());
 			if (sound != null) guessed.putIfAbsent(sound, file);
+		}
+		// Decoded ahead, so the first play of each is as quick as the rest.
+		DECODED.clear();
+		for (Path file : files) {
+			try {
+				String key = file + "@" + Files.getLastModifiedTime(file).toMillis();
+				if (!UPLOADED.contains(key) && Files.size(file) <= DECODE_AHEAD) decode(key, file);
+			} catch (IOException ignored) {
+				// Gone again: nothing to decode.
+			}
 		}
 		return true;
 	}
