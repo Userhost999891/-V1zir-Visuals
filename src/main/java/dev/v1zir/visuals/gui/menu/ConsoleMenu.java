@@ -443,7 +443,6 @@ public final class ConsoleMenu extends Screen {
 				choices.add(new ConsolePopup.Choice("Server list", Icons.SERVER, () -> client.setScreen(new MultiplayerScreen(this))));
 				choices.add(new ConsolePopup.Choice("Options", Icons.SETTINGS, () -> client.setScreen(new OptionsScreen(this, client.options))));
 				if (FabricLoader.getInstance().isModLoaded("modmenu")) choices.add(new ConsolePopup.Choice("Mods", Icons.PUZZLE, this::openModMenu));
-				choices.add(new ConsolePopup.Choice("Import menu sounds", Icons.MUSIC, UiSounds::importFiles));
 				choices.add(new ConsolePopup.Choice("Open pictures folder", Icons.IMAGE, () -> openFolder(MenuShots.folder())));
 				choices.add(new ConsolePopup.Choice("Quit game", Icons.POWER, () -> client.scheduleStop()));
 			}

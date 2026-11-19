@@ -68,5 +68,20 @@
 		"sounds": [
 			"v1zir:ui/boot"
 		]
+	},
+	"ui.popup": {
+		"sounds": [
+			"v1zir:ui/popup"
+		]
+	},
+	"ui.popup_back": {
+		"sounds": [
+			"v1zir:ui/popup_back"
+		]
+	},
+	"ui.popup_enter": {
+		"sounds": [
+			"v1zir:ui/popup_enter"
+		]
 	}
 }

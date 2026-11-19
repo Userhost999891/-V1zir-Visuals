@@ -1,7 +1,5 @@
 package dev.v1zir.visuals.module.impl.client;
 
-import dev.v1zir.visuals.gui.UiSounds;
-import dev.v1zir.visuals.gui.hud.Notifications;
 import dev.v1zir.visuals.gui.menu.MenuShots;
 import dev.v1zir.visuals.module.Category;
 import dev.v1zir.visuals.module.Module;
@@ -10,37 +8,18 @@ import dev.v1zir.visuals.module.setting.ColorSetting;
 import dev.v1zir.visuals.module.setting.ModeSetting;
 import dev.v1zir.visuals.module.setting.NumberSetting;
 import dev.v1zir.visuals.render.font.Fonts;
-import dev.v1zir.visuals.render.font.Icons;
 import dev.v1zir.visuals.util.Theme;
 import net.minecraft.util.Util;
-import org.jetbrains.annotations.Nullable;
 
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
 
 /** Colours, glass and font of the whole UI. Always enabled. */
 public final class ThemeModule extends Module {
 	/** The look of the menus and screens: the client's own, or that of a console's home screen (PS5). The game itself stays as it is. */
 	public final ModeSetting styleTheme = add(new ModeSetting("Style theme", "Normal", "Normal", "PS5"));
-	/** The PS5 style's own sounds in its menus (UiSounds). */
+	/** The PS5 style's sounds in its menus (UiSounds), the client's own. */
 	public final BoolSetting uiSounds = add(new BoolSetting("UI sounds", true).visibleIf(() -> styleTheme.is("PS5")));
-	/** Your own files from config/v1zir/ui-sounds in place of the PS5 style's sounds, each picked below (Auto: by its name). */
-	public final BoolSetting ownSounds = add(new BoolSetting("Own sounds", true).visibleIf(() -> styleTheme.is("PS5") && uiSounds.on()));
-	public final ModeSetting moveSound = add(soundChoice("Move sound"));
-	public final ModeSetting tabSound = add(soundChoice("Tab sound"));
-	public final ModeSetting confirmSound = add(soundChoice("Confirm sound"));
-	public final ModeSetting backSound = add(soundChoice("Back sound"));
-	public final ModeSetting messageSound = add(soundChoice("Message sound"));
-	public final ModeSetting startSound = add(soundChoice("Start sound"));
-	public final ModeSetting popupSound = add(soundChoice("Popup sound"));
-	public final ModeSetting popupBackSound = add(soundChoice("Popup back sound"));
-	public final ModeSetting popupEnterSound = add(soundChoice("Popup confirm sound"));
-	public final NumberSetting ownVolume = add(new NumberSetting("Own sounds volume", 0.7, 0.05, 1.0, 0.05).visibleIf(this::ownShown));
-	/** Turned on, it asks for sound files (the system's file dialog) to use in the menus, and turns itself off again. */
-	public final BoolSetting importSounds = add(new BoolSetting("Import sounds", false).visibleIf(() -> styleTheme.is("PS5") && uiSounds.on()));
-	/** Turned on, it opens the folder of your own sounds in the file manager and turns itself off again. */
-	public final BoolSetting openSounds = add(new BoolSetting("Open sounds folder", false).visibleIf(() -> styleTheme.is("PS5") && uiSounds.on()));
 	/** Pictures of the worlds and servers you play, taken now and then while playing, behind their tiles in the PS5 style menu. */
 	public final BoolSetting menuPictures = add(new BoolSetting("Menu pictures", true).visibleIf(() -> styleTheme.is("PS5")));
 	/** Turned on, it opens the folder of the menu's pictures and turns itself off again. */
@@ -57,7 +36,6 @@ public final class ThemeModule extends Module {
 	/** The game's loading screen (at start and when the resource packs reload) in the client's style instead of Mojang's. */
 	public final BoolSetting loadingScreen = add(new BoolSetting("Loading screen", true));
 	private String appliedFont;
-	private int ticks;
 
 	public ThemeModule() {
 		super("Theme", "Colours, glass and font of the interface", Category.SETTINGS);
@@ -68,35 +46,9 @@ public final class ThemeModule extends Module {
 		return preset.is(Theme.Preset.CUSTOM.title());
 	}
 
-	private boolean ownShown() {
-		return styleTheme.is("PS5") && uiSounds.on() && ownSounds.on();
-	}
-
-	private ModeSetting soundChoice(String name) {
-		UiSounds.refresh();
-		return new ModeSetting(name, UiSounds.AUTO, UiSounds.choices().toArray(new String[0])).visibleIf(this::ownShown);
-	}
-
 	@Override
 	public void onTick() {
-		// The "buttons": done once, then off again.
-		if (importSounds.on()) {
-			importSounds.set(false);
-			ownSounds.set(true);
-			UiSounds.importFiles();
-		}
-		int imported = UiSounds.takeImported();
-		if (imported > 0) {
-			UiSounds.refresh();
-			var choices = UiSounds.choices();
-			for (ModeSetting setting : soundSettings()) setting.setModes(choices);
-			Notifications.push(Icons.MUSIC, "PS5 sounds", imported == 1 ? "1 sound imported: it plays in the menus now" : imported + " sounds imported: they play in the menus now", true);
-		}
-		if (openSounds.on()) {
-			openSounds.set(false);
-			UiSounds.refresh();
-			Util.getOperatingSystem().open(UiSounds.folder());
-		}
+		// The "button": done once, then off again.
 		if (openPictures.on()) {
 			openPictures.set(false);
 			try {
@@ -106,37 +58,6 @@ public final class ThemeModule extends Module {
 			}
 			Util.getOperatingSystem().open(MenuShots.folder());
 		}
-		// Files added to the folder show up in the choices.
-		if (++ticks % 40 != 0 || !styleTheme.is("PS5")) return;
-		if (!UiSounds.refresh()) return;
-		var choices = UiSounds.choices();
-		for (ModeSetting setting : soundSettings()) setting.setModes(choices);
-	}
-
-	private ModeSetting[] soundSettings() {
-		return new ModeSetting[]{moveSound, tabSound, confirmSound, backSound, messageSound, startSound, popupSound, popupBackSound, popupEnterSound};
-	}
-
-	/** The player's own file for one of UiSounds' sounds, null for the client's own. */
-	@Nullable
-	public Path ownSound(String sound) {
-		if (!ownSounds.on()) return null;
-		ModeSetting choice = switch (sound) {
-			case UiSounds.MOVE -> moveSound;
-			case UiSounds.TAB -> tabSound;
-			case UiSounds.CONFIRM -> confirmSound;
-			case UiSounds.BACK -> backSound;
-			case UiSounds.NOTIFY -> messageSound;
-			case UiSounds.BOOT -> startSound;
-			case UiSounds.POPUP -> popupSound;
-			case UiSounds.POPUP_BACK -> popupBackSound;
-			case UiSounds.POPUP_ENTER -> popupEnterSound;
-			default -> null;
-		};
-		if (choice == null || choice.is(UiSounds.BUILT_IN)) return null;
-		if (choice.is(UiSounds.AUTO)) return UiSounds.guessed(sound);
-		Path file = UiSounds.folder().resolve(choice.get());
-		return Files.isRegularFile(file) ? file : null;
 	}
 
 	@Override
