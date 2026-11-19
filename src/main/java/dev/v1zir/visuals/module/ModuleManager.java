@@ -2,6 +2,7 @@ package dev.v1zir.visuals.module;
 
 import dev.v1zir.visuals.V1zir;
 import dev.v1zir.visuals.module.impl.client.ClickGuiModule;
+import dev.v1zir.visuals.module.impl.client.ControllerModule;
 import dev.v1zir.visuals.module.impl.client.CustomUiModule;
 import dev.v1zir.visuals.module.impl.client.MainMenuModule;
 import dev.v1zir.visuals.module.impl.client.MessagesModule;
@@ -185,6 +186,7 @@ public final class ModuleManager {
 		// impl.client
 		register(new ClickGuiModule());
 		register(new ThemeModule());
+		register(new ControllerModule());
 		register(new MainMenuModule());
 		register(new MessagesModule());
 		register(new CustomUiModule());

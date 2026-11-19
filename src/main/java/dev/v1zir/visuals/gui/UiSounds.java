@@ -24,6 +24,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -298,6 +299,8 @@ public final class UiSounds {
 		if (matches(words, joined, PROMPT_WORDS)) {
 			if (matches(words, joined, WORDS.get(BACK))) return POPUP_BACK;
 			if (matches(words, joined, WORDS.get(CONFIRM))) return POPUP_ENTER;
+			// Two of them numbered (popup1, popup-2): the first opens, the second takes a choice.
+			if (Arrays.asList(words).contains("2") || name.endsWith("2")) return POPUP_ENTER;
 			return POPUP;
 		}
 		for (String sound : SOUNDS) {

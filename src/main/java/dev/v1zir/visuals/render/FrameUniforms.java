@@ -4,6 +4,7 @@ import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.Std140Builder;
 import com.mojang.blaze3d.buffers.Std140SizeCalculator;
 import dev.v1zir.visuals.V1zir;
+import dev.v1zir.visuals.controller.Controller;
 import dev.v1zir.visuals.gui.clickgui.WindowTransition;
 import dev.v1zir.visuals.optimize.Optimizations;
 import dev.v1zir.visuals.render.cosmetic.CosmeticPreview;
@@ -58,6 +59,8 @@ public final class FrameUniforms {
 		CosmeticPreview.flip();
 		GuiCapture.flip();
 		Optimizations.endFrame();
+		// A controller is read once a frame, so its sticks turn the view and move the pointer smoothly.
+		Controller.frame(V1zir.mc());
 	}
 
 	/** Lights LIT shapes around this point (GUI coordinates) for the current frame. */

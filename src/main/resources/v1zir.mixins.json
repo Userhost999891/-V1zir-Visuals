@@ -59,7 +59,9 @@
     "optimize.EntityCullingMixin",
     "optimize.MinimizedMixin",
     "optimize.ParticleLimitMixin",
-    "optimize.SignTextMixin"
+    "optimize.SignTextMixin",
+    "KeyboardInputMixin",
+    "MouseInvoker"
   ],
   "injectors": {
     "defaultRequire": 0
