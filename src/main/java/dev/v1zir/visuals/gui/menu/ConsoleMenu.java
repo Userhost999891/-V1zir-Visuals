@@ -51,8 +51,6 @@ import org.joml.Matrix3x2fStack;
 import org.lwjgl.glfw.GLFW;
 
 import java.io.IOException;
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.net.UnknownHostException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -363,22 +361,15 @@ public final class ConsoleMenu extends Screen {
 		}
 	}
 
-	/** How the game reaches servers from here: found by its shape, a factory taking whether to use native transport. */
+	/** How the game reaches servers, as the server list asks for it. */
 	@Nullable
 	private NetworkingBackend backend() {
 		try {
-			for (Method method : NetworkingBackend.class.getMethods()) {
-				if (Modifier.isStatic(method.getModifiers()) && NetworkingBackend.class.isAssignableFrom(method.getReturnType())
-					&& method.getParameterCount() == 1 && method.getParameterTypes()[0] == boolean.class) {
-					return (NetworkingBackend) method.invoke(null, client.options.shouldUseNativeTransport());
-				}
-			}
-			Object[] values = NetworkingBackend.class.getEnumConstants();
-			if (values != null && values.length > 0) return (NetworkingBackend) values[0];
-		} catch (ReflectiveOperationException | RuntimeException e) {
+			return NetworkingBackend.remote(client.options.shouldUseNativeTransport());
+		} catch (RuntimeException e) {
 			V1zir.LOGGER.debug("No networking backend for the menu's pings", e);
+			return null;
 		}
-		return null;
 	}
 
 	@Override

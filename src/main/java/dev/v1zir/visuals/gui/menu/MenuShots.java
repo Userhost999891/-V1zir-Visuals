@@ -42,6 +42,8 @@ public final class MenuShots {
 	private static final int FIRST_DELAY = 20 * 20;
 	/** Ticks of play between two pictures of the same world or server. */
 	private static final int REFRESH = 20 * 60 * 15;
+	/** However often the world changes (dimensions, a server's lobbies), a new picture of the same place waits this long. */
+	private static final long MIN_AGE_MILLIS = 5L * 60L * 1000L;
 	private static final ExecutorService IO = Executors.newSingleThreadExecutor(task -> {
 		Thread thread = new Thread(task, "V1zir menu pictures");
 		thread.setDaemon(true);
@@ -124,7 +126,22 @@ public final class MenuShots {
 		if (world == null || client.player == null) return;
 		ticks++;
 		if (!auto || pending != null || ticks < nextAt || !enabled() || !clearView(client)) return;
-		request(client);
+		String key = currentKey(client);
+		if (key == null || recent(key)) {
+			nextAt = ticks + REFRESH;
+			return;
+		}
+		pending = key;
+	}
+
+	/** Whether the place has a picture taken only a few minutes ago. */
+	private static boolean recent(String key) {
+		try {
+			Path file = file(key);
+			return Files.isRegularFile(file) && System.currentTimeMillis() - Files.getLastModifiedTime(file).toMillis() < MIN_AGE_MILLIS;
+		} catch (IOException e) {
+			return false;
+		}
 	}
 
 	/** Nothing in the way of the world: no screen, looking ahead rather than at the ground or the sky, not under water. */
