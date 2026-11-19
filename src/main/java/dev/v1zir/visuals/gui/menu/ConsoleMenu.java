@@ -52,6 +52,7 @@ import org.joml.Matrix3x2fStack;
 import org.lwjgl.glfw.GLFW;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.net.UnknownHostException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -60,6 +61,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.stream.Stream;
@@ -93,17 +95,10 @@ public final class ConsoleMenu extends Screen {
 	private static final int DIM = 0xB3FFFFFF;
 	private static final int FAINT = 0x80FFFFFF;
 	private static final int INK = 0xFF120F1E;
-	private static final int CARD = 0x8C2A2440;
-	private static final int CARD_HOT = 0xB3393056;
 	private static final int CHIP = 0x2EFFFFFF;
-	/** The console's own tiles: near black, lighter at the top left. */
-	private static final int TILE_LIGHT = 0xFF171624;
-	private static final int TILE_MID = 0xFF0C0B16;
-	private static final int TILE_DARK = 0xFF04040A;
-	/** The rim of light around the tile in focus, lit from above. */
-	private static final int RIM_TOP = 0xFFE4E2FF;
-	private static final int RIM_BOTTOM = 0x8C9E9AC8;
-	private static final int RING = 0xFFD9CCFF;
+	/** The rim of light around the tile in focus, lit from above: white, so the theme's colours stay as they are. */
+	private static final int RIM_TOP = 0xFFEDEDF2;
+	private static final int RIM_BOTTOM = 0x8CA0A0A8;
 	private static final int ONLINE = 0xFF3DDC84;
 	private static final int MESSAGE_DOT = 0xFF4C8DFF;
 	/** The tab shown last, kept for when the menu comes back. */
@@ -111,6 +106,12 @@ public final class ConsoleMenu extends Screen {
 	/** Finding a server's address can take a while: the pings start off the render thread, as the server list's do. */
 	private static final ExecutorService PINGS = Executors.newFixedThreadPool(2, task -> {
 		Thread thread = new Thread(task, "V1zir menu pings");
+		thread.setDaemon(true);
+		return thread;
+	});
+	/** Icons are read and enlarged off the render thread. */
+	private static final ExecutorService ICONS = Executors.newFixedThreadPool(2, task -> {
+		Thread thread = new Thread(task, "V1zir menu icons");
 		thread.setDaemon(true);
 		return thread;
 	});
@@ -196,6 +197,19 @@ public final class ConsoleMenu extends Screen {
 		icons.add(new TopIcon(Icons.MESSAGE_CIRCLE, () -> Messages.open(this, null, null)));
 		pillPlaced = false;
 		showArt();
+	}
+
+	/**
+	 * The colours of the cards and tiles: the theme's base (the style changes the layout, not the colours). Tiles are
+	 * near black as a console's own, lighter at the top left (0), the base (1) and darker at the bottom right (2).
+	 */
+	private static int tileColor(int corner) {
+		int base = Theme.preset().base() | 0xFF000000;
+		return corner == 0 ? ColorUtil.brighten(base, 0.05f) : corner == 1 ? base : ColorUtil.darken(base, 0.6f);
+	}
+
+	private static int cardColor(boolean hovered) {
+		return ColorUtil.withAlpha(ColorUtil.brighten(Theme.preset().base(), hovered ? 0.17f : 0.1f), hovered ? 0xB3 : 0x8C);
 	}
 
 	/** The tab shown: 0 Singleplayer, 1 Multiplayer. */
@@ -711,23 +725,25 @@ public final class ConsoleMenu extends Screen {
 		TextureSetup texture = item.texture();
 		if (item.kind == HOME) {
 			// As a console's own tiles: near black with a faint sheen from the top left, the mark in the middle.
-			Render2D.round(ctx, x, y, size, size, r, ColorUtil.fade(TILE_LIGHT, alpha), ColorUtil.fade(TILE_MID, alpha), ColorUtil.fade(TILE_DARK, alpha),
-				ColorUtil.fade(TILE_MID, alpha));
+			Render2D.round(ctx, x, y, size, size, r, ColorUtil.fade(tileColor(0), alpha), ColorUtil.fade(tileColor(1), alpha), ColorUtil.fade(tileColor(2), alpha),
+				ColorUtil.fade(tileColor(1), alpha));
 			Render2D.gradientV(ctx, x, y, size, size * 0.5f, r, ColorUtil.withAlpha(0xFFFFFF, Math.round(9 * alpha)), 0x00FFFFFF);
 			float logo = size * 0.22f;
 			Render2D.setAlpha(alpha);
 			Logo.draw(ctx, x + logo, y + logo, size - logo * 2f);
 			Render2D.setAlpha(1f);
 		} else if (item.kind == ALL) {
-			Render2D.round(ctx, x, y, size, size, r, ColorUtil.fade(TILE_LIGHT, alpha), ColorUtil.fade(TILE_MID, alpha), ColorUtil.fade(TILE_DARK, alpha),
-				ColorUtil.fade(TILE_MID, alpha));
+			Render2D.round(ctx, x, y, size, size, r, ColorUtil.fade(tileColor(0), alpha), ColorUtil.fade(tileColor(1), alpha), ColorUtil.fade(tileColor(2), alpha),
+				ColorUtil.fade(tileColor(1), alpha));
 			Render2D.icon(ctx, Icons.LAYOUT_GRID, x + size / 2f, y + size / 2f, size * 0.3f, ColorUtil.fade(0xB3FFFFFF, alpha * (0.5f + 0.5f * focus)));
-		} else if (texture != null) {
-			// A world's or server's picture fills its tile, as a game's art does.
-			Render2D.image(ctx, texture, x, y, size, size, r, ColorUtil.fade(0xFFFFFFFF, alpha));
+		} else if (texture != null || item.iconComing()) {
+			// A world's or server's picture fills its tile, as a game's art does; it fades in once it is ready.
+			Render2D.round(ctx, x, y, size, size, r, ColorUtil.fade(tileColor(0), alpha), ColorUtil.fade(tileColor(1), alpha), ColorUtil.fade(tileColor(2), alpha),
+				ColorUtil.fade(tileColor(1), alpha));
+			if (texture != null) Render2D.image(ctx, texture, x, y, size, size, r, ColorUtil.fade(0xFFFFFFFF, alpha * item.iconIn()));
 		} else {
-			Render2D.round(ctx, x, y, size, size, r, ColorUtil.fade(TILE_LIGHT, alpha), ColorUtil.fade(TILE_MID, alpha), ColorUtil.fade(TILE_DARK, alpha),
-				ColorUtil.fade(TILE_MID, alpha));
+			Render2D.round(ctx, x, y, size, size, r, ColorUtil.fade(tileColor(0), alpha), ColorUtil.fade(tileColor(1), alpha), ColorUtil.fade(tileColor(2), alpha),
+				ColorUtil.fade(tileColor(1), alpha));
 			int icon = item.kind == SERVER ? Icons.SERVER : Icons.MOUNTAIN;
 			Render2D.icon(ctx, icon, x + size / 2f, y + size / 2f, size * 0.36f, ColorUtil.fade(0xE6FFFFFF, alpha));
 		}
@@ -842,8 +858,9 @@ public final class ConsoleMenu extends Screen {
 			TextureSetup texture = item.texture();
 			float inset = size * 0.035f;
 			if (texture != null) {
-				Render2D.image(ctx, texture, ix + inset, iy + inset, size - inset * 2f, size - inset * 2f, r - inset, ColorUtil.fade(0xFFFFFFFF, iconAlpha));
-			} else {
+				Render2D.image(ctx, texture, ix + inset, iy + inset, size - inset * 2f, size - inset * 2f, r - inset,
+					ColorUtil.fade(0xFFFFFFFF, iconAlpha * item.iconIn()));
+			} else if (!item.iconComing()) {
 				int symbol = item.kind == SERVER ? Icons.SERVER : item.kind == ALL ? Icons.LAYOUT_GRID : Icons.MOUNTAIN;
 				Render2D.icon(ctx, symbol, cx, cy, size * 0.34f, ColorUtil.fade(0xCCFFFFFF, iconAlpha));
 			}
@@ -875,12 +892,12 @@ public final class ConsoleMenu extends Screen {
 
 	/** The dot of the chip: green for a server that answered, red-grey for one that did not, 0 (pulsing) while asked. */
 	private int chipDot(Item item) {
-		if (item.kind != SERVER || item.server == null) return RING;
+		if (item.kind != SERVER || item.server == null) return Theme.accent();
 		ServerInfo.Status status = item.server.getStatus();
 		if (status == ServerInfo.Status.SUCCESSFUL && item.server.players != null) return ONLINE;
 		if (status == ServerInfo.Status.INCOMPATIBLE) return 0xFFF2B84B;
 		if (status == ServerInfo.Status.PINGING && System.nanoTime() - item.pingAt < PING_TIMEOUT) return 0;
-		return status == ServerInfo.Status.INITIAL ? RING : 0xFFB0566A;
+		return status == ServerInfo.Status.INITIAL ? Theme.accent() : 0xFFB0566A;
 	}
 
 	/**
@@ -936,9 +953,9 @@ public final class ConsoleMenu extends Screen {
 		boolean hovered = Ui.inside(mouseX, mouseY, x, y, w, h) || keyed;
 		float r = Math.max(8f, Math.min(18f, height * 0.025f));
 		Render2D.shadow(ctx, x, y + 3f, w, h, r, 14f, ColorUtil.withAlpha(0x000000, Math.round(90 * e)));
-		Render2D.round(ctx, x, y, w, h, r, ColorUtil.fade(hovered ? CARD_HOT : CARD, e));
+		Render2D.round(ctx, x, y, w, h, r, ColorUtil.fade(hovered ? cardColor(true) : cardColor(false), e));
 		Render2D.gradientV(ctx, x, y, w, h, r, ColorUtil.withAlpha(0xFFFFFF, Math.round(16 * e)), 0x00FFFFFF);
-		if (keyed) Render2D.outline(ctx, x, y, w, h, r, 1.5f, ColorUtil.fade(RING, e));
+		if (keyed) Render2D.outline(ctx, x, y, w, h, r, 1.5f, ColorUtil.fade(Theme.accent(), e));
 		SdfFont font = Fonts.medium();
 		float titleSize = Math.max(7f, Math.min(13f, height * 0.03f));
 		float lineSize = Math.max(6f, Math.min(11f, height * 0.026f));
@@ -1171,6 +1188,11 @@ public final class ConsoleMenu extends Screen {
 		private NativeImageBackedTexture backing;
 		@Nullable
 		private TextureSetup setup;
+		@Nullable
+		private CompletableFuture<NativeImage> preparing;
+		private boolean iconTaken;
+		private boolean iconFailed;
+		private long iconShownAt;
 
 		Item(int kind, String title, String subtitle, String action, @Nullable String target, @Nullable byte[] icon) {
 			this.kind = kind;
@@ -1181,53 +1203,67 @@ public final class ConsoleMenu extends Screen {
 			this.icon = icon;
 		}
 
-		/** The icon as a texture, uploaded when first drawn; null when there is none or it cannot be read. */
+		/**
+		 * The icon as a texture: read and enlarged smoothly in the background (IconScaler) the first time it is asked
+		 * for, uploaded when that is done; null until then, when there is none, or when it cannot be read.
+		 */
 		@Nullable
 		TextureSetup texture() {
-			if (setup != null || icon == null) return setup;
-			byte[] bytes = icon;
-			icon = null;
-			NativeImage image = null;
+			if (setup != null || iconFailed) return setup;
+			if (preparing == null) {
+				if (icon == null) return null;
+				byte[] bytes = icon;
+				icon = null;
+				preparing = CompletableFuture.supplyAsync(() -> {
+					try {
+						NativeImage image = NativeImage.read(bytes);
+						return IconScaler.enlarge(image, Math.max(1, Math.min(8, 256 / Math.max(1, Math.max(image.getWidth(), image.getHeight())))));
+					} catch (IOException e) {
+						throw new UncheckedIOException(e);
+					}
+				}, ICONS);
+				return null;
+			}
+			if (!preparing.isDone()) return null;
+			NativeImage image;
 			try {
-				image = enlarge(NativeImage.read(bytes));
+				image = preparing.join();
+			} catch (RuntimeException e) {
+				iconFailed = true;
+				return null;
+			}
+			iconTaken = true;
+			try {
 				backing = new NativeImageBackedTexture(() -> "V1zir menu tile", image);
 				setup = TextureSetup.of(backing.getGlTextureView(), RenderSystem.getSamplerCache().get(FilterMode.LINEAR));
-			} catch (IOException | RuntimeException e) {
-				if (backing == null && image != null) image.close();
+				iconShownAt = System.nanoTime();
+			} catch (RuntimeException e) {
+				if (backing == null) image.close();
+				iconFailed = true;
 				releaseIcon();
 			}
 			return setup;
 		}
 
-		/**
-		 * A small icon (a server's or world's is 64 pixels) made larger by a whole number of times, each pixel a square
-		 * block of the same colour (nearest neighbour), so it stays crisp when shown large and smooth while it grows;
-		 * the image given is closed when a new one is made.
-		 */
-		private static NativeImage enlarge(NativeImage image) {
-			int w = image.getWidth(), h = image.getHeight();
-			int k = Math.min(8, 256 / Math.max(1, Math.max(w, h)));
-			if (k <= 1) return image;
-			NativeImage out = new NativeImage(NativeImage.Format.RGBA, w * k, h * k, false);
-			try {
-				for (int y = 0; y < h; y++) {
-					for (int x = 0; x < w; x++) {
-						int color = image.getColorArgb(x, y);
-						for (int j = 0; j < k; j++) for (int i = 0; i < k; i++) out.setColorArgb(x * k + i, y * k + j, color);
-					}
-				}
-			} catch (RuntimeException e) {
-				out.close();
-				return image;
-			}
-			image.close();
-			return out;
+		/** Whether an icon is still on its way (it fades in when it comes; the tile shows no symbol meanwhile). */
+		boolean iconComing() {
+			return setup == null && !iconFailed && (icon != null || preparing != null);
+		}
+
+		/** How far the icon has faded in since it came, 0 to 1. */
+		float iconIn() {
+			return setup == null ? 0f : Math.min(1f, (System.nanoTime() - iconShownAt) / 1.8e8f);
 		}
 
 		private void releaseIcon() {
 			if (backing != null) backing.close();
 			backing = null;
 			setup = null;
+			// Still being made when the menu goes: freed as soon as it is made.
+			if (preparing != null && !iconTaken) preparing.thenAccept(image -> {
+				if (image != null) image.close();
+			});
+			preparing = null;
 		}
 
 		void release() {

@@ -4,19 +4,19 @@ import dev.v1zir.visuals.render.font.Fonts;
 import dev.v1zir.visuals.render.font.SdfFont;
 import dev.v1zir.visuals.render.ui.Render2D;
 import dev.v1zir.visuals.util.ColorUtil;
+import dev.v1zir.visuals.util.Theme;
 import net.minecraft.client.gui.DrawContext;
 
 /**
  * The game's widgets in the PS5 style theme, as the menus of the style's home screen draw theirs: frosted pills, a dark
  * base under a light veil so white text reads on any background, white text; what the pointer is on turns lighter, with
- * a soft blue light under it. Sliders show their value as a thin lavender line with a white knob under the label, text
- * fields get a lavender ring when typed into, slots light up with a white ring. CustomUi draws through these while the
- * style is on.
+ * a white rim and a soft light around it. Sliders show their value as a thin line in the accent with a white knob under
+ * the label, text fields get a ring in the accent when typed into, slots light up with a white ring. The colours are
+ * the theme's (its base and accent): the style changes the shapes, not the colours. CustomUi draws through these while
+ * the style is on.
  */
 public final class ConsoleUi {
-	/** Surfaces, their edge, text on them, and the dark text on a white surface. */
-	public static final int SURFACE = 0xB31A1726;
-	public static final int SURFACE_DIM = 0x73151320;
+	/** The veils, edge and text on the surfaces (white, so the theme's colours show through), and dark text on white. */
 	public static final int VEIL = 0x2EFFFFFF;
 	public static final int VEIL_HOT = 0x6BFFFFFF;
 	public static final int EDGE = 0x1FFFFFFF;
@@ -25,9 +25,11 @@ public final class ConsoleUi {
 	public static final int FOCUS = 0xFFF4F6FB;
 	public static final int INK = 0xFF120F1E;
 	public static final int GLOW = 0x8CFFFFFF;
-	/** The light under what the pointer is on, and the lavender of values and rings. */
-	public static final int BLUE = 0xFF5F8DFF;
-	public static final int LAVENDER = 0xFFD5C8FF;
+
+	/** A surface in the theme's base colour, a little lighter, at the given opacity (0 to 255). */
+	private static int surface(int alpha, float lighter) {
+		return ColorUtil.withAlpha(ColorUtil.brighten(Theme.preset().base(), lighter), alpha);
+	}
 
 	private ConsoleUi() {
 	}
@@ -47,7 +49,7 @@ public final class ConsoleUi {
 	private static void pill(DrawContext ctx, float x, float y, float w, float h, float r, boolean lit, boolean active) {
 		Render2D.shadow(ctx, x, y + 1.5f, w, h, r, 7f, 0x4D000000);
 		if (lit) Render2D.glow(ctx, x, y, w, h, r, 7f, 0x38FFFFFF, 0x38FFFFFF);
-		Render2D.round(ctx, x, y, w, h, r, active ? SURFACE : SURFACE_DIM);
+		Render2D.round(ctx, x, y, w, h, r, surface(active ? 0xB3 : 0x73, 0.06f));
 		if (active) Render2D.gradientV(ctx, x, y, w, h, r, lit ? VEIL_HOT : VEIL, lit ? 0x47FFFFFF : 0x1AFFFFFF);
 		Render2D.outline(ctx, x, y, w, h, r, lit ? 1.25f : 1f, lit ? 0xA6FFFFFF : EDGE);
 	}
@@ -64,7 +66,8 @@ public final class ConsoleUi {
 		float th = Math.max(1.5f, h * 0.08f);
 		Render2D.round(ctx, x + inset, trackY - th / 2f, trackW, th, th / 2f, 0x33FFFFFF);
 		float fill = trackW * v;
-		if (fill > 0.5f) Render2D.round(ctx, x + inset, trackY - th / 2f, fill, th, th / 2f, active ? LAVENDER : ColorUtil.fade(LAVENDER, 0.5f));
+		int accent = Theme.accent();
+		if (fill > 0.5f) Render2D.round(ctx, x + inset, trackY - th / 2f, fill, th, th / 2f, active ? accent : ColorUtil.fade(accent, 0.5f));
 		float kw = Math.max(6f, h * 0.36f), kh = Math.max(3.5f, h * 0.2f);
 		float kx = x + inset + fill;
 		if (lit) Render2D.glow(ctx, kx - kw / 2f, trackY - kh / 2f, kw, kh, kh / 2f, 5f, GLOW, GLOW);
@@ -75,23 +78,24 @@ public final class ConsoleUi {
 	/** Behind a text field (the game draws its text and cursor on top): a white ring while it is typed into. */
 	public static void textField(DrawContext ctx, float x, float y, float w, float h, boolean focused, boolean hovered, boolean active) {
 		float r = Math.min(h / 2f, 7f);
-		if (focused) Render2D.shadow(ctx, x, y, w, h, r, 8f, ColorUtil.withAlpha(LAVENDER, 110));
-		Render2D.round(ctx, x, y, w, h, r, active ? 0xD9141220 : 0x80141220);
-		Render2D.outline(ctx, x, y, w, h, r, focused ? 1.5f : 1f, focused ? LAVENDER : hovered ? 0x55FFFFFF : EDGE);
+		int accent = Theme.accent();
+		if (focused) Render2D.shadow(ctx, x, y, w, h, r, 8f, ColorUtil.withAlpha(accent, 110));
+		Render2D.round(ctx, x, y, w, h, r, surface(active ? 0xD9 : 0x80, 0.03f));
+		Render2D.outline(ctx, x, y, w, h, r, focused ? 1.5f : 1f, focused ? accent : hovered ? 0x55FFFFFF : EDGE);
 	}
 
 	/** A tooltip around the text area (x, y, w, h as the game passes it). */
 	public static void tooltip(DrawContext ctx, float x, float y, float w, float h) {
 		float pad = 4f;
 		Render2D.shadow(ctx, x - pad, y - pad + 2f, w + pad * 2f, h + pad * 2f, 7f, 12f, 0x70000000);
-		Render2D.round(ctx, x - pad, y - pad, w + pad * 2f, h + pad * 2f, 7f, 0xF2161322);
+		Render2D.round(ctx, x - pad, y - pad, w + pad * 2f, h + pad * 2f, 7f, surface(0xF2, 0.05f));
 		Render2D.outline(ctx, x - pad, y - pad, w + pad * 2f, h + pad * 2f, 7f, 1f, 0x2EFFFFFF);
 	}
 
 	/** The panel behind an inventory or container. */
 	public static void panel(DrawContext ctx, float x, float y, float w, float h) {
 		Render2D.shadow(ctx, x, y + 4f, w, h, 11f, 20f, 0x80000000);
-		Render2D.gradientV(ctx, x, y, w, h, 11f, 0xEB1E1A2E, 0xEB12101D);
+		Render2D.gradientV(ctx, x, y, w, h, 11f, surface(0xEB, 0.09f), surface(0xEB, 0.02f));
 		Render2D.outline(ctx, x, y, w, h, 11f, 1f, 0x2EFFFFFF, 0x2EFFFFFF, 0x14FFFFFF, 0x14FFFFFF);
 	}
 
@@ -111,13 +115,13 @@ public final class ConsoleUi {
 	/** The hotbar's bar. */
 	public static void bar(DrawContext ctx, float x, float y, float w, float h) {
 		Render2D.shadow(ctx, x, y + 2f, w, h, 9f, 12f, 0x66000000);
-		Render2D.round(ctx, x, y, w, h, 9f, 0xCC141220);
+		Render2D.round(ctx, x, y, w, h, 9f, surface(0xCC, 0.04f));
 		Render2D.outline(ctx, x, y, w, h, 9f, 1f, 0x2EFFFFFF);
 	}
 
 	/** The hotbar's selected slot: ringed in white like a focused tile. */
 	public static void selection(DrawContext ctx, float x, float y) {
-		Render2D.glow(ctx, x - 1f, y - 1f, 20f, 20f, 6f, 7f, GLOW, ColorUtil.withAlpha(BLUE, 120));
+		Render2D.glow(ctx, x - 1f, y - 1f, 20f, 20f, 6f, 7f, GLOW, ColorUtil.withAlpha(Theme.accent(), 120));
 		Render2D.round(ctx, x, y, 18f, 18f, 5f, 0x33FFFFFF);
 		Render2D.outline(ctx, x - 1f, y - 1f, 20f, 20f, 6f, 1.5f, 0xF2FFFFFF);
 	}

@@ -58,9 +58,6 @@ public final class LoadingScreen {
 	private static final int SPARKS = 7;
 	/** Cells the gleam over the mark is drawn in, across and down. */
 	private static final int GLEAM_CELLS = 12;
-	/** The PS5 style theme's glow behind the mark and the end of the bar. */
-	private static final int PS5_GLOW = 0xFF8C6BFF;
-	private static final int PS5_BAR = 0xFFC9B8FF;
 
 	/** The overlay being drawn, and when it first showed: a new one starts its intro again. */
 	private static Object overlay;
@@ -156,8 +153,10 @@ public final class LoadingScreen {
 		m.pushMatrix();
 		// Pixels of the screen from here on.
 		m.scale(1f / scale, 1f / scale);
-		int accent = ps5 ? Backdrop.PS5_BEAM : Theme.accent();
-		int accent2 = ps5 ? Backdrop.PS5_BEAM_2 : Theme.accent2();
+		// Both styles in the theme's colours: the PS5 style changes the layout and the motion, not the colours.
+		int accent = Theme.accent();
+		int accent2 = Theme.accent2();
+		int light = ColorUtil.lerp(accent, 0xFFFFFFFF, 0.45f);
 		// On a console the stars come out on black first, then the light.
 		float lightIn = ps5 ? in(t, 0.7f, 1.8f) : in(t, 0f, 1.4f);
 		float starsIn = in(t, 0.1f, 1.2f);
@@ -169,7 +168,7 @@ public final class LoadingScreen {
 				0.7f, 0.5f, ColorUtil.lerp(0xFFFFFFFF, accent, 0.25f), lightIn, starsIn, cover);
 		}
 		float unit = Math.min(w, h);
-		motes(ctx, w, h, unit, t, ps5, ps5 ? PS5_BAR : ColorUtil.lerp(accent, 0xFFFFFFFF, 0.35f), lightIn, in(t, 0.3f, 1.6f) * cover);
+		motes(ctx, w, h, unit, t, ps5, ColorUtil.lerp(accent, 0xFFFFFFFF, 0.35f), lightIn, in(t, 0.3f, 1.6f) * cover);
 
 		float mark = mark(unit);
 		float cx = w / 2f;
@@ -185,7 +184,7 @@ public final class LoadingScreen {
 		m.translate(cx, markCy);
 		m.scale(grow, grow);
 		m.translate(-cx, -markCy);
-		int glowColor = ps5 ? PS5_GLOW : accent;
+		int glowColor = accent;
 		markAndGlow(ctx, cx, markCy, mark, t, f, glowColor, cover);
 		float baseline = top + mark + mark * 0.3f + titleH;
 		name(ctx, cx, baseline, mark, t, ps5, cover);
@@ -194,9 +193,9 @@ public final class LoadingScreen {
 		float barY = smallBaseline + mark * 0.36f;
 		float barW = Math.min(w * 0.36f, mark * 3.4f);
 		float content = cover * (1f - done);
-		bar(ctx, cx, barY, barW, bar, mark, t, ps5 ? 0xFFFFFFFF : accent, ps5 ? PS5_BAR : accent2, content);
+		bar(ctx, cx, barY, barW, bar, mark, t, ps5 ? 0xFFFFFFFF : accent, ps5 ? light : accent2, content);
 		captionLine(ctx, cx, barY + bar + mark * 0.16f, barW, mark, t, reloading ? RELOADING : STARTING, content);
-		flash(ctx, cx, markCy, mark, f, ps5 ? 0xFFE9DEFF : ColorUtil.lerp(accent, 0xFFFFFFFF, 0.5f), cover);
+		flash(ctx, cx, markCy, mark, f, ColorUtil.lerp(accent, 0xFFFFFFFF, 0.5f), cover);
 		m.popMatrix();
 		m.popMatrix();
 		if (f >= 2f) release();
@@ -364,7 +363,7 @@ public final class LoadingScreen {
 		float spacing = glyphs.size * 0.36f;
 		float width = glyphs.width(text, spacing);
 		glyphs.drawString(ctx, text, cx - width / 2f, baseline + (1f - e) * glyphs.size * 0.6f, spacing,
-			ColorUtil.fade(ps5 ? 0xFFD7CCFF : 0xFFFFFFFF, 0.5f * e));
+			ColorUtil.fade(0xFFFFFFFF, 0.5f * e));
 	}
 
 	/**

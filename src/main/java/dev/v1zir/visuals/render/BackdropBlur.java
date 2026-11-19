@@ -167,6 +167,22 @@ public final class BackdropBlur {
 		for (int j = 1; j < levels; j++) margin += up << (j + 1);
 		margins[levels - 1] = margin;
 		for (int i = levels - 2; i >= 0; i--) margins[i] = margins[i + 1] + (down << (i + 1));
+		// Many panels apart (a full HUD): one box around them all costs far fewer passes than a box for each.
+		if (regionCount > 3) {
+			int x0 = Integer.MAX_VALUE, y0 = Integer.MAX_VALUE, x1 = Integer.MIN_VALUE, y1 = Integer.MIN_VALUE;
+			for (int i = 0; i < regionCount * 4; i += 4) {
+				x0 = Math.min(x0, regions[i]);
+				y0 = Math.min(y0, regions[i + 1]);
+				x1 = Math.max(x1, regions[i + 2]);
+				y1 = Math.max(y1, regions[i + 3]);
+			}
+			regions[0] = x0;
+			regions[1] = y0;
+			regions[2] = x1;
+			regions[3] = y1;
+			regionCount = 1;
+			return;
+		}
 		// Merge regions whose widest reach overlaps, so no area is blurred twice.
 		int reach = margins[0];
 		for (boolean merged = true; merged; ) {

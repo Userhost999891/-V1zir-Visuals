@@ -24,8 +24,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /**
  * Menus opened outside a world (options, world list, server list...) show the home screen's wallpaper instead of the
  * vanilla rotating panorama (the PS5 style's backdrop with that style theme), and a screen opened from the main menu
- * comes in out of a dark veil from a slight zoom ({@link ScreenTransition}). While a screen draws, the UI takes the
- * colours of the PS5 style theme when it is on (Theme).
+ * comes in out of a dark veil from a slight zoom ({@link ScreenTransition}).
  */
 @Mixin(Screen.class)
 public abstract class ScreenMixin {
@@ -42,7 +41,6 @@ public abstract class ScreenMixin {
 
 	@Inject(method = "renderWithTooltip", at = @At("HEAD"))
 	private void v1zir$enterBegin(DrawContext context, int mouseX, int mouseY, float deltaTicks, CallbackInfo ci) {
-		Theme.screen(true);
 		float p = ScreenTransition.progress((Screen) (Object) this);
 		v1zir$entering = p < 1f;
 		if (!v1zir$entering) return;
@@ -57,7 +55,6 @@ public abstract class ScreenMixin {
 
 	@Inject(method = "renderWithTooltip", at = @At("TAIL"))
 	private void v1zir$enterEnd(DrawContext context, int mouseX, int mouseY, float deltaTicks, CallbackInfo ci) {
-		Theme.screen(false);
 		if (!v1zir$entering) return;
 		v1zir$entering = false;
 		context.getMatrices().popMatrix();

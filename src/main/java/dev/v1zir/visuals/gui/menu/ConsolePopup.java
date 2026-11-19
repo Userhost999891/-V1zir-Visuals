@@ -6,6 +6,7 @@ import dev.v1zir.visuals.render.font.SdfFont;
 import dev.v1zir.visuals.render.ui.Render2D;
 import dev.v1zir.visuals.util.Anim;
 import dev.v1zir.visuals.util.ColorUtil;
+import dev.v1zir.visuals.util.Theme;
 import net.minecraft.client.gui.DrawContext;
 import org.joml.Matrix3x2fStack;
 import org.lwjgl.glfw.GLFW;
@@ -23,7 +24,6 @@ final class ConsolePopup {
 	record Choice(String label, int icon, Runnable action) {
 	}
 
-	private static final int PANEL = 0xE01A1726;
 	private static final int PILL = 0x38FFFFFF;
 	private static final int PILL_HOT = 0x75FFFFFF;
 
@@ -98,7 +98,7 @@ final class ConsolePopup {
 		m.translate(-cx, -cy);
 		float r = Math.min(22f, rowH * 0.8f);
 		Render2D.shadow(ctx, panelX, panelY + 4f, panelW, panelH, r, 22f, ColorUtil.withAlpha(0x000000, Math.round(150 * e)));
-		Render2D.round(ctx, panelX, panelY, panelW, panelH, r, ColorUtil.fade(PANEL, e));
+		Render2D.round(ctx, panelX, panelY, panelW, panelH, r, ColorUtil.fade(ColorUtil.withAlpha(ColorUtil.brighten(Theme.preset().base(), 0.08f), 0xE0), e));
 		Render2D.gradientV(ctx, panelX, panelY, panelW, panelH, r, ColorUtil.withAlpha(0xFFFFFF, Math.round(18 * e)), 0x00FFFFFF);
 		Render2D.outline(ctx, panelX, panelY, panelW, panelH, r, 1f, ColorUtil.withAlpha(0xFFFFFF, Math.round(26 * e)));
 		if (!title.isEmpty()) {

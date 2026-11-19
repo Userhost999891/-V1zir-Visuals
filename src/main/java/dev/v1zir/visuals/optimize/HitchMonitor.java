@@ -16,8 +16,9 @@ import java.util.Locale;
  * The client's own work is timed in a few parts each frame (its tick, the world's effects, the post effects, the
  * HUD), and Java's garbage collection reports its pauses. A hitch is written to the log (latest.log) with the time of
  * each part in that frame and any pause of the collector that fell in it, at most once every few seconds, and once a
- * minute a summary. When the collector's pauses are what stutter, again and again, a notification says to give the
- * game more memory. Render thread only, but for the collector's reports.
+ * minute a summary. When hitches come again and again, a notification says once what is behind them: the collector
+ * (give the game more memory), the client's own work (which part), or the game itself (chunks, the server).
+ * Render thread only, but for the collector's reports.
  */
 public final class HitchMonitor {
 	public static final int TICK = 0;
@@ -47,6 +48,10 @@ public final class HitchMonitor {
 	private static volatile int longPauses;
 	private static volatile String lastPause = "";
 	private static boolean warned;
+	/** In this minute's hitches: how much of their time was the client's own work, and which part the most. */
+	private static long hitchTime;
+	private static long hitchOurs;
+	private static final long[] hitchParts = new long[PARTS.length];
 	private static boolean started;
 
 	private HitchMonitor() {
@@ -112,11 +117,16 @@ public final class HitchMonitor {
 				V1zir.LOGGER.info("Hitches in the last minute: {}, the worst {} ms; usual frame {} ms; collector pauses of {} ms or more: {} (worst {} ms)",
 					hitches, worst / 1_000_000L, String.format(Locale.ROOT, "%.1f", usual / 1.0e6f), LONG_PAUSE_MS, longPauses, pauseWorstMs);
 			}
-			if (longPauses >= 3 && !warned) {
+			// Not in the game test (software rendering there hitches all the time; its log has the lines anyway).
+			if (hitches >= 5 && !warned && !"loopback".equals(System.getProperty("v1zir.messages.relay"))) {
 				warned = true;
-				Notifications.push(Icons.CPU, "Lag spikes: memory", "Java keeps stopping to free memory. Give Minecraft more RAM (4 GB+) in the launcher", false);
+				Notifications.push(Icons.CPU, "Lag spikes: " + hitches + " in a minute", cause(), false);
+				V1zir.LOGGER.info("Hitches: {}", cause());
 			}
 			windowStart = now;
+			hitchTime = 0L;
+			hitchOurs = 0L;
+			for (int i = 0; i < hitchParts.length; i++) hitchParts[i] = 0L;
 			hitches = 0;
 			worst = 0L;
 			longPauses = 0;
@@ -124,9 +134,25 @@ public final class HitchMonitor {
 		}
 	}
 
+	/** What the hitches of this minute were mostly made of, in words for the player. */
+	private static String cause() {
+		if (longPauses >= 2) return "Java stops to free memory: give Minecraft more RAM (4-6 GB) in the launcher";
+		if (hitchTime > 0L && hitchOurs * 3L > hitchTime) {
+			int most = 0;
+			for (int i = 1; i < hitchParts.length; i++) if (hitchParts[i] > hitchParts[most]) most = i;
+			return "V1zir's " + PARTS[most] + " (turn off heavy modules there)";
+		}
+		return "Minecraft itself (chunks loading, the server, other mods), not V1zir";
+	}
+
 	private static void hitch(long now, long frame) {
 		hitches++;
 		worst = Math.max(worst, frame);
+		hitchTime += frame;
+		for (int i = 0; i < spent.length; i++) {
+			hitchOurs += spent[i];
+			hitchParts[i] += spent[i];
+		}
 		if (now - lastLogged < LOG_EVERY_NANOS) return;
 		lastLogged = now;
 		StringBuilder parts = new StringBuilder();

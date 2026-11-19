@@ -3,6 +3,7 @@ package dev.v1zir.visuals.gui.loading;
 import dev.v1zir.visuals.V1zir;
 import dev.v1zir.visuals.util.Anim;
 import dev.v1zir.visuals.util.ColorUtil;
+import dev.v1zir.visuals.util.Theme;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.gui.DrawContext;
@@ -19,16 +20,7 @@ import org.joml.Matrix3x2fStack;
  * pipeline of the Mojang logo, so it works before anything of the game is loaded. Render thread only.
  */
 public final class Backdrop {
-	/** The PS5 style theme's backdrop: near black with a violet cast, one violet beam with a pink-white source, dense stars. */
-	public static final int PS5_TOP = 0xFF040308;
-	public static final int PS5_BOTTOM = 0xFF0B0819;
-	public static final int PS5_BEAM = 0xFF9466FF;
-	public static final int PS5_BEAM_2 = 0xFFB98CFF;
-	public static final int PS5_CORE = 0xFFF4CCFF;
-	public static final int PS5_HAZE = 0xFF5A3CC8;
-	public static final int PS5_STAR = 0xFFE4E2FF;
-	private static final int PS5_STAR_BLUE = 0xFF9FB8FF;
-	private static final int PS5_STAR_VIOLET = 0xFFC3A4FF;
+	/** Stars of the PS5 style's backdrop; its colours are the theme's (accent, second accent, base). */
 	private static final int PS5_STARS = 240;
 	private static final int STARS = 90;
 	private static final long EPOCH = System.nanoTime();
@@ -49,13 +41,18 @@ public final class Backdrop {
 	}
 
 	/**
-	 * The PS5 style backdrop over w x h pixels (the pose in pixels of the screen): one beam falls from the top left corner,
-	 * pink-white where it comes in and violet as it widens, in a faint haze of its own colour, swaying a little; stars
-	 * all over, a few drifting, brighter where the beam passes over them. lightIn and starsIn (0 to 1) bring the light
-	 * and the stars in; alpha fades it all.
+	 * The PS5 style backdrop over w x h pixels (the pose in pixels of the screen), in the theme's colours: one beam
+	 * falls from the top left corner, near white where it comes in and the accent as it widens, in a faint haze of the
+	 * second accent, swaying a little; stars all over, a few drifting, brighter where the beam passes over them.
+	 * lightIn and starsIn (0 to 1) bring the light and the stars in; alpha fades it all.
 	 */
 	public static void ps5(DrawContext ctx, int w, int h, float scale, float lightIn, float starsIn, float alpha) {
-		ctx.fillGradient(0, 0, w, h, ColorUtil.fade(PS5_TOP, alpha), ColorUtil.fade(PS5_BOTTOM, alpha));
+		int base = Theme.preset().base();
+		int accent = Theme.accent();
+		int accent2 = Theme.accent2();
+		int top = ColorUtil.darken(base, 0.45f) | 0xFF000000;
+		int bottom = ColorUtil.lerp(ColorUtil.darken(base, 0.1f), accent2, 0.05f) | 0xFF000000;
+		ctx.fillGradient(0, 0, w, h, ColorUtil.fade(top, alpha), ColorUtil.fade(bottom, alpha));
 		float t = time();
 		float light = lightIn * alpha;
 		float ox = w * 0.02f, oy = -h * 0.05f;
@@ -64,10 +61,13 @@ public final class Backdrop {
 		float width = Math.max(w * 0.2f, h * 0.5f);
 		if (light > 0.01f && ensureBeam(w, h)) {
 			float breathe = 0.92f + 0.08f * (float) Math.sin(t * 0.6f);
-			beam(ctx, ox, oy, angle, length * 1.05f, width * 2.1f, ColorUtil.fade(PS5_HAZE, 0.2f * light));
-			beam(ctx, ox, oy, angle, length, width, ColorUtil.fade(PS5_BEAM, 0.95f * light * breathe));
-			beam(ctx, ox, oy, angle, length * 0.42f, width * 0.42f, ColorUtil.fade(PS5_CORE, 0.55f * light * breathe));
+			beam(ctx, ox, oy, angle, length * 1.05f, width * 2.1f, ColorUtil.fade(accent2, 0.2f * light));
+			beam(ctx, ox, oy, angle, length, width, ColorUtil.fade(accent, 0.95f * light * breathe));
+			beam(ctx, ox, oy, angle, length * 0.42f, width * 0.42f, ColorUtil.fade(ColorUtil.lerp(accent, 0xFFFFFFFF, 0.65f), 0.55f * light * breathe));
 		}
+		int starWhite = 0xFFE9E9EE;
+		int starA = ColorUtil.lerp(0xFFFFFFFF, accent, 0.45f);
+		int starB = ColorUtil.lerp(0xFFFFFFFF, accent2, 0.45f);
 		float stars = starsIn * alpha;
 		if (stars <= 0.01f) return;
 		float dx = (float) Math.cos(angle), dy = (float) Math.sin(angle);
@@ -91,7 +91,7 @@ public final class Backdrop {
 				float lit = (float) Math.exp(-(across / half) * (across / half) * 2f) * (1f - along / length);
 				a += lit * 0.9f * light;
 			}
-			int color = h3 < 0.18f ? PS5_STAR_BLUE : h3 > 0.86f ? PS5_STAR_VIOLET : PS5_STAR;
+			int color = h3 < 0.18f ? starA : h3 > 0.86f ? starB : starWhite;
 			int size = Math.max(1, Math.round(scale * (0.4f + 0.75f * h4 * h4 * h4)));
 			int sx = Math.round(x), sy = Math.round(y);
 			ctx.fill(sx, sy, sx + size, sy + size, ColorUtil.fade(color, Math.min(1f, a) * stars));
