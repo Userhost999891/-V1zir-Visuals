@@ -132,6 +132,8 @@ public final class ConsoleMenu extends Screen {
 	/** Asks the servers of the list how many are on them, as the server list does. */
 	private final MultiplayerServerListPinger pinger = new MultiplayerServerListPinger();
 	private boolean pinged;
+	/** Whether there is something to continue, read from the disk once per layout (not every frame). */
+	private boolean canContinue;
 	/** Pictures shown, the one picked last at the end (on top); those under it go once it covers them. */
 	private final List<Item> art = new ArrayList<>();
 	private int swapDirection = 1;
@@ -205,6 +207,7 @@ public final class ConsoleMenu extends Screen {
 		List<Item> items = new ArrayList<>();
 		String user = client.getSession().getUsername();
 		boolean last = LastPlayed.available(client);
+		canContinue = last;
 		items.add(new Item(HOME, V1zir.NAME, last ? "Continue: " + LastPlayed.label() : "Welcome, " + user, last ? "Continue" : "Play", null, null));
 		if (servers) loadServers(items);
 		else loadWorlds(items);
@@ -855,7 +858,7 @@ public final class ConsoleMenu extends Screen {
 			Message last = newest.last();
 			latest = last != null ? (last.out() ? "You: " : newest.contact().name() + ": ") + last.text() : newest.contact().name();
 		}
-		boolean last = LastPlayed.available(client);
+		boolean last = canContinue;
 		String activity = last ? "Continue " + LastPlayed.label() + (LastPlayed.server && LastPlayed.ping > 0 ? "  ·  " + LastPlayed.ping + " ms" : "")
 			: "Nothing played yet";
 		float w = width, h = height;
