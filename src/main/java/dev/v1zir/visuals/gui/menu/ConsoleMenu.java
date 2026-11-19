@@ -714,7 +714,7 @@ public final class ConsoleMenu extends Screen {
 			Render2D.round(ctx, x, y, size, size, r, ColorUtil.fade(TILE_LIGHT, alpha), ColorUtil.fade(TILE_MID, alpha), ColorUtil.fade(TILE_DARK, alpha),
 				ColorUtil.fade(TILE_MID, alpha));
 			Render2D.gradientV(ctx, x, y, size, size * 0.5f, r, ColorUtil.withAlpha(0xFFFFFF, Math.round(9 * alpha)), 0x00FFFFFF);
-			float logo = size * 0.25f;
+			float logo = size * 0.22f;
 			Render2D.setAlpha(alpha);
 			Logo.draw(ctx, x + logo, y + logo, size - logo * 2f);
 			Render2D.setAlpha(1f);
