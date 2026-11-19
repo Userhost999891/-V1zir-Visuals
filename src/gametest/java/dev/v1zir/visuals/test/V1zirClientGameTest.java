@@ -8,6 +8,7 @@ import dev.v1zir.visuals.compat.voicechat.MusicFeed;
 import dev.v1zir.visuals.gui.menu.ConsoleMenu;
 import dev.v1zir.visuals.gui.menu.LockScreen;
 import dev.v1zir.visuals.gui.menu.MainMenus;
+import dev.v1zir.visuals.gui.menu.MenuShots;
 import dev.v1zir.visuals.gui.menu.V1zirMainMenu;
 import dev.v1zir.visuals.media.Media;
 import dev.v1zir.visuals.media.NowPlaying;
@@ -133,6 +134,8 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 
 	@Override
 	public void runTest(ClientGameTestContext context) {
+		// Pictures for the PS5 style menu are taken when the test asks, not at whatever moment comes.
+		context.runOnClient(client -> MenuShots.auto = false);
 		resize(context, 1280, 720);
 		mainMenu(context);
 		vanillaMenuNeverShows(context);
@@ -214,8 +217,17 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.waitTicks(40);
 		context.takeScreenshot("main-menu-ps5-worlds");
 		context.getInput().pressKey(GLFW.GLFW_KEY_RIGHT);
-		context.waitTicks(15);
+		// Its picture, taken in the world, read and faded in behind it.
+		context.waitTicks(40);
 		context.takeScreenshot("main-menu-ps5-world");
+		context.getInput().pressKey(GLFW.GLFW_KEY_DOWN);
+		context.getInput().pressKey(GLFW.GLFW_KEY_RIGHT);
+		context.waitTicks(10);
+		context.getInput().pressKey(GLFW.GLFW_KEY_ENTER);
+		context.waitTicks(15);
+		context.takeScreenshot("main-menu-ps5-popup");
+		context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+		context.waitTicks(10);
 		context.runOnClient(client -> ModuleManager.get(ThemeModule.class).styleTheme.reset());
 		context.runOnClient(client -> {
 			if (bot != null) bot.stop();
@@ -627,12 +639,21 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 				int streamedWav = streamed(wav);
 				Files.deleteIfExists(ogg);
 				Files.deleteIfExists(wav);
-				return pcm.samples().length + " " + pcm.rate() + " " + pcm.channels() + " " + streamed + " " + fromWav.samples().length + " " + streamedWav;
+				// An MP3 file (a short tone made for the test): whole, and streamed.
+				Path mp3 = Files.createTempFile("v1zir-audio", ".mp3");
+				try (InputStream tone = V1zirClientGameTest.class.getResourceAsStream("/v1zir-test-tone.mp3")) {
+					Files.write(mp3, tone.readAllBytes());
+				}
+				Pcm fromMp3 = AudioFiles.decode(mp3);
+				int streamedMp3 = streamed(mp3);
+				Files.deleteIfExists(mp3);
+				return pcm.samples().length + " " + pcm.rate() + " " + pcm.channels() + " " + streamed + " " + fromWav.samples().length + " " + streamedWav
+					+ " " + fromMp3.samples().length + " " + fromMp3.rate() + " " + fromMp3.channels() + " " + streamedMp3;
 			} catch (IOException | RuntimeException e) {
 				return "failed " + e;
 			}
 		});
-		System.out.println("V1ZIR-AUDIO samples, rate, channels, streamed at 48 kHz, WAV samples, WAV streamed: " + result);
+		System.out.println("V1ZIR-AUDIO samples, rate, channels, streamed at 48 kHz, WAV samples, WAV streamed, MP3 samples, rate, channels, streamed: " + result);
 		if (result.startsWith("failed")) throw new AssertionError("The audio did not decode: " + result);
 		String[] parts = result.split(" ");
 		int samples = Integer.parseInt(parts[0]);
@@ -641,6 +662,13 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		int expected = Math.round(samples / (float) Integer.parseInt(parts[2]) * MusicFeed.RATE / rate);
 		if (samples < 5000 || Math.abs(streamed - expected) > 64 || Integer.parseInt(parts[4]) != samples || Math.abs(Integer.parseInt(parts[5]) - expected) > 64) {
 			throw new AssertionError("The audio decoded wrong: " + result + " (streamed should be about " + expected + ")");
+		}
+		// The tone is half a second at 44.1 kHz, mono; the encoder adds a little silence at the ends.
+		int mp3 = Integer.parseInt(parts[6]);
+		int mp3Streamed = Integer.parseInt(parts[9]);
+		if (Integer.parseInt(parts[7]) != 44100 || Integer.parseInt(parts[8]) != 1 || mp3 < 21000 || mp3 > 28000
+			|| Math.abs(mp3Streamed - Math.round(mp3 * (float) MusicFeed.RATE / 44100)) > 64) {
+			throw new AssertionError("The MP3 decoded wrong: " + result);
 		}
 		context.runOnClient(client -> {
 			HitSoundModule hit = ModuleManager.get(HitSoundModule.class);
@@ -1504,6 +1532,13 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.setScreen(() -> null);
 		context.waitTicks(12);
 		context.takeScreenshot("hotbar-ps5");
+		// The PS5 menu's picture of this world: taken as the next frame is drawn, without the hand or the HUD.
+		int before = context.computeOnClient(client -> MenuShots.saved());
+		boolean asked = context.computeOnClient(MenuShots::request);
+		for (int i = 0; i < 100 && context.computeOnClient(client -> MenuShots.saved()) == before; i++) context.waitTick();
+		int after = context.computeOnClient(client -> MenuShots.saved());
+		System.out.println("V1ZIR-PICTURE asked: " + asked + ", saved: " + (after - before));
+		if (!asked || after == before) throw new AssertionError("The menu picture of the world was not saved");
 		context.runOnClient(client -> ModuleManager.get(ThemeModule.class).styleTheme.reset());
 		context.waitTicks(2);
 	}

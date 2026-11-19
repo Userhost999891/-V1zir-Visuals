@@ -1,5 +1,11 @@
 package dev.v1zir.visuals.audio;
 
+import javazoom.jl.decoder.Bitstream;
+import javazoom.jl.decoder.BitstreamException;
+import javazoom.jl.decoder.Decoder;
+import javazoom.jl.decoder.DecoderException;
+import javazoom.jl.decoder.Header;
+import javazoom.jl.decoder.SampleBuffer;
 import org.lwjgl.stb.STBVorbis;
 import org.lwjgl.stb.STBVorbisInfo;
 import org.lwjgl.system.MemoryStack;
@@ -27,11 +33,11 @@ import java.util.Locale;
 import java.util.stream.Stream;
 
 /**
- * Sound files the player brings: Ogg Vorbis (stb_vorbis, as the game itself reads them) and WAV, AIFF or AU (Java's own
- * audio). They are decoded whole for short sounds, or streamed as mono at a fixed rate for music.
+ * Sound files the player brings: Ogg Vorbis (stb_vorbis, as the game itself reads them), MP3 (JLayer) and WAV, AIFF or
+ * AU (Java's own audio). They are decoded whole for short sounds, or streamed as mono at a fixed rate for music.
  */
 public final class AudioFiles {
-	private static final String[] EXTENSIONS = {".ogg", ".wav", ".aiff", ".aif", ".au"};
+	private static final String[] EXTENSIONS = {".ogg", ".mp3", ".wav", ".aiff", ".aif", ".au"};
 	/** Files larger than this are not read whole (a hit sound is a few kilobytes). */
 	private static final long MAX_CLIP = 8L << 20;
 
@@ -64,27 +70,35 @@ public final class AudioFiles {
 
 	/** Decodes a whole file read into memory; name tells the format by its extension. */
 	public static Pcm decode(byte[] bytes, String name) throws IOException {
-		return name.toLowerCase(Locale.ROOT).endsWith(".ogg") ? ogg(bytes) : sampled(new ByteArrayInputStream(bytes));
+		String lower = name.toLowerCase(Locale.ROOT);
+		if (lower.endsWith(".ogg")) {
+			// Through the same stream as music, into buffers of its own: what stb_vorbis allocates for a whole-file
+			// decode belongs to LWJGL's allocator, and freeing it any other way crashes the game.
+			try (OggSource source = new OggSource(bytes)) {
+				return whole(source, bytes.length * 4);
+			}
+		}
+		if (lower.endsWith(".mp3")) {
+			try (Mp3Source source = new Mp3Source(new ByteArrayInputStream(bytes))) {
+				return whole(source, bytes.length * 12);
+			}
+		}
+		return sampled(new ByteArrayInputStream(bytes));
 	}
 
-	/**
-	 * Decodes a whole Ogg file through the same stream as music, into buffers of its own: what stb_vorbis allocates for a
-	 * whole-file decode belongs to LWJGL's allocator, and freeing it any other way crashes the game.
-	 */
-	private static Pcm ogg(byte[] bytes) throws IOException {
-		try (OggSource source = new OggSource(bytes)) {
-			int channels = source.channels();
-			short[] chunk = new short[4096 * channels];
-			short[] samples = new short[Math.max(4096, bytes.length * 4)];
-			int length = 0;
-			for (int frames; (frames = source.frames(chunk)) > 0; ) {
-				int n = frames * channels;
-				if (length + n > samples.length) samples = Arrays.copyOf(samples, Math.max(samples.length * 2, length + n));
-				System.arraycopy(chunk, 0, samples, length, n);
-				length += n;
-			}
-			return new Pcm(Arrays.copyOf(samples, length), channels, source.rate());
+	/** All of a source's frames; guess is roughly how many samples to expect. */
+	private static Pcm whole(Source source, int guess) throws IOException {
+		int channels = source.channels();
+		short[] chunk = new short[4096 * channels];
+		short[] samples = new short[Math.max(4096, Math.min(guess, 1 << 24))];
+		int length = 0;
+		for (int frames; (frames = source.frames(chunk)) > 0; ) {
+			int n = frames * channels;
+			if (length + n > samples.length) samples = Arrays.copyOf(samples, Math.max(samples.length * 2, length + n));
+			System.arraycopy(chunk, 0, samples, length, n);
+			length += n;
 		}
+		return new Pcm(Arrays.copyOf(samples, length), channels, source.rate());
 	}
 
 	private static Pcm sampled(InputStream in) throws IOException {
@@ -121,8 +135,11 @@ public final class AudioFiles {
 	/** Opens a file to stream it as mono at rate samples a second. */
 	public static MonoStream open(Path file, int rate) throws IOException {
 		Source source;
-		if (file.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".ogg")) {
+		String name = file.getFileName().toString().toLowerCase(Locale.ROOT);
+		if (name.endsWith(".ogg")) {
 			source = new OggSource(Files.readAllBytes(file));
+		} else if (name.endsWith(".mp3")) {
+			source = new Mp3Source(new BufferedInputStream(Files.newInputStream(file), 1 << 16));
 		} else {
 			try {
 				source = new SampledSource(pcm16(AudioSystem.getAudioInputStream(new BufferedInputStream(Files.newInputStream(file)))));
@@ -195,6 +212,121 @@ public final class AudioFiles {
 			STBVorbis.stb_vorbis_close(handle);
 			MemoryUtil.memFree(data);
 			MemoryUtil.memFree(chunk);
+		}
+	}
+
+	/**
+	 * MPEG audio (MP3) through JLayer, a frame at a time. The channel count is the first frame's: a later frame with
+	 * another count is mixed down or spread to it, and frames that do not decode are skipped.
+	 */
+	private static final class Mp3Source implements Source {
+		/** Frames in a row that may fail to decode before the file is taken as broken. */
+		private static final int MAX_BAD_FRAMES = 64;
+		private final InputStream in;
+		private final Bitstream bitstream;
+		private final Decoder decoder = new Decoder();
+		private final int channels;
+		private final int rate;
+		private short[] pending = new short[2304];
+		private int pendingLength;
+		private int pendingOffset;
+		private boolean ended;
+
+		Mp3Source(InputStream in) throws IOException {
+			this.in = in;
+			this.bitstream = new Bitstream(in);
+			SampleBuffer first = next();
+			if (first == null) {
+				close();
+				throw new IOException("Not an MP3 file");
+			}
+			channels = Math.max(1, Math.min(2, first.getChannelCount()));
+			rate = Math.max(8000, first.getSampleFrequency());
+			take(first);
+		}
+
+		@Override
+		public int channels() {
+			return channels;
+		}
+
+		@Override
+		public int rate() {
+			return rate;
+		}
+
+		/** The next frame that decodes, null at the end. */
+		private SampleBuffer next() throws IOException {
+			if (ended) return null;
+			try {
+				for (int bad = 0; bad < MAX_BAD_FRAMES; bad++) {
+					Header header = bitstream.readFrame();
+					if (header == null) break;
+					try {
+						return (SampleBuffer) decoder.decodeFrame(header, bitstream);
+					} catch (DecoderException | ArrayIndexOutOfBoundsException e) {
+						// A damaged frame: on to the next one.
+					} finally {
+						bitstream.closeFrame();
+					}
+				}
+			} catch (BitstreamException e) {
+				if (pendingLength == 0 && pendingOffset == 0) throw new IOException("Broken MP3 file", e);
+				// A damaged end of an otherwise good file: what was read plays.
+			}
+			ended = true;
+			return null;
+		}
+
+		/** Keeps a decoded frame (its buffer is the decoder's own, used again for the next one) in this source's channels. */
+		private void take(SampleBuffer frame) {
+			short[] samples = frame.getBuffer();
+			int length = Math.min(frame.getBufferLength(), samples.length);
+			int own = Math.max(1, frame.getChannelCount());
+			int count = length / own;
+			if (pending.length < count * channels) pending = new short[count * channels];
+			if (own == channels) {
+				System.arraycopy(samples, 0, pending, 0, count * channels);
+			} else if (channels == 1) {
+				for (int i = 0; i < count; i++) pending[i] = (short) ((samples[i * own] + samples[i * own + 1]) / 2);
+			} else {
+				for (int i = 0; i < count; i++) pending[i * 2] = pending[i * 2 + 1] = samples[i * own];
+			}
+			pendingLength = count * channels;
+			pendingOffset = 0;
+		}
+
+		@Override
+		public int frames(short[] out) throws IOException {
+			int capacity = out.length / channels * channels;
+			int written = 0;
+			while (written < capacity) {
+				if (pendingOffset >= pendingLength) {
+					SampleBuffer frame = next();
+					if (frame == null) break;
+					take(frame);
+					continue;
+				}
+				int n = Math.min(pendingLength - pendingOffset, capacity - written);
+				System.arraycopy(pending, pendingOffset, out, written, n);
+				pendingOffset += n;
+				written += n;
+			}
+			return written / channels;
+		}
+
+		@Override
+		public void close() {
+			try {
+				bitstream.close();
+			} catch (BitstreamException ignored) {
+				// Closing anyway.
+			}
+			try {
+				in.close();
+			} catch (IOException ignored) {
+				// Closing anyway.
+			}
 		}
 	}
 

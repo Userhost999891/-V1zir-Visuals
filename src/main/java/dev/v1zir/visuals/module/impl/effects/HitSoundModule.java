@@ -23,7 +23,7 @@ import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * A sound on every hit you land: one of the client's own, made for it (Bubble, a drop of water, by default; Pop, Click,
- * Ding, Crit, Thump, Chime, Zap), or a file of your own from config/v1zir/hitsounds (OGG or WAV), picked under File.
+ * Ding, Crit, Thump, Chime, Zap), or a file of your own from config/v1zir/hitsounds (MP3, OGG or WAV), picked under File.
  * The client's own play through the game's sounds (assets/v1zir/sounds.json); your own straight through the audio
  * device, at the game's master volume.
  */

@@ -22,7 +22,7 @@ import java.util.List;
 
 /**
  * Voice Chat Music: music for the others on Simple Voice Chat, through your microphone. It plays the files in
- * config/v1zir/music (OGG or WAV) one after another, shuffled if you like, merged into what your microphone sends, also
+ * config/v1zir/music (MP3, OGG or WAV) one after another, shuffled if you like, merged into what your microphone sends, also
  * while you are not talking (MusicFeed, VoiceChatBridge). You hear it yourself too, quieter, unless you turn that off.
  * It needs Simple Voice Chat and plays while voice chat is connected; keys can skip to the next track and pause it.
  */
@@ -65,7 +65,7 @@ public final class VoiceChatMusicModule extends Module {
 		}
 		List<Path> files = AudioFiles.list(folder());
 		if (files.isEmpty()) {
-			Notifications.push(Icons.FOLDER, "Voice Chat Music", "Put OGG or WAV files in config/v1zir/music", false);
+			Notifications.push(Icons.FOLDER, "Voice Chat Music", "Put MP3, OGG or WAV files in config/v1zir/music", false);
 			Util.getOperatingSystem().open(folder());
 			played = false;
 			return;

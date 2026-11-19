@@ -29,6 +29,7 @@ jobs:
       # Temporary: method signatures of the mapped 1.21.11 classes the mod hooks into, so mixin
       # targets can be checked against the real game (javap prints declarations and bytecode only).
       - name: API signatures
+        if: always()
         run: |
           jar=$(find .gradle ~/.gradle -path '*minecraftMaven*' -name 'minecraft-*.jar' ! -name '*sources*' 2>/dev/null | head -1)
           echo "mapped jar: $jar"
@@ -39,7 +40,9 @@ jobs:
                    net.minecraft.client.render.RenderSetup\$Builder net.minecraft.entity.PlayerLikeEntity \
                    net.minecraft.client.render.entity.state.BipedEntityRenderState net.minecraft.client.render.entity.state.PlayerEntityRenderState \
                    net.minecraft.client.render.entity.feature.CapeFeatureRenderer net.minecraft.client.render.entity.feature.FeatureRenderer \
-                   net.minecraft.client.gui.screen.ingame.InventoryScreen; do
+                   net.minecraft.client.gui.screen.ingame.InventoryScreen net.minecraft.client.util.ScreenshotRecorder \
+                   net.minecraft.client.texture.NativeImage net.minecraft.client.network.MultiplayerServerListPinger \
+                   net.minecraft.client.network.ServerInfo; do
             echo "=== SIG $c"; sig "$c"
           done
           echo "=== CODE HeldItemFeatureRenderer.renderItem"; code net.minecraft.client.render.entity.feature.HeldItemFeatureRenderer renderItem

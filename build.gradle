@@ -54,6 +54,9 @@ dependencies {
 	mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
 	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+	// MP3 decoding for the player's own sounds (JLayer, LGPL), inside the mod's jar as a jar of its own.
+	implementation "javazoom:jlayer:1.0.1"
+	include "javazoom:jlayer:1.0.1"
 }
 
 processResources {

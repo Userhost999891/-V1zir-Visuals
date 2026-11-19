@@ -59,15 +59,20 @@ import java.util.stream.Stream;
 
 /**
  * The main menu with the PS5 style theme, laid out like the home screen of a console. Two tabs at the top left,
- * Singleplayer and Multiplayer; Messages, the settings, the account and the clock at the top right. Under them a row
- * of tiles: the client's own (home) first, then the worlds, newest first, or the servers of the list, and last one
- * that opens the whole list. The tile picked is larger and ringed with light, its name under the row; under that,
- * large, what it is, and a white Play button. Two cards at the bottom right show Messages: the newest conversation and
- * who is online. It all stands on the loading screen's {@link Backdrop}, so the loading screen fades into it without a
- * seam.
+ * Singleplayer and Multiplayer, the open one a white pill; the icons, the account and the clock at the top right. Under
+ * them a row of tiles: the client's own (home) first, then the worlds, newest first, or the servers of the list, and
+ * last a dark one that opens the whole list. The tile picked is much larger, framed in lavender light, and stays near
+ * the left edge as the row scrolls under it, one tile before it still in view; its name sits under the smaller tiles
+ * beside it, after a small tag.
  * <p>
- * The arrow keys (or the wheel) move along the row, Tab switches the tab, Enter plays. A click picks a tile, a click on
- * the picked one (or a double click) plays it.
+ * A world or a server picked fills the screen with its picture, as a console shows a game's art: the client takes one
+ * while it is played ({@link MenuShots}); the pictures cross-fade as the pick moves and drift slowly closer. Without a
+ * picture it stands on the loading screen's starry {@link Backdrop} with its icon large at the right. Over it, its
+ * name, large, what it is, and a white Play pill with a round "..." beside it for more (a small menu). Home shows cards
+ * at the bottom right instead: Messages, what was played last (to continue it) and who is online.
+ * <p>
+ * The arrow keys (or the wheel) move along the row, down goes to the buttons or the cards and up back to the row, Tab
+ * switches the tab, Enter plays. A click picks a tile, a click on the picked one (or a double click) plays it.
  */
 public final class ConsoleMenu extends Screen {
 	private static final int HOME = 0;
@@ -75,31 +80,44 @@ public final class ConsoleMenu extends Screen {
 	private static final int SERVER = 2;
 	private static final int ALL = 3;
 	private static final int MAX_TILES = 14;
+	/** Where the keys are: the row, or the first or second button (Play and "..."; on home, the cards). */
+	private static final int ROW = 0;
 	private static final int TEXT = 0xFFFFFFFF;
-	private static final int DIM = 0xB8FFFFFF;
+	private static final int DIM = 0xB3FFFFFF;
 	private static final int FAINT = 0x80FFFFFF;
-	private static final int INK = 0xFF0E1224;
-	private static final int CARD = 0x990C1230;
-	private static final int HOME_FROM = 0xFF6A4CFF;
-	private static final int HOME_TO = 0xFF2F6BFF;
-	private static final int RING = 0xFFFFFFFF;
-	private static final int RING_GLOW = 0xFFA9C4FF;
+	private static final int INK = 0xFF120F1E;
+	private static final int CARD = 0x8C2A2440;
+	private static final int CARD_HOT = 0xB3393056;
+	private static final int CHIP = 0x2EFFFFFF;
+	private static final int HOME_FROM = 0xFFA587F5;
+	private static final int HOME_TO = 0xFF6A4BCF;
+	private static final int FRAME = 0x995B45B5;
+	private static final int RING = 0xFFD9CCFF;
+	private static final int RING_GLOW = 0xFF9C7CFF;
+	private static final int ONLINE = 0xFF3DDC84;
+	private static final int MESSAGE_DOT = 0xFF4C8DFF;
 	/** The tab shown last, kept for when the menu comes back. */
 	private static int lastTab;
 
 	private final List<List<Item>> tabs = new ArrayList<>();
 	private final int[] selected = new int[2];
 	private int tab;
-	private final Anim tabAnim = new Anim(0f, 14f);
+	private int focus = ROW;
+	private final Anim pillX = new Anim(0f, 14f);
+	private final Anim pillW = new Anim(0f, 14f);
 	private final Anim cursor = new Anim(0f, 12f);
 	private final Anim scroll = new Anim(0f, 10f);
-	private final Anim hero = new Anim(1f, 7f);
-	private final Anim labelWidth = new Anim(0f, 12f);
-	private final Anim playHover = new Anim(0f, 20f);
-	private final Anim moreHover = new Anim(0f, 20f);
+	private final Anim hero = new Anim(1f, 6f);
+	private final Anim tabSwap = new Anim(1f, 7f);
+	private final Anim[] buttonHover = {new Anim(0f, 20f), new Anim(0f, 20f), new Anim(0f, 20f)};
 	private final Anim[] iconHover = {new Anim(0f, 20f), new Anim(0f, 20f), new Anim(0f, 20f), new Anim(0f, 20f), new Anim(0f, 20f)};
 	private final AccountsPanel accounts = new AccountsPanel();
+	private final ConsolePopup popup = new ConsolePopup();
+	/** Pictures shown, the one picked last at the end (on top); those under it go once it covers them. */
+	private final List<Item> art = new ArrayList<>();
+	private int swapDirection = 1;
 	private long openedAt = -1L;
+	private boolean pillPlaced;
 	/** Bounds as last drawn, for the mouse. */
 	private final float[] tabX = new float[2];
 	private final float[] tabW = new float[2];
@@ -117,15 +135,13 @@ public final class ConsoleMenu extends Screen {
 	private float avatarX;
 	private float avatarY;
 	private float avatarS;
-	private float cardsX;
-	private float cardsY;
-	private float cardsW;
-	private float cardsH;
+	/** The home cards as last drawn: Activity, Messages, Online (x, y, w, h each). */
+	private final float[][] cards = new float[3][4];
+	private boolean cardsShown;
 
 	public ConsoleMenu() {
 		super(Text.literal(V1zir.NAME));
 		tab = lastTab;
-		tabAnim.snap(tab);
 	}
 
 	@Override
@@ -142,12 +158,15 @@ public final class ConsoleMenu extends Screen {
 		tabs.add(load(true));
 		for (int i = 0; i < 2; i++) selected[i] = Math.min(selected[i], tabs.get(i).size() - 1);
 		cursor.snap(selected[tab]);
+		scroll.snap(scrollTarget());
 		if (openedAt < 0L) openedAt = System.nanoTime();
 		icons.clear();
 		icons.add(new TopIcon(Icons.POWER, () -> client.scheduleStop()));
 		icons.add(new TopIcon(Icons.SETTINGS, () -> client.setScreen(new OptionsScreen(this, client.options))));
 		if (FabricLoader.getInstance().isModLoaded("modmenu")) icons.add(new TopIcon(Icons.PUZZLE, this::openModMenu));
 		icons.add(new TopIcon(Icons.MESSAGE_CIRCLE, () -> Messages.open(this, null, null)));
+		pillPlaced = false;
+		showArt();
 	}
 
 	private void openModMenu() {
@@ -203,6 +222,7 @@ public final class ConsoleMenu extends Screen {
 				// No icon: the tile shows a symbol.
 			}
 			Item item = new Item(WORLD, name, "Played " + ago(save.played), "Play", name, icon);
+			item.pictureKey = MenuShots.worldKey(name);
 			items.add(item);
 		}
 	}
@@ -217,8 +237,9 @@ public final class ConsoleMenu extends Screen {
 				if (info == null || info.isRealm()) continue;
 				String address = info.address.strip();
 				if (address.endsWith(":25565")) address = address.substring(0, address.length() - 6);
-				Item item = new Item(SERVER, info.name, address, "Join", info.address, info.getFavicon());
+				Item item = new Item(SERVER, info.name, "IP: " + address, "Join", info.address, info.getFavicon());
 				item.server = info;
+				item.pictureKey = MenuShots.serverKey(info.address);
 				items.add(item);
 			}
 		} catch (RuntimeException e) {
@@ -243,6 +264,12 @@ public final class ConsoleMenu extends Screen {
 		return tabs.isEmpty() ? List.of() : tabs.get(tab);
 	}
 
+	@Nullable
+	private Item picked() {
+		List<Item> items = items();
+		return items.isEmpty() ? null : items.get(Math.min(selected[tab], items.size() - 1));
+	}
+
 	private void select(int index) {
 		List<Item> items = items();
 		if (items.isEmpty()) return;
@@ -250,25 +277,47 @@ public final class ConsoleMenu extends Screen {
 		if (next != selected[tab]) {
 			selected[tab] = next;
 			hero.snap(0f);
+			focus = ROW;
 			UiSounds.play(UiSounds.MOVE);
+			showArt();
 		}
 	}
 
 	private void switchTab(int next) {
 		if (next == tab || next < 0 || next > 1) return;
 		UiSounds.play(UiSounds.TAB);
+		swapDirection = next > tab ? 1 : -1;
 		tab = next;
 		lastTab = next;
+		focus = ROW;
 		cursor.snap(selected[tab]);
 		scroll.snap(scrollTarget());
 		hero.snap(0f);
+		tabSwap.snap(0f);
+		showArt();
+	}
+
+	/** Puts the picked tile's picture on top of those shown, starting to read it if it was not yet. */
+	private void showArt() {
+		Item item = picked();
+		if (item == null || item.pictureKey == null) return;
+		if (item.picture == null && !item.pictureChecked) {
+			item.pictureChecked = true;
+			item.picture = MenuShots.load(item.pictureKey);
+		}
+		if (item.picture == null) return;
+		if (!art.isEmpty() && art.get(art.size() - 1) == item) return;
+		// On top again, it fades in over what is shown now.
+		art.remove(item);
+		item.artAlpha.snap(0f);
+		art.add(item);
+		item.shownAt = System.nanoTime();
 	}
 
 	/** Plays the picked tile: its world, its server, the last one played (home) or the whole list. */
 	private void play() {
-		List<Item> items = items();
-		if (items.isEmpty()) return;
-		Item item = items.get(selected[tab]);
+		Item item = picked();
+		if (item == null) return;
 		UiSounds.play(UiSounds.CONFIRM);
 		switch (item.kind) {
 			case WORLD -> client.createIntegratedServerLoader().start(item.target, () -> client.setScreen(this));
@@ -288,6 +337,46 @@ public final class ConsoleMenu extends Screen {
 		client.setScreen(tab == 1 ? new MultiplayerScreen(this) : new SelectWorldScreen(this));
 	}
 
+	/** The small menu of the picked tile's "...". */
+	private void more() {
+		Item item = picked();
+		if (item == null) return;
+		List<ConsolePopup.Choice> choices = new ArrayList<>();
+		switch (item.kind) {
+			case HOME -> {
+				if (LastPlayed.available(client)) choices.add(new ConsolePopup.Choice("Continue " + LastPlayed.label(), Icons.PLAY, this::play));
+				choices.add(new ConsolePopup.Choice("All worlds", Icons.MOUNTAIN, () -> client.setScreen(new SelectWorldScreen(this))));
+				choices.add(new ConsolePopup.Choice("Server list", Icons.SERVER, () -> client.setScreen(new MultiplayerScreen(this))));
+				choices.add(new ConsolePopup.Choice("Options", Icons.SETTINGS, () -> client.setScreen(new OptionsScreen(this, client.options))));
+				if (FabricLoader.getInstance().isModLoaded("modmenu")) choices.add(new ConsolePopup.Choice("Mods", Icons.PUZZLE, this::openModMenu));
+				choices.add(new ConsolePopup.Choice("Quit game", Icons.POWER, () -> client.scheduleStop()));
+			}
+			case WORLD, SERVER -> {
+				choices.add(new ConsolePopup.Choice(item.action, item.kind == SERVER ? Icons.SERVER : Icons.PLAY, this::play));
+				if (item.kind == SERVER) {
+					choices.add(new ConsolePopup.Choice("Copy address", Icons.LIST, () -> client.keyboard.setClipboard(item.target)));
+					choices.add(new ConsolePopup.Choice("Edit in the server list", Icons.PENCIL, () -> client.setScreen(new MultiplayerScreen(this))));
+				} else {
+					choices.add(new ConsolePopup.Choice("Edit in all worlds", Icons.PENCIL, () -> client.setScreen(new SelectWorldScreen(this))));
+				}
+				if (item.picture != null) choices.add(new ConsolePopup.Choice("Remove picture", Icons.TRASH_2, () -> removePicture(item)));
+			}
+			default -> {
+				choices.add(new ConsolePopup.Choice(item.action, Icons.LIST, this::openList));
+				choices.add(new ConsolePopup.Choice("Options", Icons.SETTINGS, () -> client.setScreen(new OptionsScreen(this, client.options))));
+			}
+		}
+		UiSounds.play(UiSounds.CONFIRM);
+		popup.show(item.kind == HOME ? V1zir.NAME : item.title, choices);
+	}
+
+	private void removePicture(Item item) {
+		if (item.pictureKey != null) MenuShots.remove(item.pictureKey);
+		art.remove(item);
+		if (item.picture != null) item.picture.release();
+		item.picture = null;
+	}
+
 	// ------------------------------------------------------------------ drawing
 
 	@Override
@@ -305,77 +394,108 @@ public final class ConsoleMenu extends Screen {
 		m.scale(1f / scale, 1f / scale);
 		Backdrop.ps5(ctx, client.getWindow().getFramebufferWidth(), client.getWindow().getFramebufferHeight(), scale, 1f, 1f, 1f);
 		m.popMatrix();
-		if (tabs.isEmpty()) return;
+		Item item = picked();
+		if (item == null) return;
 		float t = openedAt < 0L ? 1f : (System.nanoTime() - openedAt) / 1.0e9f;
-		float pad = Math.max(14f, width * 0.045f);
-		renderArt(ctx, t);
-		renderTop(ctx, mouseX, mouseY, t, pad);
-		float rowY = tabY + tabH + Math.max(12f, height * 0.06f);
-		float rowBottom = renderRow(ctx, mouseX, mouseY, t, pad, rowY);
-		renderHero(ctx, mouseX, mouseY, t, pad, rowBottom);
-		renderCards(ctx, mouseX, mouseY, t, pad);
+		boolean blocked = popup.shown() || accounts.shown();
+		int mx = blocked ? -1000 : mouseX, my = blocked ? -1000 : mouseY;
+		float pictured = renderArt(ctx);
+		float pad = Math.max(14f, width * 0.033f);
+		renderTop(ctx, mx, my, t, pad);
+		float rowTop = tabY + tabH + Math.max(8f, height * 0.075f);
+		renderRow(ctx, mx, my, t, pad, rowTop, pictured);
+		if (item.kind == HOME) {
+			cardsShown = true;
+			renderCards(ctx, mx, my, t);
+		} else {
+			cardsShown = false;
+			renderHero(ctx, item, mx, my, t, pad, pictured);
+		}
+		popup.render(ctx, width, height, mouseX, mouseY);
 		accounts.render(ctx, client, Math.min(width - pad - AccountsPanel.WIDTH, avatarX), avatarY + avatarS + 6f, height, mouseX, mouseY);
 	}
 
 	/**
-	 * The picked world's or server's picture spread wide over the right of the screen behind everything, softened by its
-	 * own enlargement and faded into the backdrop to the left and at the bottom, as a game's art is on a console.
+	 * The pictures of the worlds and servers picked, over the whole screen, the newest on top fading in and drifting
+	 * slowly closer, and the shade over them that keeps the words readable. Returns how much a picture covers the
+	 * backdrop (0 to 1).
 	 */
-	private void renderArt(DrawContext ctx, float t) {
-		Item item = items().get(selected[tab]);
-		TextureSetup texture = item.kind == WORLD || item.kind == SERVER ? item.texture() : null;
-		if (texture == null) return;
-		float e = Anim.easeOutCubic(hero.target(1f).get()) * in(t, 0.2f, 0.8f);
-		if (e <= 0.01f) return;
-		float side = Math.max(width * 0.75f, height * 1.2f);
-		float x = width - side * 0.92f;
-		float y = height * 0.5f - side * 0.5f;
-		Render2D.image(ctx, texture, x, y, side, side, 0f, ColorUtil.fade(0xFFFFFFFF, 0.42f * e));
-		Render2D.gradientH(ctx, 0f, 0f, width, height, 0f, 0xF2050A1C, 0x00050A1C);
-		Render2D.gradientV(ctx, 0f, height * 0.55f, width, height * 0.45f, 0f, 0x00050A1C, 0xE6050A1C);
-		Render2D.gradientV(ctx, 0f, 0f, width, height * 0.25f, 0f, 0xB3050A1C, 0x00050A1C);
+	private float renderArt(DrawContext ctx) {
+		Item picked = picked();
+		// While the tile picked has a picture, the ones under it stay until it has faded in over them; else all fade out.
+		boolean keep = picked != null && picked.picture != null && !picked.picture.failed() && !art.isEmpty() && art.get(art.size() - 1) == picked;
+		float top = 0f;
+		for (int i = 0; i < art.size(); i++) {
+			Item item = art.get(i);
+			boolean newest = i == art.size() - 1;
+			TextureSetup texture = item.picture != null ? item.picture.setup() : null;
+			float a = item.artAlpha.target(keep && (!newest || texture != null) ? 1f : 0f).get();
+			if (texture == null || a <= 0.005f) continue;
+			float since = (System.nanoTime() - item.shownAt) / 1.0e9f;
+			float zoom = 1.02f + 0.05f * Anim.easeOutCubic(Math.min(1f, since / 24f));
+			float aspect = item.picture.aspect();
+			float w = Math.max(width, height * aspect) * zoom;
+			float h = w / aspect;
+			Render2D.image(ctx, texture, (width - w) / 2f, (height - h) / 2f, w, h, 0f, ColorUtil.fade(0xFFFFFFFF, a));
+			if (newest) top = a;
+		}
+		// Those under a picture fully shown are covered: let them go.
+		if (top >= 0.995f) while (art.size() > 1) art.remove(0).artAlpha.snap(0f);
+		float shade = 0f;
+		for (Item item : art) shade = Math.max(shade, item.artAlpha.get());
+		if (shade > 0.005f) {
+			Render2D.gradientH(ctx, 0f, 0f, width * 0.7f, height, 0f, ColorUtil.withAlpha(0x07050E, Math.round(210 * shade)), 0x0007050E);
+			Render2D.gradientV(ctx, 0f, 0f, width, height * 0.42f, 0f, ColorUtil.withAlpha(0x07050E, Math.round(170 * shade)), 0x0007050E);
+			Render2D.gradientV(ctx, 0f, height * 0.5f, width, height * 0.5f, 0f, 0x0007050E, ColorUtil.withAlpha(0x07050E, Math.round(200 * shade)));
+		}
+		return shade;
 	}
 
 	private static float in(float t, float start, float length) {
 		return Anim.easeOutCubic((t - start) / length);
 	}
 
-	/** The tabs at the left, the round icons, the account and the clock at the right. */
+	/** The tabs at the left, the open one in a white pill; the round icons, the account and the clock at the right. */
 	private void renderTop(DrawContext ctx, int mouseX, int mouseY, float t, float pad) {
-		float appear = in(t, 0.05f, 0.5f);
+		float appear = in(t, 0.05f, 0.45f);
 		SdfFont font = Fonts.medium();
-		SdfFont strong = Fonts.semibold();
-		float size = 8f;
-		float tabSize = 9.5f;
-		tabH = 16f;
-		tabY = 12f;
-		float x = pad;
-		float slide = tabAnim.target(tab).get();
+		float size = Math.max(7f, Math.min(12f, height * 0.031f));
+		tabH = Math.max(13f, Math.min(26f, height * 0.066f));
+		float centerY = Math.max(14f, height * 0.12f);
+		tabY = centerY - tabH / 2f;
+		float inner = tabH * 0.55f;
 		String[] names = {label("menu.singleplayer"), label("menu.multiplayer")};
+		float x = pad - inner;
 		for (int i = 0; i < 2; i++) {
-			tabW[i] = strong.width(names[i], tabSize);
+			tabW[i] = font.width(names[i], size) + inner * 2f;
 			tabX[i] = x;
-			x += tabW[i] + 16f;
+			x += tabW[i] + 4f;
 		}
-		// Words, the open one white and the other grey, as on a console; a short line slides under the open one.
+		if (!pillPlaced) {
+			pillPlaced = true;
+			pillX.snap(tabX[tab]);
+			pillW.snap(tabW[tab]);
+		}
+		float px = pillX.target(tabX[tab]).get(), pw = pillW.target(tabW[tab]).get();
+		Render2D.shadow(ctx, px, tabY + 1f, pw, tabH, tabH / 2f, 6f, ColorUtil.withAlpha(0x000000, Math.round(80 * appear)));
+		Render2D.round(ctx, px, tabY, pw, tabH, tabH / 2f, ColorUtil.fade(0xFFFFFFFF, appear));
 		for (int i = 0; i < 2; i++) {
-			float on = 1f - Math.min(1f, Math.abs(slide - i));
-			boolean over = Ui.inside(mouseX, mouseY, tabX[i] - 4f, tabY, tabW[i] + 8f, tabH);
-			int color = ColorUtil.lerp(over ? 0xD9FFFFFF : 0x8CFFFFFF, TEXT, on);
-			Render2D.textMiddle(ctx, on > 0.5f ? strong : font, names[i], tabX[i], tabY + tabH / 2f, tabSize, ColorUtil.fade(color, appear));
+			// Over the pill the words are dark, beside it white.
+			float overlap = Math.max(0f, Math.min(px + pw, tabX[i] + tabW[i]) - Math.max(px, tabX[i])) / tabW[i];
+			boolean over = Ui.inside(mouseX, mouseY, tabX[i], tabY, tabW[i], tabH);
+			int beside = over ? TEXT : 0xD9FFFFFF;
+			int color = ColorUtil.lerp(beside, INK, Anim.clamp01(overlap));
+			Render2D.textMiddle(ctx, font, names[i], tabX[i] + inner, centerY, size, ColorUtil.fade(color, appear));
 		}
-		float lineX = tabX[0] + (tabX[1] - tabX[0]) * slide;
-		float lineW = tabW[0] + (tabW[1] - tabW[0]) * slide;
-		Render2D.round(ctx, lineX, tabY + tabH + 1f, lineW, 2f, 1f, ColorUtil.fade(0xFFFFFFFF, appear));
 
 		// From the right: the clock, the account, then the round icons.
 		String time = clock();
 		float right = width - pad;
 		float clockW = font.width(time, size);
-		Render2D.textMiddle(ctx, font, time, right - clockW, tabY + tabH / 2f, size, ColorUtil.fade(TEXT, appear));
-		avatarS = 15f;
-		avatarX = right - clockW - 10f - avatarS;
-		avatarY = tabY + (tabH - avatarS) / 2f;
+		Render2D.textMiddle(ctx, font, time, right - clockW, centerY, size, Render2D.TextStyle.of(ColorUtil.fade(TEXT, appear)).shadow(0x66000000));
+		avatarS = Math.max(12f, Math.min(22f, height * 0.055f));
+		avatarX = right - clockW - size * 1.4f - avatarS;
+		avatarY = centerY - avatarS / 2f;
 		Accounts.Account account = Accounts.current();
 		SkinTextures skin = account != null ? accounts.skin(client, account) : null;
 		boolean overAvatar = Ui.inside(mouseX, mouseY, avatarX, avatarY, avatarS, avatarS);
@@ -383,220 +503,321 @@ public final class ConsoleMenu extends Screen {
 			ColorUtil.fade(overAvatar || accounts.shown() ? 0xFFFFFFFF : 0x33FFFFFF, appear));
 		if (skin != null) Heads.skin(ctx, skin, avatarX, avatarY, avatarS, avatarS / 2f, ColorUtil.fade(0xFFFFFFFF, appear));
 		else Render2D.icon(ctx, Icons.CIRCLE_USER, avatarX + avatarS / 2f, avatarY + avatarS / 2f, avatarS, ColorUtil.fade(TEXT, appear));
-		float ix = avatarX - 12f;
+		float ix = avatarX - size * 1.2f;
+		float r = Math.max(7f, size * 1.05f);
 		for (int i = 0; i < icons.size(); i++) {
 			TopIcon icon = icons.get(icons.size() - 1 - i);
-			float r = 8f;
 			float cx = ix - r;
-			float cy = tabY + tabH / 2f;
 			icon.cx = cx;
-			icon.cy = cy;
+			icon.cy = centerY;
 			icon.r = r;
-			boolean over = (mouseX - cx) * (mouseX - cx) + (mouseY - cy) * (mouseY - cy) <= r * r;
+			boolean over = (mouseX - cx) * (mouseX - cx) + (mouseY - centerY) * (mouseY - centerY) <= r * r;
 			float hv = iconHover[Math.min(i, iconHover.length - 1)].target(over ? 1f : 0f).get();
-			if (hv > 0.01f) Render2D.circle(ctx, cx, cy, r, ColorUtil.withAlpha(0xFFFFFF, Math.round(46 * hv * appear)));
-			Render2D.icon(ctx, icon.icon, cx, cy, 9f, ColorUtil.fade(ColorUtil.lerp(DIM, TEXT, hv), appear));
-			if (icon.icon == Icons.MESSAGE_CIRCLE) MessagesUi.badge(ctx, cx + 5.5f, cy - 5f, Messages.unread());
-			ix = cx - r - 4f;
+			if (hv > 0.01f) Render2D.circle(ctx, cx, centerY, r, ColorUtil.withAlpha(0xFFFFFF, Math.round(46 * hv * appear)));
+			Render2D.icon(ctx, icon.icon, cx, centerY, size * 1.15f, ColorUtil.fade(ColorUtil.lerp(0xE6FFFFFF, TEXT, hv), appear));
+			if (icon.icon == Icons.MESSAGE_CIRCLE) MessagesUi.badge(ctx, cx + r * 0.65f, centerY - r * 0.6f, Messages.unread());
+			ix = cx - r - 2f;
 		}
 	}
 
-	/** The row of tiles, the picked one's name beside it as on a console's home screen; returns where it ends below. */
-	private float renderRow(DrawContext ctx, int mouseX, int mouseY, float t, float pad, float y) {
+	private float small() {
+		return Math.max(24f, Math.min(72f, height * 0.13f));
+	}
+
+	private float big() {
+		return small() * 1.69f;
+	}
+
+	private float gap() {
+		return Math.max(3f, height * 0.015f);
+	}
+
+	/** How far the row scrolls: the picked tile near the left edge, one small tile before it still in view. */
+	private float scrollTarget() {
+		int picked = selected[tab];
+		return picked == 0 ? 0f : picked * (small() + gap()) - small() * 0.95f;
+	}
+
+	/** The row of tiles, and the picked one's name under the small tiles beside it. */
+	private void renderRow(DrawContext ctx, int mouseX, int mouseY, float t, float pad, float top, float pictured) {
 		List<Item> items = items();
-		float s = tileSize();
-		float big = s * 1.36f;
-		float gap = s * 0.17f;
+		float s = small();
+		float b = big();
+		float gap = gap();
 		float at = cursor.target(selected[tab]).get();
 		float offset = scroll.target(scrollTarget()).get();
-		Item picked = items.get(selected[tab]);
-		float labelW = labelWidth.target(nameWidth(picked)).get();
-		float appear = in(t, 0.4f, 0.5f) * hero.target(1f).get();
+		float swap = Anim.easeOutCubic(tabSwap.target(1f).get());
+		float swapDx = (1f - swap) * 26f * swapDirection;
+		// The picked tile grows into place after the row has come in.
+		float grow = in(t, 0.3f, 0.45f);
 		tileBounds.clear();
-		float x = pad - offset;
+		float x = pad - offset + swapDx;
+		float labelX = 0f;
 		for (int i = 0; i < items.size(); i++) {
-			float focus = Math.max(0f, 1f - Math.abs(i - at));
-			float size = s + (big - s) * focus;
-			// Smaller tiles sit level with the middle of the picked one.
-			float ty = y + (big - size) / 2f;
-			float e = in(t, 0.12f + i * 0.045f, 0.55f);
-			float dx = (1f - e) * 40f;
-			if (e > 0.01f && x + dx < width && x + size + dx > 0f) {
-				tile(ctx, items.get(i), x + dx, ty, size, focus, e, Ui.inside(mouseX, mouseY, x, ty, size, size));
+			float focus = Math.max(0f, 1f - Math.abs(i - at)) * grow;
+			float size = s + (b - s) * focus;
+			// The smaller tiles hang from near the top of the picked one.
+			float ty = top + (1f - focus) * b * 0.05f;
+			float e = in(t, 0.1f + i * 0.04f, 0.5f) * swap;
+			float dx = (1f - in(t, 0.1f + i * 0.04f, 0.5f)) * 34f;
+			boolean hovered = Ui.inside(mouseX, mouseY, x, ty, size, size);
+			if (e > 0.01f && x + dx < width && x + size + dx > -size) {
+				tile(ctx, items.get(i), x + dx, ty, size, focus, e, hovered, pictured);
 			}
 			tileBounds.add(new float[]{x, ty, size, size});
+			if (i == Math.round(at)) labelX = x + size + gap;
 			x += size + gap;
-			if (i == selected[tab]) {
-				name(ctx, picked, x + 2f, y + big / 2f, appear);
-				x += labelW;
-			}
 		}
-		return y + big;
+		Item picked = items.get(selected[tab]);
+		float labelY = top + b * 0.05f + s + (b - s - b * 0.05f) / 2f + b * 0.04f;
+		float appear = in(t, 0.5f, 0.35f) * Anim.easeOutCubic(hero.target(1f).get()) * swap;
+		name(ctx, picked, labelX + s * 0.08f + (1f - appear) * 6f, labelY, appear, pictured);
 	}
 
-	private float tileSize() {
-		return Math.max(26f, Math.min(50f, height * 0.14f));
-	}
-
-	/** Room the picked tile's name takes in the row. */
-	private float nameWidth(Item item) {
-		SdfFont font = Fonts.semibold();
-		float w = font.width(item.kind == HOME ? "Home" : item.title, 9.5f);
-		if (item.kind == HOME) w += Fonts.bold().width("V1ZIR", 5.6f) + 13f;
-		return Math.min(w, width * 0.3f) + 16f;
-	}
-
-	/** The picked tile's name, beside it in the row. */
-	private void name(DrawContext ctx, Item item, float x, float cy, float alpha) {
-		SdfFont font = Fonts.semibold();
-		if (item.kind == HOME) {
-			SdfFont bold = Fonts.bold();
-			String tag = "V1ZIR";
-			float tw = bold.width(tag, 5.6f) + 8f;
-			Render2D.round(ctx, x, cy - 5f, tw, 10f, 5f, ColorUtil.fade(0xFFFFFFFF, alpha));
-			Render2D.textMiddle(ctx, bold, tag, x + 4f, cy, 5.6f, ColorUtil.fade(INK, alpha));
-			Render2D.textMiddle(ctx, font, "Home", x + tw + 5f, cy, 9.5f, ColorUtil.fade(TEXT, alpha));
-			return;
-		}
-		Render2D.textMiddle(ctx, font, fit(font, item.title, 9.5f, width * 0.3f), x, cy, 9.5f, ColorUtil.fade(TEXT, alpha));
-	}
-
-	/** How far the row scrolls so the picked tile and its name are in view. */
-	private float scrollTarget() {
-		List<Item> items = items();
-		float s = tileSize();
-		float big = s * 1.36f;
-		float gap = s * 0.17f;
-		float pad = Math.max(14f, width * 0.045f);
-		int picked = selected[tab];
-		float label = nameWidth(items.get(picked));
-		float end = pad + picked * (s + gap) + big + label;
-		float total = pad + Math.max(0, items.size() - 1) * (s + gap) + big + label + pad;
-		float over = end - (width - pad - s * 1.5f);
-		return Math.max(0f, Math.min(over, Math.max(0f, total - width)));
-	}
-
-	/** One tile: its picture (the logo for home, the world's or server's icon, a symbol), ringed with light when picked. */
-	private void tile(DrawContext ctx, Item item, float x, float y, float size, float focus, float alpha, boolean hovered) {
-		float r = size * 0.17f;
-		Render2D.shadow(ctx, x, y + 2f, size, size, r, size * 0.25f, ColorUtil.withAlpha(0x000000, Math.round((70 + 60 * focus) * alpha)));
-		if (focus > 0.01f) {
-			Render2D.glow(ctx, x - 3f, y - 3f, size + 6f, size + 6f, r + 3f, 10f * focus, ColorUtil.fade(RING_GLOW, 0.45f * focus * alpha),
-				ColorUtil.fade(Backdrop.PS5_BEAM, 0.35f * focus * alpha));
-		}
-		TextureSetup texture = item.texture();
-		if (item.kind == HOME) {
-			Render2D.round(ctx, x, y, size, size, r, ColorUtil.fade(HOME_FROM, alpha), ColorUtil.fade(HOME_TO, alpha), ColorUtil.fade(HOME_TO, alpha),
-				ColorUtil.fade(HOME_FROM, alpha));
-			float inset = size * 0.2f;
-			Render2D.setAlpha(alpha);
-			Logo.draw(ctx, x + inset, y + inset, size - inset * 2f);
-			Render2D.setAlpha(1f);
-		} else if (texture != null) {
-			Render2D.image(ctx, texture, x, y, size, size, r, ColorUtil.fade(0xFFFFFFFF, alpha));
-		} else {
-			int from = item.kind == SERVER ? 0xFF1E2B5C : item.kind == ALL ? 0xFF151B38 : 0xFF213A3A;
-			int to = item.kind == SERVER ? 0xFF2D4FA8 : item.kind == ALL ? 0xFF222B52 : 0xFF2F6B5A;
-			Render2D.round(ctx, x, y, size, size, r, ColorUtil.fade(from, alpha), ColorUtil.fade(from, alpha), ColorUtil.fade(to, alpha), ColorUtil.fade(to, alpha));
-			int icon = item.kind == SERVER ? Icons.SERVER : item.kind == ALL ? Icons.LAYOUT_GRID : Icons.MOUNTAIN;
-			Render2D.icon(ctx, icon, x + size / 2f, y + size / 2f, size * 0.38f, ColorUtil.fade(0xE6FFFFFF, alpha));
-		}
-		// The tiles not picked sit back a little.
-		if (focus < 0.99f) Render2D.round(ctx, x, y, size, size, r, ColorUtil.withAlpha(0x000000, Math.round((hovered ? 20 : 70) * (1f - focus) * alpha)));
-		if (focus > 0.01f) Render2D.outline(ctx, x - 2.5f, y - 2.5f, size + 5f, size + 5f, r + 2.5f, 1.6f, ColorUtil.fade(RING, focus * alpha));
-	}
-
-	/** What the picked tile is, large, and its Play button with the more button beside it. */
-	private void renderHero(DrawContext ctx, int mouseX, int mouseY, float t, float pad, float top) {
-		Item item = items().get(selected[tab]);
-		float e = Anim.easeOutCubic(hero.target(1f).get()) * in(t, 0.35f, 0.6f);
-		float dx = (1f - e) * 10f;
-		float x = pad + dx;
-		float y = Math.max(top + 18f, height * 0.44f);
+	/** The picked tile's name, under the row: a small white tag, then the name. */
+	private void name(DrawContext ctx, Item item, float x, float cy, float alpha, float pictured) {
+		if (alpha <= 0.01f) return;
 		SdfFont bold = Fonts.bold();
 		SdfFont font = Fonts.medium();
-		float titleSize = Math.max(14f, Math.min(28f, height * 0.085f));
-		Render2D.text(ctx, bold, item.title, x, y, titleSize, ColorUtil.fade(TEXT, e));
-		y += titleSize + 5f;
-		Render2D.text(ctx, font, item.subtitle, x, y, 7.5f, ColorUtil.fade(DIM, e));
-		y += 20f;
-		playH = 21f;
-		playW = Math.max(70f, Fonts.semibold().width(item.action, 8.5f) + 40f);
-		playX = x;
-		playY = y;
-		boolean overPlay = Ui.inside(mouseX, mouseY, playX, playY, playW, playH);
-		float hv = playHover.target(overPlay ? 1f : 0f).get();
-		Render2D.shadow(ctx, playX, playY + 2f, playW, playH, playH / 2f, 8f, ColorUtil.withAlpha(0x000000, Math.round(90 * e)));
-		if (hv > 0.01f) Render2D.glow(ctx, playX, playY, playW, playH, playH / 2f, 8f * hv, ColorUtil.fade(RING_GLOW, 0.5f * hv * e), ColorUtil.fade(RING_GLOW, 0.5f * hv * e));
-		Render2D.round(ctx, playX, playY, playW, playH, playH / 2f, ColorUtil.fade(ColorUtil.lerp(0xFFF2F4FA, 0xFFFFFFFF, hv), e));
-		int icon = item.kind == SERVER ? Icons.SERVER : item.kind == ALL ? Icons.LIST : Icons.PLAY;
-		Render2D.icon(ctx, icon, playX + 14f, playY + playH / 2f, 8.5f, ColorUtil.fade(INK, e));
-		Render2D.textMiddle(ctx, Fonts.semibold(), item.action, playX + 24f, playY + playH / 2f, 8.5f, ColorUtil.fade(INK, e));
-		moreR = playH / 2f;
-		moreX = playX + playW + 6f + moreR;
-		moreY = playY + moreR;
-		boolean overMore = (mouseX - moreX) * (mouseX - moreX) + (mouseY - moreY) * (mouseY - moreY) <= moreR * moreR;
-		float mh = moreHover.target(overMore ? 1f : 0f).get();
-		Render2D.circle(ctx, moreX, moreY, moreR, ColorUtil.withAlpha(0xFFFFFF, Math.round((40 + 40 * mh) * e)));
-		Render2D.icon(ctx, Icons.ELLIPSIS, moreX, moreY, 9f, ColorUtil.fade(TEXT, e));
+		float tagSize = Math.max(5f, Math.min(9f, height * 0.021f));
+		float nameSize = Math.max(8f, Math.min(16f, height * 0.04f));
+		float tagH = tagSize * 1.85f;
+		String tag = switch (item.kind) {
+			case HOME -> "V1ZIR";
+			case WORLD -> "WORLD";
+			case SERVER -> "SERVER";
+			default -> "";
+		};
+		if (!tag.isEmpty()) {
+			float tw = bold.width(tag, tagSize) + tagH;
+			Render2D.round(ctx, x, cy - tagH / 2f, tw, tagH, tagH / 2f, ColorUtil.fade(0xFFFFFFFF, alpha));
+			Render2D.textMiddle(ctx, bold, tag, x + tagH / 2f, cy, tagSize, ColorUtil.fade(INK, alpha));
+			x += tw + tagSize * 0.8f;
+		}
+		String text = item.kind == HOME ? "Home" : item.title;
+		Render2D.textMiddle(ctx, font, fit(font, text, nameSize, width * 0.42f), x, cy, nameSize,
+			Render2D.TextStyle.of(ColorUtil.fade(TEXT, alpha)).shadow(ColorUtil.withAlpha(0x000000, Math.round(110 * pictured * alpha))));
 	}
 
-	/** Activity cards along the bottom, as on a console: a tip, then Messages' newest conversation and who is online. */
-	private void renderCards(DrawContext ctx, int mouseX, int mouseY, float t, float pad) {
-		float e = in(t, 0.5f, 0.6f);
-		float w = Math.min(150f, (width - pad * 2f - 16f) / 3f);
-		float h = 46f;
-		float gap = 8f;
-		float y = height - pad - h;
-		card(ctx, pad, y, w, h, Icons.GAMEPAD_2, "Tip", tab == 1 ? "Enter joins, Tab goes to your worlds" : "Arrow keys move, Enter plays, Tab switches",
-			0, 0, e, false);
-		ChatService service = Messages.service();
-		if (service == null) {
-			cardsW = 0f;
+	/** One tile: its picture (the logo for home, the world's or server's icon, a symbol); framed in light when picked. */
+	private void tile(DrawContext ctx, Item item, float x, float y, float size, float focus, float alpha, boolean hovered, float pictured) {
+		float r = size * 0.16f;
+		Render2D.shadow(ctx, x, y + 2f, size, size, r, size * 0.22f, ColorUtil.withAlpha(0x000000, Math.round((60 + 70 * focus + 40 * pictured) * alpha)));
+		if (focus > 0.01f) {
+			Render2D.glow(ctx, x - 2f, y - 2f, size + 4f, size + 4f, r + 2f, 12f * focus, ColorUtil.fade(RING_GLOW, 0.5f * focus * alpha),
+				ColorUtil.fade(RING_GLOW, 0.3f * focus * alpha));
+		}
+		TextureSetup texture = item.texture();
+		// Picked, the picture sits in a frame of light a little inside the tile's edge.
+		float inset = size * 0.075f * focus;
+		float ir = Math.max(2f, r - inset * 0.6f);
+		if (item.kind == HOME) {
+			Render2D.round(ctx, x, y, size, size, r, ColorUtil.fade(HOME_FROM, alpha), ColorUtil.fade(HOME_FROM, alpha), ColorUtil.fade(HOME_TO, alpha),
+				ColorUtil.fade(HOME_TO, alpha));
+			Render2D.gradientV(ctx, x, y, size, size * 0.55f, r, ColorUtil.withAlpha(0xFFFFFF, Math.round(46 * alpha)), 0x00FFFFFF);
+			float logo = size * 0.22f;
+			Render2D.setAlpha(alpha);
+			Logo.draw(ctx, x + logo, y + logo, size - logo * 2f);
+			Render2D.setAlpha(1f);
+		} else if (item.kind == ALL) {
+			Render2D.round(ctx, x, y, size, size, r, ColorUtil.withAlpha(0xFFFFFF, Math.round((hovered ? 52 : 34) * alpha)));
+			Render2D.icon(ctx, Icons.LAYOUT_GRID, x + size / 2f, y + size / 2f, size * 0.3f, ColorUtil.fade(0x8CFFFFFF, alpha * (0.4f + 0.6f * focus)));
+		} else if (texture != null) {
+			if (focus > 0.01f) Render2D.round(ctx, x, y, size, size, r, ColorUtil.fade(FRAME, focus * alpha));
+			Render2D.image(ctx, texture, x + inset, y + inset, size - inset * 2f, size - inset * 2f, ir, ColorUtil.fade(0xFFFFFFFF, alpha));
+		} else {
+			int from = item.kind == SERVER ? 0xFF2A2152 : 0xFF213A3A;
+			int to = item.kind == SERVER ? 0xFF4A3A9C : 0xFF2F6B5A;
+			Render2D.round(ctx, x, y, size, size, r, ColorUtil.fade(from, alpha), ColorUtil.fade(from, alpha), ColorUtil.fade(to, alpha), ColorUtil.fade(to, alpha));
+			int icon = item.kind == SERVER ? Icons.SERVER : Icons.MOUNTAIN;
+			Render2D.icon(ctx, icon, x + size / 2f, y + size / 2f, size * 0.38f, ColorUtil.fade(0xE6FFFFFF, alpha));
+		}
+		if (hovered && focus < 0.5f) Render2D.round(ctx, x, y, size, size, r, ColorUtil.withAlpha(0xFFFFFF, Math.round(26 * alpha)));
+		// The ring dims while the keys are on the buttons under the row.
+		if (focus > 0.01f) Render2D.outline(ctx, x, y, size, size, r, Math.max(1.5f, size * 0.028f), ColorUtil.fade(RING, focus * alpha * (this.focus == ROW ? 1f : 0.55f)));
+	}
+
+	/**
+	 * What the picked tile is, large: its name, what it is and a chip, and its Play pill with the round "..." beside it;
+	 * with no picture behind it, its icon large at the right.
+	 */
+	private void renderHero(DrawContext ctx, Item item, int mouseX, int mouseY, float t, float pad, float pictured) {
+		float base = Anim.easeOutCubic(hero.target(1f).get()) * in(t, 0.45f, 0.45f) * Anim.easeOutCubic(tabSwap.get());
+		if (base <= 0.01f) {
+			playW = 0f;
+			moreR = 0f;
 			return;
 		}
-		cardsW = w * 2f + gap;
-		cardsH = h;
-		cardsX = pad + w + gap;
-		cardsY = y;
+		SdfFont bold = Fonts.bold();
+		SdfFont font = Fonts.medium();
+		int shadow = ColorUtil.withAlpha(0x000000, Math.round(130 * Math.max(pictured, 0.4f)));
+		float x = pad;
+		float titleSize = Math.max(12f, Math.min(30f, height * 0.055f));
+		float e = stagger(base, 0f);
+		Render2D.textMiddle(ctx, bold, fit(bold, item.title, titleSize, width * 0.6f), x, height * 0.57f + (1f - e) * 8f, titleSize,
+			Render2D.TextStyle.of(ColorUtil.fade(TEXT, e)).shadow(ColorUtil.fade(shadow, e)));
+		e = stagger(base, 0.12f);
+		float subSize = Math.max(6.5f, Math.min(14f, height * 0.028f));
+		Render2D.textMiddle(ctx, font, item.subtitle, x, height * 0.635f + (1f - e) * 8f, subSize,
+			Render2D.TextStyle.of(ColorUtil.fade(DIM, e)).shadow(ColorUtil.fade(shadow, e)));
+		String chip = chip(item);
+		if (!chip.isEmpty()) {
+			e = stagger(base, 0.22f);
+			float chipH = Math.max(12f, Math.min(28f, height * 0.066f));
+			float chipSize = Math.max(6f, Math.min(12f, height * 0.025f));
+			float cw = font.width(chip, chipSize) + chipH * 1.35f;
+			float cy = height * 0.68f + (1f - e) * 8f;
+			Render2D.round(ctx, x, cy, cw, chipH, chipH * 0.3f, ColorUtil.fade(CHIP, e));
+			Render2D.circle(ctx, x + chipH * 0.45f, cy + chipH / 2f, chipH * 0.12f, ColorUtil.fade(item.kind == SERVER ? ONLINE : RING, e));
+			Render2D.textMiddle(ctx, font, chip, x + chipH * 0.75f, cy + chipH / 2f, chipSize, ColorUtil.fade(0xE6FFFFFF, e));
+		}
+		// The buttons.
+		e = stagger(base, 0.3f);
+		playH = Math.max(16f, Math.min(44f, height * 0.093f));
+		SdfFont semibold = Fonts.semibold();
+		float playSize = Math.max(7f, Math.min(15f, height * 0.034f));
+		playW = Math.max(width * 0.2f, semibold.width(item.action, playSize) + playH * 2.2f);
+		playX = x;
+		playY = Math.min(height * 0.85f, height - height * 0.05f - playH) + (1f - e) * 8f;
+		boolean overPlay = Ui.inside(mouseX, mouseY, playX, playY, playW, playH);
+		float hv = buttonHover[0].target(overPlay || focus == 1 ? 1f : 0f).get();
+		Render2D.shadow(ctx, playX, playY + 2f, playW, playH, playH / 2f, 9f, ColorUtil.withAlpha(0x000000, Math.round(110 * e)));
+		if (hv > 0.01f) {
+			// Picked, the pill gets a ring of its own a little outside it, as a console marks what the keys are on.
+			float o = playH * 0.12f;
+			Render2D.outline(ctx, playX - o, playY - o, playW + o * 2f, playH + o * 2f, playH / 2f + o, 1.6f, ColorUtil.fade(0xFFFFFFFF, hv * e));
+		}
+		Render2D.round(ctx, playX, playY, playW, playH, playH / 2f, ColorUtil.fade(0xFFFFFFFF, e));
+		int icon = item.kind == SERVER ? Icons.SERVER : item.kind == ALL ? Icons.LIST : Icons.PLAY;
+		float labelW = semibold.width(item.action, playSize);
+		float contentW = labelW + playSize * 1.6f;
+		float lx = playX + (playW - contentW) / 2f;
+		Render2D.textMiddle(ctx, semibold, item.action, lx, playY + playH / 2f, playSize, ColorUtil.fade(INK, e));
+		Render2D.icon(ctx, icon, lx + labelW + playSize * 1.0f, playY + playH / 2f, playSize * 1.05f, ColorUtil.fade(INK, e));
+		moreR = playH / 2f;
+		moreX = playX + playW + playH * 0.35f + moreR;
+		moreY = playY + moreR;
+		boolean overMore = (mouseX - moreX) * (mouseX - moreX) + (mouseY - moreY) * (mouseY - moreY) <= moreR * moreR;
+		float mh = buttonHover[1].target(overMore || focus == 2 ? 1f : 0f).get();
+		Render2D.circle(ctx, moreX, moreY, moreR, ColorUtil.fade(ColorUtil.lerp(0x38FFFFFF, 0xFFFFFFFF, mh), e));
+		Render2D.icon(ctx, Icons.ELLIPSIS, moreX, moreY, playSize * 1.25f, ColorUtil.fade(ColorUtil.lerp(TEXT, INK, mh), e));
+
+		// No picture: the icon, large, at the right.
+		float iconAlpha = stagger(base, 0.18f) * (1f - pictured);
+		if (iconAlpha > 0.01f) {
+			float size = height * 0.31f;
+			float ix = Math.min(width * 0.76f, width - pad - size);
+			float iy = height * 0.70f - size / 2f;
+			float grow = 0.92f + 0.08f * iconAlpha;
+			float cx = ix + size / 2f, cy = iy + size / 2f;
+			size *= grow;
+			ix = cx - size / 2f;
+			iy = cy - size / 2f;
+			float r = size * 0.12f;
+			Render2D.shadow(ctx, ix, iy + 4f, size, size, r, 18f, ColorUtil.withAlpha(0x000000, Math.round(120 * iconAlpha)));
+			Render2D.round(ctx, ix, iy, size, size, r, ColorUtil.fade(0x33FFFFFF, iconAlpha));
+			TextureSetup texture = item.texture();
+			float inset = size * 0.035f;
+			if (texture != null) {
+				Render2D.image(ctx, texture, ix + inset, iy + inset, size - inset * 2f, size - inset * 2f, r - inset, ColorUtil.fade(0xFFFFFFFF, iconAlpha));
+			} else {
+				int symbol = item.kind == SERVER ? Icons.SERVER : item.kind == ALL ? Icons.LAYOUT_GRID : Icons.MOUNTAIN;
+				Render2D.icon(ctx, symbol, cx, cy, size * 0.34f, ColorUtil.fade(0xCCFFFFFF, iconAlpha));
+			}
+		}
+	}
+
+	/** A part of the hero coming in after the others: 0 to 1 from base (0 to 1) and how late it is. */
+	private static float stagger(float base, float delay) {
+		return Anim.easeOutCubic(Anim.clamp01((base - delay) / (1f - delay)));
+	}
+
+	/** The chip under the name: a server's last visit (when its picture was taken), or what a world is. */
+	private String chip(Item item) {
+		if (item.kind == WORLD) return "Singleplayer";
+		if (item.kind != SERVER) return "";
+		if (item.pictureKey != null) {
+			try {
+				Path file = MenuShots.file(item.pictureKey);
+				if (Files.isRegularFile(file)) return "Played " + ago(Files.getLastModifiedTime(file).toMillis());
+			} catch (IOException ignored) {
+				// No time to show.
+			}
+		}
+		return "Multiplayer";
+	}
+
+	/**
+	 * Home's cards at the bottom right, as a console's widgets: Messages (the newest conversation, the unread count by a
+	 * blue dot), what was played last (to continue it) and who is online (by a green dot).
+	 */
+	private void renderCards(DrawContext ctx, int mouseX, int mouseY, float t) {
+		ChatService service = Messages.service();
 		Conversation newest = null;
 		int online = 0;
 		StringBuilder names = new StringBuilder();
-		for (Conversation c : service.conversations()) {
-			if (newest == null || c.activity() > newest.activity()) newest = c;
-			if (c.contact().online()) {
-				online++;
-				if (names.length() < 40) names.append(names.length() > 0 ? ", " : "").append(c.contact().name());
+		if (service != null) {
+			for (Conversation c : service.conversations()) {
+				if (newest == null || c.activity() > newest.activity()) newest = c;
+				if (c.contact().online()) {
+					online++;
+					if (names.length() < 40) names.append(names.length() > 0 ? ", " : "").append(c.contact().name());
+				}
 			}
 		}
-		String latest = "No conversations yet";
+		String latest = service == null ? "Messages are off" : "No conversations yet";
 		if (newest != null) {
 			Message last = newest.last();
 			latest = last != null ? (last.out() ? "You: " : newest.contact().name() + ": ") + last.text() : newest.contact().name();
 		}
-		card(ctx, cardsX, cardsY, w, h, Icons.USERS, "Online", online > 0 ? names.toString() : "Nobody is online", online, 0xFF4CD787, e,
-			Ui.inside(mouseX, mouseY, cardsX, cardsY, w, h));
-		card(ctx, cardsX + w + gap, cardsY, w, h, Icons.MESSAGE_CIRCLE, "Messages", latest, Messages.unread(), Backdrop.PS5_BEAM_2, e,
-			Ui.inside(mouseX, mouseY, cardsX + w + gap, cardsY, w, h));
+		boolean last = LastPlayed.available(client);
+		String activity = last ? "Continue " + LastPlayed.label() + (LastPlayed.server && LastPlayed.ping > 0 ? "  ·  " + LastPlayed.ping + " ms" : "")
+			: "Nothing played yet";
+		float w = width, h = height;
+		float bottom = h * 0.97f;
+		set(cards[1], w * 0.636f, h * 0.586f, w * 0.336f, h * 0.2f);
+		set(cards[0], w * 0.196f, h * 0.785f, w * 0.427f, bottom - h * 0.785f);
+		set(cards[2], w * 0.636f, h * 0.816f, w * 0.336f, bottom - h * 0.816f);
+		card(ctx, cards[1], 0.6f, t, Icons.MESSAGE_CIRCLE, "Messages", latest, Messages.unread(), MESSAGE_DOT, true, mouseX, mouseY, focus == 2);
+		card(ctx, cards[0], 0.66f, t, Icons.GAMEPAD_2, "Recent activity", activity, 0, 0, false, mouseX, mouseY, focus == 1);
+		card(ctx, cards[2], 0.72f, t, Icons.USERS, "Online", online > 0 ? names.toString() : "Nobody is online", online, ONLINE, true, mouseX, mouseY,
+			focus == 3);
 	}
 
-	private void card(DrawContext ctx, float x, float y, float w, float h, int icon, String title, String line, int count, int dot, float alpha,
-					  boolean hovered) {
-		float r = 10f;
-		Render2D.shadow(ctx, x, y + 2f, w, h, r, 10f, ColorUtil.withAlpha(0x000000, Math.round(80 * alpha)));
-		Render2D.round(ctx, x, y, w, h, r, ColorUtil.fade(hovered ? 0xB3182046 : CARD, alpha));
-		Render2D.outline(ctx, x, y, w, h, r, 1f, ColorUtil.withAlpha(0xFFFFFF, Math.round((hovered ? 60 : 28) * alpha)));
+	private static void set(float[] bounds, float x, float y, float w, float h) {
+		bounds[0] = x;
+		bounds[1] = y;
+		bounds[2] = w;
+		bounds[3] = h;
+	}
+
+	private void card(DrawContext ctx, float[] b, float delay, float t, int icon, String title, String line, int count, int dot, boolean showCount,
+					  int mouseX, int mouseY, boolean keyed) {
+		float e = in(t, delay, 0.5f) * Anim.easeOutCubic(hero.target(1f).get()) * Anim.easeOutCubic(tabSwap.get());
+		if (e <= 0.01f) return;
+		float x = b[0], y = b[1] + (1f - e) * 12f, w = b[2], h = b[3];
+		boolean hovered = Ui.inside(mouseX, mouseY, x, y, w, h) || keyed;
+		float r = Math.max(8f, Math.min(18f, height * 0.025f));
+		Render2D.shadow(ctx, x, y + 3f, w, h, r, 14f, ColorUtil.withAlpha(0x000000, Math.round(90 * e)));
+		Render2D.round(ctx, x, y, w, h, r, ColorUtil.fade(hovered ? CARD_HOT : CARD, e));
+		Render2D.gradientV(ctx, x, y, w, h, r, ColorUtil.withAlpha(0xFFFFFF, Math.round(16 * e)), 0x00FFFFFF);
+		if (keyed) Render2D.outline(ctx, x, y, w, h, r, 1.5f, ColorUtil.fade(RING, e));
 		SdfFont font = Fonts.medium();
-		Render2D.icon(ctx, icon, x + 12f, y + 12f, 8f, ColorUtil.fade(TEXT, alpha));
-		Render2D.textMiddle(ctx, Fonts.semibold(), title, x + 21f, y + 12f, 7f, ColorUtil.fade(TEXT, alpha));
-		if (count > 0) {
+		float titleSize = Math.max(7f, Math.min(13f, height * 0.03f));
+		float lineSize = Math.max(6f, Math.min(11f, height * 0.026f));
+		float rowY = y + Math.max(9f, height * 0.046f);
+		float lx = x + Math.max(8f, height * 0.028f);
+		Render2D.icon(ctx, icon, lx + titleSize * 0.5f, rowY, titleSize * 1.05f, ColorUtil.fade(TEXT, e));
+		Render2D.textMiddle(ctx, font, title, lx + titleSize * 1.5f, rowY, titleSize, ColorUtil.fade(TEXT, e));
+		if (showCount) {
 			String n = String.valueOf(count);
-			float nw = font.width(n, 6.5f);
-			Render2D.circle(ctx, x + w - 14f - nw, y + 12f, 2.2f, ColorUtil.fade(dot, alpha));
-			Render2D.textMiddle(ctx, font, n, x + w - 9f - nw, y + 12f, 6.5f, ColorUtil.fade(TEXT, alpha));
+			float nw = Fonts.semibold().width(n, titleSize);
+			float rx = x + w - Math.max(8f, height * 0.03f);
+			Render2D.textMiddle(ctx, Fonts.semibold(), n, rx - nw, rowY, titleSize, ColorUtil.fade(TEXT, e));
+			Render2D.circle(ctx, rx - nw - titleSize * 0.75f, rowY, titleSize * 0.36f, ColorUtil.fade(dot, e));
 		}
-		String text = fit(font, line, 6.5f, w - 20f);
-		Render2D.textMiddle(ctx, font, text, x + 10f, y + h - 13f, 6.5f, ColorUtil.fade(FAINT, alpha));
+		float lineY = y + Math.max(20f, height * 0.133f);
+		Render2D.textMiddle(ctx, font, fit(font, line, lineSize, w - (lx - x) * 2f), lx, Math.min(lineY, y + h - lineSize), lineSize, ColorUtil.fade(FAINT, e));
 	}
 
 	private static String fit(SdfFont font, String text, float size, float width) {
@@ -625,6 +846,7 @@ public final class ConsoleMenu extends Screen {
 	public boolean mouseClicked(Click click, boolean doubled) {
 		if (click.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT) return super.mouseClicked(click, doubled);
 		double mx = click.x(), my = click.y();
+		if (popup.mouseClicked(mx, my)) return true;
 		if (accounts.shown()) {
 			if (!accounts.mouseClicked(client, mx, my)) accounts.close();
 			return true;
@@ -655,25 +877,42 @@ public final class ConsoleMenu extends Screen {
 				return true;
 			}
 		}
-		if (Ui.inside(mx, my, playX, playY, playW, playH)) {
-			play();
-			return true;
+		Item item = picked();
+		if (item != null && item.kind != HOME) {
+			if (playW > 0f && Ui.inside(mx, my, playX, playY, playW, playH)) {
+				play();
+				return true;
+			}
+			if (moreR > 0f && (mx - moreX) * (mx - moreX) + (my - moreY) * (my - moreY) <= moreR * moreR) {
+				more();
+				return true;
+			}
 		}
-		if ((mx - moreX) * (mx - moreX) + (my - moreY) * (my - moreY) <= moreR * moreR) {
-			UiSounds.play(UiSounds.CONFIRM);
-			openList();
-			return true;
-		}
-		if (cardsW > 0f && Ui.inside(mx, my, cardsX, cardsY, cardsW, cardsH)) {
-			UiSounds.play(UiSounds.CONFIRM);
-			client.setScreen(new MessagesScreen(this, null, null));
-			return true;
+		if (cardsShown) {
+			for (int i = 0; i < 3; i++) {
+				float[] b = cards[i];
+				if (Ui.inside(mx, my, b[0], b[1], b[2], b[3])) {
+					useCard(i);
+					return true;
+				}
+			}
 		}
 		return super.mouseClicked(click, doubled);
 	}
 
+	/** A home card: 0 continues what was played last, 1 opens Messages, 2 opens Messages on who is online. */
+	private void useCard(int card) {
+		if (card == 0) {
+			play();
+			return;
+		}
+		UiSounds.play(UiSounds.CONFIRM);
+		client.setScreen(new MessagesScreen(this, null, null));
+	}
+
 	@Override
 	public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+		if (popup.shown()) return true;
 		if (accounts.mouseScrolled(mouseX, mouseY, verticalAmount)) return true;
 		double amount = verticalAmount != 0 ? verticalAmount : -horizontalAmount;
 		if (amount != 0) select(selected[tab] + (amount < 0 ? 1 : -1));
@@ -682,21 +921,47 @@ public final class ConsoleMenu extends Screen {
 
 	@Override
 	public boolean keyPressed(KeyInput input) {
+		if (popup.keyPressed(input.key())) return true;
 		if (accounts.keyPressed(client, input.key(), input.modifiers())) return true;
 		// While the accounts panel is open, letters go into its name field.
 		if (accounts.shown()) return super.keyPressed(input);
+		Item item = picked();
+		boolean home = item != null && item.kind == HOME;
+		int buttons = home ? 3 : 2;
 		int key = input.key();
 		switch (key) {
-			case GLFW.GLFW_KEY_LEFT, GLFW.GLFW_KEY_A -> select(selected[tab] - 1);
-			case GLFW.GLFW_KEY_RIGHT, GLFW.GLFW_KEY_D -> select(selected[tab] + 1);
+			case GLFW.GLFW_KEY_LEFT, GLFW.GLFW_KEY_A -> {
+				if (focus == ROW) select(selected[tab] - 1);
+				else moveFocus(Math.max(1, focus - 1));
+			}
+			case GLFW.GLFW_KEY_RIGHT, GLFW.GLFW_KEY_D -> {
+				if (focus == ROW) select(selected[tab] + 1);
+				else moveFocus(Math.min(buttons, focus + 1));
+			}
+			case GLFW.GLFW_KEY_DOWN, GLFW.GLFW_KEY_S -> {
+				if (focus == ROW) moveFocus(1);
+			}
+			case GLFW.GLFW_KEY_UP, GLFW.GLFW_KEY_W -> {
+				if (focus != ROW) moveFocus(ROW);
+			}
 			case GLFW.GLFW_KEY_TAB, GLFW.GLFW_KEY_Q, GLFW.GLFW_KEY_E -> switchTab(1 - tab);
-			case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER, GLFW.GLFW_KEY_SPACE -> play();
+			case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER, GLFW.GLFW_KEY_SPACE -> {
+				if (focus == ROW || focus == 1 && !home) play();
+				else if (home) useCard(focus == 1 ? 0 : focus == 2 ? 1 : 2);
+				else more();
+			}
 			case GLFW.GLFW_KEY_HOME -> select(0);
 			default -> {
 				return super.keyPressed(input);
 			}
 		}
 		return true;
+	}
+
+	private void moveFocus(int next) {
+		if (next == focus) return;
+		focus = next;
+		UiSounds.play(UiSounds.MOVE);
 	}
 
 	@Override
@@ -724,6 +989,7 @@ public final class ConsoleMenu extends Screen {
 
 	private void release() {
 		for (List<Item> items : tabs) for (Item item : items) item.release();
+		art.clear();
 	}
 
 	/** A round icon at the top right. */
@@ -752,6 +1018,14 @@ public final class ConsoleMenu extends Screen {
 		private byte[] icon;
 		@Nullable
 		ServerInfo server;
+		/** The name its picture goes by (MenuShots), null for tiles that have none. */
+		@Nullable
+		String pictureKey;
+		@Nullable
+		MenuShots.Picture picture;
+		boolean pictureChecked;
+		final Anim artAlpha = new Anim(0f, 6f);
+		long shownAt;
 		@Nullable
 		private NativeImageBackedTexture backing;
 		@Nullable
@@ -779,15 +1053,22 @@ public final class ConsoleMenu extends Screen {
 				setup = TextureSetup.of(backing.getGlTextureView(), RenderSystem.getSamplerCache().get(FilterMode.LINEAR));
 			} catch (IOException | RuntimeException e) {
 				if (backing == null && image != null) image.close();
-				release();
+				releaseIcon();
 			}
 			return setup;
 		}
 
-		void release() {
+		private void releaseIcon() {
 			if (backing != null) backing.close();
 			backing = null;
 			setup = null;
+		}
+
+		void release() {
+			releaseIcon();
+			if (picture != null) picture.release();
+			picture = null;
+			pictureChecked = false;
 		}
 	}
 }

@@ -5,6 +5,7 @@ import com.llamalad7.mixinextras.injector.wrapmethod.WrapMethod;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import com.llamalad7.mixinextras.sugar.Local;
+import dev.v1zir.visuals.gui.menu.MenuShots;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.visuals.AspectRatioModule;
 import dev.v1zir.visuals.module.impl.visuals.BloomModule;
@@ -116,6 +117,8 @@ public abstract class GameRendererMixin {
 		// The mist and the light shafts read the world's depth, which is cleared for the hand right after this; they
 		// go before the blur, so it smears them with the rest.
 		PostFx.atmosphere();
+		// The PS5 style menu's picture of this world or server, when one is due: the world alone, not yet smeared.
+		MenuShots.afterWorld();
 		MotionBlurModule.renderIfEnabled();
 	}
 

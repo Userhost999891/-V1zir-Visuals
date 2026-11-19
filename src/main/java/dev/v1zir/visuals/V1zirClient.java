@@ -10,6 +10,7 @@ import dev.v1zir.visuals.chat.Messages;
 import dev.v1zir.visuals.gui.hud.HudRenderer;
 import dev.v1zir.visuals.gui.messages.MessagesUi;
 import dev.v1zir.visuals.gui.menu.MainMenus;
+import dev.v1zir.visuals.gui.menu.MenuShots;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.pack.PackMixer;
 import dev.v1zir.visuals.module.impl.client.ClickGuiModule;
@@ -51,6 +52,7 @@ public final class V1zirClient implements ClientModInitializer {
 			Effects.tick(client);
 			HudRenderer.tick(client);
 			Messages.tick(client);
+			MenuShots.tick(client);
 		});
 		// Once the game has started (its options are loaded): Unlock frame rate, a single time.
 		ClientLifecycleEvents.CLIENT_STARTED.register(Optimizations::unlockFrameRate);
