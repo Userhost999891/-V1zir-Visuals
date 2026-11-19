@@ -96,11 +96,14 @@ public final class ConsoleMenu extends Screen {
 	private static final int CARD = 0x8C2A2440;
 	private static final int CARD_HOT = 0xB3393056;
 	private static final int CHIP = 0x2EFFFFFF;
-	private static final int HOME_FROM = 0xFFA587F5;
-	private static final int HOME_TO = 0xFF6A4BCF;
-	private static final int FRAME = 0x995B45B5;
+	/** The console's own tiles: near black, lighter at the top left. */
+	private static final int TILE_LIGHT = 0xFF171624;
+	private static final int TILE_MID = 0xFF0C0B16;
+	private static final int TILE_DARK = 0xFF04040A;
+	/** The rim of light around the tile in focus, lit from above. */
+	private static final int RIM_TOP = 0xFFE4E2FF;
+	private static final int RIM_BOTTOM = 0x8C9E9AC8;
 	private static final int RING = 0xFFD9CCFF;
-	private static final int RING_GLOW = 0xFF9C7CFF;
 	private static final int ONLINE = 0xFF3DDC84;
 	private static final int MESSAGE_DOT = 0xFF4C8DFF;
 	/** The tab shown last, kept for when the menu comes back. */
@@ -701,40 +704,41 @@ public final class ConsoleMenu extends Screen {
 
 	/** One tile: its picture (the logo for home, the world's or server's icon, a symbol); framed in light when picked. */
 	private void tile(DrawContext ctx, Item item, float x, float y, float size, float focus, float alpha, boolean hovered, float pictured) {
-		float r = size * 0.16f;
-		Render2D.shadow(ctx, x, y + 2f, size, size, r, size * 0.22f, ColorUtil.withAlpha(0x000000, Math.round((60 + 70 * focus + 40 * pictured) * alpha)));
-		if (focus > 0.01f) {
-			Render2D.glow(ctx, x - 2f, y - 2f, size + 4f, size + 4f, r + 2f, 12f * focus, ColorUtil.fade(RING_GLOW, 0.5f * focus * alpha),
-				ColorUtil.fade(RING_GLOW, 0.3f * focus * alpha));
-		}
+		float r = size * 0.15f;
+		// A soft shadow under every tile, deeper under the picked one.
+		Render2D.shadow(ctx, x, y + 2f + 2f * focus, size, size, r, size * (0.18f + 0.1f * focus),
+			ColorUtil.withAlpha(0x000000, Math.round((70 + 70 * focus + 40 * pictured) * alpha)));
 		TextureSetup texture = item.texture();
-		// Picked, the picture sits in a frame of light a little inside the tile's edge.
-		float inset = size * 0.075f * focus;
-		float ir = Math.max(2f, r - inset * 0.6f);
 		if (item.kind == HOME) {
-			Render2D.round(ctx, x, y, size, size, r, ColorUtil.fade(HOME_FROM, alpha), ColorUtil.fade(HOME_FROM, alpha), ColorUtil.fade(HOME_TO, alpha),
-				ColorUtil.fade(HOME_TO, alpha));
-			Render2D.gradientV(ctx, x, y, size, size * 0.55f, r, ColorUtil.withAlpha(0xFFFFFF, Math.round(46 * alpha)), 0x00FFFFFF);
-			float logo = size * 0.22f;
+			// As a console's own tiles: near black with a faint sheen from the top left, the mark in the middle.
+			Render2D.round(ctx, x, y, size, size, r, ColorUtil.fade(TILE_LIGHT, alpha), ColorUtil.fade(TILE_MID, alpha), ColorUtil.fade(TILE_DARK, alpha),
+				ColorUtil.fade(TILE_MID, alpha));
+			Render2D.gradientV(ctx, x, y, size, size * 0.5f, r, ColorUtil.withAlpha(0xFFFFFF, Math.round(9 * alpha)), 0x00FFFFFF);
+			float logo = size * 0.25f;
 			Render2D.setAlpha(alpha);
 			Logo.draw(ctx, x + logo, y + logo, size - logo * 2f);
 			Render2D.setAlpha(1f);
 		} else if (item.kind == ALL) {
-			Render2D.round(ctx, x, y, size, size, r, ColorUtil.withAlpha(0xFFFFFF, Math.round((hovered ? 52 : 34) * alpha)));
-			Render2D.icon(ctx, Icons.LAYOUT_GRID, x + size / 2f, y + size / 2f, size * 0.3f, ColorUtil.fade(0x8CFFFFFF, alpha * (0.4f + 0.6f * focus)));
+			Render2D.round(ctx, x, y, size, size, r, ColorUtil.fade(TILE_LIGHT, alpha), ColorUtil.fade(TILE_MID, alpha), ColorUtil.fade(TILE_DARK, alpha),
+				ColorUtil.fade(TILE_MID, alpha));
+			Render2D.icon(ctx, Icons.LAYOUT_GRID, x + size / 2f, y + size / 2f, size * 0.3f, ColorUtil.fade(0xB3FFFFFF, alpha * (0.5f + 0.5f * focus)));
 		} else if (texture != null) {
-			if (focus > 0.01f) Render2D.round(ctx, x, y, size, size, r, ColorUtil.fade(FRAME, focus * alpha));
-			Render2D.image(ctx, texture, x + inset, y + inset, size - inset * 2f, size - inset * 2f, ir, ColorUtil.fade(0xFFFFFFFF, alpha));
+			// A world's or server's picture fills its tile, as a game's art does.
+			Render2D.image(ctx, texture, x, y, size, size, r, ColorUtil.fade(0xFFFFFFFF, alpha));
 		} else {
-			int from = item.kind == SERVER ? 0xFF2A2152 : 0xFF213A3A;
-			int to = item.kind == SERVER ? 0xFF4A3A9C : 0xFF2F6B5A;
-			Render2D.round(ctx, x, y, size, size, r, ColorUtil.fade(from, alpha), ColorUtil.fade(from, alpha), ColorUtil.fade(to, alpha), ColorUtil.fade(to, alpha));
+			Render2D.round(ctx, x, y, size, size, r, ColorUtil.fade(TILE_LIGHT, alpha), ColorUtil.fade(TILE_MID, alpha), ColorUtil.fade(TILE_DARK, alpha),
+				ColorUtil.fade(TILE_MID, alpha));
 			int icon = item.kind == SERVER ? Icons.SERVER : Icons.MOUNTAIN;
-			Render2D.icon(ctx, icon, x + size / 2f, y + size / 2f, size * 0.38f, ColorUtil.fade(0xE6FFFFFF, alpha));
+			Render2D.icon(ctx, icon, x + size / 2f, y + size / 2f, size * 0.36f, ColorUtil.fade(0xE6FFFFFF, alpha));
 		}
-		if (hovered && focus < 0.5f) Render2D.round(ctx, x, y, size, size, r, ColorUtil.withAlpha(0xFFFFFF, Math.round(26 * alpha)));
-		// The ring dims while the keys are on the buttons under the row.
-		if (focus > 0.01f) Render2D.outline(ctx, x, y, size, size, r, Math.max(1.5f, size * 0.028f), ColorUtil.fade(RING, focus * alpha * (this.focus == ROW ? 1f : 0.55f)));
+		if (hovered && focus < 0.5f) Render2D.round(ctx, x, y, size, size, r, ColorUtil.withAlpha(0xFFFFFF, Math.round(22 * alpha)));
+		// Picked: a thin rim of light right at the tile's edge, brightest along the top as if lit from above, as a
+		// console marks the tile in focus; it dims while the keys are on the buttons under the row.
+		if (focus > 0.01f) {
+			float a = focus * alpha * (this.focus == ROW ? 1f : 0.55f);
+			Render2D.outline(ctx, x, y, size, size, r, Math.max(1f, size * 0.022f), ColorUtil.fade(RIM_TOP, a), ColorUtil.fade(RIM_TOP, a * 0.85f),
+				ColorUtil.fade(RIM_BOTTOM, a), ColorUtil.fade(RIM_BOTTOM, a * 0.85f));
+		}
 	}
 
 	/**
