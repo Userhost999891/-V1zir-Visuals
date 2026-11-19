@@ -26,6 +26,7 @@ import dev.v1zir.visuals.util.Anim;
 import dev.v1zir.visuals.util.ColorUtil;
 import dev.v1zir.visuals.util.Theme;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
@@ -134,6 +135,9 @@ public final class ConsoleMenu extends Screen {
 	private final ConsolePopup popup = new ConsolePopup();
 	/** Asks the servers of the list how many are on them, as the server list does. */
 	private final MultiplayerServerListPinger pinger = new MultiplayerServerListPinger();
+	/** The server list the tiles were made from: a ping that brings a server's new icon saves it, as the game's list does. */
+	@Nullable
+	private ServerList serverList;
 	private boolean pinged;
 	/** Whether there is something to continue, read from the disk once per layout (not every frame). */
 	private boolean canContinue;
@@ -281,6 +285,7 @@ public final class ConsoleMenu extends Screen {
 		try {
 			ServerList list = new ServerList(client);
 			list.loadFile();
+			serverList = list;
 			for (int i = 0; i < list.size() && items.size() <= MAX_TILES; i++) {
 				ServerInfo info = list.get(i);
 				if (info == null || info.isRealm()) continue;
@@ -380,8 +385,8 @@ public final class ConsoleMenu extends Screen {
 			item.pingAt = System.nanoTime();
 			PINGS.execute(() -> {
 				try {
-					pinger.add(info, () -> {
-					}, () -> info.setStatus(ServerInfo.Status.SUCCESSFUL), backend);
+					// The first is called when the server sends an icon other than the one the list had: the tile takes it.
+					pinger.add(info, () -> client.execute(() -> iconArrived(item, info)), () -> info.setStatus(ServerInfo.Status.SUCCESSFUL), backend);
 				} catch (UnknownHostException e) {
 					info.setStatus(ServerInfo.Status.UNREACHABLE);
 				} catch (Exception e) {
@@ -389,6 +394,19 @@ public final class ConsoleMenu extends Screen {
 					info.setStatus(ServerInfo.Status.UNREACHABLE);
 				}
 			});
+		}
+	}
+
+	/** A server sent its icon (new, or changed): the tile shows it, and the list keeps it for next time. */
+	private void iconArrived(Item item, ServerInfo info) {
+		// The menu is gone (its tiles let go of their icons): nothing to show it on.
+		if (client.currentScreen != this) return;
+		item.replaceIcon(info.getFavicon());
+		if (serverList == null) return;
+		try {
+			serverList.saveFile();
+		} catch (RuntimeException e) {
+			V1zir.LOGGER.debug("Could not save the server list", e);
 		}
 	}
 
@@ -1213,10 +1231,11 @@ public final class ConsoleMenu extends Screen {
 				if (icon == null) return null;
 				byte[] bytes = icon;
 				icon = null;
+				// As large as the menu shows it: the picked tile's icon on the right is 31% of the window's height.
+				int target = Math.max(64, Math.min(1024, Math.round(MinecraftClient.getInstance().getWindow().getFramebufferHeight() * 0.31f)));
 				preparing = CompletableFuture.supplyAsync(() -> {
 					try {
-						NativeImage image = NativeImage.read(bytes);
-						return IconScaler.enlarge(image, Math.max(1, Math.min(8, 256 / Math.max(1, Math.max(image.getWidth(), image.getHeight())))));
+						return IconScaler.enlarge(NativeImage.read(bytes), target);
 					} catch (IOException e) {
 						throw new UncheckedIOException(e);
 					}
@@ -1242,6 +1261,15 @@ public final class ConsoleMenu extends Screen {
 				releaseIcon();
 			}
 			return setup;
+		}
+
+		/** A new icon from the server (null: it has none now): made and faded in as the first one was. */
+		void replaceIcon(@Nullable byte[] bytes) {
+			releaseIcon();
+			icon = bytes;
+			iconFailed = false;
+			iconTaken = false;
+			iconShownAt = 0L;
 		}
 
 		/** Whether an icon is still on its way (it fades in when it comes; the tile shows no symbol meanwhile). */

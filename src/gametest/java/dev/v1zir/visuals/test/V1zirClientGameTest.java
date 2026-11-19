@@ -585,6 +585,8 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.runOnClient(client -> {
 			ServerList list = new ServerList(client);
 			list.loadFile();
+			// A real server first: its icon comes with its ping, and the menu shows it enlarged.
+			list.add(new ServerInfo("CraftCube", "craftcube.pl", ServerInfo.ServerType.OTHER), false);
 			list.add(new ServerInfo("V1zir Test", "play.example.net", ServerInfo.ServerType.OTHER), false);
 			list.add(new ServerInfo("Lobby", "lobby.example.net:25566", ServerInfo.ServerType.OTHER), false);
 			list.saveFile();
@@ -603,6 +605,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.getInput().pressKey(GLFW.GLFW_KEY_RIGHT);
 		context.waitTicks(15);
 		context.takeScreenshot("main-menu-ps5-multiplayer");
+		serverIcon(context);
 		reloadShot(context, "loading-screen-ps5");
 		context.runOnClient(client -> {
 			ServerList list = new ServerList(client);
@@ -614,6 +617,33 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.setScreen(MainMenus::create);
 		context.waitTicks(10);
 		assertMainMenu(context, "going back to the Normal style theme");
+	}
+
+	/**
+	 * The first server's icon as its ping brings it: the menu saves it to the list (so this waits for it there, half a
+	 * minute at most, as the server may be slow or away), the log gets the icon itself (V1ZIR-FAVICON, Base64 PNG) and a
+	 * picture shows its tile and the large icon of the picked tile, enlarged. Not a failure when the server is away.
+	 */
+	private static void serverIcon(ClientGameTestContext context) {
+		boolean came = false;
+		for (int i = 0; i < 30 && !came; i++) {
+			context.waitTicks(20);
+			came = context.computeOnClient(client -> {
+				ServerList list = new ServerList(client);
+				list.loadFile();
+				return list.size() > 0 && list.get(0).getFavicon() != null;
+			});
+		}
+		String favicon = context.computeOnClient(client -> {
+			ServerList list = new ServerList(client);
+			list.loadFile();
+			byte[] bytes = list.size() > 0 ? list.get(0).getFavicon() : null;
+			return bytes == null ? "none" : java.util.Base64.getEncoder().encodeToString(bytes);
+		});
+		System.out.println("V1ZIR-FAVICON " + favicon);
+		// Enlarged off the render thread, then faded in.
+		context.waitTicks(30);
+		context.takeScreenshot("main-menu-ps5-server-icon");
 	}
 
 	/**
