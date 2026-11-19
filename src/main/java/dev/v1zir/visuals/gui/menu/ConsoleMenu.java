@@ -46,6 +46,7 @@ import net.minecraft.entity.player.SkinTextures;
 import net.minecraft.network.NetworkingBackend;
 import net.minecraft.server.ServerMetadata;
 import net.minecraft.text.Text;
+import net.minecraft.util.Util;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix3x2fStack;
 import org.lwjgl.glfw.GLFW;
@@ -417,6 +418,8 @@ public final class ConsoleMenu extends Screen {
 				choices.add(new ConsolePopup.Choice("Server list", Icons.SERVER, () -> client.setScreen(new MultiplayerScreen(this))));
 				choices.add(new ConsolePopup.Choice("Options", Icons.SETTINGS, () -> client.setScreen(new OptionsScreen(this, client.options))));
 				if (FabricLoader.getInstance().isModLoaded("modmenu")) choices.add(new ConsolePopup.Choice("Mods", Icons.PUZZLE, this::openModMenu));
+				choices.add(new ConsolePopup.Choice("Open sounds folder", Icons.MUSIC, () -> openFolder(UiSounds.folder())));
+				choices.add(new ConsolePopup.Choice("Open pictures folder", Icons.IMAGE, () -> openFolder(MenuShots.folder())));
 				choices.add(new ConsolePopup.Choice("Quit game", Icons.POWER, () -> client.scheduleStop()));
 			}
 			case WORLD, SERVER -> {
@@ -428,6 +431,7 @@ public final class ConsoleMenu extends Screen {
 					choices.add(new ConsolePopup.Choice("Edit in all worlds", Icons.PENCIL, () -> client.setScreen(new SelectWorldScreen(this))));
 				}
 				if (item.picture != null) choices.add(new ConsolePopup.Choice("Remove picture", Icons.TRASH_2, () -> removePicture(item)));
+				choices.add(new ConsolePopup.Choice("Open pictures folder", Icons.IMAGE, () -> openFolder(MenuShots.folder())));
 			}
 			default -> {
 				choices.add(new ConsolePopup.Choice(item.action, Icons.LIST, this::openList));
@@ -436,6 +440,16 @@ public final class ConsoleMenu extends Screen {
 		}
 		UiSounds.play(UiSounds.CONFIRM);
 		popup.show(item.kind == HOME ? V1zir.NAME : item.title, choices);
+	}
+
+	/** Opens a folder of the client's in the system's file manager, making it first if it is not there yet. */
+	private static void openFolder(Path folder) {
+		try {
+			Files.createDirectories(folder);
+		} catch (IOException e) {
+			V1zir.LOGGER.warn("Could not create {}", folder, e);
+		}
+		Util.getOperatingSystem().open(folder);
 	}
 
 	private void removePicture(Item item) {

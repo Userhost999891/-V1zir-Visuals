@@ -1,6 +1,7 @@
 package dev.v1zir.visuals.module.impl.client;
 
 import dev.v1zir.visuals.gui.UiSounds;
+import dev.v1zir.visuals.gui.menu.MenuShots;
 import dev.v1zir.visuals.module.Category;
 import dev.v1zir.visuals.module.Module;
 import dev.v1zir.visuals.module.setting.BoolSetting;
@@ -9,8 +10,10 @@ import dev.v1zir.visuals.module.setting.ModeSetting;
 import dev.v1zir.visuals.module.setting.NumberSetting;
 import dev.v1zir.visuals.render.font.Fonts;
 import dev.v1zir.visuals.util.Theme;
+import net.minecraft.util.Util;
 import org.jetbrains.annotations.Nullable;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -29,8 +32,12 @@ public final class ThemeModule extends Module {
 	public final ModeSetting messageSound = add(soundChoice("Message sound"));
 	public final ModeSetting startSound = add(soundChoice("Start sound"));
 	public final NumberSetting ownVolume = add(new NumberSetting("Own sounds volume", 0.7, 0.05, 1.0, 0.05).visibleIf(this::ownShown));
+	/** Turned on, it opens the folder of your own sounds in the file manager and turns itself off again. */
+	public final BoolSetting openSounds = add(new BoolSetting("Open sounds folder", false).visibleIf(() -> styleTheme.is("PS5") && uiSounds.on()));
 	/** Pictures of the worlds and servers you play, taken now and then while playing, behind their tiles in the PS5 style menu. */
 	public final BoolSetting menuPictures = add(new BoolSetting("Menu pictures", true).visibleIf(() -> styleTheme.is("PS5")));
+	/** Turned on, it opens the folder of the menu's pictures and turns itself off again. */
+	public final BoolSetting openPictures = add(new BoolSetting("Open pictures folder", false).visibleIf(() -> styleTheme.is("PS5")));
 	public final ModeSetting preset = add(new ModeSetting("Preset", Theme.Preset.V1ZIR.title(), Theme.Preset.titles()));
 	public final ColorSetting accent = add(new ColorSetting("Accent", 0xFFF6A64B, false).visibleIf(this::custom));
 	public final ColorSetting accent2 = add(new ColorSetting("Accent 2", 0xFFE8693F, false).visibleIf(this::custom));
@@ -65,6 +72,21 @@ public final class ThemeModule extends Module {
 
 	@Override
 	public void onTick() {
+		// The two folder "buttons": opened once, then off again.
+		if (openSounds.on()) {
+			openSounds.set(false);
+			UiSounds.refresh();
+			Util.getOperatingSystem().open(UiSounds.folder());
+		}
+		if (openPictures.on()) {
+			openPictures.set(false);
+			try {
+				Files.createDirectories(MenuShots.folder());
+			} catch (IOException ignored) {
+				// The file manager says it is missing.
+			}
+			Util.getOperatingSystem().open(MenuShots.folder());
+		}
 		// Files added to the folder show up in the choices.
 		if (++ticks % 40 != 0 || !styleTheme.is("PS5")) return;
 		if (!UiSounds.refresh()) return;
