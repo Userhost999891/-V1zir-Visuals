@@ -463,7 +463,7 @@ public final class ConsoleMenu extends Screen {
 				choices.add(new ConsolePopup.Choice("Options", Icons.SETTINGS, () -> client.setScreen(new OptionsScreen(this, client.options))));
 			}
 		}
-		UiSounds.play(UiSounds.CONFIRM);
+		UiSounds.play(UiSounds.POPUP);
 		popup.show(item.kind == HOME ? V1zir.NAME : item.title, choices);
 	}
 

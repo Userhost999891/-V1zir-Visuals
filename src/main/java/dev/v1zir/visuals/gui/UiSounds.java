@@ -48,10 +48,16 @@ public final class UiSounds {
 	public static final String BACK = "back";
 	public static final String NOTIFY = "notify";
 	public static final String BOOT = "boot";
+	/** A small menu (prompt) opening, going back from it, and a choice of it taken. */
+	public static final String POPUP = "popup";
+	public static final String POPUP_BACK = "popup_back";
+	public static final String POPUP_ENTER = "popup_enter";
 	/** The choices of each sound besides the files: guessed from the names, or the client's own. */
 	public static final String AUTO = "Auto";
 	public static final String BUILT_IN = "Built-in";
 	private static final String[] SOUNDS = {BOOT, NOTIFY, BACK, TAB, CONFIRM, MOVE};
+	/** Words that make a file a prompt's (a small menu's) sound; with a word of going back or confirming in it too, that one's. */
+	private static final String[] PROMPT_WORDS = {"prompt", "popup", "dialog", "okno", "komunikat"};
 	/** Words in a file's name that tell which sound it is, in the order they are looked for (English and Polish). */
 	private static final Map<String, String[]> WORDS = Map.of(
 		BOOT, new String[]{"boot", "start", "logo", "intro", "welcome", "poweron", "turnon", "uruch", "wlacz", "powitan"},
@@ -70,6 +76,7 @@ public final class UiSounds {
 		  going back           - back, cancel, close, return
 		  a message            - notification, message, trophy, alert
 		  the game has loaded  - startup, start, boot, logo, intro
+		  a small menu         - prompt (opening), prompt back, prompt enter
 		Or pick a file for each sound under Theme. Short sounds work best (a few seconds at most).
 		""";
 
@@ -118,13 +125,20 @@ public final class UiSounds {
 		ThemeModule theme = ModuleManager.get(ThemeModule.class);
 		Path own = theme != null ? theme.ownSound(name) : null;
 		if (own != null && playFile(mc, own, theme.ownVolume.f())) return;
-		float volume = switch (name) {
+		// The client's own sounds: a prompt's take the nearest of them.
+		String own = switch (name) {
+			case POPUP -> TAB;
+			case POPUP_BACK -> BACK;
+			case POPUP_ENTER -> CONFIRM;
+			default -> name;
+		};
+		float volume = switch (own) {
 			case MOVE -> 0.35f;
 			case TAB, BACK -> 0.45f;
 			case BOOT -> 0.8f;
 			default -> 0.6f;
 		};
-		mc.getSoundManager().play(PositionedSoundInstance.master(SoundEvent.of(V1zir.id("ui." + name)), pitch, volume));
+		mc.getSoundManager().play(PositionedSoundInstance.master(SoundEvent.of(V1zir.id("ui." + own)), pitch, volume));
 	}
 
 	/** Plays one of the player's files at its own pitch; false when it is gone. */
@@ -280,6 +294,12 @@ public final class UiSounds {
 			.replace('ź', 'z').replace('ż', 'z');
 		String joined = name.replaceAll("[^a-z0-9]", "");
 		String[] words = name.split("[^a-z0-9]+");
+		// A prompt's sounds (Prompt, Prompt_Back, Prompt_Enter): the small menus'.
+		if (matches(words, joined, PROMPT_WORDS)) {
+			if (matches(words, joined, WORDS.get(BACK))) return POPUP_BACK;
+			if (matches(words, joined, WORDS.get(CONFIRM))) return POPUP_ENTER;
+			return POPUP;
+		}
 		for (String sound : SOUNDS) {
 			for (String key : WORDS.get(sound)) {
 				for (String word : words) {
@@ -290,5 +310,15 @@ public final class UiSounds {
 			}
 		}
 		return null;
+	}
+
+	private static boolean matches(String[] words, String joined, String[] keys) {
+		for (String key : keys) {
+			for (String word : words) {
+				if (key.length() <= 2 ? word.equals(key) : word.startsWith(key)) return true;
+			}
+			if (key.length() >= 6 && joined.contains(key)) return true;
+		}
+		return false;
 	}
 }

@@ -62,7 +62,7 @@ final class ConsolePopup {
 	void close() {
 		if (!shown) return;
 		shown = false;
-		UiSounds.play(UiSounds.BACK);
+		UiSounds.play(UiSounds.POPUP_BACK);
 	}
 
 	/** How far it is open, 0 to 1. */
@@ -174,7 +174,7 @@ final class ConsolePopup {
 		if (index < 0 || index >= choices.size()) return;
 		Choice choice = choices.get(index);
 		shown = false;
-		UiSounds.play(UiSounds.CONFIRM);
+		UiSounds.play(UiSounds.POPUP_ENTER);
 		choice.action().run();
 	}
 

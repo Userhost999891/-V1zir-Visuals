@@ -33,6 +33,9 @@ public final class ThemeModule extends Module {
 	public final ModeSetting backSound = add(soundChoice("Back sound"));
 	public final ModeSetting messageSound = add(soundChoice("Message sound"));
 	public final ModeSetting startSound = add(soundChoice("Start sound"));
+	public final ModeSetting popupSound = add(soundChoice("Popup sound"));
+	public final ModeSetting popupBackSound = add(soundChoice("Popup back sound"));
+	public final ModeSetting popupEnterSound = add(soundChoice("Popup confirm sound"));
 	public final NumberSetting ownVolume = add(new NumberSetting("Own sounds volume", 0.7, 0.05, 1.0, 0.05).visibleIf(this::ownShown));
 	/** Turned on, it asks for sound files (the system's file dialog) to use in the menus, and turns itself off again. */
 	public final BoolSetting importSounds = add(new BoolSetting("Import sounds", false).visibleIf(() -> styleTheme.is("PS5") && uiSounds.on()));
@@ -86,7 +89,7 @@ public final class ThemeModule extends Module {
 		if (imported > 0) {
 			UiSounds.refresh();
 			var choices = UiSounds.choices();
-			for (ModeSetting setting : new ModeSetting[]{moveSound, tabSound, confirmSound, backSound, messageSound, startSound}) setting.setModes(choices);
+			for (ModeSetting setting : soundSettings()) setting.setModes(choices);
 			Notifications.push(Icons.MUSIC, "PS5 sounds", imported == 1 ? "1 sound imported: it plays in the menus now" : imported + " sounds imported: they play in the menus now", true);
 		}
 		if (openSounds.on()) {
@@ -107,7 +110,11 @@ public final class ThemeModule extends Module {
 		if (++ticks % 40 != 0 || !styleTheme.is("PS5")) return;
 		if (!UiSounds.refresh()) return;
 		var choices = UiSounds.choices();
-		for (ModeSetting setting : new ModeSetting[]{moveSound, tabSound, confirmSound, backSound, messageSound, startSound}) setting.setModes(choices);
+		for (ModeSetting setting : soundSettings()) setting.setModes(choices);
+	}
+
+	private ModeSetting[] soundSettings() {
+		return new ModeSetting[]{moveSound, tabSound, confirmSound, backSound, messageSound, startSound, popupSound, popupBackSound, popupEnterSound};
 	}
 
 	/** The player's own file for one of UiSounds' sounds, null for the client's own. */
@@ -121,6 +128,9 @@ public final class ThemeModule extends Module {
 			case UiSounds.BACK -> backSound;
 			case UiSounds.NOTIFY -> messageSound;
 			case UiSounds.BOOT -> startSound;
+			case UiSounds.POPUP -> popupSound;
+			case UiSounds.POPUP_BACK -> popupBackSound;
+			case UiSounds.POPUP_ENTER -> popupEnterSound;
 			default -> null;
 		};
 		if (choice == null || choice.is(UiSounds.BUILT_IN)) return null;
