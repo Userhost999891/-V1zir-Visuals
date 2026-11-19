@@ -127,19 +127,19 @@ public final class UiSounds {
 		Path own = theme != null ? theme.ownSound(name) : null;
 		if (own != null && playFile(mc, own, theme.ownVolume.f())) return;
 		// The client's own sounds: a prompt's take the nearest of them.
-		String own = switch (name) {
+		String builtIn = switch (name) {
 			case POPUP -> TAB;
 			case POPUP_BACK -> BACK;
 			case POPUP_ENTER -> CONFIRM;
 			default -> name;
 		};
-		float volume = switch (own) {
+		float volume = switch (builtIn) {
 			case MOVE -> 0.35f;
 			case TAB, BACK -> 0.45f;
 			case BOOT -> 0.8f;
 			default -> 0.6f;
 		};
-		mc.getSoundManager().play(PositionedSoundInstance.master(SoundEvent.of(V1zir.id("ui." + own)), pitch, volume));
+		mc.getSoundManager().play(PositionedSoundInstance.master(SoundEvent.of(V1zir.id("ui." + builtIn)), pitch, volume));
 	}
 
 	/** Plays one of the player's files at its own pitch; false when it is gone. */
