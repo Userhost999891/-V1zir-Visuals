@@ -12,12 +12,17 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.sound.PositionedSoundInstance;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvent;
+import net.minecraft.util.Util;
 import org.jetbrains.annotations.Nullable;
+import org.lwjgl.PointerBuffer;
+import org.lwjgl.system.MemoryStack;
+import org.lwjgl.util.tinyfd.TinyFileDialogs;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -27,6 +32,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * The PS5 style theme's sounds: a soft tick as the selection moves, an airy brush between tabs, a warm bloom to confirm,
@@ -83,6 +89,9 @@ public final class UiSounds {
 	private static final Map<String, Path> guessed = new HashMap<>();
 	private static long folderStamp = Long.MIN_VALUE;
 	private static boolean made;
+	private static volatile boolean importing;
+	/** How many files the last import copied, until it is taken (-1: nothing to report). */
+	private static final AtomicInteger imported = new AtomicInteger(-1);
 
 	private UiSounds() {
 	}
@@ -152,6 +161,55 @@ public final class UiSounds {
 				throw new RuntimeException(e);
 			}
 		}, DECODE));
+	}
+
+	/**
+	 * Asks for sound files with the system's file dialog (on a thread of its own: the dialog blocks) and copies the
+	 * ones chosen into the folder, where they take the place of the client's own sounds (by their names, on Auto).
+	 * Without a native dialog the folder opens instead.
+	 */
+	public static void importFiles() {
+		if (importing) return;
+		importing = true;
+		Thread thread = new Thread(() -> {
+			int count = 0;
+			try {
+				String chosen;
+				try (MemoryStack stack = MemoryStack.stackPush()) {
+					PointerBuffer filters = stack.mallocPointer(3);
+					filters.put(stack.UTF8("*.mp3"));
+					filters.put(stack.UTF8("*.ogg"));
+					filters.put(stack.UTF8("*.wav"));
+					filters.flip();
+					chosen = TinyFileDialogs.tinyfd_openFileDialog("Sounds for the PS5 style menus", null, filters, "Sounds (MP3, OGG, WAV)", true);
+				}
+				if (chosen != null) {
+					Path folder = folder();
+					Files.createDirectories(folder);
+					for (String part : chosen.split("\\|")) {
+						if (part.isBlank()) continue;
+						Path source = Path.of(part.strip());
+						if (!Files.isRegularFile(source) || !AudioFiles.supported(source)) continue;
+						Path target = folder.resolve(source.getFileName().toString());
+						if (!source.toAbsolutePath().equals(target.toAbsolutePath())) Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
+						count++;
+					}
+				}
+			} catch (Exception | LinkageError e) {
+				V1zir.LOGGER.warn("No file dialog, opening the sounds folder instead", e);
+				MinecraftClient.getInstance().execute(() -> Util.getOperatingSystem().open(folder()));
+			} finally {
+				imported.set(count);
+				importing = false;
+			}
+		}, "V1zir UI sounds import");
+		thread.setDaemon(true);
+		thread.start();
+	}
+
+	/** How many files the last import copied, once (then -1 until the next import ends). */
+	public static int takeImported() {
+		return imported.getAndSet(-1);
 	}
 
 	/** The file picked for a sound on Auto: the first whose name says it is that sound, null when none does. */

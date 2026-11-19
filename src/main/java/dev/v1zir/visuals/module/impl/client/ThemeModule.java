@@ -1,6 +1,7 @@
 package dev.v1zir.visuals.module.impl.client;
 
 import dev.v1zir.visuals.gui.UiSounds;
+import dev.v1zir.visuals.gui.hud.Notifications;
 import dev.v1zir.visuals.gui.menu.MenuShots;
 import dev.v1zir.visuals.module.Category;
 import dev.v1zir.visuals.module.Module;
@@ -9,6 +10,7 @@ import dev.v1zir.visuals.module.setting.ColorSetting;
 import dev.v1zir.visuals.module.setting.ModeSetting;
 import dev.v1zir.visuals.module.setting.NumberSetting;
 import dev.v1zir.visuals.render.font.Fonts;
+import dev.v1zir.visuals.render.font.Icons;
 import dev.v1zir.visuals.util.Theme;
 import net.minecraft.util.Util;
 import org.jetbrains.annotations.Nullable;
@@ -32,6 +34,8 @@ public final class ThemeModule extends Module {
 	public final ModeSetting messageSound = add(soundChoice("Message sound"));
 	public final ModeSetting startSound = add(soundChoice("Start sound"));
 	public final NumberSetting ownVolume = add(new NumberSetting("Own sounds volume", 0.7, 0.05, 1.0, 0.05).visibleIf(this::ownShown));
+	/** Turned on, it asks for sound files (the system's file dialog) to use in the menus, and turns itself off again. */
+	public final BoolSetting importSounds = add(new BoolSetting("Import sounds", false).visibleIf(() -> styleTheme.is("PS5") && uiSounds.on()));
 	/** Turned on, it opens the folder of your own sounds in the file manager and turns itself off again. */
 	public final BoolSetting openSounds = add(new BoolSetting("Open sounds folder", false).visibleIf(() -> styleTheme.is("PS5") && uiSounds.on()));
 	/** Pictures of the worlds and servers you play, taken now and then while playing, behind their tiles in the PS5 style menu. */
@@ -72,7 +76,19 @@ public final class ThemeModule extends Module {
 
 	@Override
 	public void onTick() {
-		// The two folder "buttons": opened once, then off again.
+		// The "buttons": done once, then off again.
+		if (importSounds.on()) {
+			importSounds.set(false);
+			ownSounds.set(true);
+			UiSounds.importFiles();
+		}
+		int imported = UiSounds.takeImported();
+		if (imported > 0) {
+			UiSounds.refresh();
+			var choices = UiSounds.choices();
+			for (ModeSetting setting : new ModeSetting[]{moveSound, tabSound, confirmSound, backSound, messageSound, startSound}) setting.setModes(choices);
+			Notifications.push(Icons.MUSIC, "PS5 sounds", imported == 1 ? "1 sound imported: it plays in the menus now" : imported + " sounds imported: they play in the menus now", true);
+		}
 		if (openSounds.on()) {
 			openSounds.set(false);
 			UiSounds.refresh();

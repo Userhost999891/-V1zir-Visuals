@@ -15,6 +15,7 @@ import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.pack.PackMixer;
 import dev.v1zir.visuals.module.impl.client.ClickGuiModule;
 import dev.v1zir.visuals.module.impl.client.MainMenuModule;
+import dev.v1zir.visuals.module.impl.hud.VoiceChatMusicModule;
 import dev.v1zir.visuals.optimize.HitchMonitor;
 import dev.v1zir.visuals.optimize.Optimizations;
 import dev.v1zir.visuals.render.Reflections;
@@ -56,6 +57,7 @@ public final class V1zirClient implements ClientModInitializer {
 			HudRenderer.tick(client);
 			Messages.tick(client);
 			MenuShots.tick(client);
+			VoiceChatMusicModule.idleTick();
 			HitchMonitor.end(HitchMonitor.TICK, begun);
 		});
 		// Once the game has started (its options are loaded): Unlock frame rate, a single time.
