@@ -460,6 +460,7 @@ public final class LoadingScreen {
 			float mark = mark(Math.min(w, h));
 			title = Glyphs.make(V1zir.id("loading/title"), ps5 ? REGULAR : BOLD, distinct(NAME), Math.max(10f, mark * 0.26f));
 			caption = Glyphs.make(V1zir.id("loading/caption"), MEDIUM, distinct(STARTING + RELOADING + DIGITS), Math.max(8f, mark * 0.115f));
+			small = Glyphs.make(V1zir.id("loading/small"), MEDIUM, distinct(versionLine()), Math.max(7f, mark * 0.075f));
 			int size = Math.round(mark);
 			NativeImage source = readLogo();
 			try {
@@ -469,6 +470,7 @@ public final class LoadingScreen {
 				source.close();
 			}
 			glow = register(V1zir.id("loading/glow"), glow(Math.max(32, Math.round(mark * 1.6f))));
+			ring = register(V1zir.id("loading/ring"), ring(Math.max(32, Math.round(mark * 1.4f))));
 		} catch (IOException | RuntimeException e) {
 			V1zir.LOGGER.warn("Could not make the loading screen; it shows without its text and light", e);
 			broken = true;
