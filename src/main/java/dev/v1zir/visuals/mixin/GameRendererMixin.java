@@ -7,6 +7,7 @@ import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import com.llamalad7.mixinextras.sugar.Local;
 import dev.v1zir.visuals.gui.menu.MenuShots;
 import dev.v1zir.visuals.module.ModuleManager;
+import dev.v1zir.visuals.optimize.GpuTimer;
 import dev.v1zir.visuals.optimize.HitchMonitor;
 import dev.v1zir.visuals.module.impl.visuals.AspectRatioModule;
 import dev.v1zir.visuals.module.impl.visuals.BloomModule;
@@ -109,7 +110,11 @@ public abstract class GameRendererMixin {
 		try {
 			original.call(tickProgress, sleeping, positionMatrix);
 		} finally {
-			if (captured) HandFx.end();
+			if (captured) {
+				GpuTimer.begin(GpuTimer.HAND);
+				HandFx.end();
+				GpuTimer.end(GpuTimer.HAND);
+			}
 		}
 	}
 
@@ -118,20 +123,24 @@ public abstract class GameRendererMixin {
 		// The mist and the light shafts read the world's depth, which is cleared for the hand right after this; they
 		// go before the blur, so it smears them with the rest.
 		long begun = HitchMonitor.begin();
+		GpuTimer.begin(GpuTimer.POST);
 		PostFx.atmosphere();
 		// The PS5 style menu's picture of this world or server, when one is due: the world alone, not yet smeared.
 		MenuShots.afterWorld();
 		MotionBlurModule.renderIfEnabled();
+		GpuTimer.end(GpuTimer.POST);
 		HitchMonitor.end(HitchMonitor.WORLD, begun);
 	}
 
 	@Inject(method = RENDER_WORLD, at = @At("RETURN"))
 	private void v1zir$colorGrade(CallbackInfo ci) {
 		long begun = HitchMonitor.begin();
+		GpuTimer.begin(GpuTimer.POST);
 		BloomModule.renderIfEnabled();
 		ColorGradingModule.renderIfEnabled();
 		VibeModule.gradeIfEnabled();
 		PostFx.lens();
+		GpuTimer.end(GpuTimer.POST);
 		HitchMonitor.end(HitchMonitor.POST, begun);
 	}
 

@@ -7,6 +7,7 @@ import com.mojang.blaze3d.textures.GpuTextureView;
 import dev.v1zir.visuals.V1zir;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.visuals.ShaderSkyModule;
+import dev.v1zir.visuals.optimize.GpuTimer;
 import dev.v1zir.visuals.render.Fullscreen;
 import dev.v1zir.visuals.render.V1zirPipelines;
 import net.minecraft.client.MinecraftClient;
@@ -70,13 +71,23 @@ public final class SkyRenderer {
 	public static boolean renderWorldSky() {
 		ShaderSkyModule sky = module();
 		if (sky == null || !captured) return false;
-		return render(sky);
+		return timed(sky);
 	}
 
 	public static boolean renderEndSky() {
 		ShaderSkyModule sky = module();
 		if (sky == null || !captured || !sky.endSky.on()) return false;
-		return render(sky);
+		return timed(sky);
+	}
+
+	/** The sky, its time on the graphics card measured (GpuTimer). */
+	private static boolean timed(ShaderSkyModule sky) {
+		GpuTimer.begin(GpuTimer.SKY);
+		try {
+			return render(sky);
+		} finally {
+			GpuTimer.end(GpuTimer.SKY);
+		}
 	}
 
 	/** How far the frame's projection is zoomed in from the field of view set in the options. */

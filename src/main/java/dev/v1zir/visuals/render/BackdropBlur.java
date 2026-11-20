@@ -44,7 +44,9 @@ public final class BackdropBlur {
 	private static int sourceWidth = -1;
 	private static int sourceHeight = -1;
 	private static boolean requested;
-	private static final int MAX_REGIONS = 8;
+	private static final int MAX_REGIONS = 16;
+	/** Two regions become one when the box around both (with the passes' reach) is at most this much larger than the two. */
+	private static final float MERGE_SLACK = 1.2f;
 	/** Requested areas in framebuffer pixels with the origin at the bottom (x0, y0, x1, y1), unless fullFrame. */
 	private static final int[] regions = new int[MAX_REGIONS * 4];
 	private static int regionCount;
@@ -80,11 +82,43 @@ public final class BackdropBlur {
 		Window window = V1zir.mc().getWindow();
 		int scale = window.getScaleFactor();
 		int height = window.getFramebufferHeight();
+		int x0 = bounds.getLeft() * scale;
+		int y0 = height - bounds.getBottom() * scale;
+		int x1 = bounds.getRight() * scale;
+		int y1 = height - bounds.getTop() * scale;
+		if (regionCount == MAX_REGIONS) {
+			// Full: the panel joins the region that grows least by it (never the whole frame for one panel more).
+			int best = 0;
+			long least = Long.MAX_VALUE;
+			for (int i = 0; i < regionCount * 4; i += 4) {
+				long grown = area(Math.min(regions[i], x0), Math.min(regions[i + 1], y0), Math.max(regions[i + 2], x1), Math.max(regions[i + 3], y1), 0)
+					- area(regions[i], regions[i + 1], regions[i + 2], regions[i + 3], 0);
+				if (grown < least) {
+					least = grown;
+					best = i;
+				}
+			}
+			include(best, x0, y0, x1, y1);
+			return;
+		}
 		int r = regionCount++ * 4;
-		regions[r] = bounds.getLeft() * scale;
-		regions[r + 1] = height - bounds.getBottom() * scale;
-		regions[r + 2] = bounds.getRight() * scale;
-		regions[r + 3] = height - bounds.getTop() * scale;
+		regions[r] = x0;
+		regions[r + 1] = y0;
+		regions[r + 2] = x1;
+		regions[r + 3] = y1;
+	}
+
+	/** Grows the region at index r (into regions) to take the box in too. */
+	private static void include(int r, int x0, int y0, int x1, int y1) {
+		regions[r] = Math.min(regions[r], x0);
+		regions[r + 1] = Math.min(regions[r + 1], y0);
+		regions[r + 2] = Math.max(regions[r + 2], x1);
+		regions[r + 3] = Math.max(regions[r + 3], y1);
+	}
+
+	/** The area of a box grown by margin on every side. */
+	private static long area(int x0, int y0, int x1, int y1, int margin) {
+		return (long) Math.max(0, x1 - x0 + 2 * margin) * Math.max(0, y1 - y0 + 2 * margin);
 	}
 
 	public static void flip() {
@@ -158,7 +192,9 @@ public final class BackdropBlur {
 	/**
 	 * Margins per level and merged regions. An up pass reads up to offset + 1 texels of its source level
 	 * around each target texel, a down pass 0.5 * offset + 1; walking back from the final level gives how far
-	 * around a panel every level must be valid.
+	 * around a panel every level must be valid. Regions whose reach overlaps become one (no area is blurred twice),
+	 * and so do regions close enough that the box around both is hardly larger; panels far apart (a HUD's corners)
+	 * stay apart, so the passes cover the panels and not the frame between them.
 	 */
 	private static void prepareRegions(int levels, float offset) {
 		int up = (int) Math.ceil(offset + 1f);
@@ -167,23 +203,6 @@ public final class BackdropBlur {
 		for (int j = 1; j < levels; j++) margin += up << (j + 1);
 		margins[levels - 1] = margin;
 		for (int i = levels - 2; i >= 0; i--) margins[i] = margins[i + 1] + (down << (i + 1));
-		// Many panels apart (a full HUD): one box around them all costs far fewer passes than a box for each.
-		if (regionCount > 3) {
-			int x0 = Integer.MAX_VALUE, y0 = Integer.MAX_VALUE, x1 = Integer.MIN_VALUE, y1 = Integer.MIN_VALUE;
-			for (int i = 0; i < regionCount * 4; i += 4) {
-				x0 = Math.min(x0, regions[i]);
-				y0 = Math.min(y0, regions[i + 1]);
-				x1 = Math.max(x1, regions[i + 2]);
-				y1 = Math.max(y1, regions[i + 3]);
-			}
-			regions[0] = x0;
-			regions[1] = y0;
-			regions[2] = x1;
-			regions[3] = y1;
-			regionCount = 1;
-			return;
-		}
-		// Merge regions whose widest reach overlaps, so no area is blurred twice.
 		int reach = margins[0];
 		for (boolean merged = true; merged; ) {
 			merged = false;
@@ -191,12 +210,16 @@ public final class BackdropBlur {
 				for (int b = a + 1; b < regionCount; b++) {
 					int ra = a * 4;
 					int rb = b * 4;
-					if (regions[ra] - reach > regions[rb + 2] + reach || regions[rb] - reach > regions[ra + 2] + reach
-						|| regions[ra + 1] - reach > regions[rb + 3] + reach || regions[rb + 1] - reach > regions[ra + 3] + reach) continue;
-					regions[ra] = Math.min(regions[ra], regions[rb]);
-					regions[ra + 1] = Math.min(regions[ra + 1], regions[rb + 1]);
-					regions[ra + 2] = Math.max(regions[ra + 2], regions[rb + 2]);
-					regions[ra + 3] = Math.max(regions[ra + 3], regions[rb + 3]);
+					boolean overlap = !(regions[ra] - reach > regions[rb + 2] + reach || regions[rb] - reach > regions[ra + 2] + reach
+						|| regions[ra + 1] - reach > regions[rb + 3] + reach || regions[rb + 1] - reach > regions[ra + 3] + reach);
+					if (!overlap) {
+						long both = area(Math.min(regions[ra], regions[rb]), Math.min(regions[ra + 1], regions[rb + 1]),
+							Math.max(regions[ra + 2], regions[rb + 2]), Math.max(regions[ra + 3], regions[rb + 3]), reach);
+						long apart = area(regions[ra], regions[ra + 1], regions[ra + 2], regions[ra + 3], reach)
+							+ area(regions[rb], regions[rb + 1], regions[rb + 2], regions[rb + 3], reach);
+						if (both > apart * MERGE_SLACK) continue;
+					}
+					include(ra, regions[rb], regions[rb + 1], regions[rb + 2], regions[rb + 3]);
 					regionCount--;
 					System.arraycopy(regions, regionCount * 4, regions, rb, 4);
 					merged = true;
@@ -206,30 +229,31 @@ public final class BackdropBlur {
 		}
 	}
 
-	/** One blur pass into the given level, over the whole level or (scissored) only around the requested regions. */
+	/**
+	 * One blur pass into the given level, over the whole level or (scissored) only around the requested regions: one
+	 * render pass for the level, one draw per region.
+	 */
 	private static void pass(RenderPipeline pipeline, GpuTextureView source, int sourceW, int sourceH, int level, float offset, boolean scissored) {
 		BLUR.set(1f / sourceW, 1f / sourceH, offset);
 		GpuBufferSlice params = storage.write(BLUR);
 		int texel = 2 << level;
 		int margin = margins[level];
-		for (int r = 0; r < (scissored ? regionCount * 4 : 1); r += 4) {
-			int x0 = 0;
-			int y0 = 0;
-			int x1 = widths[level];
-			int y1 = heights[level];
-			if (scissored) {
-				x0 = Math.max(x0, Math.floorDiv(regions[r] - margin, texel));
-				y0 = Math.max(y0, Math.floorDiv(regions[r + 1] - margin, texel));
-				x1 = Math.min(x1, -Math.floorDiv(-(regions[r + 2] + margin), texel));
-				y1 = Math.min(y1, -Math.floorDiv(-(regions[r + 3] + margin), texel));
-				if (x1 <= x0 || y1 <= y0) continue;
+		try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(() -> "V1zir backdrop blur", views[level], OptionalInt.empty())) {
+			pass.setPipeline(pipeline);
+			pass.bindTexture("Sampler0", source, RenderSystem.getSamplerCache().get(FilterMode.LINEAR));
+			pass.setUniform("BlurParams", params);
+			pass.setVertexBuffer(0, Fullscreen.buffer());
+			if (!scissored) {
+				pass.draw(0, 3);
+				return;
 			}
-			try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(() -> "V1zir backdrop blur", views[level], OptionalInt.empty())) {
-				if (scissored) pass.enableScissor(x0, y0, x1 - x0, y1 - y0);
-				pass.setPipeline(pipeline);
-				pass.bindTexture("Sampler0", source, RenderSystem.getSamplerCache().get(FilterMode.LINEAR));
-				pass.setUniform("BlurParams", params);
-				pass.setVertexBuffer(0, Fullscreen.buffer());
+			for (int r = 0; r < regionCount * 4; r += 4) {
+				int x0 = Math.max(0, Math.floorDiv(regions[r] - margin, texel));
+				int y0 = Math.max(0, Math.floorDiv(regions[r + 1] - margin, texel));
+				int x1 = Math.min(widths[level], -Math.floorDiv(-(regions[r + 2] + margin), texel));
+				int y1 = Math.min(heights[level], -Math.floorDiv(-(regions[r + 3] + margin), texel));
+				if (x1 <= x0 || y1 <= y0) continue;
+				pass.enableScissor(x0, y0, x1 - x0, y1 - y0);
 				pass.draw(0, 3);
 			}
 		}

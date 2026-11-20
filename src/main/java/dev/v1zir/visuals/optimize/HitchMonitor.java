@@ -48,6 +48,8 @@ public final class HitchMonitor {
 	private static volatile int longPauses;
 	private static volatile String lastPause = "";
 	private static boolean warned;
+	/** The graphics card notice (the client's effects take much of a slow frame) was shown this session. */
+	private static boolean gpuWarned;
 	/** In this minute's hitches: how much of their time was the client's own work, and which part the most. */
 	private static long hitchTime;
 	private static long hitchOurs;
@@ -117,6 +119,10 @@ public final class HitchMonitor {
 				V1zir.LOGGER.info("Hitches in the last minute: {}, the worst {} ms; usual frame {} ms; collector pauses of {} ms or more: {} (worst {} ms)",
 					hitches, worst / 1_000_000L, String.format(Locale.ROOT, "%.1f", usual / 1.0e6f), LONG_PAUSE_MS, longPauses, pauseWorstMs);
 			}
+			if (GpuTimer.measured() && client.world != null) {
+				V1zir.LOGGER.info("Graphics card per frame: {}", gpuParts(0.05f));
+				gpuNotice(client);
+			}
 			// Not in the game test (software rendering there hitches all the time; its log has the lines anyway).
 			if (hitches >= 5 && !warned && !"loopback".equals(System.getProperty("v1zir.messages.relay"))) {
 				warned = true;
@@ -162,7 +168,43 @@ public final class HitchMonitor {
 			if (spent[i] >= 1_000_000L) parts.append(", ").append(PARTS[i]).append(' ').append(spent[i] / 1_000_000L).append(" ms");
 		}
 		long pause = pauseNanos;
-		V1zir.LOGGER.info("Hitch: a frame took {} ms (usually {} ms); V1zir's own work {} ms{}{}", frame / 1_000_000L,
-			String.format(Locale.ROOT, "%.1f", usual / 1.0e6f), ours / 1_000_000L, parts, pause > 0L ? "; garbage collection " + pause / 1_000_000L + " ms" : "");
+		String card = GpuTimer.measured() ? "; V1zir on the graphics card " + gpuParts(0.5f) : "";
+		V1zir.LOGGER.info("Hitch: a frame took {} ms (usually {} ms); V1zir's own work {} ms{}{}{}", frame / 1_000_000L,
+			String.format(Locale.ROOT, "%.1f", usual / 1.0e6f), ours / 1_000_000L, parts, pause > 0L ? "; garbage collection " + pause / 1_000_000L + " ms" : "", card);
+	}
+
+	/** The client's parts on the graphics card that take at least min ms per frame, costliest first, in words. */
+	private static String gpuParts(float min) {
+		StringBuilder out = new StringBuilder();
+		boolean[] done = new boolean[GpuTimer.GUI + 1];
+		for (int n = 0; n <= GpuTimer.GUI; n++) {
+			int best = -1;
+			for (int i = 0; i <= GpuTimer.GUI; i++) {
+				if (!done[i] && GpuTimer.ms(i) >= min && (best < 0 || GpuTimer.ms(i) > GpuTimer.ms(best))) best = i;
+			}
+			if (best < 0) break;
+			done[best] = true;
+			if (out.length() > 0) out.append(", ");
+			out.append(GpuTimer.name(best)).append(' ').append(String.format(Locale.ROOT, "%.1f", GpuTimer.ms(best))).append(" ms");
+		}
+		return out.length() == 0 ? "none" : out.toString();
+	}
+
+	/**
+	 * Once a session: when frames are slow (under about 55 FPS) and the client's own passes take much of each on the
+	 * graphics card, says which one and how long, as that is what to lower or turn off. Not in the game test.
+	 */
+	private static void gpuNotice(MinecraftClient client) {
+		if (gpuWarned || "loopback".equals(System.getProperty("v1zir.messages.relay"))) return;
+		float frameMs = usual / 1.0e6f;
+		float effects = GpuTimer.effects();
+		int costliest = GpuTimer.costliest();
+		if (frameMs < 18f || costliest < 0 || effects < frameMs * 0.35f) return;
+		gpuWarned = true;
+		String text = String.format(Locale.ROOT, "%s takes %.1f ms of each frame on your graphics card: lower its quality or turn it off",
+			GpuTimer.name(costliest), GpuTimer.ms(costliest));
+		Notifications.push(Icons.CPU, "Low FPS: " + GpuTimer.name(costliest), text, false);
+		V1zir.LOGGER.info("Low FPS: {} (frames {} ms, V1zir's passes {} ms on the graphics card)", text, String.format(Locale.ROOT, "%.1f", frameMs),
+			String.format(Locale.ROOT, "%.1f", effects));
 	}
 }

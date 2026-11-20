@@ -56,6 +56,7 @@ public final class Optimizations {
 	public static void endFrame() {
 		frame++;
 		OcclusionCuller.endFrame();
+		GpuTimer.endFrame();
 		HitchMonitor.endFrame();
 	}
 

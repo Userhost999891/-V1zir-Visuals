@@ -3,6 +3,7 @@ package dev.v1zir.visuals.mixin;
 import com.llamalad7.mixinextras.sugar.Local;
 import dev.v1zir.visuals.module.impl.world.BlockHighlightModule;
 import dev.v1zir.visuals.module.impl.world.BreakEffectsModule;
+import dev.v1zir.visuals.optimize.GpuTimer;
 import dev.v1zir.visuals.render.Reflections;
 import dev.v1zir.visuals.render.sky.SkyRenderer;
 import dev.v1zir.visuals.render.world.WorldEffectRenderer;
@@ -44,8 +45,12 @@ public abstract class WorldRendererMixin {
 	@Inject(method = "render", at = @At("TAIL"))
 	private void v1zir$renderEffects(CallbackInfo ci, @Local(argsOnly = true) RenderTickCounter tickCounter) {
 		float tickDelta = tickCounter.getTickProgress(false);
+		GpuTimer.begin(GpuTimer.REFLECTIONS);
 		Reflections.render(tickDelta);
+		GpuTimer.end(GpuTimer.REFLECTIONS);
+		GpuTimer.begin(GpuTimer.WORLD);
 		WorldEffectRenderer.render(tickDelta);
+		GpuTimer.end(GpuTimer.WORLD);
 	}
 
 	@Inject(method = "renderClouds", at = @At("HEAD"), cancellable = true)

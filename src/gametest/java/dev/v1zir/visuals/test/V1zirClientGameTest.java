@@ -92,6 +92,7 @@ import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.option.Perspective;
 import net.minecraft.client.option.ServerList;
 import net.minecraft.client.session.ProfileKeys;
+import net.minecraft.client.texture.NativeImage;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.util.Hand;
@@ -246,6 +247,26 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.waitForScreen(TitleScreen.class);
 	}
 
+	/** A small picture for a profile: a ring on a gradient, as a PNG. */
+	private static byte[] testPicture() {
+		try (NativeImage image = new NativeImage(NativeImage.Format.RGBA, 64, 64, false)) {
+			for (int y = 0; y < 64; y++) {
+				for (int x = 0; x < 64; x++) {
+					double d = Math.hypot(x - 31.5, y - 31.5);
+					int argb = Math.abs(d - 17.0) < 4.0 ? 0xFFFFFFFF : 0xFF000000 | (90 + x * 2) << 16 | (50 + y * 2) << 8 | 230 - x;
+					image.setColorArgb(x, y, argb);
+				}
+			}
+			Path temp = Files.createTempFile("v1zir-picture", ".png");
+			image.writeTo(temp);
+			byte[] bytes = Files.readAllBytes(temp);
+			Files.delete(temp);
+			return bytes;
+		} catch (IOException e) {
+			throw new UncheckedIOException(e);
+		}
+	}
+
 	/** The in-game relay of the Messages steps and the two players on it besides this one. */
 	private static final LoopbackTransport.Bus BUS = new LoopbackTransport.Bus();
 	private static ChatService bot;
@@ -269,6 +290,9 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			kuba.start(true);
 		});
 		context.waitTicks(10);
+		// Kuba_PL has a name and a picture of his own for Messages: they go with his message, sealed like it.
+		byte[] picture = context.computeOnClient(client -> testPicture());
+		context.runOnClient(client -> kuba.setProfile("Kuba", picture));
 		context.runOnClient(client -> kuba.send(kuba.open(me), "gg wp, rewanż jutro o 18?"));
 		context.waitTicks(10);
 		context.runOnClient(client -> bot.send(bot.open(me), "Hej! Wbijasz dziś na serwer? Mam nowy preset nieba"));
@@ -304,6 +328,25 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			return last == null ? -1 : last.state();
 		});
 		if (state != Message.READ) throw new AssertionError("The reply should show as read, its state is " + state);
+		String kubaShown = context.computeOnClient(client -> {
+			Conversation conversation = Messages.service().find("Kuba_PL");
+			return conversation == null ? "none" : conversation.contact().displayName() + (conversation.contact().avatar() != null ? " +picture" : "");
+		});
+		if (!"Kuba +picture".equals(kubaShown)) throw new AssertionError("Kuba_PL's name and picture should have come, they are " + kubaShown);
+
+		// This account's own profile: the editor, a name typed and saved; Kuba_PL's game gets it.
+		context.runOnClient(client -> ((MessagesScreen) client.currentScreen).editProfile());
+		context.waitTicks(4);
+		context.getInput().typeChars("Tester 01");
+		context.waitTicks(10);
+		context.takeScreenshot("messages-profile");
+		context.getInput().pressKey(GLFW.GLFW_KEY_ENTER);
+		context.waitTicks(10);
+		String mine = context.computeOnClient(client -> {
+			Conversation conversation = kuba.find(me);
+			return conversation == null ? "none" : conversation.contact().displayName();
+		});
+		if (!"Tester 01".equals(mine)) throw new AssertionError("Kuba_PL's game should show this account as Tester 01, it shows " + mine);
 
 		context.runOnClient(client -> bot.send(bot.find(me), "Play.v1zir.pl, czekam przy spawnie"));
 		context.waitTicks(10);
@@ -597,6 +640,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		String screen = context.computeOnClient(client -> client.currentScreen == null ? "null" : client.currentScreen.getClass().getName());
 		if (!screen.equals(ConsoleMenu.class.getName())) throw new AssertionError("With the PS5 style theme the menu is " + screen);
 		context.takeScreenshot("main-menu-ps5");
+		bench(context, "main-menu-ps5");
 		context.getInput().pressKey(GLFW.GLFW_KEY_RIGHT);
 		context.waitTicks(15);
 		context.takeScreenshot("main-menu-ps5-next");
@@ -644,6 +688,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		// Enlarged off the render thread, then faded in.
 		context.waitTicks(30);
 		context.takeScreenshot("main-menu-ps5-server-icon");
+		bench(context, "main-menu-ps5-server");
 	}
 
 	/**

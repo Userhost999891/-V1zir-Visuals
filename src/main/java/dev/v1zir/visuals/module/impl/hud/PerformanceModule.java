@@ -2,6 +2,7 @@ package dev.v1zir.visuals.module.impl.hud;
 
 import dev.v1zir.visuals.gui.clickgui.Label;
 import dev.v1zir.visuals.module.setting.BoolSetting;
+import dev.v1zir.visuals.optimize.GpuTimer;
 import dev.v1zir.visuals.render.font.Fonts;
 import dev.v1zir.visuals.render.font.Icons;
 import dev.v1zir.visuals.render.font.SdfFont;
@@ -24,6 +25,8 @@ public final class PerformanceModule extends HudModule {
 
 	public final BoolSetting graph = add(new BoolSetting("Graph", true));
 	public final BoolSetting stats = add(new BoolSetting("Min / avg", true));
+	/** What V1zir's own effects take of each frame on the graphics card, and the costliest of them. */
+	public final BoolSetting cost = add(new BoolSetting("V1zir GPU cost", true));
 
 	private final Sparkline frames = new Sparkline(BARS);
 	private final float[] worst = new float[BARS];
@@ -40,6 +43,7 @@ public final class PerformanceModule extends HudModule {
 	private final NumberText frameTime = new NumberText(1, " ms");
 	private final NumberText min = new NumberText(0, "");
 	private final NumberText avg = new NumberText(0, "");
+	private final NumberText gpu = new NumberText(1, " ms");
 	private final Label avgLabel = new Label();
 
 	public PerformanceModule() {
@@ -71,7 +75,8 @@ public final class PerformanceModule extends HudModule {
 
 		SdfFont bold = Fonts.semibold();
 		SdfFont font = Fonts.medium();
-		float h = 20f + (graph.on() ? 15f : 0f) + (stats.on() ? 11f : 0f) + 2f;
+		boolean showCost = cost.on() && GpuTimer.measured();
+		float h = 20f + (graph.on() ? 15f : 0f) + (stats.on() ? 11f : 0f) + (showCost ? 11f : 0f) + 2f;
 		width = W;
 		height = h;
 		panel(ctx, x, y, W, h);
@@ -104,6 +109,19 @@ public final class PerformanceModule extends HudModule {
 			float aw = avg.width(bold, 6.5f);
 			Render2D.textMiddle(ctx, bold, avg.text(), x + W - 8f - aw, sy, 6.5f, Theme.textDim());
 			Render2D.textMiddle(ctx, font, "avg", x + W - 8f - aw - 3f - avgLabel.width(font, "avg", 6f), sy, 6f, Theme.textFaint());
+			cy += 11f;
+		}
+		if (showCost) {
+			float sy = cy + 4f;
+			float sx = x + 8f;
+			sx += Render2D.textMiddle(ctx, font, "V1zir GPU", sx, sy, 6f, Theme.textFaint()) + 3f;
+			gpu.set(GpuTimer.effects());
+			Render2D.textMiddle(ctx, bold, gpu.text(), sx, sy, 6.5f, Theme.textDim());
+			int part = GpuTimer.costliest();
+			if (part >= 0) {
+				String name = GpuTimer.name(part);
+				Render2D.textMiddle(ctx, font, name, x + W - 8f - font.width(name, 6f), sy, 6f, Theme.textFaint());
+			}
 		}
 	}
 

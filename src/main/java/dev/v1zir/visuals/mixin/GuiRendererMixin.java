@@ -5,6 +5,7 @@ import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.vertex.VertexFormat;
+import dev.v1zir.visuals.optimize.GpuTimer;
 import dev.v1zir.visuals.render.BackdropBlur;
 import dev.v1zir.visuals.gui.clickgui.WindowTransition;
 import dev.v1zir.visuals.render.FrameUniforms;
@@ -29,13 +30,18 @@ public abstract class GuiRendererMixin {
 		// The title screen wallpapers first: outside a world they are what glass panels blur.
 		WallpaperRenderer.renderPending();
 		if (WindowTransition.wantsBlur()) BackdropBlur.request();
+		GpuTimer.begin(GpuTimer.BLUR);
 		BackdropBlur.runIfRequested();
+		GpuTimer.end(GpuTimer.BLUR);
+		GpuTimer.begin(GpuTimer.GUI);
 	}
 
 	/** The click GUI's open and close animations composite over the finished GUI. */
 	@Inject(method = "render(Lcom/mojang/blaze3d/buffers/GpuBufferSlice;)V", at = @At("RETURN"))
 	private void v1zir$afterGui(GpuBufferSlice fogBuffer, CallbackInfo ci) {
-		if (!GuiCapture.isCapturing(this)) WindowTransition.afterGui(fogBuffer);
+		if (GuiCapture.isCapturing(this)) return;
+		GpuTimer.end(GpuTimer.GUI);
+		WindowTransition.afterGui(fogBuffer);
 	}
 
 	/** GuiCapture's own renderer draws into the capture framebuffer instead of the main one. */
