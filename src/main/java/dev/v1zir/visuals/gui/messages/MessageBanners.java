@@ -131,11 +131,11 @@ public final class MessageBanners {
 		Render2D.shadow(ctx, x, y + 3f, W, H, 12f, 16f, 0x73000000);
 		Render2D.panel(ctx, x, y, W, H, 12f);
 		if (over) Render2D.round(ctx, x, y, W, H, 12f, ColorUtil.withAlpha(0xFFFFFF, 16));
-		String name = banner.conversation.contact().name();
+		String name = banner.conversation.contact().displayName();
 		float head = 26f;
 		float hx = x + 7f;
 		float hy = y + 7f;
-		Avatar.draw(ctx, name, hx, hy, head, 8f);
+		Avatar.draw(ctx, banner.conversation.contact(), hx, hy, head, 8f);
 		// The Messages badge on the picture's corner.
 		Render2D.circle(ctx, hx + head - 1f, hy + head - 1f, 6f, 0xFF15171C);
 		Render2D.circle(ctx, hx + head - 1f, hy + head - 1f, 4.8f, Theme.accent());

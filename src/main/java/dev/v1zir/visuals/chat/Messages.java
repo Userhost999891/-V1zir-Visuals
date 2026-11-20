@@ -169,6 +169,14 @@ public final class Messages {
 		client.setScreen(new MessagesScreen(parent, conversation, highlight));
 	}
 
+	/** Opens Messages over parent with the editor of this account's name and picture. */
+	public static void openProfile(Screen parent) {
+		MinecraftClient client = MinecraftClient.getInstance();
+		MessagesScreen screen = client.currentScreen instanceof MessagesScreen open ? open : new MessagesScreen(parent, null, null);
+		screen.editProfile();
+		if (client.currentScreen != screen) client.setScreen(screen);
+	}
+
 	/** The Open key: the conversation of the newest banner, else the latest with unread messages, else the list. */
 	public static void openLatest(Screen parent) {
 		if (service == null) return;

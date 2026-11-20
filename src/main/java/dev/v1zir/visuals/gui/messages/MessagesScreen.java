@@ -26,6 +26,7 @@ import net.minecraft.client.input.CharInput;
 import net.minecraft.client.input.KeyInput;
 import net.minecraft.client.texture.TextureSetup;
 import net.minecraft.text.Text;
+import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
 
 import java.time.Instant;
@@ -49,6 +50,8 @@ public final class MessagesScreen extends Screen {
 	private static final float ROW = 34f;
 	private static final float HEADER = 38f;
 	private static final float FIELD_H = 24f;
+	/** The bar of this account's own profile at the bottom of the list. */
+	private static final float PROFILE_H = 30f;
 	private static final float TEXT = 6.8f;
 	private static final float LINE = 9.4f;
 	private static final float PAD_X = 7.5f;
@@ -72,6 +75,27 @@ public final class MessagesScreen extends Screen {
 	private String newName = "";
 	private String nameError = "";
 	private long nameErrorUntil;
+	/** The profile editor (this account's name and picture for Messages) is open, or asked to open. */
+	private boolean editing;
+	private boolean editAsked;
+	private String editName = "";
+	@Nullable
+	private byte[] editPicture;
+	private final Anim editor = new Anim(0f, 14f);
+	private float profileY;
+	private float edX;
+	private float edY;
+	private float edW;
+	private float edH;
+	private float changeX;
+	private float changeY;
+	private float changeW;
+	private float headY;
+	private float saveX;
+	private float saveY;
+	private float saveW;
+	private float cancelX;
+	private float cancelW;
 	private final Anim open = new Anim(0f, 9f);
 	private final Anim nameField = new Anim(0f, 14f);
 	private final Anim send = new Anim(0f, 16f);
@@ -174,6 +198,24 @@ public final class MessagesScreen extends Screen {
 		scrollToHighlight = message != null;
 	}
 
+	/** Opens the profile editor (this account's name and picture for Messages), as its bar under the list does. */
+	public void editProfile() {
+		editAsked = true;
+	}
+
+	private void openEditor(ChatService service) {
+		editing = true;
+		editAsked = false;
+		naming = false;
+		editName = service.displayName();
+		editPicture = service.avatar();
+	}
+
+	private void saveProfile(ChatService service) {
+		service.setProfile(editName, editPicture);
+		editing = false;
+	}
+
 	/** Opens the field for a new conversation's name, as the + button does. */
 	public void newConversation() {
 		naming = true;
@@ -260,10 +302,12 @@ public final class MessagesScreen extends Screen {
 		Render2D.gradientH(ctx, winX + winW * 0.5f, winY, lineW * 0.5f, 1f, 0f, ColorUtil.withAlpha(Theme.accent2(), 170),
 			ColorUtil.withAlpha(Theme.accent2(), 0));
 
+		if (editAsked && service != null) openEditor(service);
 		renderList(ctx, service, mx, my);
 		if (service == null) renderOff(ctx);
 		else if (selected == null) renderEmpty(ctx, mx, my);
 		else renderConversation(ctx, service, mx, my);
+		renderEditor(ctx, service, mx, my);
 		ctx.getMatrices().popMatrix();
 		Render2D.setAlpha(1f);
 	}
@@ -334,8 +378,8 @@ public final class MessagesScreen extends Screen {
 			Render2D.setAlpha(a);
 		}
 
-		// The conversations, the latest first.
-		float listBottom = y + h - 4f;
+		// The conversations, the latest first, above the bar of this account's own profile.
+		float listBottom = y + h - 4f - PROFILE_H;
 		List<Conversation> conversations = service == null ? List.of() : service.conversations();
 		float total = conversations.size() * ROW;
 		listScroll = Math.max(0f, Math.min(listScroll, Math.max(0f, total - (listBottom - listTop))));
@@ -354,6 +398,104 @@ public final class MessagesScreen extends Screen {
 			renderRow(ctx, conversation, x + 4f, ry, SIDE - 8f, mx, my, now, my >= listTop && my <= listBottom);
 		}
 		ctx.disableScissor();
+		renderProfileBar(ctx, service, x, y + h - PROFILE_H, mx, my);
+	}
+
+	/** This account's own picture and name for Messages, under the list; a click opens the editor. */
+	private void renderProfileBar(DrawContext ctx, ChatService service, float x, float y, double mx, double my) {
+		profileY = y;
+		if (service == null) return;
+		Render2D.rect(ctx, x + 8f, y, SIDE - 16f, 1f, Ui.HAIRLINE);
+		float bx = x + 4f;
+		float bw = SIDE - 8f;
+		float by = y + 3f;
+		float bh = PROFILE_H - 6f;
+		boolean over = !editing && Ui.inside(mx, my, bx, by, bw, bh);
+		if (over) Render2D.round(ctx, bx, by, bw, bh, 7f, ColorUtil.withAlpha(0xFFFFFF, 14));
+		float head = 18f;
+		float hx = bx + 5f;
+		float hy = by + (bh - head) / 2f;
+		Avatar.drawOwn(ctx, service.avatar(), hx, hy, head, head / 2f);
+		SdfFont bold = Fonts.semibold();
+		SdfFont font = Fonts.regular();
+		boolean named = !service.displayName().isEmpty();
+		float tx = hx + head + 6f;
+		float maxW = bx + bw - 18f - tx;
+		Render2D.textMiddle(ctx, bold, TextWrap.ellipsize(bold, named ? service.displayName() : service.name(), 6.6f, maxW), tx, by + bh / 2f - 4f, 6.6f, 0xF2FFFFFF);
+		String sub = named ? "@" + service.name() : "Your name and picture";
+		Render2D.textMiddle(ctx, font, TextWrap.ellipsize(font, sub, 5.4f, maxW), tx, by + bh / 2f + 4.5f, 5.4f, 0x80FFFFFF);
+		Render2D.icon(ctx, Icons.PENCIL, bx + bw - 9f, by + bh / 2f, 6f, over ? 0xF2FFFFFF : 0x80FFFFFF);
+	}
+
+	/**
+	 * The profile editor over the window: the picture (a file of one's own, cut to a square, or the Minecraft head) and
+	 * the name others see (empty: the Minecraft name, which stays shown beside a chosen one), Save and Cancel.
+	 */
+	private void renderEditor(DrawContext ctx, ChatService service, double mx, double my) {
+		float t = editor.target(editing ? 1f : 0f).get();
+		if (t < 0.01f || service == null) return;
+		byte[] picked = Faces.takePicked();
+		if (picked != null && editing) editPicture = picked;
+		float alpha = Render2D.alpha();
+		Render2D.setAlpha(alpha * t);
+		Render2D.round(ctx, winX, winY, winW, winH, Ui.RADIUS, 0x8C000000);
+		edW = 236f;
+		edH = 172f;
+		edX = winX + (winW - edW) / 2f;
+		edY = winY + (winH - edH) / 2f + (1f - t) * 8f;
+		Render2D.shadow(ctx, edX, edY + 4f, edW, edH, 12f, 20f, 0x99000000);
+		Render2D.panel(ctx, edX, edY, edW, edH, 12f);
+		SdfFont bold = Fonts.semibold();
+		SdfFont font = Fonts.regular();
+		float px = edX + 14f;
+		Render2D.textMiddle(ctx, bold, "Your profile", px, edY + 16f, 9f, 0xF2FFFFFF);
+		Render2D.textMiddle(ctx, font, "What the people you write to see", px, edY + 27f, 5.8f, 0x80FFFFFF);
+		float head = 46f;
+		float hy = edY + 38f;
+		Avatar.drawOwn(ctx, editPicture, px, hy, head, 12f);
+		changeX = px + head + 12f;
+		changeW = edX + edW - 14f - changeX;
+		changeY = hy + 4f;
+		pill(ctx, changeX, changeY, changeW, 16f, Faces.picking() ? "Choosing…" : "Change picture", Icons.IMAGE, mx, my, !Faces.picking());
+		headY = changeY + 21f;
+		pill(ctx, changeX, headY, changeW, 16f, "Use Minecraft head", Icons.USER, mx, my, editPicture != null);
+		float ly = hy + head + 10f;
+		Render2D.textMiddle(ctx, font, "Name", px, ly, 5.6f, 0x99FFFFFF);
+		float fieldW = edW - 28f;
+		float fieldTop = ly + 6f;
+		Render2D.round(ctx, px, fieldTop, fieldW, 18f, 9f, ColorUtil.withAlpha(0x000000, 90));
+		Render2D.outline(ctx, px, fieldTop, fieldW, 18f, 9f, 0.8f, ColorUtil.withAlpha(Theme.accent(), 200));
+		float cy = fieldTop + 9f;
+		if (editName.isEmpty()) Render2D.textMiddle(ctx, font, service.name(), px + 8f, cy, 6.4f, 0x66FFFFFF);
+		else Render2D.textMiddle(ctx, bold, editName, px + 8f, cy, 6.5f, 0xF2FFFFFF);
+		if (editing && caret()) Render2D.rect(ctx, px + 8.5f + (editName.isEmpty() ? 0f : bold.width(editName, 6.5f)), cy - 4f, 0.8f, 8f, 0xE6FFFFFF);
+		String error = Faces.pickError();
+		String hint = !error.isEmpty() ? error : "Your Minecraft name (@" + service.name() + ") stays beside it";
+		Render2D.textMiddle(ctx, font, TextWrap.ellipsize(font, hint, 5.2f, fieldW), px, fieldTop + 26f, 5.2f, error.isEmpty() ? 0x66FFFFFF : RED);
+		saveW = bold.width("Save", 6.5f) + 26f;
+		saveX = edX + edW - 14f - saveW;
+		saveY = edY + edH - 14f - 18f;
+		boolean overSave = Ui.inside(mx, my, saveX, saveY, saveW, 18f);
+		Render2D.round(ctx, saveX, saveY, saveW, 18f, 9f, ColorUtil.lerp(Theme.accent(), 0xFFFFFFFF, overSave ? 0.15f : 0f));
+		Render2D.textCentered(ctx, bold, "Save", saveX + saveW / 2f, Render2D.middle(bold, saveY + 9f, 6.5f), 6.5f, 0xFFFFFFFF);
+		cancelW = font.width("Cancel", 6.5f) + 22f;
+		cancelX = saveX - 6f - cancelW;
+		boolean overCancel = Ui.inside(mx, my, cancelX, saveY, cancelW, 18f);
+		Render2D.round(ctx, cancelX, saveY, cancelW, 18f, 9f, ColorUtil.withAlpha(0xFFFFFF, overCancel ? 34 : 18));
+		Render2D.textCentered(ctx, font, "Cancel", cancelX + cancelW / 2f, Render2D.middle(font, saveY + 9f, 6.5f), 6.5f, 0xE6FFFFFF);
+		Render2D.setAlpha(alpha);
+	}
+
+	/** A pill button with an icon and words, dimmed when it does nothing. */
+	private static void pill(DrawContext ctx, float x, float y, float w, float h, String label, int icon, double mx, double my, boolean enabled) {
+		boolean over = enabled && Ui.inside(mx, my, x, y, w, h);
+		Render2D.round(ctx, x, y, w, h, h / 2f, ColorUtil.withAlpha(0xFFFFFF, !enabled ? 8 : over ? 34 : 18));
+		SdfFont font = Fonts.medium();
+		int color = enabled ? 0xE6FFFFFF : 0x4DFFFFFF;
+		float tw = font.width(label, 6f) + 10f;
+		float tx = x + (w - tw) / 2f;
+		Render2D.icon(ctx, icon, tx + 3f, y + h / 2f, 6f, color);
+		Render2D.textMiddle(ctx, font, label, tx + 10f, y + h / 2f, 6f, color);
 	}
 
 	private void renderRow(DrawContext ctx, Conversation conversation, float x, float y, float w, double mx, double my, long now, boolean inList) {
@@ -369,7 +511,7 @@ public final class MessagesScreen extends Screen {
 		float head = 22f;
 		float hx = x + 7f;
 		float hy = y + (ROW - head) / 2f;
-		Avatar.draw(ctx, contact.name(), hx, hy, head, 6f);
+		Avatar.draw(ctx, contact, hx, hy, head, 6f);
 		if (contact.online()) {
 			Render2D.circle(ctx, hx + head - 1f, hy + head - 1f, 3.6f, 0xFF15171C);
 			Render2D.circle(ctx, hx + head - 1f, hy + head - 1f, 2.5f, GREEN);
@@ -387,7 +529,7 @@ public final class MessagesScreen extends Screen {
 		} else if (!time.isEmpty()) {
 			Render2D.textMiddle(ctx, font, time, right - timeW, y + 11f, 5.4f, conversation.unread() > 0 ? Theme.accent() : 0x73FFFFFF);
 		}
-		String name = TextWrap.ellipsize(bold, contact.name(), 7f, right - 16f - tx - timeW);
+		String name = TextWrap.ellipsize(bold, contact.displayName(), 7f, right - 16f - tx - timeW);
 		Render2D.textMiddle(ctx, bold, name, tx, y + 11f, 7f, 0xF2FFFFFF);
 		if (contact.verified()) {
 			float vx = tx + bold.width(name, 7f) + 5f;
@@ -453,14 +595,19 @@ public final class MessagesScreen extends Screen {
 		float top = winY + Ui.PAD;
 		// Header: who, and what they are doing.
 		float head = 24f;
-		Avatar.draw(ctx, contact.name(), mainX + 4f, top + 3f, head, 7f);
+		Avatar.draw(ctx, contact, mainX + 4f, top + 3f, head, 7f);
 		float tx = mainX + 4f + head + 8f;
-		Render2D.textMiddle(ctx, bold, contact.name(), tx, top + 10f, 8.5f, 0xF2FFFFFF);
+		String shown = contact.displayName();
+		Render2D.textMiddle(ctx, bold, shown, tx, top + 10f, 8.5f, 0xF2FFFFFF);
+		float after = tx + bold.width(shown, 8.5f);
 		if (contact.verified()) {
-			float vx = tx + bold.width(contact.name(), 8.5f) + 6f;
+			float vx = after + 6f;
 			Render2D.circle(ctx, vx, top + 10f, 3.6f, Theme.accent());
 			Render2D.icon(ctx, Icons.CHECK, vx, top + 10f, 4.2f, 0xFFFFFFFF);
+			after = vx + 4f;
 		}
+		// A name of their own: their Minecraft name beside it, which is who they are.
+		if (contact.hasDisplayName()) Render2D.textMiddle(ctx, font, "@" + contact.name(), after + 5f, top + 10.5f, 6f, 0x73FFFFFF);
 		String status;
 		int statusColor = 0x8CFFFFFF;
 		if (contact.typing(now)) {
@@ -614,7 +761,7 @@ public final class MessagesScreen extends Screen {
 		float cy = fieldY + FIELD_H / 2f;
 		float room = fw - 20f;
 		if (draft.isEmpty()) {
-			Render2D.textMiddle(ctx, font, "Message " + contact.name() + "…", fx + 11f, cy, 6.6f, 0x66FFFFFF);
+			Render2D.textMiddle(ctx, font, "Message " + contact.displayName() + "…", fx + 11f, cy, 6.6f, 0x66FFFFFF);
 			if (active && caret()) Render2D.rect(ctx, fx + 10.5f, cy - 4.5f, 0.8f, 9f, 0xE6FFFFFF);
 		} else {
 			// The end of what is written shows when it is longer than the field.
@@ -704,6 +851,17 @@ public final class MessagesScreen extends Screen {
 		double my = toSpaceY(click.y());
 		ChatService service = Messages.service();
 		if (service == null) return true;
+		if (editing) {
+			if (!Faces.picking() && Ui.inside(mx, my, changeX, changeY, changeW, 16f)) Faces.pick();
+			else if (editPicture != null && Ui.inside(mx, my, changeX, headY, changeW, 16f)) editPicture = null;
+			else if (Ui.inside(mx, my, saveX, saveY, saveW, 18f)) saveProfile(service);
+			else if (Ui.inside(mx, my, cancelX, saveY, cancelW, 18f) || !Ui.inside(mx, my, edX, edY, edW, edH)) editing = false;
+			return true;
+		}
+		if (Ui.inside(mx, my, winX + Ui.PAD + 4f, profileY + 3f, SIDE - 8f, PROFILE_H - 6f)) {
+			openEditor(service);
+			return true;
+		}
 		if (inCircle(mx, my, plusX, plusY, 9f)) {
 			naming = !naming;
 			newName = "";
@@ -713,7 +871,7 @@ public final class MessagesScreen extends Screen {
 			if (mx > winX + Ui.PAD + SIDE - 24f) startConversation();
 			return true;
 		}
-		float listBottom = winY + winH - Ui.PAD - 4f;
+		float listBottom = winY + winH - Ui.PAD - 4f - PROFILE_H;
 		if (Ui.inside(mx, my, winX + Ui.PAD, listTop, SIDE, listBottom - listTop)) {
 			List<Conversation> conversations = service.conversations();
 			int index = (int) ((my - listTop + listScroll) / ROW);
@@ -754,7 +912,8 @@ public final class MessagesScreen extends Screen {
 	public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
 		double mx = toSpaceX(mouseX);
 		double my = toSpaceY(mouseY);
-		if (Ui.inside(mx, my, winX + Ui.PAD, listTop, SIDE, winY + winH - listTop)) {
+		if (editing) return true;
+		if (Ui.inside(mx, my, winX + Ui.PAD, listTop, SIDE, winY + winH - Ui.PAD - 4f - PROFILE_H - listTop)) {
 			listScroll -= (float) verticalAmount * ROW;
 			return true;
 		}
@@ -769,6 +928,14 @@ public final class MessagesScreen extends Screen {
 	public boolean keyPressed(KeyInput input) {
 		int key = input.key();
 		boolean shortcut = (input.modifiers() & (GLFW.GLFW_MOD_CONTROL | GLFW.GLFW_MOD_SUPER)) != 0;
+		if (editing) {
+			ChatService service = Messages.service();
+			if (key == GLFW.GLFW_KEY_ESCAPE || service == null) editing = false;
+			else if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) saveProfile(service);
+			else if (key == GLFW.GLFW_KEY_BACKSPACE) editName = shortcut ? "" : dropLast(editName);
+			else if (key == GLFW.GLFW_KEY_V && shortcut) type(client.keyboard.getClipboard());
+			return true;
+		}
 		if (key == GLFW.GLFW_KEY_ESCAPE) {
 			if (naming) naming = false;
 			else close();
@@ -812,6 +979,14 @@ public final class MessagesScreen extends Screen {
 
 	private void type(String text) {
 		if (text == null || text.isEmpty()) return;
+		if (editing) {
+			StringBuilder name = new StringBuilder(editName);
+			text.codePoints().forEach(cp -> {
+				if (!Character.isISOControl(cp) && name.codePointCount(0, name.length()) < ChatService.MAX_DISPLAY_NAME) name.appendCodePoint(cp);
+			});
+			editName = name.toString();
+			return;
+		}
 		if (naming) {
 			StringBuilder name = new StringBuilder(newName);
 			for (int i = 0; i < text.length() && name.length() < 16; i++) {

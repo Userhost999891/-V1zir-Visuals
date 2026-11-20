@@ -23,6 +23,8 @@ public final class MessagesModule extends Module {
 	/** Opens Messages in game, or the conversation of the notification showing. */
 	public final KeySetting openKey = add(new KeySetting("Open key", GLFW.GLFW_KEY_Y));
 	public final ModeSetting server = add(new ModeSetting("Server", "EMQX", "EMQX", "HiveMQ"));
+	/** Turned on, it opens Messages with the editor of your name and picture there, and turns itself off again. */
+	public final BoolSetting editProfile = add(new BoolSetting("Edit profile", false));
 
 	public MessagesModule() {
 		super("Messages", "Private, end-to-end encrypted chat with other V1zir Visuals players", Category.SETTINGS);
@@ -32,6 +34,15 @@ public final class MessagesModule extends Module {
 	@Override
 	public boolean showInList() {
 		return false;
+	}
+
+	@Override
+	public void onTick() {
+		// The "button": done once, then off again.
+		if (editProfile.on()) {
+			editProfile.set(false);
+			Messages.openProfile(mc.currentScreen);
+		}
 	}
 
 	@Override

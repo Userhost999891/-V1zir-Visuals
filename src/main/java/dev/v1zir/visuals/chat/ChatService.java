@@ -72,6 +72,13 @@ public final class ChatService implements ChatTransport.Listener {
 
 	public static final Pattern NAME = Pattern.compile("[A-Za-z0-9_]{3,16}");
 	public static final int MAX_TEXT = 500;
+	/** A name chosen for Messages: at most this many characters. */
+	public static final int MAX_DISPLAY_NAME = 24;
+	/** A picture chosen for Messages: a PNG of at most this many bytes and AVATAR_MAX pixels a side. */
+	public static final int MAX_AVATAR_BYTES = 64 * 1024;
+	private static final int AVATAR_MAX = 256;
+	/** A profile their game has not confirmed goes again after this long. */
+	private static final long PROFILE_RETRY_MS = 30_000L;
 	private static final String PREFIX = "v1zir/chat1/";
 	/** Sent again when they come online, or this game reconnects, unless it went out this recently. */
 	private static final long RESEND_MS = 1_000L;
@@ -108,6 +115,10 @@ public final class ChatService implements ChatTransport.Listener {
 	private long lastAnnounce;
 	private long lastRetry;
 	private Conversation viewing;
+	/** This account's own name and picture for Messages (empty, null: its Minecraft name and head) and their version. */
+	private String displayName = "";
+	private byte[] avatar;
+	private long profileRev;
 
 	public ChatService(Host host, ChatTransport transport, Events events) {
 		this.host = host;
@@ -144,7 +155,10 @@ public final class ChatService implements ChatTransport.Listener {
 		long now = host.now();
 		if (transport.connected() && now - lastRetry > 5_000L) {
 			lastRetry = now;
-			for (Conversation conversation : conversations.values()) retry(conversation, now);
+			for (Conversation conversation : conversations.values()) {
+				retry(conversation, now);
+				if (conversation.contact.online) sendProfile(conversation.contact, false);
+			}
 		}
 		if (!held.isEmpty()) {
 			for (Contact contact : new ArrayList<>(contacts.values())) {
@@ -164,6 +178,55 @@ public final class ChatService implements ChatTransport.Listener {
 
 	public String name() {
 		return name;
+	}
+
+	/** The name this account chose for Messages, empty for its Minecraft name. */
+	public String displayName() {
+		return displayName;
+	}
+
+	/** The picture this account chose for Messages (PNG), null for its head. */
+	public byte[] avatar() {
+		return avatar;
+	}
+
+	/** The version of this account's profile: changes whenever its name or picture does. */
+	public long profileRevision() {
+		return profileRev;
+	}
+
+	/**
+	 * Sets this account's name and picture for Messages (an empty name: the Minecraft name; no picture: the head) and
+	 * sends them to everyone it writes to, sealed like the messages. A picture too large or not a PNG is left out.
+	 */
+	public void setProfile(String newName, byte[] newAvatar) {
+		String chosen = cleanName(newName);
+		if (chosen.equalsIgnoreCase(name)) chosen = "";
+		byte[] picture = newAvatar != null && validPicture(newAvatar) ? newAvatar : null;
+		if (chosen.equals(displayName) && java.util.Arrays.equals(picture, avatar)) return;
+		displayName = chosen;
+		avatar = picture;
+		profileRev = Math.max(profileRev + 1L, host.now());
+		dirty();
+		for (Conversation conversation : conversations.values()) sendProfile(conversation.contact, true);
+	}
+
+	/** A name chosen for Messages as it is kept: one line, no control characters, at most MAX_DISPLAY_NAME long. */
+	public static String cleanName(String text) {
+		if (text == null) return "";
+		StringBuilder out = new StringBuilder();
+		text.strip().codePoints().limit(MAX_DISPLAY_NAME).forEach(cp -> out.appendCodePoint(Character.isISOControl(cp) || Character.isWhitespace(cp) ? ' ' : cp));
+		return out.toString().replaceAll(" {2,}", " ").strip();
+	}
+
+	/** A PNG of at most MAX_AVATAR_BYTES and AVATAR_MAX pixels a side (read from its header). */
+	static boolean validPicture(byte[] png) {
+		if (png.length < 24 || png.length > MAX_AVATAR_BYTES) return false;
+		byte[] signature = {(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n'};
+		for (int i = 0; i < signature.length; i++) if (png[i] != signature[i]) return false;
+		int width = (png[16] & 0xFF) << 24 | (png[17] & 0xFF) << 16 | (png[18] & 0xFF) << 8 | png[19] & 0xFF;
+		int height = (png[20] & 0xFF) << 24 | (png[21] & 0xFF) << 16 | (png[22] & 0xFF) << 8 | png[23] & 0xFF;
+		return width > 0 && height > 0 && width <= AVATAR_MAX && height <= AVATAR_MAX;
 	}
 
 	public Status status() {
@@ -280,7 +343,10 @@ public final class ChatService implements ChatTransport.Listener {
 		announce(false);
 		transport.publish(topic('p', myId), presence(appearOnline), 1, true, null);
 		long now = host.now();
-		for (Conversation conversation : conversations.values()) flush(conversation, RESEND_MS, now);
+		for (Conversation conversation : conversations.values()) {
+			flush(conversation, RESEND_MS, now);
+			sendProfile(conversation.contact, false);
+		}
 	}
 
 	private void onMessage(String topic, byte[] payload) {
@@ -380,7 +446,10 @@ public final class ChatService implements ChatTransport.Listener {
 		else if (time > 0L) contact.lastSeen = time;
 		if (online && !was) {
 			Conversation conversation = conversations.get(key(contact.name));
-			if (conversation != null) flush(conversation, RESEND_MS, host.now());
+			if (conversation != null) {
+				flush(conversation, RESEND_MS, host.now());
+				sendProfile(contact, true);
+			}
 			// Ask them to prove their key while they are here (a premium account can).
 			if (!contact.verified && contact.key != null && host.now() - contact.lastVerifyAsk > VERIFY_ASK_MS) {
 				contact.lastVerifyAsk = host.now();
@@ -427,6 +496,10 @@ public final class ChatService implements ChatTransport.Listener {
 		JsonObject body = json(opened.body());
 		String type = body == null ? null : str(body, "t");
 		if (type == null) return;
+		if (type.equals("pf") || type.equals("pa")) {
+			if (trusted) profileMessage(contact, opened, body, type);
+			return;
+		}
 		Conversation conversation = conversation(contact);
 		switch (type) {
 			case "m" -> {
@@ -479,6 +552,49 @@ public final class ChatService implements ChatTransport.Listener {
 		}
 	}
 
+	/**
+	 * Their profile (pf: a version, a name and a picture, either empty for none), kept when it is newer than the one
+	 * here and confirmed either way; or their confirmation of this account's (pa).
+	 */
+	private void profileMessage(Contact contact, ChatCrypto.Opened opened, JsonObject body, String type) {
+		long rev = num(body, "r");
+		if (rev <= 0L) return;
+		if (type.equals("pa")) {
+			if (rev == profileRev && contact.profileSent != rev) {
+				contact.profileSent = rev;
+				dirty();
+			}
+			return;
+		}
+		if (rev > contact.profileRev) {
+			String chosen = cleanName(str(body, "n"));
+			String picture = str(body, "p");
+			byte[] png = picture == null || picture.isEmpty() ? null : decode(picture);
+			contact.displayName = chosen.isEmpty() ? null : chosen;
+			contact.avatar = png != null && validPicture(png) ? png : null;
+			contact.profileRev = rev;
+			dirty();
+		}
+		JsonObject ack = body("pa");
+		ack.addProperty("r", rev);
+		sendTo(contact, opened.fromKey(), ack, 1, null);
+	}
+
+	/**
+	 * Sends this account's profile to them when they do not have its version yet (now: at once; else not again within
+	 * PROFILE_RETRY_MS). Nothing goes while it was never set: they see the Minecraft name and head then.
+	 */
+	private void sendProfile(Contact contact, boolean now) {
+		if (profileRev == 0L || contact.key == null || contact.profileSent == profileRev) return;
+		long time = host.now();
+		if (!now && time - contact.profileSentAt < PROFILE_RETRY_MS) return;
+		JsonObject body = body("pf");
+		body.addProperty("r", profileRev);
+		body.addProperty("n", displayName);
+		body.addProperty("p", avatar != null ? encode(avatar) : "");
+		if (sendTo(contact, decode(contact.key), body, 1, null)) contact.profileSentAt = time;
+	}
+
 	private void deliver(Conversation conversation, Message message) {
 		Contact contact = conversation.contact;
 		if (contact.key == null) return;
@@ -488,6 +604,7 @@ public final class ChatService implements ChatTransport.Listener {
 		body.addProperty("x", message.text);
 		message.lastSent = host.now();
 		message.tries++;
+		sendProfile(contact, false);
 		sendTo(contact, decode(contact.key), body, 1, () -> {
 			if (message.state < Message.SENT) {
 				message.state = Message.SENT;
@@ -561,7 +678,10 @@ public final class ChatService implements ChatTransport.Listener {
 		if (key.equals(contact.pendingKey)) contact.pendingKey = null;
 		dirty();
 		Conversation conversation = conversations.get(key(contact.name));
-		if (conversation != null) flush(conversation, -1L, host.now());
+		if (conversation != null) {
+			flush(conversation, -1L, host.now());
+			sendProfile(contact, true);
+		}
 	}
 
 	private void note(Conversation conversation, String text) {
@@ -646,6 +766,13 @@ public final class ChatService implements ChatTransport.Listener {
 			String priv = str(root, "priv");
 			String pub = str(root, "pub");
 			if (priv != null && pub != null) keys = ChatCrypto.restore(decode(priv), decode(pub));
+			if (root.get("profile") instanceof JsonObject profile) {
+				displayName = cleanName(str(profile, "n"));
+				String picture = str(profile, "p");
+				byte[] png = picture == null || picture.isEmpty() ? null : decode(picture);
+				avatar = png != null && validPicture(png) ? png : null;
+				profileRev = num(profile, "r");
+			}
 			for (JsonElement e : array(root, "contacts")) {
 				if (!e.isJsonObject()) continue;
 				JsonObject o = e.getAsJsonObject();
@@ -659,6 +786,13 @@ public final class ChatService implements ChatTransport.Listener {
 				contact.lastSeen = num(o, "seen");
 				String uuid = str(o, "u");
 				if (uuid != null) contact.uuid = parseUuid(uuid);
+				String chosen = str(o, "dn");
+				contact.displayName = chosen == null || chosen.isEmpty() ? null : cleanName(chosen);
+				String picture = str(o, "av");
+				byte[] png = picture == null || picture.isEmpty() ? null : decode(picture);
+				contact.avatar = png != null && validPicture(png) ? png : null;
+				contact.profileRev = num(o, "pr");
+				contact.profileSent = num(o, "ps");
 			}
 			for (JsonElement e : array(root, "chats")) {
 				if (!e.isJsonObject()) continue;
@@ -706,6 +840,13 @@ public final class ChatService implements ChatTransport.Listener {
 		root.addProperty("name", name);
 		root.addProperty("priv", encode(keys.encodedPrivate()));
 		root.addProperty("pub", encode(keys.pub()));
+		if (profileRev != 0L) {
+			JsonObject profile = new JsonObject();
+			profile.addProperty("n", displayName);
+			if (avatar != null) profile.addProperty("p", encode(avatar));
+			profile.addProperty("r", profileRev);
+			root.add("profile", profile);
+		}
 		JsonArray list = new JsonArray();
 		for (Contact contact : contacts.values()) {
 			JsonObject o = new JsonObject();
@@ -716,6 +857,10 @@ public final class ChatService implements ChatTransport.Listener {
 			if (contact.announced) o.addProperty("ann", true);
 			if (contact.lastSeen > 0L) o.addProperty("seen", contact.lastSeen);
 			if (contact.uuid != null) o.addProperty("u", contact.uuid.toString());
+			if (contact.displayName != null) o.addProperty("dn", contact.displayName);
+			if (contact.avatar != null) o.addProperty("av", encode(contact.avatar));
+			if (contact.profileRev != 0L) o.addProperty("pr", contact.profileRev);
+			if (contact.profileSent != 0L) o.addProperty("ps", contact.profileSent);
 			list.add(o);
 		}
 		root.add("contacts", list);

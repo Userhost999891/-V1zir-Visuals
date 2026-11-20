@@ -21,6 +21,13 @@ public final class Contact {
 	/** When their topics were first subscribed to, this session (0: not yet). */
 	transient long watchedAt;
 	transient long lastVerifyAsk;
+	/** The name and picture (PNG) they chose for Messages, null for none: their Minecraft name and head then. */
+	String displayName;
+	byte[] avatar;
+	/** The version of their profile kept here, and the version of this account's own that their game confirmed. */
+	long profileRev;
+	long profileSent;
+	transient long profileSentAt;
 
 	Contact(String name) {
 		this.name = name;
@@ -33,6 +40,26 @@ public final class Contact {
 
 	public UUID uuid() {
 		return uuid;
+	}
+
+	/** The name they chose for Messages, else their Minecraft name. */
+	public String displayName() {
+		return displayName != null && !displayName.isEmpty() ? displayName : name;
+	}
+
+	/** Whether they chose a name of their own (the Minecraft name is then shown beside it). */
+	public boolean hasDisplayName() {
+		return displayName != null && !displayName.isEmpty() && !displayName.equalsIgnoreCase(name);
+	}
+
+	/** The picture they chose (PNG), null for their head. */
+	public byte[] avatar() {
+		return avatar;
+	}
+
+	/** The version of their profile: changes whenever their name or picture does. */
+	public long profileRevision() {
+		return profileRev;
 	}
 
 	public boolean online() {

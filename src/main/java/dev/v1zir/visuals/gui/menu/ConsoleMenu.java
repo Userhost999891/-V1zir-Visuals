@@ -931,14 +931,14 @@ public final class ConsoleMenu extends Screen {
 				if (newest == null || c.activity() > newest.activity()) newest = c;
 				if (c.contact().online()) {
 					online++;
-					if (names.length() < 40) names.append(names.length() > 0 ? ", " : "").append(c.contact().name());
+					if (names.length() < 40) names.append(names.length() > 0 ? ", " : "").append(c.contact().displayName());
 				}
 			}
 		}
 		String latest = service == null ? "Messages are off" : "No conversations yet";
 		if (newest != null) {
 			Message last = newest.last();
-			latest = last != null ? (last.out() ? "You: " : newest.contact().name() + ": ") + last.text() : newest.contact().name();
+			latest = last != null ? (last.out() ? "You: " : newest.contact().displayName() + ": ") + last.text() : newest.contact().displayName();
 		}
 		boolean last = canContinue;
 		String activity = last ? "Continue " + LastPlayed.label() + (LastPlayed.server && LastPlayed.ping > 0 ? "  ·  " + LastPlayed.ping + " ms" : "")
