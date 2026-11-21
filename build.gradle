@@ -53,6 +53,10 @@ loom {
 			vmArg '-Dfabric.client.gametest.disableNetworkSynchronizer=true'
 			// Messages stays off the network: the test gives it an in-game relay (and tries the real one on its own).
 			vmArg '-Dv1zir.messages.relay=loopback'
+			// CI's run with Sodium: its jar as one more mod, which Fabric Loader remaps as it loads it, as from the
+			// mods folder (Loom's own remapping takes only mods built with a Loom no newer than this one).
+			def sodium = System.getenv('V1ZIR_SODIUM_JAR')
+			if (sodium) vmArg "-Dfabric.addMods=${sodium}"
 		}
 	}
 }
@@ -68,10 +72,6 @@ dependencies {
 	// Sodium's config API, to be built against only: with Sodium there, its Video Settings get the GPU page
 	// (SodiumGpuOption); the oldest 0.8 release for 1.21.11, whose API the later ones keep.
 	modCompileOnly "net.caffeinemc:sodium-fabric-api:0.8.0+mc1.21.11"
-	// CI's second client run: -Pv1zirSodium=<Sodium's jar> runs the dev client with Sodium in it.
-	if (project.hasProperty('v1zirSodium')) {
-		modLocalRuntime files(project.property('v1zirSodium'))
-	}
 }
 
 processResources {
