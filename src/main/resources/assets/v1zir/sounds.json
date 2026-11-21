@@ -1,0 +1,102 @@
+{
+	"hit.bubble": {
+		"sounds": [
+			"v1zir:hit/bubble"
+		]
+	},
+	"hit.pop": {
+		"sounds": [
+			"v1zir:hit/pop"
+		]
+	},
+	"hit.click": {
+		"sounds": [
+			"v1zir:hit/click"
+		]
+	},
+	"hit.ding": {
+		"sounds": [
+			"v1zir:hit/ding"
+		]
+	},
+	"hit.crit": {
+		"sounds": [
+			"v1zir:hit/crit"
+		]
+	},
+	"hit.thump": {
+		"sounds": [
+			"v1zir:hit/thump"
+		]
+	},
+	"hit.chime": {
+		"sounds": [
+			"v1zir:hit/chime"
+		]
+	},
+	"hit.zap": {
+		"sounds": [
+			"v1zir:hit/zap"
+		]
+	},
+	"ui.move": {
+		"sounds": [
+			"v1zir:ui/move"
+		]
+	},
+	"ui.tab": {
+		"sounds": [
+			"v1zir:ui/tab"
+		]
+	},
+	"ui.confirm": {
+		"sounds": [
+			"v1zir:ui/confirm"
+		]
+	},
+	"ui.back": {
+		"sounds": [
+			"v1zir:ui/back"
+		]
+	},
+	"ui.notify": {
+		"sounds": [
+			"v1zir:ui/notify"
+		]
+	},
+	"ui.boot": {
+		"sounds": [
+			"v1zir:ui/boot"
+		]
+	},
+	"ui.popup": {
+		"sounds": [
+			"v1zir:ui/popup"
+		]
+	},
+	"ui.popup_back": {
+		"sounds": [
+			"v1zir:ui/popup_back"
+		]
+	},
+	"ui.popup_enter": {
+		"sounds": [
+			"v1zir:ui/popup_enter"
+		]
+	},
+	"ui.control_on": {
+		"sounds": [
+			"v1zir:ui/control_on"
+		]
+	},
+	"ui.control_off": {
+		"sounds": [
+			"v1zir:ui/control_off"
+		]
+	},
+	"ui.trophy": {
+		"sounds": [
+			"v1zir:ui/trophy"
+		]
+	}
+}
