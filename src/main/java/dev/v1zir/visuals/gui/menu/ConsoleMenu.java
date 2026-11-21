@@ -1233,9 +1233,13 @@ public final class ConsoleMenu extends Screen {
 				icon = null;
 				// As large as the menu shows it: the picked tile's icon on the right is 31% of the window's height.
 				int target = Math.max(64, Math.min(1024, Math.round(MinecraftClient.getInstance().getWindow().getFramebufferHeight() * 0.31f)));
+				// A server's icon is pixel art: its pixels stay sharp squares (nearest neighbour); a world's, a small
+				// picture of it, is enlarged smoothly.
+				boolean pixelArt = kind == SERVER;
 				preparing = CompletableFuture.supplyAsync(() -> {
 					try {
-						return IconScaler.enlarge(NativeImage.read(bytes), target);
+						NativeImage image = NativeImage.read(bytes);
+						return pixelArt ? IconScaler.pixels(image, target) : IconScaler.enlarge(image, target);
 					} catch (IOException e) {
 						throw new UncheckedIOException(e);
 					}

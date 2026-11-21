@@ -50,6 +50,8 @@ public final class MessagesScreen extends Screen {
 	private static final float ROW = 34f;
 	private static final float HEADER = 38f;
 	private static final float FIELD_H = 24f;
+	/** How much larger Messages are than the click GUI, room allowing. */
+	private static final float ZOOM = 1.3f;
 	/** The bar of this account's own profile at the bottom of the list. */
 	private static final float PROFILE_H = 30f;
 	private static final float TEXT = 6.8f;
@@ -230,9 +232,15 @@ public final class MessagesScreen extends Screen {
 
 	// ------------------------------------------------------------------ space
 
+	/**
+	 * The size of everything here: Messages are read, not glanced at, so a third larger than the click GUI where the
+	 * screen has room for it (the window keeps at least its smallest size inside the screen).
+	 */
 	private float scale() {
 		ClickGuiModule gui = ModuleManager.get(ClickGuiModule.class);
-		return gui != null ? gui.scale.f() : 1f;
+		float base = gui != null ? gui.scale.f() : 1f;
+		float room = Math.min(width / base / 436f, height / base / 276f);
+		return base * Math.max(1f, Math.min(ZOOM, room));
 	}
 
 	private float spaceW() {

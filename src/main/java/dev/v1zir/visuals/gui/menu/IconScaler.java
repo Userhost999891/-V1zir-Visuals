@@ -4,7 +4,8 @@ import net.minecraft.client.texture.NativeImage;
 
 /**
  * Makes a small icon large for the PS5 style menu (a server's or world's icon is 64 pixels, shown several times that
- * size) with directional cubic convolution: each new pixel is interpolated along the edge it lies on, found from how
+ * size). A server's icon is pixel art: {@link #pixels} keeps it so (nearest neighbour). A world's icon is a small
+ * picture of the world: {@link #enlarge} uses directional cubic convolution: each new pixel is interpolated along the edge it lies on, found from how
  * much the picture changes along the two diagonals (then across and down), instead of across it. Edges, rings and
  * letters come out smooth and sharp, without the stair steps of enlarged pixels, without the blur of a plain smooth
  * filter and without the light or dark halos of a sharpened one. It doubles the size per pass, in premultiplied alpha
@@ -19,6 +20,48 @@ final class IconScaler {
 	private static final float SHARPEN = 0.4f;
 
 	private IconScaler() {
+	}
+
+	/**
+	 * Pixel art enlarged as pixel art (nearest neighbour): every pixel becomes a square of the largest whole number of
+	 * pixels that keeps the image within target, so all of them are the same size and as sharp as they were. The
+	 * colour of transparent pixels next to visible ones is taken from them first, so the edges stay clean where the
+	 * texture is drawn at a size between. The image given is closed when a new one is made.
+	 */
+	static NativeImage pixels(NativeImage image, int target) {
+		int w = image.getWidth(), h = image.getHeight();
+		if (w <= 0 || h <= 0) return image;
+		int k = Math.max(1, target / Math.max(w, h));
+		int[] argb = new int[w * h];
+		for (int y = 0; y < h; y++) {
+			for (int x = 0; x < w; x++) argb[y * w + x] = image.getColorArgb(x, y);
+		}
+		int[] bled = argb.clone();
+		for (int y = 0; y < h; y++) {
+			for (int x = 0; x < w; x++) {
+				if ((argb[y * w + x] >>> 24) != 0) continue;
+				int[][] around = {{x - 1, y}, {x + 1, y}, {x, y - 1}, {x, y + 1}};
+				for (int[] p : around) {
+					if (p[0] < 0 || p[1] < 0 || p[0] >= w || p[1] >= h) continue;
+					int c = argb[p[1] * w + p[0]];
+					if ((c >>> 24) != 0) {
+						bled[y * w + x] = c & 0x00FFFFFF;
+						break;
+					}
+				}
+			}
+		}
+		NativeImage out = new NativeImage(NativeImage.Format.RGBA, w * k, h * k, false);
+		try {
+			for (int y = 0; y < h * k; y++) {
+				for (int x = 0; x < w * k; x++) out.setColorArgb(x, y, bled[(y / k) * w + x / k]);
+			}
+		} catch (RuntimeException e) {
+			out.close();
+			return image;
+		}
+		image.close();
+		return out;
 	}
 
 	/**
