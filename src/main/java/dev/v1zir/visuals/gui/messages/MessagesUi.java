@@ -106,8 +106,15 @@ public final class MessagesUi {
 		int fill = ColorUtil.lerp(ColorUtil.withAlpha(base, 130), ColorUtil.withAlpha(ColorUtil.lerp(base, 0xFFFFFF, 0.3f), 150), h);
 		if (BackdropBlur.available()) Render2D.glass(ctx, cx - r, cy - r, d, d, r, 0, ShapeElement.MATTE, fill);
 		else Render2D.matte(ctx, cx - r, cy - r, d, d, r, ColorUtil.withAlpha(fill, Math.max(ColorUtil.alpha(fill), 190)), 0);
-		if (h > 0.01f) Render2D.ring(ctx, cx, cy, r - 0.5f, 1f, ColorUtil.withAlpha(Theme.accent(), Math.round(150 * h)));
-		Render2D.icon(ctx, Icons.MESSAGE_CIRCLE, cx, cy, r * 0.95f, ColorUtil.lerp(0xD9FFFFFF, 0xFFFFFFFF, h));
+		int icon = ColorUtil.lerp(0xD9FFFFFF, 0xFFFFFFFF, h);
+		if (focused) {
+			// In focus from the keys or a controller: white with a dark icon, as a console marks what is in focus.
+			Render2D.circle(ctx, cx, cy, r, ColorUtil.withAlpha(0xFFFFFF, Math.round(255 * h)));
+			icon = ColorUtil.lerp(0xFFFFFFFF, 0xFF121215, h);
+		} else if (h > 0.01f) {
+			Render2D.ring(ctx, cx, cy, r - 0.5f, 1f, ColorUtil.withAlpha(Theme.accent(), Math.round(150 * h)));
+		}
+		Render2D.icon(ctx, Icons.MESSAGE_CIRCLE, cx, cy, r * 0.95f, icon);
 		badge(ctx, cx + r * 0.72f, cy - r * 0.72f, Messages.unread());
 		SdfFont font = Fonts.medium();
 		Render2D.textCentered(ctx, font, "Messages", cx, Render2D.middle(font, cy + r + 8f, 6.2f), 6.2f, ColorUtil.lerp(0xB3FFFFFF, 0xFFFFFFFF, h));

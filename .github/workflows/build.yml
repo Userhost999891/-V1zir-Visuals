@@ -171,3 +171,23 @@ jobs:
             & $ps -NoLogo -NoProfile -ExecutionPolicy Bypass -File .github\media-bridge-test.ps1 -Apartment $apartment
           }
           exit 0
+
+  gpu-preference:
+    name: Windows GPU preference
+    runs-on: windows-latest
+    # The GPU option of Video Settings on a real Windows registry: its class as it is, written and read back through
+    # reg.exe as in the game, for this Java and for a path with spaces, keeping Windows' own settings ("V1ZIR-GPU-PREF OK").
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: GPU preference in the registry
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          javac -d gpu-out src/main/java/dev/v1zir/visuals/optimize/GpuPreference.java
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          java -cp gpu-out .github/gpu/GpuPreferenceCheck.java
+          exit $LASTEXITCODE

@@ -1,5 +1,6 @@
 package dev.v1zir.visuals.optimize;
 
+import dev.v1zir.visuals.V1zir;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.fabricmc.fabric.api.client.screen.v1.Screens;
 import net.minecraft.client.MinecraftClient;
@@ -129,6 +130,7 @@ public final class GpuOption {
 		button.setMessage(label());
 		Thread thread = new Thread(() -> {
 			boolean ok = GpuPreference.write(next.preference());
+			V1zir.LOGGER.info("Graphics preference for {}: {} ({})", GpuPreference.executable(), next.preference(), ok ? "set" : "not set");
 			client.execute(() -> client.getToastManager().add(SystemToast.create(client, SystemToast.Type.PERIODIC_NOTIFICATION,
 				Text.literal(ok ? "GPU: " + next.name() : "GPU not changed"),
 				Text.literal(!ok ? "Windows did not take the graphics preference."
