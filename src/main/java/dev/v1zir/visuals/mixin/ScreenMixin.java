@@ -1,5 +1,6 @@
 package dev.v1zir.visuals.mixin;
 
+import dev.v1zir.visuals.controller.Targets;
 import dev.v1zir.visuals.gui.loading.Backdrop;
 import dev.v1zir.visuals.gui.menu.ScreenTransition;
 import dev.v1zir.visuals.module.ModuleManager;
@@ -38,6 +39,17 @@ public abstract class ScreenMixin {
 	private boolean v1zir$entering;
 	@Unique
 	private float v1zir$veil;
+
+	/** What a controller's D-pad can move to is collected while the screen draws (Targets). */
+	@Inject(method = "renderWithTooltip", at = @At("HEAD"))
+	private void v1zir$targetsBegin(DrawContext context, int mouseX, int mouseY, float deltaTicks, CallbackInfo ci) {
+		Targets.begin((Screen) (Object) this, context);
+	}
+
+	@Inject(method = "renderWithTooltip", at = @At("TAIL"))
+	private void v1zir$targetsEnd(DrawContext context, int mouseX, int mouseY, float deltaTicks, CallbackInfo ci) {
+		Targets.end();
+	}
 
 	@Inject(method = "renderWithTooltip", at = @At("HEAD"))
 	private void v1zir$enterBegin(DrawContext context, int mouseX, int mouseY, float deltaTicks, CallbackInfo ci) {

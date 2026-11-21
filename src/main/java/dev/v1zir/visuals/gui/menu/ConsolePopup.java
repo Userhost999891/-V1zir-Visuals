@@ -24,8 +24,10 @@ final class ConsolePopup {
 	record Choice(String label, int icon, Runnable action) {
 	}
 
-	private static final int PILL = 0x38FFFFFF;
-	private static final int PILL_HOT = 0x75FFFFFF;
+	/** A choice is a faint pill; in focus it turns white and its words dark, as a console marks it. */
+	private static final int PILL = 0x14FFFFFF;
+	private static final int PILL_HOT = 0xF5FFFFFF;
+	private static final int TEXT_HOT = 0xFF121215;
 
 	private final List<Choice> choices = new ArrayList<>();
 	private final List<Anim> hover = new ArrayList<>();
@@ -112,17 +114,20 @@ final class ConsolePopup {
 			Choice choice = choices.get(i);
 			float y = rowY + i * (rowH + rowGap);
 			float hv = hover.get(i).target(i == picked ? 1f : 0f).get();
-			// Picked, the pill is lighter, with a white rim and a soft light evenly around it.
-			if (hv > 0.01f) Render2D.glow(ctx, rowX, y, rowW, rowH, rowH / 2f, 9f, ColorUtil.withAlpha(0xFFFFFF, Math.round(60 * hv * e)),
-				ColorUtil.withAlpha(0xFFFFFF, Math.round(60 * hv * e)));
-			Render2D.round(ctx, rowX, y, rowW, rowH, rowH / 2f, ColorUtil.fade(ColorUtil.lerp(PILL, PILL_HOT, hv), e));
-			if (hv > 0.01f) Render2D.outline(ctx, rowX, y, rowW, rowH, rowH / 2f, 1.25f, ColorUtil.withAlpha(0xFFFFFF, Math.round(170 * hv * e)));
+			// In focus the pill turns white, grows a touch and has a soft light around it; its words turn dark.
+			float grow = 1f + 0.03f * hv;
+			float gw = rowW * grow, gh = rowH * grow;
+			float gx = rowX - (gw - rowW) / 2f, gy = y - (gh - rowH) / 2f;
+			if (hv > 0.01f) Render2D.glow(ctx, gx, gy, gw, gh, gh / 2f, 10f, ColorUtil.withAlpha(0xFFFFFF, Math.round(55 * hv * e)),
+				ColorUtil.withAlpha(0xFFFFFF, Math.round(55 * hv * e)));
+			Render2D.round(ctx, gx, gy, gw, gh, gh / 2f, ColorUtil.fade(ColorUtil.lerp(PILL, PILL_HOT, hv), e));
+			int words = ColorUtil.fade(ColorUtil.lerp(0xFFFFFFFF, TEXT_HOT, hv), e);
 			String label = fit(font, choice.label(), size, rowW - rowH * 1.6f);
 			float tw = font.width(label, size);
 			float iconW = choice.icon() != 0 ? size * 1.5f : 0f;
 			float tx = rowX + (rowW - tw - iconW) / 2f;
-			if (choice.icon() != 0) Render2D.icon(ctx, choice.icon(), tx + size * 0.5f, y + rowH / 2f, size, ColorUtil.fade(0xFFFFFFFF, e));
-			Render2D.textMiddle(ctx, font, label, tx + iconW, y + rowH / 2f, size, ColorUtil.fade(0xFFFFFFFF, e));
+			if (choice.icon() != 0) Render2D.icon(ctx, choice.icon(), tx + size * 0.5f, y + rowH / 2f, size, words);
+			Render2D.textMiddle(ctx, font, label, tx + iconW, y + rowH / 2f, size, words);
 		}
 		m.popMatrix();
 	}

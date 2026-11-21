@@ -62,7 +62,11 @@
     "optimize.SignTextMixin",
     "KeyboardInputMixin",
     "MouseInvoker",
-    "ToastManagerMixin"
+    "ToastManagerMixin",
+    "HandledScreenAccessor",
+    "VideoOptionsScreenMixin",
+    "ClickableWidgetMixin",
+    "DrawContextMixin"
   ],
   "injectors": {
     "defaultRequire": 0

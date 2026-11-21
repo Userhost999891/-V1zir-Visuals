@@ -1,5 +1,6 @@
 package dev.v1zir.visuals.gui.menu;
 
+import dev.v1zir.visuals.controller.KeyNavigation;
 import dev.v1zir.visuals.V1zir;
 import dev.v1zir.visuals.chat.Messages;
 import dev.v1zir.visuals.gui.messages.MessagesScreen;
@@ -62,7 +63,7 @@ import java.util.function.Supplier;
  * before the next screen comes in out of the dark ({@link ScreenTransition}). The classes of the screens the buttons
  * open are loaded in the background while the menu shows, so opening them the first time does not stall a frame.
  */
-public final class V1zirMainMenu extends Screen {
+public final class V1zirMainMenu extends Screen implements KeyNavigation {
 	private static final int DANGER = 0xFFFF4D5E;
 	/** Header clock style, refilled every frame instead of allocated. */
 	private static final Render2D.TextStyle TIME_STYLE = new Render2D.TextStyle().weight(0f);

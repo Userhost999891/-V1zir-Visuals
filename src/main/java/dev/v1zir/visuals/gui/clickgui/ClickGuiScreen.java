@@ -2,6 +2,7 @@ package dev.v1zir.visuals.gui.clickgui;
 
 import com.google.gson.JsonObject;
 import dev.v1zir.visuals.config.ConfigManager;
+import dev.v1zir.visuals.controller.Targets;
 import dev.v1zir.visuals.gui.UiSounds;
 import dev.v1zir.visuals.module.Category;
 import dev.v1zir.visuals.module.Module;
@@ -276,6 +277,8 @@ public final class ClickGuiScreen extends Screen {
 		float sh = spaceH();
 		double mx = toSpaceX(mouseX);
 		double my = toSpaceY(mouseY);
+		// The window's places, for a controller's D-pad, in the screen's coordinates.
+		Targets.scale(s);
 		ctx.getMatrices().pushMatrix();
 		ctx.getMatrices().translate(width / 2f, height / 2f + rise);
 		ctx.getMatrices().scale(s * scale, s * scale);
@@ -329,6 +332,7 @@ public final class ClickGuiScreen extends Screen {
 		tooltip.render(ctx, grid != null ? grid.hovered() : null, mx, my, winX, winY, winX + winW, winY + winH);
 		sidebar.renderMenu(ctx, mx, my);
 		ctx.getMatrices().popMatrix();
+		Targets.scale(1f);
 	}
 
 	/** The grid of cards being shown (the search results or the tab's), null on the Settings tab. */

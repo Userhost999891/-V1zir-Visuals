@@ -3,6 +3,7 @@ package dev.v1zir.visuals.gui.menu;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.FilterMode;
 import dev.v1zir.visuals.V1zir;
+import dev.v1zir.visuals.controller.KeyNavigation;
 import dev.v1zir.visuals.account.Accounts;
 import dev.v1zir.visuals.chat.ChatService;
 import dev.v1zir.visuals.chat.Conversation;
@@ -84,7 +85,7 @@ import java.util.stream.Stream;
  * The arrow keys (or the wheel) move along the row, down goes to the buttons or the cards and up back to the row, Tab
  * switches the tab, Enter plays. A click picks a tile, a click on the picked one (or a double click) plays it.
  */
-public final class ConsoleMenu extends Screen {
+public final class ConsoleMenu extends Screen implements KeyNavigation {
 	private static final int HOME = 0;
 	private static final int WORLD = 1;
 	private static final int SERVER = 2;

@@ -39,19 +39,24 @@ public final class ConsoleUi {
 		float r = Math.min(h / 2f, 10f);
 		boolean lit = focused && active;
 		pill(ctx, x, y, w, h, r, lit, active);
-		label(ctx, label, x + w / 2f, y + h / 2f, w - 10f, 8f, active ? TEXT : TEXT_DIM);
+		label(ctx, label, x + w / 2f, y + h / 2f, w - 10f, 8f, lit ? INK : active ? TEXT : TEXT_DIM);
 	}
 
 	/**
-	 * The pill under a button or a slider: a dark base so white text reads on anything, a light veil over it; under
-	 * the pointer the veil is lighter, the rim white and a soft light spreads evenly around it.
+	 * The pill under a button or a slider: a dark base so white text reads on anything, a light veil over it. In focus
+	 * (under the pointer, or picked with the keys or a controller) it turns white with a soft light around it, as a
+	 * console marks what is in focus; the words on it turn dark.
 	 */
 	private static void pill(DrawContext ctx, float x, float y, float w, float h, float r, boolean lit, boolean active) {
 		Render2D.shadow(ctx, x, y + 1.5f, w, h, r, 7f, 0x4D000000);
-		if (lit) Render2D.glow(ctx, x, y, w, h, r, 7f, 0x38FFFFFF, 0x38FFFFFF);
+		if (lit) {
+			Render2D.glow(ctx, x, y, w, h, r, 8f, 0x40FFFFFF, 0x40FFFFFF);
+			Render2D.round(ctx, x, y, w, h, r, FOCUS);
+			return;
+		}
 		Render2D.round(ctx, x, y, w, h, r, surface(active ? 0xB3 : 0x73, 0.06f));
-		if (active) Render2D.gradientV(ctx, x, y, w, h, r, lit ? VEIL_HOT : VEIL, lit ? 0x47FFFFFF : 0x1AFFFFFF);
-		Render2D.outline(ctx, x, y, w, h, r, lit ? 1.25f : 1f, lit ? 0xA6FFFFFF : EDGE);
+		if (active) Render2D.gradientV(ctx, x, y, w, h, r, VEIL, 0x1AFFFFFF);
+		Render2D.outline(ctx, x, y, w, h, r, 1f, EDGE);
 	}
 
 	/** A slider: the pill with the label a little above its middle and a thin line under it, lavender up to a white knob. */
@@ -64,15 +69,14 @@ public final class ConsoleUi {
 		float trackY = y + h - Math.max(4f, h * 0.2f);
 		float trackW = w - inset * 2f;
 		float th = Math.max(1.5f, h * 0.08f);
-		Render2D.round(ctx, x + inset, trackY - th / 2f, trackW, th, th / 2f, 0x33FFFFFF);
+		Render2D.round(ctx, x + inset, trackY - th / 2f, trackW, th, th / 2f, lit ? 0x33000000 : 0x33FFFFFF);
 		float fill = trackW * v;
 		int accent = Theme.accent();
 		if (fill > 0.5f) Render2D.round(ctx, x + inset, trackY - th / 2f, fill, th, th / 2f, active ? accent : ColorUtil.fade(accent, 0.5f));
 		float kw = Math.max(6f, h * 0.36f), kh = Math.max(3.5f, h * 0.2f);
 		float kx = x + inset + fill;
-		if (lit) Render2D.glow(ctx, kx - kw / 2f, trackY - kh / 2f, kw, kh, kh / 2f, 5f, GLOW, GLOW);
-		Render2D.round(ctx, kx - kw / 2f, trackY - kh / 2f, kw, kh, kh / 2f, active ? 0xFFFFFFFF : 0x99FFFFFF);
-		label(ctx, label, x + w / 2f, y + h * 0.42f, w - 14f, 7.5f, active ? TEXT : TEXT_DIM);
+		Render2D.round(ctx, kx - kw / 2f, trackY - kh / 2f, kw, kh, kh / 2f, lit ? INK : active ? 0xFFFFFFFF : 0x99FFFFFF);
+		label(ctx, label, x + w / 2f, y + h * 0.42f, w - 14f, 7.5f, lit ? INK : active ? TEXT : TEXT_DIM);
 	}
 
 	/** Behind a text field (the game draws its text and cursor on top): a white ring while it is typed into. */

@@ -1,36 +1,44 @@
 package dev.v1zir.visuals.test;
 
 import dev.v1zir.visuals.account.Accounts;
-import dev.v1zir.visuals.gui.clickgui.ClickGuiScreen;
 import dev.v1zir.visuals.audio.AudioFiles;
 import dev.v1zir.visuals.audio.Pcm;
+import dev.v1zir.visuals.chat.ChatService;
+import dev.v1zir.visuals.chat.Conversation;
+import dev.v1zir.visuals.chat.LoopbackTransport;
+import dev.v1zir.visuals.chat.Message;
+import dev.v1zir.visuals.chat.Messages;
+import dev.v1zir.visuals.chat.MqttTransport;
 import dev.v1zir.visuals.compat.voicechat.MusicFeed;
+import dev.v1zir.visuals.controller.Controller;
+import dev.v1zir.visuals.gui.clickgui.ClickGuiScreen;
 import dev.v1zir.visuals.gui.menu.ConsoleMenu;
 import dev.v1zir.visuals.gui.menu.LockScreen;
 import dev.v1zir.visuals.gui.menu.MainMenus;
 import dev.v1zir.visuals.gui.menu.MenuShots;
 import dev.v1zir.visuals.gui.menu.V1zirMainMenu;
+import dev.v1zir.visuals.gui.messages.MessagesScreen;
 import dev.v1zir.visuals.media.Media;
 import dev.v1zir.visuals.media.NowPlaying;
 import dev.v1zir.visuals.media.Track;
+import dev.v1zir.visuals.mixin.HandledScreenAccessor;
 import dev.v1zir.visuals.module.Category;
 import dev.v1zir.visuals.module.Module;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.client.ClickGuiModule;
 import dev.v1zir.visuals.module.impl.client.MainMenuModule;
 import dev.v1zir.visuals.module.impl.client.ThemeModule;
+import dev.v1zir.visuals.module.impl.cosmetics.CosmeticsModule;
 import dev.v1zir.visuals.module.impl.effects.ChamsModule;
 import dev.v1zir.visuals.module.impl.effects.ChinaHatModule;
 import dev.v1zir.visuals.module.impl.effects.CrosshairModule;
 import dev.v1zir.visuals.module.impl.effects.EspModule;
 import dev.v1zir.visuals.module.impl.effects.HealthIndicatorModule;
-import dev.v1zir.visuals.module.impl.effects.JumpCirclesModule;
 import dev.v1zir.visuals.module.impl.effects.HitSoundModule;
+import dev.v1zir.visuals.module.impl.effects.JumpCirclesModule;
 import dev.v1zir.visuals.module.impl.effects.KillEffectsModule;
 import dev.v1zir.visuals.module.impl.effects.TargetEspModule;
 import dev.v1zir.visuals.module.impl.hud.ArmorModule;
-import dev.v1zir.visuals.module.impl.cosmetics.CosmeticsModule;
-import dev.v1zir.visuals.module.impl.knives.KnivesModule;
 import dev.v1zir.visuals.module.impl.hud.ArrayListModule;
 import dev.v1zir.visuals.module.impl.hud.ClockModule;
 import dev.v1zir.visuals.module.impl.hud.CompassModule;
@@ -48,6 +56,7 @@ import dev.v1zir.visuals.module.impl.hud.SpeedModule;
 import dev.v1zir.visuals.module.impl.hud.SpotifyModule;
 import dev.v1zir.visuals.module.impl.hud.TargetHudModule;
 import dev.v1zir.visuals.module.impl.hud.WatermarkModule;
+import dev.v1zir.visuals.module.impl.knives.KnivesModule;
 import dev.v1zir.visuals.module.impl.visuals.BlockReflectionModule;
 import dev.v1zir.visuals.module.impl.visuals.CinematicModule;
 import dev.v1zir.visuals.module.impl.visuals.ColorGradingModule;
@@ -55,8 +64,8 @@ import dev.v1zir.visuals.module.impl.visuals.FreeLookModule;
 import dev.v1zir.visuals.module.impl.visuals.GodRaysModule;
 import dev.v1zir.visuals.module.impl.visuals.HandChamsModule;
 import dev.v1zir.visuals.module.impl.visuals.MistModule;
-import dev.v1zir.visuals.module.impl.visuals.NametagsModule;
 import dev.v1zir.visuals.module.impl.visuals.MotionBlurModule;
+import dev.v1zir.visuals.module.impl.visuals.NametagsModule;
 import dev.v1zir.visuals.module.impl.visuals.RainEffectsModule;
 import dev.v1zir.visuals.module.impl.visuals.ShaderSkyModule;
 import dev.v1zir.visuals.module.impl.visuals.ShootingStarsModule;
@@ -64,17 +73,11 @@ import dev.v1zir.visuals.module.impl.visuals.VibeModule;
 import dev.v1zir.visuals.module.impl.visuals.WetWorldModule;
 import dev.v1zir.visuals.module.impl.visuals.WorldParticlesModule;
 import dev.v1zir.visuals.module.impl.visuals.ZoomModule;
+import dev.v1zir.visuals.optimize.GpuOption;
 import dev.v1zir.visuals.pack.PackMixer;
 import dev.v1zir.visuals.render.knife.KnifeViewModel;
-import dev.v1zir.visuals.render.world.Effects;
-import dev.v1zir.visuals.chat.ChatService;
-import dev.v1zir.visuals.chat.Conversation;
-import dev.v1zir.visuals.chat.LoopbackTransport;
-import dev.v1zir.visuals.chat.Message;
-import dev.v1zir.visuals.chat.Messages;
-import dev.v1zir.visuals.chat.MqttTransport;
-import dev.v1zir.visuals.gui.messages.MessagesScreen;
 import dev.v1zir.visuals.render.sky.SkyPreset;
+import dev.v1zir.visuals.render.world.Effects;
 import dev.v1zir.visuals.util.Theme;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
@@ -83,9 +86,13 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.hud.DebugHud;
 import net.minecraft.client.gui.screen.AccessibilityOnboardingScreen;
 import net.minecraft.client.gui.screen.TitleScreen;
+import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.screen.ingame.CreativeInventoryScreen;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.client.gui.screen.multiplayer.MultiplayerScreen;
 import net.minecraft.client.gui.screen.option.OptionsScreen;
+import net.minecraft.client.gui.screen.option.VideoOptionsScreen;
+import net.minecraft.screen.slot.Slot;
 import net.minecraft.client.network.ServerInfo;
 import net.minecraft.client.option.GameOptions;
 import net.minecraft.client.option.KeyBinding;
@@ -182,6 +189,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			clickGui(context);
 			clickGuiFavourites(context);
 			messages(context);
+			controllerGui(context, singleplayer);
 
 			// The test runner expects to end on the vanilla title screen.
 			context.runOnClient(client -> MainMenuModule.suspended = true);
@@ -2056,6 +2064,85 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			ModuleManager.get(ZoomModule.class).setEnabled(zoomWasOn, false);
 			ModuleManager.get(BlockReflectionModule.class).setEnabled(false, false);
 		});
+	}
+
+	/**
+	 * A controller's D-pad on the game's screens: on the inventory it goes from slot to slot, on the creative inventory
+	 * up to the tabs, on the click GUI from button to button; Video Settings has GPU as its first row. Each says where
+	 * it went (V1ZIR-DPAD, V1ZIR-GPU-OPTION); the inventory's steps, the plainest case, must land on the next slot.
+	 */
+	private static void controllerGui(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
+		singleplayer.getServer().runCommand("gamemode survival @a");
+		context.waitTicks(10);
+		context.setScreen(() -> new InventoryScreen(MinecraftClient.getInstance().player));
+		context.waitTicks(10);
+		String inventory = context.computeOnClient(client -> {
+			if (!(client.currentScreen instanceof InventoryScreen screen)) return "no inventory: " + client.currentScreen;
+			HandledScreenAccessor panel = (HandledScreenAccessor) screen;
+			List<Slot> slots = screen.getScreenHandler().slots;
+			// The hotbar's first slot; right is its second, up the first of the inventory's row above.
+			Slot from = slots.get(36), right = slots.get(37), up = slots.get(27);
+			double x = panel.v1zir$x() + from.x + 8, y = panel.v1zir$y() + from.y + 8;
+			float[] r = Controller.dpad(client, screen, x, y, GLFW.GLFW_KEY_RIGHT);
+			float[] u = Controller.dpad(client, screen, x, y, GLFW.GLFW_KEY_UP);
+			boolean ok = r != null && r[0] == panel.v1zir$x() + right.x + 8 && r[1] == panel.v1zir$y() + right.y + 8
+				&& u != null && u[0] == panel.v1zir$x() + up.x + 8 && u[1] == panel.v1zir$y() + up.y + 8;
+			return (ok ? "ok" : "WRONG") + " right " + Arrays.toString(r) + " up " + Arrays.toString(u) + " from " + x + ", " + y;
+		});
+		System.out.println("V1ZIR-DPAD inventory " + inventory);
+		if (!inventory.startsWith("ok")) throw new AssertionError("The D-pad did not go from slot to slot: " + inventory);
+
+		singleplayer.getServer().runCommand("gamemode creative @a");
+		context.setScreen(() -> null);
+		context.waitTicks(10);
+		context.getInput().pressKey(GLFW.GLFW_KEY_E);
+		context.waitTicks(10);
+		String creative = context.computeOnClient(client -> {
+			if (!(client.currentScreen instanceof CreativeInventoryScreen screen)) return "no creative inventory: " + client.currentScreen;
+			HandledScreenAccessor panel = (HandledScreenAccessor) screen;
+			// From the top left slot up: one of the tabs over the panel.
+			Slot top = null;
+			for (Slot slot : screen.getScreenHandler().slots) {
+				if (slot.isEnabled() && (top == null || slot.y < top.y || slot.y == top.y && slot.x < top.x)) top = slot;
+			}
+			if (top == null) return "no slots";
+			double x = panel.v1zir$x() + top.x + 8, y = panel.v1zir$y() + top.y + 8;
+			float[] u = Controller.dpad(client, screen, x, y, GLFW.GLFW_KEY_UP);
+			return (u != null && u[1] < panel.v1zir$y() ? "ok" : "WRONG") + " up " + Arrays.toString(u) + " from " + x + ", " + y
+				+ " (panel top " + panel.v1zir$y() + ")";
+		});
+		System.out.println("V1ZIR-DPAD creative " + creative);
+		singleplayer.getServer().runCommand("gamemode survival @a");
+
+		context.setScreen(() -> null);
+		context.setScreen(ClickGuiScreen::new);
+		context.waitTicks(30);
+		String gui = context.computeOnClient(client -> {
+			Screen screen = client.currentScreen;
+			if (screen == null) return "no screen";
+			StringBuilder out = new StringBuilder();
+			double x = screen.width / 2.0, y = screen.height / 2.0;
+			int reached = 0;
+			for (int arrow : new int[]{GLFW.GLFW_KEY_DOWN, GLFW.GLFW_KEY_RIGHT, GLFW.GLFW_KEY_DOWN, GLFW.GLFW_KEY_LEFT, GLFW.GLFW_KEY_UP}) {
+				float[] to = Controller.dpad(client, screen, x, y, arrow);
+				out.append(' ').append(Arrays.toString(to));
+				if (to != null) {
+					x = to[0];
+					y = to[1];
+					reached++;
+				}
+			}
+			return reached + " of 5 steps:" + out;
+		});
+		System.out.println("V1ZIR-DPAD clickgui " + gui);
+
+		context.setScreen(() -> null);
+		context.setScreen(() -> new VideoOptionsScreen(null, MinecraftClient.getInstance(), MinecraftClient.getInstance().options));
+		context.waitTicks(10);
+		boolean listed = context.computeOnClient(client -> client.currentScreen != null && GpuOption.listedOn(client.currentScreen));
+		System.out.println("V1ZIR-GPU-OPTION first row of Video Settings: " + listed);
+		context.takeScreenshot("video-settings-gpu");
+		context.setScreen(() -> null);
 	}
 
 	private static void clickGui(ClientGameTestContext context) {

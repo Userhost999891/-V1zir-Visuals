@@ -26,8 +26,31 @@ public final class GpuCheck {
 	/** Cards of their own. */
 	private static final Pattern DEDICATED = Pattern.compile("geforce|rtx|gtx|quadro|radeon rx|radeon pro|firepro|\\barc a");
 	private static final long DEDICATED_VRAM = 2L << 30;
+	/** The system's cards (a card of its own, or one built into the processor) and the one OpenGL draws with. */
+	public record Card(String name, boolean dedicated) {
+	}
+
+	private static volatile List<Card> cards = List.of();
+	private static volatile String drawing = "";
 
 	private GpuCheck() {
+	}
+
+	/** The graphics cards of this computer, as read at start (empty until then, or where they cannot be read). */
+	public static List<Card> cards() {
+		return cards;
+	}
+
+	/** The card OpenGL draws with (its name as the driver gives it). */
+	public static String drawing() {
+		return drawing;
+	}
+
+	/** Whether this card is the one the game draws with now. */
+	public static boolean drawsWith(Card card) {
+		String name = plain(card.name());
+		String now = plain(drawing);
+		return !name.isEmpty() && !now.isEmpty() && (now.contains(name) || name.contains(now));
 	}
 
 	/** Once the game has started (render thread, its OpenGL context current). */
@@ -39,14 +62,16 @@ public final class GpuCheck {
 			return;
 		}
 		if (renderer == null || renderer.isBlank()) return;
+		drawing = renderer;
 		Thread thread = new Thread(() -> {
 			try {
-				List<GraphicsCard> cards = new SystemInfo().getHardware().getGraphicsCards();
+				List<GraphicsCard> found = new SystemInfo().getHardware().getGraphicsCards();
+				cards = found.stream().map(card -> new Card(card.getName() == null ? "" : card.getName().strip(), dedicated(card))).toList();
 				String drawing = plain(renderer);
 				if (drawing.isEmpty()) return;
 				GraphicsCard used = null;
 				GraphicsCard unused = null;
-				for (GraphicsCard card : cards) {
+				for (GraphicsCard card : found) {
 					String name = plain(card.getName());
 					if (!name.isEmpty() && (drawing.contains(name) || name.contains(drawing))) used = card;
 					else if (dedicated(card) && unused == null) unused = card;
@@ -75,10 +100,7 @@ public final class GpuCheck {
 
 	/** What to change, on this system. */
 	private static String advice() {
-		String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
-		if (os.contains("win")) {
-			return "Windows Settings > System > Display > Graphics: add your launcher's javaw.exe (or Java), Options > High performance, then restart the game.";
-		}
+		if (GpuPreference.supported()) return "Options > Video Settings > GPU: pick it, then restart the game.";
 		return "Start the game on the dedicated card (for example with prime-run), then restart it.";
 	}
 

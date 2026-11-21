@@ -1,5 +1,6 @@
 package dev.v1zir.visuals.gui.clickgui;
 
+import dev.v1zir.visuals.controller.Targets;
 import dev.v1zir.visuals.module.setting.NumberSetting;
 import dev.v1zir.visuals.render.font.Fonts;
 import dev.v1zir.visuals.render.font.SdfFont;
@@ -54,6 +55,8 @@ public final class SliderComponent extends SettingComponent<NumberSetting> {
 		float kr = 3.5f + 0.5f * (dragging ? 1f : h);
 		Render2D.circle(ctx, kx, ky, kr + 0.5f, 0x40000000);
 		Render2D.circle(ctx, kx, ky, kr, 0xFFFFFFFF);
+		// A controller's D-pad lands on the knob, so pressing it keeps the value and holding it drags it.
+		Targets.anchor(x, y, width, HEIGHT, kx, ky);
 		return HEIGHT;
 	}
 

@@ -1,5 +1,6 @@
 package dev.v1zir.visuals.gui.clickgui;
 
+import dev.v1zir.visuals.controller.Targets;
 import dev.v1zir.visuals.render.font.Fonts;
 import dev.v1zir.visuals.render.font.SdfFont;
 import dev.v1zir.visuals.render.ui.Render2D;
@@ -90,7 +91,9 @@ public final class Ui {
 		return Math.max(0f, Math.min(1f, a));
 	}
 
+	/** Whether the pointer is over the area; while a screen draws, the area is also a place a controller's D-pad goes to. */
 	public static boolean inside(double mx, double my, float x, float y, float w, float h) {
+		Targets.add(x, y, w, h);
 		return mx >= x && mx <= x + w && my >= y && my <= y + h;
 	}
 }

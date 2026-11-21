@@ -1,15 +1,19 @@
 package dev.v1zir.visuals.controller;
 
+import dev.v1zir.visuals.gui.UiSounds;
 import dev.v1zir.visuals.gui.clickgui.ClickGuiScreen;
 import dev.v1zir.visuals.gui.hud.Notifications;
+import dev.v1zir.visuals.mixin.HandledScreenAccessor;
 import dev.v1zir.visuals.mixin.MouseInvoker;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.client.ControllerModule;
 import dev.v1zir.visuals.render.font.Icons;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.Element;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
+import net.minecraft.client.gui.widget.ClickableWidget;
 import net.minecraft.client.input.KeyInput;
 import net.minecraft.client.input.MouseInput;
 import net.minecraft.client.network.ClientPlayerEntity;
@@ -17,9 +21,12 @@ import net.minecraft.client.option.GameOptions;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import net.minecraft.client.util.Window;
+import net.minecraft.screen.slot.Slot;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.glfw.GLFWGamepadState;
+
+import java.util.List;
 
 /**
  * A PlayStation controller (DualShock 4 or DualSense, or any other the system knows as a gamepad) playing the game,
@@ -333,7 +340,7 @@ public final class Controller {
 		}
 		if (pressed(GLFW.GLFW_GAMEPAD_BUTTON_LEFT_BUMPER)) key(screen, GLFW.GLFW_KEY_TAB, GLFW.GLFW_MOD_SHIFT);
 		if (pressed(GLFW.GLFW_GAMEPAD_BUTTON_RIGHT_BUMPER)) key(screen, GLFW.GLFW_KEY_TAB, 0);
-		arrows(screen, dt);
+		arrows(client, screen, dt);
 		// The right stick scrolls, faster the further it is pushed.
 		float wheel = axis(GLFW.GLFW_GAMEPAD_AXIS_RIGHT_Y, module.deadzone.f());
 		scroll += -wheel * 10.0 * dt;
@@ -351,25 +358,101 @@ public final class Controller {
 			: down[GLFW.GLFW_GAMEPAD_BUTTON_DPAD_LEFT] ? GLFW.GLFW_KEY_LEFT : down[GLFW.GLFW_GAMEPAD_BUTTON_DPAD_RIGHT] ? GLFW.GLFW_KEY_RIGHT : -1;
 	}
 
-	/** The D-pad as the arrow keys, repeating while held. */
-	private static void arrows(Screen screen, float dt) {
+	/** The D-pad, a step at a time, repeating while held. */
+	private static void arrows(MinecraftClient client, Screen screen, float dt) {
 		int arrow = arrow();
 		if (arrow != heldArrow) {
 			heldArrow = arrow;
 			heldFor = 0.0;
 			nextRepeat = REPEAT_FIRST;
-			if (arrow >= 0) {
-				focusMode = true;
-				key(screen, arrow, 0);
-			}
+			if (arrow >= 0) step(client, screen, arrow);
 			return;
 		}
 		if (arrow < 0) return;
 		heldFor += dt;
 		if (heldFor >= nextRepeat) {
 			nextRepeat += REPEAT_NEXT;
-			key(screen, arrow, 0);
+			step(client, screen, arrow);
 		}
+	}
+
+	/**
+	 * One step of the D-pad. On an inventory and on the client's own screens the pointer goes to the next place that
+	 * way (a slot, a button, a toggle, a row...), which lights up as under the mouse, and Cross presses it; on the
+	 * game's other screens (and the menus that go through their own with the keys) it is the arrow key, which moves
+	 * their keyboard focus.
+	 */
+	private static void step(MinecraftClient client, Screen screen, int arrow) {
+		if (!spatial(screen)) {
+			focusMode = true;
+			key(screen, arrow, 0);
+			return;
+		}
+		Window window = client.getWindow();
+		dpad(client, screen, client.mouse.getX() * screen.width / window.getWidth(), client.mouse.getY() * screen.height / window.getHeight(), arrow);
+	}
+
+	/**
+	 * A step of the D-pad on a screen it moves the pointer on, from (x, y) in the screen's coordinates that way (an
+	 * arrow key): the pointer goes to the next place there, and that place is returned (null: nothing that way).
+	 */
+	@Nullable
+	public static float[] dpad(MinecraftClient client, Screen screen, double x, double y, int arrow) {
+		int dx = arrow == GLFW.GLFW_KEY_RIGHT ? 1 : arrow == GLFW.GLFW_KEY_LEFT ? -1 : 0;
+		int dy = arrow == GLFW.GLFW_KEY_DOWN ? 1 : arrow == GLFW.GLFW_KEY_UP ? -1 : 0;
+		Window window = client.getWindow();
+		float[] to = screen instanceof HandledScreen<?> handled ? slot(handled, x, y, dx, dy) : Targets.next(screen, x, y, dx, dy);
+		if (to == null) return null;
+		cursorX = to[0] * (double) window.getWidth() / screen.width;
+		cursorY = to[1] * (double) window.getHeight() / screen.height;
+		long handle = window.getHandle();
+		GLFW.glfwSetCursorPos(handle, cursorX, cursorY);
+		((MouseInvoker) client.mouse).v1zir$cursorPos(handle, cursorX, cursorY);
+		focusMode = false;
+		UiSounds.play(UiSounds.MOVE);
+		return to;
+	}
+
+	/** Screens whose places the D-pad goes through (Targets, or an inventory's slots) rather than the arrow keys. */
+	private static boolean spatial(Screen screen) {
+		return screen instanceof HandledScreen<?> || screen.getClass().getName().startsWith("dev.v1zir.") && !(screen instanceof KeyNavigation);
+	}
+
+	/**
+	 * On an inventory: the next slot that way, or button of it: its widgets (the recipe book's among them) and what it
+	 * draws as buttons (the creative tabs, the enchantments, the stonecutter's and the loom's choices), as last drawn.
+	 */
+	@Nullable
+	private static float[] slot(HandledScreen<?> screen, double x, double y, int dx, int dy) {
+		HandledScreenAccessor panel = (HandledScreenAccessor) screen;
+		List<Slot> slots = screen.getScreenHandler().slots;
+		float[] drawn = Targets.shown(screen);
+		float[] places = new float[(slots.size() + screen.children().size()) * 6 + drawn.length];
+		int n = 0;
+		for (Slot slot : slots) {
+			if (slot.isEnabled()) n = place(places, n, screen, panel.v1zir$x() + slot.x, panel.v1zir$y() + slot.y, 16f, 16f);
+		}
+		for (Element element : screen.children()) {
+			if (element instanceof ClickableWidget widget && widget.visible && widget.active) {
+				n = place(places, n, screen, widget.getX(), widget.getY(), widget.getWidth(), widget.getHeight());
+			}
+		}
+		System.arraycopy(drawn, 0, places, n * 6, drawn.length);
+		return Targets.pick(places, n + drawn.length / 6, x, y, dx, dy);
+	}
+
+	/** A place on the screen (one off it, as a slot put away, is none). */
+	private static int place(float[] places, int n, Screen screen, float x, float y, float w, float h) {
+		float cx = x + w / 2f, cy = y + h / 2f;
+		if (cx < 0f || cy < 0f || cx > screen.width || cy > screen.height) return n;
+		int o = n * 6;
+		places[o] = x;
+		places[o + 1] = y;
+		places[o + 2] = w;
+		places[o + 3] = h;
+		places[o + 4] = x + w / 2f;
+		places[o + 5] = y + h / 2f;
+		return n + 1;
 	}
 
 	private static void key(Screen screen, int key, int modifiers) {

@@ -13,8 +13,8 @@ import net.minecraft.text.Text;
 
 /**
  * Drawing of the restyled vanilla widgets (Custom UI module). Every surface follows the Theme
- * style; hover only lights the widget up, nothing moves. With the PS5 style theme they are all restyled, Custom UI
- * or not, in that style's look ({@link ConsoleUi}).
+ * style; hover only lights the widget up, nothing moves. With the PS5 style theme they take that style's look
+ * ({@link ConsoleUi}); which of them are restyled is Custom UI's choice in either style.
  */
 public final class CustomUi {
 	private CustomUi() {
@@ -26,43 +26,31 @@ public final class CustomUi {
 	}
 
 	public static boolean buttons() {
-		// The PS5 style restyles them all, Custom UI or not.
-		if (Theme.ps5()) return true;
 		CustomUiModule m = module();
 		return m != null && m.buttons.on();
 	}
 
 	public static boolean sliders() {
-		// The PS5 style restyles them all, Custom UI or not.
-		if (Theme.ps5()) return true;
 		CustomUiModule m = module();
 		return m != null && m.sliders.on();
 	}
 
 	public static boolean textFields() {
-		// The PS5 style restyles them all, Custom UI or not.
-		if (Theme.ps5()) return true;
 		CustomUiModule m = module();
 		return m != null && m.textFields.on();
 	}
 
 	public static boolean inventory() {
-		// The PS5 style restyles them all, Custom UI or not.
-		if (Theme.ps5()) return true;
 		CustomUiModule m = module();
 		return m != null && m.inventory.on();
 	}
 
 	public static boolean hotbar() {
-		// The PS5 style restyles them all, Custom UI or not.
-		if (Theme.ps5()) return true;
 		CustomUiModule m = module();
 		return m != null && m.hotbar.on();
 	}
 
 	public static boolean tooltips() {
-		// The PS5 style restyles them all, Custom UI or not.
-		if (Theme.ps5()) return true;
 		CustomUiModule m = module();
 		return m != null && m.tooltips.on();
 	}

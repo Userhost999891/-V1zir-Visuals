@@ -5,6 +5,7 @@ import dev.v1zir.visuals.chat.Contact;
 import dev.v1zir.visuals.chat.Conversation;
 import dev.v1zir.visuals.chat.Message;
 import dev.v1zir.visuals.chat.Messages;
+import dev.v1zir.visuals.controller.Targets;
 import dev.v1zir.visuals.gui.clickgui.Ui;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.client.ClickGuiModule;
@@ -295,6 +296,8 @@ public final class MessagesScreen extends Screen {
 		float s = scale() * (0.95f + 0.05f * t);
 		double mx = toSpaceX(mouseX);
 		double my = toSpaceY(mouseY);
+		// The places in the window, for a controller's D-pad, in the screen's coordinates.
+		Targets.scale(scale());
 		ctx.getMatrices().pushMatrix();
 		ctx.getMatrices().translate(width / 2f, height / 2f + (1f - t) * 10f);
 		ctx.getMatrices().scale(s, s);
@@ -317,6 +320,7 @@ public final class MessagesScreen extends Screen {
 		else renderConversation(ctx, service, mx, my);
 		renderEditor(ctx, service, mx, my);
 		ctx.getMatrices().popMatrix();
+		Targets.scale(1f);
 		Render2D.setAlpha(1f);
 	}
 
@@ -1067,6 +1071,7 @@ public final class MessagesScreen extends Screen {
 	}
 
 	private static boolean inCircle(double mx, double my, float cx, float cy, float r) {
+		Targets.add(cx - r, cy - r, r * 2f, r * 2f);
 		double dx = mx - cx;
 		double dy = my - cy;
 		return dx * dx + dy * dy <= r * r;
