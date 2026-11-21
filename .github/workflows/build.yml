@@ -26,6 +26,8 @@ jobs:
         with:
           name: v1zir-visuals-jar
           path: build/libs/
+          # A private repository has 500 MB for artifacts on the free plan: the jar is kept two weeks.
+          retention-days: 14
       # Temporary: method signatures of the mapped 1.21.11 classes the mod hooks into, so mixin
       # targets can be checked against the real game (javap prints declarations and bytecode only).
       - name: API signatures
@@ -89,16 +91,12 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: dev-client-screenshots
-          path: build/run/clientGameTest/screenshots/
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
           name: dev-client-logs
           path: |
             build/run/clientGameTest/logs/
             build/run/clientGameTest/crash-reports/
             build/run/clientGameTest/v1zir-*.jfr
+          retention-days: 7
       - name: Profile summary
         if: always()
         run: |
