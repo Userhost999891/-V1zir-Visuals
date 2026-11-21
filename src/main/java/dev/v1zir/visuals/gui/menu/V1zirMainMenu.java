@@ -1,6 +1,7 @@
 package dev.v1zir.visuals.gui.menu;
 
 import dev.v1zir.visuals.controller.KeyNavigation;
+import dev.v1zir.visuals.controller.Targets;
 import dev.v1zir.visuals.V1zir;
 import dev.v1zir.visuals.chat.Messages;
 import dev.v1zir.visuals.gui.messages.MessagesScreen;
@@ -674,6 +675,15 @@ public final class V1zirMainMenu extends Screen implements KeyNavigation {
 		return super.mouseScrolled(mouseX, mouseY, horizontalAmount, verticalAmount);
 	}
 
+	/**
+	 * The D-pad is the arrow keys on the lock screen (any key opens it) and in the widget editor; otherwise it moves the
+	 * pointer to each thing here, the Continue pill and the account too.
+	 */
+	@Override
+	public boolean keysNow() {
+		return lock.locked() || editor.active();
+	}
+
 	@Override
 	public boolean keyPressed(KeyInput input) {
 		if (leavingTo != null) return true;
@@ -778,6 +788,7 @@ public final class V1zirMainMenu extends Screen implements KeyNavigation {
 		}
 
 		void render(DrawContext ctx, int mouseX, int mouseY, boolean focused, boolean held) {
+			Targets.add(cx - radius, cy - radius, radius * 2f, radius * 2f);
 			boolean over = hovered(mouseX, mouseY);
 			float h = hover.target(over || focused ? 1f : 0f).get();
 			float p = press.target(held && over ? 1f : 0f).get();

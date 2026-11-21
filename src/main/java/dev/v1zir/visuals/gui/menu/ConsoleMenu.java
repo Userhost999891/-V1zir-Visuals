@@ -93,6 +93,8 @@ public final class ConsoleMenu extends Screen implements KeyNavigation {
 	private static final int MAX_TILES = 14;
 	/** Where the keys are: the row, or the first or second button (Play and "..."; on home, the cards). */
 	private static final int ROW = 0;
+	/** The focus on the top bar (up from the row): which of its places, from the left, is in {@link #top}. */
+	private static final int TOP = -1;
 	private static final int TEXT = 0xFFFFFFFF;
 	private static final int DIM = 0xB3FFFFFF;
 	private static final int FAINT = 0x80FFFFFF;
@@ -124,6 +126,8 @@ public final class ConsoleMenu extends Screen implements KeyNavigation {
 	private final int[] selected = new int[2];
 	private int tab;
 	private int focus = ROW;
+	/** On the top bar: 0 and 1 the tabs, then the round icons from the left, then the account. */
+	private int top;
 	private final Anim pillX = new Anim(0f, 14f);
 	private final Anim pillW = new Anim(0f, 14f);
 	private final Anim cursor = new Anim(0f, 12f);
@@ -620,6 +624,11 @@ public final class ConsoleMenu extends Screen implements KeyNavigation {
 			int beside = over ? TEXT : 0xD9FFFFFF;
 			int color = ColorUtil.lerp(beside, INK, Anim.clamp01(overlap));
 			Render2D.textMiddle(ctx, font, names[i], tabX[i] + inner, centerY, size, ColorUtil.fade(color, appear));
+			if (focus == TOP && top == i) {
+				// In focus from the keys: a ring of its own a little outside it, as on the Play button.
+				float o = tabH * 0.14f;
+				Render2D.outline(ctx, tabX[i] - o, tabY - o, tabW[i] + o * 2f, tabH + o * 2f, tabH / 2f + o, 1.6f, ColorUtil.fade(0xFFFFFFFF, appear));
+			}
 		}
 
 		// From the right: the clock, the account, then the round icons.
@@ -633,8 +642,10 @@ public final class ConsoleMenu extends Screen implements KeyNavigation {
 		Accounts.Account account = Accounts.current();
 		SkinTextures skin = account != null ? accounts.skin(client, account) : null;
 		boolean overAvatar = Ui.inside(mouseX, mouseY, avatarX, avatarY, avatarS, avatarS);
+		boolean keyedAvatar = focus == TOP && top == 2 + icons.size();
+		if (keyedAvatar) Render2D.ring(ctx, avatarX + avatarS / 2f, avatarY + avatarS / 2f, avatarS / 2f + avatarS * 0.2f, 1.6f, ColorUtil.fade(0xFFFFFFFF, appear));
 		Render2D.circle(ctx, avatarX + avatarS / 2f, avatarY + avatarS / 2f, avatarS / 2f + 1.5f,
-			ColorUtil.fade(overAvatar || accounts.shown() ? 0xFFFFFFFF : 0x33FFFFFF, appear));
+			ColorUtil.fade(overAvatar || accounts.shown() || keyedAvatar ? 0xFFFFFFFF : 0x33FFFFFF, appear));
 		if (skin != null) Heads.skin(ctx, skin, avatarX, avatarY, avatarS, avatarS / 2f, ColorUtil.fade(0xFFFFFFFF, appear));
 		else Render2D.icon(ctx, Icons.CIRCLE_USER, avatarX + avatarS / 2f, avatarY + avatarS / 2f, avatarS, ColorUtil.fade(TEXT, appear));
 		float ix = avatarX - size * 1.2f;
@@ -646,9 +657,13 @@ public final class ConsoleMenu extends Screen implements KeyNavigation {
 			icon.cy = centerY;
 			icon.r = r;
 			boolean over = (mouseX - cx) * (mouseX - cx) + (mouseY - centerY) * (mouseY - centerY) <= r * r;
-			float hv = iconHover[Math.min(i, iconHover.length - 1)].target(over ? 1f : 0f).get();
-			if (hv > 0.01f) Render2D.circle(ctx, cx, centerY, r, ColorUtil.withAlpha(0xFFFFFF, Math.round(46 * hv * appear)));
-			Render2D.icon(ctx, icon.icon, cx, centerY, size * 1.15f, ColorUtil.fade(ColorUtil.lerp(0xE6FFFFFF, TEXT, hv), appear));
+			// In focus from the keys it turns white with a dark icon, as a console marks it; under the pointer it lightens.
+			boolean keyed = focus == TOP && top == 2 + icons.size() - 1 - i;
+			float hv = iconHover[Math.min(i, iconHover.length - 1)].target(over || keyed ? 1f : 0f).get();
+			if (keyed) Render2D.circle(ctx, cx, centerY, r, ColorUtil.fade(ColorUtil.withAlpha(0xFFFFFF, Math.round(255 * hv)), appear));
+			else if (hv > 0.01f) Render2D.circle(ctx, cx, centerY, r, ColorUtil.withAlpha(0xFFFFFF, Math.round(46 * hv * appear)));
+			int ink = keyed ? ColorUtil.lerp(TEXT, INK, hv) : ColorUtil.lerp(0xE6FFFFFF, TEXT, hv);
+			Render2D.icon(ctx, icon.icon, cx, centerY, size * 1.15f, ColorUtil.fade(ink, appear));
 			if (icon.icon == Icons.MESSAGE_CIRCLE) MessagesUi.badge(ctx, cx + r * 0.65f, centerY - r * 0.6f, Messages.unread());
 			ix = cx - r - 2f;
 		}
@@ -1101,6 +1116,7 @@ public final class ConsoleMenu extends Screen implements KeyNavigation {
 		boolean home = item != null && item.kind == HOME;
 		int buttons = home ? 3 : 2;
 		int key = input.key();
+		if (focus == TOP) return topKey(input);
 		switch (key) {
 			case GLFW.GLFW_KEY_LEFT, GLFW.GLFW_KEY_A -> {
 				if (focus == ROW) select(selected[tab] - 1);
@@ -1115,6 +1131,11 @@ public final class ConsoleMenu extends Screen implements KeyNavigation {
 			}
 			case GLFW.GLFW_KEY_UP, GLFW.GLFW_KEY_W -> {
 				if (focus != ROW) moveFocus(ROW);
+				else {
+					// Up from the row: the top bar, on the tab shown.
+					top = tab;
+					moveFocus(TOP);
+				}
 			}
 			case GLFW.GLFW_KEY_TAB, GLFW.GLFW_KEY_Q, GLFW.GLFW_KEY_E -> switchTab(1 - tab);
 			case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER, GLFW.GLFW_KEY_SPACE -> {
@@ -1128,6 +1149,51 @@ public final class ConsoleMenu extends Screen implements KeyNavigation {
 			}
 		}
 		return true;
+	}
+
+	/** The keys on the top bar: along it, down back to the row, Enter takes what is in focus. */
+	private boolean topKey(KeyInput input) {
+		int last = 2 + icons.size();
+		switch (input.key()) {
+			case GLFW.GLFW_KEY_LEFT, GLFW.GLFW_KEY_A -> {
+				if (top > 0) {
+					top--;
+					UiSounds.play(UiSounds.MOVE);
+				}
+			}
+			case GLFW.GLFW_KEY_RIGHT, GLFW.GLFW_KEY_D -> {
+				if (top < last) {
+					top++;
+					UiSounds.play(UiSounds.MOVE);
+				}
+			}
+			case GLFW.GLFW_KEY_DOWN, GLFW.GLFW_KEY_S -> moveFocus(ROW);
+			case GLFW.GLFW_KEY_UP, GLFW.GLFW_KEY_W -> {
+			}
+			case GLFW.GLFW_KEY_TAB, GLFW.GLFW_KEY_Q, GLFW.GLFW_KEY_E -> switchTab(1 - tab);
+			case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER, GLFW.GLFW_KEY_SPACE -> {
+				if (top < 2) {
+					if (top == tab) moveFocus(ROW);
+					else switchTab(top);
+				} else if (top < last) {
+					UiSounds.play(UiSounds.CONFIRM);
+					icons.get(top - 2).action.run();
+				} else {
+					UiSounds.play(accounts.shown() ? UiSounds.BACK : UiSounds.TAB);
+					accounts.toggle();
+				}
+			}
+			default -> {
+				return super.keyPressed(input);
+			}
+		}
+		return true;
+	}
+
+	/** The D-pad goes through the menu as the arrow keys do; over the open accounts panel it moves the pointer. */
+	@Override
+	public boolean keysNow() {
+		return !accounts.shown();
 	}
 
 	private void moveFocus(int next) {

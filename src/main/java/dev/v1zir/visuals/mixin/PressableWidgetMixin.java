@@ -1,6 +1,7 @@
 package dev.v1zir.visuals.mixin;
 
 import dev.v1zir.visuals.gui.custom.CustomUi;
+import dev.v1zir.visuals.gui.messages.MessagesUi;
 import net.minecraft.client.font.DrawnTextConsumer;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.widget.ButtonWidget;
@@ -22,6 +23,12 @@ public abstract class PressableWidgetMixin {
 	@Inject(method = "drawButton", at = @At("HEAD"), cancellable = true)
 	private void v1zir$drawButton(DrawContext context, CallbackInfo ci) {
 		Object self = this;
+		if (MessagesUi.isPauseKey(self)) {
+			// The pause menu's Messages button is drawn round by MessagesUi; this one is only there for the keys.
+			v1zir$styled = true;
+			ci.cancel();
+			return;
+		}
 		v1zir$styled = CustomUi.buttons() && (self instanceof ButtonWidget || self instanceof CyclingButtonWidget);
 		if (!v1zir$styled) return;
 		ClickableWidget widget = (ClickableWidget) self;

@@ -18,6 +18,7 @@ import dev.v1zir.visuals.gui.menu.MainMenus;
 import dev.v1zir.visuals.gui.menu.MenuShots;
 import dev.v1zir.visuals.gui.menu.V1zirMainMenu;
 import dev.v1zir.visuals.gui.messages.MessagesScreen;
+import dev.v1zir.visuals.gui.messages.MessagesUi;
 import dev.v1zir.visuals.media.Media;
 import dev.v1zir.visuals.media.NowPlaying;
 import dev.v1zir.visuals.media.Track;
@@ -242,6 +243,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.takeScreenshot("main-menu-ps5-popup");
 		context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
 		context.waitTicks(10);
+		ps5TopBar(context);
 		context.runOnClient(client -> ModuleManager.get(ThemeModule.class).styleTheme.reset());
 		context.runOnClient(client -> {
 			if (bot != null) bot.stop();
@@ -2067,6 +2069,32 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 	}
 
 	/**
+	 * The PS5 style menu's top bar from the keys (a controller's D-pad): up from the buttons to the row, up again to the
+	 * tab shown, right along the bar to the settings icon (V1ZIR-PS5-TOP), whose Enter opens the game's options.
+	 */
+	private static void ps5TopBar(ClientGameTestContext context) {
+		context.getInput().pressKey(GLFW.GLFW_KEY_UP);
+		context.getInput().pressKey(GLFW.GLFW_KEY_UP);
+		context.waitTicks(3);
+		int top = context.computeOnClient(client -> client.currentScreen instanceof ConsoleMenu menu
+			&& (int) field(menu, ConsoleMenu.class, "focus") == -1 ? (int) field(menu, ConsoleMenu.class, "top") : -100);
+		// Left to right: the two tabs, then the power, settings and Messages icons (no Mod Menu here), then the account.
+		for (int i = top; i >= 0 && i < 3; i++) context.getInput().pressKey(GLFW.GLFW_KEY_RIGHT);
+		context.waitTicks(8);
+		int at = context.computeOnClient(client -> client.currentScreen instanceof ConsoleMenu menu ? (int) field(menu, ConsoleMenu.class, "top") : -100);
+		context.takeScreenshot("main-menu-ps5-top-bar");
+		boolean options = false;
+		if (top >= 0 && at == 3) {
+			context.getInput().pressKey(GLFW.GLFW_KEY_ENTER);
+			context.waitTicks(10);
+			options = context.computeOnClient(client -> client.currentScreen instanceof OptionsScreen);
+			context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+			context.waitTicks(10);
+		}
+		System.out.println("V1ZIR-PS5-TOP up to the bar on " + top + ", along to " + at + ", settings opened: " + options);
+	}
+
+	/**
 	 * A controller's D-pad on the game's screens: on the inventory it goes from slot to slot, on the creative inventory
 	 * up to the tabs, on the click GUI from button to button; Video Settings has GPU as its first row. Each says where
 	 * it went (V1ZIR-DPAD, V1ZIR-GPU-OPTION); the inventory's steps, the plainest case, must land on the next slot.
@@ -2113,6 +2141,19 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		});
 		System.out.println("V1ZIR-DPAD creative " + creative);
 		singleplayer.getServer().runCommand("gamemode survival @a");
+
+		// The pause menu: left of its buttons, the round Messages button takes the focus.
+		context.setScreen(() -> null);
+		context.waitTicks(3);
+		context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+		context.waitTicks(10);
+		context.getInput().pressKey(GLFW.GLFW_KEY_TAB);
+		context.getInput().pressKey(GLFW.GLFW_KEY_LEFT);
+		context.waitTicks(5);
+		String pause = context.computeOnClient(client -> client.currentScreen == null ? "no pause menu"
+			: client.currentScreen.getClass().getSimpleName() + ", Messages in focus: " + MessagesUi.isPauseKey(client.currentScreen.getFocused()));
+		System.out.println("V1ZIR-DPAD pause " + pause);
+		context.takeScreenshot("pause-messages-focus");
 
 		context.setScreen(() -> null);
 		context.setScreen(ClickGuiScreen::new);

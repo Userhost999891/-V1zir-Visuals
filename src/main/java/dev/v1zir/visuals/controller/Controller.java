@@ -415,7 +415,7 @@ public final class Controller {
 
 	/** Screens whose places the D-pad goes through (Targets, or an inventory's slots) rather than the arrow keys. */
 	private static boolean spatial(Screen screen) {
-		return screen instanceof HandledScreen<?> || screen.getClass().getName().startsWith("dev.v1zir.") && !(screen instanceof KeyNavigation);
+		return screen instanceof HandledScreen<?> || screen.getClass().getName().startsWith("dev.v1zir.") && !(screen instanceof KeyNavigation keys && keys.keysNow());
 	}
 
 	/**

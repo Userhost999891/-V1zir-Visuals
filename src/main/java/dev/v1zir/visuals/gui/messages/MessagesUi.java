@@ -12,10 +12,15 @@ import dev.v1zir.visuals.util.ColorUtil;
 import dev.v1zir.visuals.util.Theme;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenMouseEvents;
+import net.fabricmc.fabric.api.client.screen.v1.Screens;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.GameMenuScreen;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.widget.ButtonWidget;
+import net.minecraft.text.Text;
 import org.lwjgl.glfw.GLFW;
+
+import java.lang.ref.WeakReference;
 
 /**
  * Where Messages shows outside its own screen: the banners drawn over every screen (and clickable there), and a round
@@ -23,12 +28,31 @@ import org.lwjgl.glfw.GLFW;
  */
 public final class MessagesUi {
 	private static final Anim HOVER = new Anim(0f, 20f);
+	/**
+	 * The pause menu's Messages button as the game's keys and a controller's D-pad know it: a button of the screen's own,
+	 * over the round one and never drawn (PressableWidgetMixin), so the focus goes to it (left of the menu's buttons)
+	 * and Enter or Cross opens Messages; the round button lights up while it has the focus.
+	 */
+	private static WeakReference<ButtonWidget> pauseKey = new WeakReference<>(null);
 
 	private MessagesUi() {
 	}
 
+	/** Whether this is the pause menu's hidden Messages button (drawn as the round one, not as a button). */
+	public static boolean isPauseKey(Object widget) {
+		return widget != null && widget == pauseKey.get();
+	}
+
 	public static void register() {
 		ScreenEvents.AFTER_INIT.register((client, screen, width, height) -> {
+			if (screen instanceof GameMenuScreen && Messages.service() != null) {
+				float r = radius(screen);
+				int size = Math.round(r * 2f);
+				ButtonWidget key = ButtonWidget.builder(Text.literal("Messages"), b -> Messages.open(screen, null, null))
+					.dimensions(Math.round(centerX(screen) - r), Math.round(centerY(screen) - r), size, size).build();
+				Screens.getButtons(screen).add(key);
+				pauseKey = new WeakReference<>(key);
+			}
 			ScreenEvents.afterRender(screen).register((s, ctx, mouseX, mouseY, delta) -> {
 				if (s instanceof GameMenuScreen) renderPauseButton(ctx, s, mouseX, mouseY);
 				MessageBanners.render(ctx, s.width, mouseX, mouseY, true);
@@ -72,7 +96,9 @@ public final class MessagesUi {
 		float r0 = radius(screen);
 		float cx = centerX(screen);
 		float cy = centerY(screen);
-		float h = HOVER.target(overPauseButton(screen, mouseX, mouseY) ? 1f : 0f).get();
+		ButtonWidget key = pauseKey.get();
+		boolean focused = key != null && key.isFocused();
+		float h = HOVER.target(overPauseButton(screen, mouseX, mouseY) || focused ? 1f : 0f).get();
 		float r = r0 * (1f + 0.05f * h);
 		float d = r * 2f;
 		Render2D.shadow(ctx, cx - r, cy - r + 1.5f + h, d, d, r, r * 0.8f, ColorUtil.withAlpha(0x000000, Math.round(80 + 25 * h)));
