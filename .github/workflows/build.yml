@@ -191,3 +191,50 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
           java -cp gpu-out .github/gpu/GpuPreferenceCheck.java
           exit $LASTEXITCODE
+
+  sodium:
+    name: Dev client with Sodium
+    runs-on: ubuntu-24.04
+    # The dev client with Sodium in it (its newest release for 1.21.11, from Modrinth): Sodium's Video Settings, which
+    # take the place of the game's, get V1zir Visuals' GPU page; the test opens it ("V1ZIR-SODIUM", a screenshot).
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install Xvfb and Mesa
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q xvfb libgl1-mesa-dri imagemagick
+      - name: Download Sodium
+        run: |
+          curl -sSf -A "v1zir-visuals-ci" -o /tmp/sodium.json \
+            'https://api.modrinth.com/v2/project/sodium/version?loaders=%5B%22fabric%22%5D&game_versions=%5B%221.21.11%22%5D'
+          python3 - <<'PY'
+          import json
+          version = json.load(open('/tmp/sodium.json'))[0]
+          file = next(f for f in version['files'] if f['primary'])
+          print('Sodium', version['version_number'], file['filename'])
+          open('/tmp/sodium-url', 'w').write(file['url'])
+          PY
+          mkdir -p ci-mods
+          curl -sSfL -A "v1zir-visuals-ci" -o ci-mods/sodium.jar "$(cat /tmp/sodium-url)"
+      - name: Run dev client with Sodium
+        timeout-minutes: 20
+        env:
+          LP_NUM_THREADS: 2
+          V1ZIR_SODIUM: '1'
+        run: xvfb-run -a -s "-screen 0 1920x1080x24" ./gradlew runClientGameTest -Pv1zirSodium="$PWD/ci-mods/sodium.jar" --stacktrace
+      - name: Screenshot previews
+        if: always()
+        run: |
+          shopt -s nullglob
+          for f in build/run/clientGameTest/crash-reports/*.txt; do echo "=== $f"; cat "$f"; done
+          for f in build/run/clientGameTest/screenshots/*.png; do
+            convert "$f" -resize 800x450 -quality 72 /tmp/preview.jpg
+            echo "V1ZIR-PREVIEW-BEGIN $(basename "$f")"
+            base64 -w 4000 /tmp/preview.jpg
+            echo "V1ZIR-PREVIEW-END"
+          done

@@ -95,6 +95,7 @@ import net.minecraft.client.gui.screen.multiplayer.MultiplayerScreen;
 import net.minecraft.client.gui.screen.option.OptionsScreen;
 import net.minecraft.client.gui.screen.option.VideoOptionsScreen;
 import net.minecraft.screen.slot.Slot;
+import net.minecraft.util.Identifier;
 import net.minecraft.client.network.ServerInfo;
 import net.minecraft.client.option.GameOptions;
 import net.minecraft.client.option.KeyBinding;
@@ -144,6 +145,11 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 
 	@Override
 	public void runTest(ClientGameTestContext context) {
+		// CI's second client run has Sodium in it, for its Video Settings only.
+		if (System.getenv("V1ZIR_SODIUM") != null) {
+			sodium(context);
+			return;
+		}
 		// Pictures for the PS5 style menu are taken when the test asks, not at whatever moment comes.
 		context.runOnClient(client -> MenuShots.auto = false);
 		resize(context, 1280, 720);
@@ -2067,6 +2073,51 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			ModuleManager.get(ZoomModule.class).setEnabled(zoomWasOn, false);
 			ModuleManager.get(BlockReflectionModule.class).setEnabled(false, false);
 		});
+	}
+
+	/**
+	 * With Sodium (CI's second client run): Sodium's Video Settings, which take the place of the game's, have V1zir
+	 * Visuals' GPU page (SodiumGpuOption), registered without a fault; it is opened on that page (V1ZIR-SODIUM,
+	 * sodium-video-settings-gpu). Sodium's own classes are reached by reflection: the test is built without them.
+	 */
+	private static void sodium(ClientGameTestContext context) {
+		context.waitTicks(20);
+		String found = context.computeOnClient(client -> {
+			try {
+				Object config = Class.forName("net.caffeinemc.mods.sodium.client.config.ConfigManager").getField("CONFIG").get(null);
+				Object option = config.getClass().getMethod("getOption", Identifier.class).invoke(config, Identifier.of("v1zir", "gpu"));
+				Object value = config.getClass().getMethod("readEnumOption", Identifier.class, Class.class)
+					.invoke(config, Identifier.of("v1zir", "gpu"), GpuOption.Gpu.class);
+				return "GPU option registered: " + (option != null) + ", value " + value;
+			} catch (ReflectiveOperationException | RuntimeException e) {
+				return "GPU option not found: " + e;
+			}
+		});
+		System.out.println("V1ZIR-SODIUM " + found);
+		context.setScreen(() -> {
+			MinecraftClient client = MinecraftClient.getInstance();
+			try {
+				Object config = Class.forName("net.caffeinemc.mods.sodium.client.config.ConfigManager").getField("CONFIG").get(null);
+				Object page = null;
+				for (Object mod : (List<?>) config.getClass().getMethod("getModOptions").invoke(config)) {
+					if ("v1zir".equals(mod.getClass().getMethod("configId").invoke(mod))) page = ((List<?>) mod.getClass().getMethod("pages").invoke(mod)).get(0);
+				}
+				Class<?> screen = Class.forName("net.caffeinemc.mods.sodium.client.gui.VideoSettingsScreen");
+				Class<?> pageType = Class.forName("net.caffeinemc.mods.sodium.client.config.structure.OptionPage");
+				return (Screen) screen.getMethod("createScreen", Screen.class, pageType).invoke(null, client.currentScreen, page);
+			} catch (ReflectiveOperationException | RuntimeException e) {
+				System.out.println("V1ZIR-SODIUM could not open its Video Settings: " + e);
+				return client.currentScreen;
+			}
+		});
+		context.waitTicks(20);
+		System.out.println("V1ZIR-SODIUM screen: " + context.computeOnClient(client -> String.valueOf(client.currentScreen)));
+		context.takeScreenshot("sodium-video-settings-gpu");
+		context.runOnClient(client -> {
+			MainMenuModule.suspended = true;
+			client.setScreen(new TitleScreen());
+		});
+		context.waitForScreen(TitleScreen.class);
 	}
 
 	/**

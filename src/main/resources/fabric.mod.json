@@ -14,7 +14,8 @@
 	},
 	"entrypoints": {
 		"client": ["dev.v1zir.visuals.V1zirClient"],
-		"voicechat": [{"adapter": "v1zir_voicechat", "value": "dev.v1zir.visuals.compat.voicechat.VoiceChatBridge"}]
+		"voicechat": [{"adapter": "v1zir_voicechat", "value": "dev.v1zir.visuals.compat.voicechat.VoiceChatBridge"}],
+		"sodium:config_api_user": ["dev.v1zir.visuals.optimize.SodiumGpuOption"]
 	},
 	"mixins": ["v1zir.mixins.json"],
 	"accessWidener": "v1zir.accesswidener",
