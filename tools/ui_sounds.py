@@ -15,6 +15,9 @@ water), a warm tone under them, a breath of air, all in a small airy room.
     popup_enter  a quick bright chime as one of its choices is taken
     notify       a soft pop and two chimes for a message
     boot         a slow swell of an open chord with sparkles climbing over it, when the game has loaded
+    control_on   the pause menu (a control center) opening over the game: air rising into a bright open chord
+    control_off  and closing back to the game: the chord settling down as the air falls
+    trophy       an advancement made: a quick rising arpeggio of bells with a shimmer over it
 
 Needs numpy and ffmpeg (with libvorbis). Run: python3 tools/ui_sounds.py [--wav DIR] (DIR keeps the WAVs too).
 """
@@ -44,6 +47,9 @@ LOUDNESS = {
     'popup_enter': -12.0,
     'notify': -11.0,
     'boot': -12.0,
+    'control_on': -14.0,
+    'control_off': -15.0,
+    'trophy': -11.5,
 }
 PEAK_LIMIT_DB = -1.0
 
@@ -341,9 +347,46 @@ def boot(rng):
     return mix.render(rng, 1.8, 0.42, predelay=0.02, low_pass=9000.0)
 
 
+def control_on(rng):
+    mix = Mix()
+    length = 0.36
+    t = times(length)
+    air = swept_noise(rng, length, lambda s: 600.0 * 4.0 ** min(1.0, s / 0.2), octaves=1.0)
+    mix.add(air * smooth(t / 0.12) * np.exp(-np.clip(t - 0.14, 0.0, None) / 0.07), gain=0.12)
+    for i, (note, pan) in enumerate((('D5', -0.25), ('A5', 0.0), ('E6', 0.25))):
+        mix.add(glass(hz(note), 0.16 + 0.04 * i, partials=CLEAR, drop=0.02), at=0.04 + i * 0.045, pan=pan, gain=0.34 - 0.05 * i)
+    mix.add(warm(hz('D4'), 0.14, attack=0.03), at=0.03, gain=0.18)
+    return mix.render(rng, 0.8, 0.36, predelay=0.014)
+
+
+def control_off(rng):
+    mix = Mix()
+    length = 0.32
+    t = times(length)
+    air = swept_noise(rng, length, lambda s: 2400.0 / 4.0 ** min(1.0, s / 0.18), octaves=1.0)
+    mix.add(air * smooth(t / 0.06) * np.exp(-np.clip(t - 0.08, 0.0, None) / 0.06), gain=0.1)
+    for i, (note, pan) in enumerate((('E6', 0.25), ('A5', 0.0), ('D5', -0.25))):
+        mix.add(glass(hz(note), 0.12 + 0.03 * i, partials=SOFT, drop=0.02), at=i * 0.05, pan=pan, gain=0.26 + 0.04 * i)
+    mix.add(warm(hz('D4'), 0.12, attack=0.01), at=0.1, gain=0.16)
+    return mix.render(rng, 0.65, 0.3, predelay=0.012, dark=1.3, low_pass=8000.0)
+
+
+def trophy(rng):
+    mix = Mix()
+    notes = (('A5', -0.3), ('D6', -0.1), ('F#6', 0.1), ('A6', 0.3))
+    for i, (note, pan) in enumerate(notes):
+        mix.add(glass(hz(note), 0.22 + 0.06 * i, partials=BELL, drop=0.012), at=i * 0.07, pan=pan, gain=0.32)
+    mix.add(glass(hz('D7'), 0.45, partials=BELL, drop=0.01), at=0.3, pan=0.0, gain=0.24)
+    mix.add(warm(hz('D5'), 0.4, attack=0.01), at=0.3, gain=0.16)
+    for i, (note, pan) in enumerate((('F#7', 0.45), ('A7', -0.45), ('D8', 0.3))):
+        mix.add(glass(hz(note), 0.12, partials=(), drop=0.006), at=0.36 + i * 0.06, pan=pan, gain=0.05)
+    return mix.render(rng, 1.1, 0.38, predelay=0.016)
+
+
 SOUNDS = {
     'move': move, 'tab': tab, 'confirm': confirm, 'back': back, 'popup': popup, 'popup_back': popup_back,
     'popup_enter': popup_enter, 'notify': notify, 'boot': boot,
+    'control_on': control_on, 'control_off': control_off, 'trophy': trophy,
 }
 
 

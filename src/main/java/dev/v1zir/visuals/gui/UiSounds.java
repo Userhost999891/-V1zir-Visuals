@@ -5,8 +5,11 @@ import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.client.ThemeModule;
 import dev.v1zir.visuals.util.Theme;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.screen.GameMenuScreen;
+import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.sound.PositionedSoundInstance;
 import net.minecraft.sound.SoundEvent;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * The PS5 style theme's sounds, the client's own (assets/v1zir/sounds/ui), made for it as one family of soft glassy
@@ -26,6 +29,11 @@ public final class UiSounds {
 	public static final String POPUP = "popup";
 	public static final String POPUP_BACK = "popup_back";
 	public static final String POPUP_ENTER = "popup_enter";
+	/** The pause menu (the style's control center) opening over the game, and closing back to it. */
+	public static final String CONTROL_ON = "control_on";
+	public static final String CONTROL_OFF = "control_off";
+	/** An advancement made, as a console's trophy. */
+	public static final String TROPHY = "trophy";
 
 	private UiSounds() {
 	}
@@ -51,9 +59,19 @@ public final class UiSounds {
 		return switch (name) {
 			case MOVE -> 0.4f;
 			case TAB, POPUP_BACK -> 0.5f;
-			case BACK, POPUP -> 0.55f;
+			case BACK, POPUP, CONTROL_ON, CONTROL_OFF -> 0.55f;
+			case TROPHY -> 0.7f;
 			case BOOT -> 0.8f;
 			default -> 0.6f;
 		};
+	}
+
+	/**
+	 * A screen about to change: the pause menu opening over the game plays the control center's opening, and going
+	 * back from it to the game its closing (not the menus opened from it and back).
+	 */
+	public static void screenChanging(@Nullable Screen from, @Nullable Screen to) {
+		if (to instanceof GameMenuScreen && from == null) play(CONTROL_ON);
+		else if (from instanceof GameMenuScreen && to == null) play(CONTROL_OFF);
 	}
 }

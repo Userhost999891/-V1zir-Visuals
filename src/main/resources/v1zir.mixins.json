@@ -61,7 +61,8 @@
     "optimize.ParticleLimitMixin",
     "optimize.SignTextMixin",
     "KeyboardInputMixin",
-    "MouseInvoker"
+    "MouseInvoker",
+    "ToastManagerMixin"
   ],
   "injectors": {
     "defaultRequire": 0

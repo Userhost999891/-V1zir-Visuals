@@ -2,6 +2,7 @@ package dev.v1zir.visuals.mixin;
 
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import com.llamalad7.mixinextras.sugar.Local;
+import dev.v1zir.visuals.gui.UiSounds;
 import dev.v1zir.visuals.gui.menu.MainMenus;
 import dev.v1zir.visuals.module.impl.client.MainMenuModule;
 import dev.v1zir.visuals.module.impl.visuals.EntityGlowModule;
@@ -16,7 +17,9 @@ import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /** Every time vanilla opens the title screen, ours is opened instead; Entity Glow decides what glows. */
 @Mixin(MinecraftClient.class)
@@ -40,6 +43,12 @@ public abstract class MinecraftClientMixin {
 		// this method, after this hook, so that case is replaced here as well.
 		if (screen instanceof TitleScreen || screen == null && world == null) return MainMenus.create();
 		return screen;
+	}
+
+	/** The PS5 style's control center sounds: the pause menu opening over the game and closing back to it. */
+	@Inject(method = "setScreen", at = @At("HEAD"))
+	private void v1zir$controlCenter(Screen screen, CallbackInfo ci) {
+		UiSounds.screenChanging(((MinecraftClient) (Object) this).currentScreen, screen);
 	}
 
 	/** Entities Entity Glow outlines count as glowing, so vanilla draws them into its outline buffer. */

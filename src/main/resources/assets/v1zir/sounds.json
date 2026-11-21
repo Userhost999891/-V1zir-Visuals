@@ -83,5 +83,20 @@
 		"sounds": [
 			"v1zir:ui/popup_enter"
 		]
+	},
+	"ui.control_on": {
+		"sounds": [
+			"v1zir:ui/control_on"
+		]
+	},
+	"ui.control_off": {
+		"sounds": [
+			"v1zir:ui/control_off"
+		]
+	},
+	"ui.trophy": {
+		"sounds": [
+			"v1zir:ui/trophy"
+		]
 	}
 }
