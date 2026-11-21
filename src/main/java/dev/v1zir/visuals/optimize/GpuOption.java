@@ -51,8 +51,9 @@ public final class GpuOption {
 		});
 	}
 
-	/** The row at the top of Video Settings (VideoOptionsScreenMixin, as the screen fills its list). */
+	/** The row at the top of Video Settings, under a header of its own as the game's sections have (VideoOptionsScreenMixin). */
 	public static void list(Screen screen, OptionListWidget body) {
+		body.addHeader(Text.literal("Graphics Card"));
 		body.addWidgetEntry(button(MinecraftClient.getInstance(), 310), null);
 		listed = new WeakReference<>(screen);
 	}

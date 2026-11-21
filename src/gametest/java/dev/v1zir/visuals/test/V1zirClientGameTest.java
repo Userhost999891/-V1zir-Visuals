@@ -89,6 +89,7 @@ import net.minecraft.client.gui.screen.AccessibilityOnboardingScreen;
 import net.minecraft.client.gui.screen.TitleScreen;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.screen.ingame.CreativeInventoryScreen;
+import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.client.gui.screen.multiplayer.MultiplayerScreen;
 import net.minecraft.client.gui.screen.option.OptionsScreen;
@@ -2126,7 +2127,8 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.getInput().pressKey(GLFW.GLFW_KEY_E);
 		context.waitTicks(10);
 		String creative = context.computeOnClient(client -> {
-			if (!(client.currentScreen instanceof CreativeInventoryScreen screen)) return "no creative inventory: " + client.currentScreen;
+			if (!(client.currentScreen instanceof CreativeInventoryScreen)) return "no creative inventory: " + client.currentScreen;
+			HandledScreen<?> screen = (HandledScreen<?>) client.currentScreen;
 			HandledScreenAccessor panel = (HandledScreenAccessor) screen;
 			// From the top left slot up: one of the tabs over the panel.
 			Slot top = null;

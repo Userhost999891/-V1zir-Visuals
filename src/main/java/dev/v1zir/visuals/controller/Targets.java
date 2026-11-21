@@ -117,7 +117,7 @@ public final class Targets {
 		if (buildingScreen == null || buildingCount == MAX) return;
 		if (sw < 2f || sh < 2f || sw * sh > MAX_SHARE * screenW * screenH) return;
 		if (cx < 0f || cy < 0f || cx > screenW || cy > screenH) return;
-		if (context != null && !context.scissorContains(sx + sw / 2f, sy + sh / 2f)) return;
+		if (context != null && !context.scissorContains((int) (sx + sw / 2f), (int) (sy + sh / 2f))) return;
 		for (int i = buildingCount - 1; i >= Math.max(0, buildingCount - 8); i--) {
 			int o = i * 6;
 			if (building[o] == sx && building[o + 1] == sy && building[o + 2] == sw && building[o + 3] == sh) return;
