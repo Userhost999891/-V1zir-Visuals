@@ -16,6 +16,7 @@ import dev.v1zir.visuals.pack.PackMixer;
 import dev.v1zir.visuals.module.impl.client.ClickGuiModule;
 import dev.v1zir.visuals.module.impl.client.MainMenuModule;
 import dev.v1zir.visuals.module.impl.hud.VoiceChatMusicModule;
+import dev.v1zir.visuals.optimize.GpuCheck;
 import dev.v1zir.visuals.optimize.HitchMonitor;
 import dev.v1zir.visuals.optimize.Optimizations;
 import dev.v1zir.visuals.render.Reflections;
@@ -62,6 +63,8 @@ public final class V1zirClient implements ClientModInitializer {
 		});
 		// Once the game has started (its options are loaded): Unlock frame rate, a single time.
 		ClientLifecycleEvents.CLIENT_STARTED.register(Optimizations::unlockFrameRate);
+		// Laptops: a dedicated graphics card the game does not use is worth saying at once.
+		ClientLifecycleEvents.CLIENT_STARTED.register(GpuCheck::check);
 		ClientLifecycleEvents.CLIENT_STOPPING.register(client -> {
 			ConfigManager.save();
 			// Contacts see this account go offline now, not when the relay notices the dropped connection.

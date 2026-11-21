@@ -16,22 +16,33 @@ import java.util.List;
 public final class ModeComponent extends SettingComponent<ModeSetting> {
 	private static final float CHIP_HEIGHT = 11f;
 	private static final float GAP = 3f;
-	private final Label[] widths;
-	private final Anim[] chipHover;
+	private Label[] widths = new Label[0];
+	private Anim[] chipHover = new Anim[0];
 	/** Chip layout of the last frame: x, y and width per mode. */
-	private final float[] chips;
+	private float[] chips = new float[0];
+	/** How many chips the last frame laid out (the modes can change between frames). */
+	private int laid;
 	private float height = estimateHeight();
 
 	public ModeComponent(ModeSetting setting) {
 		super(setting);
-		int n = setting.modes().size();
-		widths = new Label[n];
-		chipHover = new Anim[n];
-		for (int i = 0; i < n; i++) {
+		fit(setting.modes().size());
+	}
+
+	/**
+	 * Room for n chips. Some settings' modes follow a folder (Voice Chat Music's files, Hit Sound's sounds) and grow
+	 * or shrink while the menu is open.
+	 */
+	private void fit(int n) {
+		if (widths.length >= n) return;
+		int had = widths.length;
+		widths = java.util.Arrays.copyOf(widths, n);
+		chipHover = java.util.Arrays.copyOf(chipHover, n);
+		chips = java.util.Arrays.copyOf(chips, n * 3);
+		for (int i = had; i < n; i++) {
 			widths[i] = new Label();
 			chipHover[i] = new Anim(0f, 20f);
 		}
-		chips = new float[n * 3];
 	}
 
 	@Override
@@ -46,6 +57,7 @@ public final class ModeComponent extends SettingComponent<ModeSetting> {
 		Render2D.text(ctx, Fonts.regular(), setting.name(), x, y + 1.5f, Ui.LABEL, labelColor(h));
 		int accent = Theme.accent();
 		List<String> modes = setting.modes();
+		fit(modes.size());
 		float cx = x;
 		float cy = y + 12f;
 		for (int i = 0; i < modes.size(); i++) {
@@ -72,6 +84,7 @@ public final class ModeComponent extends SettingComponent<ModeSetting> {
 			chips[i * 3 + 2] = w;
 			cx += w + GAP;
 		}
+		laid = modes.size();
 		height = cy + CHIP_HEIGHT + GAP - y;
 		return height;
 	}
@@ -80,7 +93,8 @@ public final class ModeComponent extends SettingComponent<ModeSetting> {
 	public boolean mouseClicked(double mouseX, double mouseY, int button) {
 		if (button != GLFW.GLFW_MOUSE_BUTTON_LEFT) return false;
 		List<String> modes = setting.modes();
-		for (int i = 0; i < modes.size(); i++) {
+		// Only the chips that were drawn can be clicked (the modes may have changed since).
+		for (int i = 0; i < Math.min(laid, modes.size()); i++) {
 			if (Ui.inside(mouseX, mouseY, chips[i * 3], chips[i * 3 + 1], chips[i * 3 + 2], CHIP_HEIGHT)) {
 				setting.set(modes.get(i));
 				return true;
