@@ -26,6 +26,13 @@ public final class Backdrop {
 	private static final int STARS = 90;
 	private static final long EPOCH = System.nanoTime();
 	private static final Identifier BEAM = V1zir.id("backdrop/beam");
+	/** The boot stage's wide soft spotlight, made at a fraction of the size it shows at. */
+	private static final Identifier SOFT_BEAM = V1zir.id("backdrop/stage_light");
+	private static int softW;
+	private static int softH;
+	private static int softMadeW;
+	private static int softMadeH;
+	private static boolean softBroken;
 	/** The cone of light, made at half the size it shows at for the screen it was made for. */
 	private static int beamW;
 	private static int beamH;
@@ -106,23 +113,34 @@ public final class Backdrop {
 	 */
 	public static void stage(DrawContext ctx, int w, int h, float scale, float alpha) {
 		if (alpha <= 0.004f) return;
-		ctx.fillGradient(0, 0, w, h, ColorUtil.fade(0xFF101216, alpha), ColorUtil.fade(0xFF15171C, alpha));
+		ctx.fillGradient(0, 0, w, h, ColorUtil.fade(0xFF111318, alpha), ColorUtil.fade(0xFF14161B, alpha));
+		// Cooler, bluer away from the light.
+		Render2D.gradientH(ctx, 0f, 0f, w, h, 0f, 0x000D1220, ColorUtil.fade(0xFF0D1220, 0.45f * alpha));
 		float t = time();
-		float ox = w * 0.13f, oy = -h * 0.08f;
-		float angle = (float) Math.toRadians(55) + 0.012f * (float) Math.sin(t * 0.27f);
+		// The room lit warm around the light, at the left.
+		softDisc(ctx, w * 0.2f, h * 0.35f, h * 0.25f, h * 0.6f, ColorUtil.fade(0xFF3A3530, 0.35f * alpha));
+		float ox = w * 0.14f, oy = -h * 0.06f;
+		float angle = (float) Math.toRadians(70) + 0.01f * (float) Math.sin(t * 0.27f);
 		float length = (float) Math.hypot(w, h) * 0.95f;
-		float width = Math.max(w * 0.24f, h * 0.62f);
-		if (ensureBeam(w, h)) {
-			float breathe = 0.94f + 0.06f * (float) Math.sin(t * 0.5f);
-			beam(ctx, ox, oy, angle, length * 1.1f, width * 2.1f, ColorUtil.fade(0xFFD8D2C8, 0.1f * alpha));
-			beam(ctx, ox, oy, angle, length * 0.92f, width, ColorUtil.fade(0xFFEAE4DA, 0.34f * alpha * breathe));
-			beam(ctx, ox, oy, angle, length * 0.36f, width * 0.36f, ColorUtil.fade(0xFFFFFFFF, 0.32f * alpha * breathe));
+		float width = Math.max(w * 0.45f, h * 1.0f);
+		if (ensureSoftBeam(w, h)) {
+			// A broad soft cone of light falling from above, as a spotlight's in a hazy room.
+			float breathe = 0.95f + 0.05f * (float) Math.sin(t * 0.5f);
+			softBeam(ctx, ox, oy, angle, length, width, ColorUtil.fade(0xFFD9CFC2, 0.2f * alpha * breathe));
+			softBeam(ctx, ox, oy, angle, length * 0.5f, width * 0.45f, ColorUtil.fade(0xFFE8DED0, 0.14f * alpha * breathe));
 		}
-		// The haze on the floor: light lying low across the room, brightest at the left, under the spotlight.
-		Render2D.gradientV(ctx, 0f, h * 0.64f, w, h * 0.24f, 0f, 0x0030363E, ColorUtil.fade(0xFF30363E, 0.5f * alpha));
-		Render2D.gradientV(ctx, 0f, h * 0.88f, w, h * 0.12f + 1f, 0f, ColorUtil.fade(0xFF30363E, 0.5f * alpha), ColorUtil.fade(0xFF1A1D22, 0.7f * alpha));
-		Render2D.shadow(ctx, -w * 0.08f, h * 0.83f, w * 0.62f, h * 0.08f, h * 0.04f, h * 0.12f, ColorUtil.fade(0xFF8E959D, 0.2f * alpha));
+		// Where it comes in, a glow.
+		softDisc(ctx, ox, -h * 0.02f, h * 0.08f, h * 0.2f, ColorUtil.fade(0xFFF0E6D8, 0.3f * alpha));
+		// The haze on the floor: light lying low, brightest at the left under the spotlight.
+		Render2D.round(ctx, 0f, h * 0.68f, w, h * 0.32f + 1f, 0f, 0x003C4248, 0x003C4248, ColorUtil.fade(0xFF3C4248, 0.07f * alpha),
+			ColorUtil.fade(0xFF3C4248, 0.45f * alpha));
+		Render2D.shadow(ctx, w * 0.02f, h * 0.83f, w * 0.4f, h * 0.06f, h * 0.03f, h * 0.08f, ColorUtil.fade(0xFF8E959D, 0.16f * alpha));
 		dust(ctx, w, h, scale, t, ox, oy, angle, length, width, alpha);
+	}
+
+	/** A soft round light: a disc of radius core blurred over blur more. */
+	private static void softDisc(DrawContext ctx, float cx, float cy, float core, float blur, int color) {
+		Render2D.shadow(ctx, cx - core, cy - core, core * 2f, core * 2f, core, blur, color);
 	}
 
 	/** Specks of dust floating slowly up through the stage, a few large and soft as if out of focus, lit in the beam. */
@@ -200,6 +218,57 @@ public final class Backdrop {
 			int px = Math.round(x), py = Math.round(y);
 			ctx.fill(px, py, px + size, py + size, ColorUtil.fade(star, a));
 		}
+	}
+
+	private static void softBeam(DrawContext ctx, float x, float y, float angle, float length, float width, int color) {
+		Matrix3x2fStack m = ctx.getMatrices();
+		m.pushMatrix();
+		m.translate(x, y);
+		m.rotate(angle);
+		ctx.drawTexture(RenderPipelines.MOJANG_LOGO, SOFT_BEAM, 0, Math.round(-width / 2f), 0f, 0f, Math.round(length), Math.round(width),
+			softW, softH, softW, softH, color);
+		m.popMatrix();
+	}
+
+	/** Makes the stage's soft cone of light for a w x h screen, once per size; false when it cannot be made. */
+	private static boolean ensureSoftBeam(int w, int h) {
+		if (softBroken) return false;
+		if (w == softMadeW && h == softMadeH) return true;
+		int length = Math.max(64, Math.round((float) Math.hypot(w, h) / 2.5f));
+		int width = Math.max(32, Math.round(Math.max(w, h) / 2.5f));
+		try {
+			NativeImage image = softCone(length, width);
+			TextureManager textures = MinecraftClient.getInstance().getTextureManager();
+			if (softMadeW != 0) textures.destroyTexture(SOFT_BEAM);
+			softMadeW = 0;
+			textures.registerTexture(SOFT_BEAM, new NativeImageBackedTexture(() -> "V1zir stage light", image));
+			softW = length;
+			softH = width;
+			softMadeW = w;
+			softMadeH = h;
+			return true;
+		} catch (RuntimeException e) {
+			V1zir.LOGGER.warn("Could not make the stage's light", e);
+			softBroken = true;
+			return false;
+		}
+	}
+
+	/** A wide soft cone of light, white: broad where it comes in (left), wider still and gone at its far end (right). */
+	private static NativeImage softCone(int length, int width) {
+		NativeImage out = new NativeImage(NativeImage.Format.RGBA, length, width, false);
+		float half = width / 2f;
+		for (int x = 0; x < length; x++) {
+			float u = (x + 0.5f) / length;
+			float spread = 0.32f + 0.68f * u;
+			float along = (float) Math.pow(1f - u, 1.6f) * smooth(u / 0.03f);
+			for (int y = 0; y < width; y++) {
+				float v = (y + 0.5f - half) / half / spread;
+				float a = along * (float) Math.exp(-v * v * 2.2f);
+				out.setColorArgb(x, y, Math.round(255f * Anim.clamp01(a)) << 24 | 0xFFFFFF);
+			}
+		}
+		return out;
 	}
 
 	private static void beam(DrawContext ctx, float x, float y, float angle, float length, float width, int color) {
