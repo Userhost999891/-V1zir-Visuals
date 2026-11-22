@@ -8,7 +8,9 @@ public final class MainMenus {
 	private MainMenus() {
 	}
 
+	/** The PS5 style's menu starts with the console's start once per start of the game (BootScreen), then the home. */
 	public static Screen create() {
-		return Theme.ps5() ? new ConsoleMenu() : new V1zirMainMenu();
+		if (!Theme.ps5()) return new V1zirMainMenu();
+		return BootScreen.due() ? new BootScreen() : new ConsoleMenu();
 	}
 }

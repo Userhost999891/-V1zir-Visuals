@@ -71,6 +71,13 @@ final class AccountsPanel {
 		typing = false;
 	}
 
+	/** Opens it with its name field ready for a new account (Add picked at the start). */
+	void startAdding() {
+		shown = true;
+		typing = true;
+		draft = "";
+	}
+
 	/** Draws it dropping in under (px, py) on a screen that tall; nothing once it has closed. */
 	void render(DrawContext ctx, MinecraftClient client, float px, float py, float screenH, int mouseX, int mouseY) {
 		float a = open.target(shown ? 1f : 0f).get();

@@ -107,6 +107,10 @@ public final class ConsoleMenu extends Screen implements KeyNavigation {
 	private static final int MESSAGE_DOT = 0xFF4C8DFF;
 	/** The tab shown last, kept for when the menu comes back. */
 	private static int lastTab;
+	/** The next menu opens from the start (BootScreen): over its stage, the row spreading from the middle. */
+	static boolean fromBoot;
+	/** ...and with the account panel open to add one (Add was picked there). */
+	static boolean addAccount;
 	/** Finding a server's address can take a while: the pings start off the render thread, as the server list's do. */
 	private static final ExecutorService PINGS = Executors.newFixedThreadPool(2, task -> {
 		Thread thread = new Thread(task, "V1zir menu pings");
@@ -128,8 +132,6 @@ public final class ConsoleMenu extends Screen implements KeyNavigation {
 	private int focus = ROW;
 	/** On the top bar: 0 and 1 the tabs, then the round icons from the left, then the account. */
 	private int top;
-	private final Anim pillX = new Anim(0f, 14f);
-	private final Anim pillW = new Anim(0f, 14f);
 	private final Anim cursor = new Anim(0f, 12f);
 	private final Anim scroll = new Anim(0f, 10f);
 	private final Anim hero = new Anim(1f, 6f);
@@ -154,7 +156,11 @@ public final class ConsoleMenu extends Screen implements KeyNavigation {
 	private final List<Item> art = new ArrayList<>();
 	private int swapDirection = 1;
 	private long openedAt = -1L;
-	private boolean pillPlaced;
+	/** Opened from the start (BootScreen): its stage fades out under the row spreading from the middle. */
+	private boolean bootIntro;
+	/** When the picked tile's shine starts (System.nanoTime); tests can stand it at one point of its way (0 to 1). */
+	private long shineAt;
+	public static float shineTest = Float.NaN;
 	/** Bounds as last drawn, for the mouse. */
 	private final float[] tabX = new float[2];
 	private final float[] tabW = new float[2];
@@ -198,13 +204,22 @@ public final class ConsoleMenu extends Screen implements KeyNavigation {
 		for (int i = 0; i < 2; i++) selected[i] = Math.min(selected[i], tabs.get(i).size() - 1);
 		cursor.snap(selected[tab]);
 		scroll.snap(scrollTarget());
-		if (openedAt < 0L) openedAt = System.nanoTime();
+		if (openedAt < 0L) {
+			openedAt = System.nanoTime();
+			bootIntro = fromBoot;
+			fromBoot = false;
+			// The picked tile shines once the row has come in.
+			shineAt = openedAt + (bootIntro ? 1_350_000_000L : 650_000_000L);
+			if (addAccount) {
+				addAccount = false;
+				accounts.startAdding();
+			}
+		}
 		icons.clear();
 		icons.add(new TopIcon(Icons.POWER, () -> client.scheduleStop()));
 		icons.add(new TopIcon(Icons.SETTINGS, () -> client.setScreen(new OptionsScreen(this, client.options))));
 		if (FabricLoader.getInstance().isModLoaded("modmenu")) icons.add(new TopIcon(Icons.PUZZLE, this::openModMenu));
 		icons.add(new TopIcon(Icons.MESSAGE_CIRCLE, () -> Messages.open(this, null, null)));
-		pillPlaced = false;
 		showArt();
 	}
 
@@ -339,6 +354,7 @@ public final class ConsoleMenu extends Screen implements KeyNavigation {
 			selected[tab] = next;
 			hero.snap(0f);
 			focus = ROW;
+			shineAt = System.nanoTime() + 120_000_000L;
 			UiSounds.play(UiSounds.MOVE);
 			showArt();
 		}
@@ -353,6 +369,7 @@ public final class ConsoleMenu extends Screen implements KeyNavigation {
 		tab = next;
 		lastTab = next;
 		focus = ROW;
+		shineAt = System.nanoTime() + 450_000_000L;
 		cursor.snap(selected[tab]);
 		scroll.snap(scrollTarget());
 		hero.snap(0f);
@@ -526,14 +543,28 @@ public final class ConsoleMenu extends Screen implements KeyNavigation {
 		Item item = picked();
 		if (item == null) return;
 		if (tab == 1) ping();
-		float t = openedAt < 0L ? 1f : (System.nanoTime() - openedAt) / 1.0e9f;
+		float now = openedAt < 0L ? 1f : (System.nanoTime() - openedAt) / 1.0e9f;
+		// From the start the row first spreads from the middle over its stage; the rest comes after it.
+		float t = bootIntro ? now - 0.55f : now;
 		boolean blocked = popup.shown() || accounts.shown();
 		int mx = blocked ? -1000 : mouseX, my = blocked ? -1000 : mouseY;
 		float pictured = renderArt(ctx);
-		float pad = Math.max(14f, width * 0.033f);
+		if (bootIntro) {
+			float stage = 1f - smoothstep((now - 0.6f) / 0.8f);
+			if (stage > 0.004f) {
+				m.pushMatrix();
+				m.scale(1f / scale, 1f / scale);
+				Backdrop.stage(ctx, client.getWindow().getFramebufferWidth(), client.getWindow().getFramebufferHeight(), scale, stage);
+				m.popMatrix();
+			} else {
+				bootIntro = now < 3f;
+			}
+		}
+		float pad = Math.max(14f, width * 0.048f);
 		renderTop(ctx, mx, my, t, pad);
-		float rowTop = tabY + tabH + Math.max(8f, height * 0.075f);
-		renderRow(ctx, mx, my, t, pad, rowTop, pictured);
+		float rowTop = height * 0.114f;
+		renderRow(ctx, mx, my, bootIntro ? now : t, rowLeft(), rowTop, pictured);
+		pad = rowLeft();
 		// What was picked fades out first (it takes no clicks), then the new pick's words come in.
 		float out = leaving != null ? leave.target(0f).get() : 0f;
 		if (out <= 0.01f) leaving = null;
@@ -597,33 +628,24 @@ public final class ConsoleMenu extends Screen implements KeyNavigation {
 	private void renderTop(DrawContext ctx, int mouseX, int mouseY, float t, float pad) {
 		float appear = in(t, 0.05f, 0.45f);
 		SdfFont font = Fonts.medium();
-		float size = Math.max(7f, Math.min(12f, height * 0.031f));
-		tabH = Math.max(13f, Math.min(26f, height * 0.066f));
-		float centerY = Math.max(14f, height * 0.12f);
+		SdfFont bold = Fonts.semibold();
+		float size = Math.max(7f, Math.min(14f, height * 0.031f));
+		tabH = Math.max(12f, Math.min(24f, height * 0.06f));
+		float centerY = Math.max(11f, height * 0.058f);
 		tabY = centerY - tabH / 2f;
-		float inner = tabH * 0.55f;
+		float inner = tabH * 0.3f;
 		String[] names = {label("menu.singleplayer"), label("menu.multiplayer")};
 		float x = pad - inner;
 		for (int i = 0; i < 2; i++) {
-			tabW[i] = font.width(names[i], size) + inner * 2f;
+			tabW[i] = (i == tab ? bold : font).width(names[i], size) + inner * 2f;
 			tabX[i] = x;
-			x += tabW[i] + 4f;
+			x += tabW[i] + size * 1.1f;
 		}
-		if (!pillPlaced) {
-			pillPlaced = true;
-			pillX.snap(tabX[tab]);
-			pillW.snap(tabW[tab]);
-		}
-		float px = pillX.target(tabX[tab]).get(), pw = pillW.target(tabW[tab]).get();
-		Render2D.shadow(ctx, px, tabY + 1f, pw, tabH, tabH / 2f, 6f, ColorUtil.withAlpha(0x000000, Math.round(80 * appear)));
-		Render2D.round(ctx, px, tabY, pw, tabH, tabH / 2f, ColorUtil.fade(0xFFFFFFFF, appear));
 		for (int i = 0; i < 2; i++) {
-			// Over the pill the words are dark, beside it white.
-			float overlap = Math.max(0f, Math.min(px + pw, tabX[i] + tabW[i]) - Math.max(px, tabX[i])) / tabW[i];
+			// As the console's: only words, the open tab white and bold, the other grey (lighter under the pointer).
 			boolean over = Ui.inside(mouseX, mouseY, tabX[i], tabY, tabW[i], tabH);
-			int beside = over ? TEXT : 0xD9FFFFFF;
-			int color = ColorUtil.lerp(beside, INK, Anim.clamp01(overlap));
-			Render2D.textMiddle(ctx, font, names[i], tabX[i] + inner, centerY, size, ColorUtil.fade(color, appear));
+			int color = i == tab ? TEXT : over ? 0xD9FFFFFF : 0x80FFFFFF;
+			Render2D.textMiddle(ctx, i == tab ? bold : font, names[i], tabX[i] + inner, centerY, size, ColorUtil.fade(color, appear));
 			if (focus == TOP && top == i) {
 				// In focus from the keys: a ring of its own a little outside it, as on the Play button.
 				float o = tabH * 0.14f;
@@ -636,7 +658,7 @@ public final class ConsoleMenu extends Screen implements KeyNavigation {
 		float right = width - pad;
 		float clockW = font.width(time, size);
 		Render2D.textMiddle(ctx, font, time, right - clockW, centerY, size, Render2D.TextStyle.of(ColorUtil.fade(TEXT, appear)).shadow(0x66000000));
-		avatarS = Math.max(12f, Math.min(22f, height * 0.055f));
+		avatarS = Math.max(11f, Math.min(22f, height * 0.042f));
 		avatarX = right - clockW - size * 1.4f - avatarS;
 		avatarY = centerY - avatarS / 2f;
 		Accounts.Account account = Accounts.current();
@@ -669,22 +691,27 @@ public final class ConsoleMenu extends Screen implements KeyNavigation {
 		}
 	}
 
+	/** The row as the console's: small tiles a tenth of the screen's height, the picked one half as large again. */
 	private float small() {
-		return Math.max(24f, Math.min(72f, height * 0.13f));
+		return Math.max(20f, Math.min(96f, height * 0.1f));
 	}
 
 	private float big() {
-		return small() * 1.69f;
+		return small() * 1.556f;
 	}
 
 	private float gap() {
-		return Math.max(3f, height * 0.015f);
+		return Math.max(2f, height * 0.009f);
 	}
 
-	/** How far the row scrolls: the picked tile near the left edge, one small tile before it still in view. */
+	/** Where the picked tile sits (and the words under the row start): a little in from the left edge. */
+	private float rowLeft() {
+		return width * 0.089f;
+	}
+
+	/** How far the row scrolls: the picked tile at rowLeft, those before it going off the left edge. */
 	private float scrollTarget() {
-		int picked = selected[tab];
-		return picked == 0 ? 0f : picked * (small() + gap()) - small() * 0.95f;
+		return selected[tab] * (small() + gap());
 	}
 
 	/** The row of tiles, and the picked one's name under the small tiles beside it. */
@@ -698,20 +725,30 @@ public final class ConsoleMenu extends Screen implements KeyNavigation {
 		float swap = Anim.easeOutCubic(tabSwap.target(1f).get());
 		float swapDx = (1f - swap) * 26f * swapDirection;
 		// The picked tile grows into place after the row has come in.
-		float grow = in(t, 0.3f, 0.45f);
+		float grow = bootIntro ? in(t, 0.75f, 0.35f) : in(t, 0.3f, 0.45f);
 		tileBounds.clear();
 		float x = pad - offset + swapDx;
 		float labelX = 0f;
 		for (int i = 0; i < items.size(); i++) {
 			float focus = Math.max(0f, 1f - Math.abs(i - at)) * grow;
 			float size = s + (b - s) * focus;
-			// The smaller tiles hang from near the top of the picked one.
-			float ty = top + (1f - focus) * b * 0.05f;
+			// The smaller tiles hang from the top of the picked one, as the console's.
+			float ty = top + (1f - focus) * b * 0.015f;
 			float e = in(t, 0.1f + i * 0.04f, 0.5f) * swap;
 			float dx = (1f - in(t, 0.1f + i * 0.04f, 0.5f)) * 34f;
+			float shown = size;
+			if (bootIntro) {
+				// From the start: gathered small in the middle of the row, then spreading out to their places.
+				float spread = in(t, 0.25f + Math.abs(i - selected[tab]) * 0.03f, 0.6f);
+				float home = width / 2f + (i - selected[tab]) * s * 0.42f - s * 0.35f;
+				dx = (home - x) * (1f - spread);
+				shown = size * (0.7f + 0.3f * spread);
+				e = smoothstep(spread / 0.35f) * swap;
+			}
 			boolean hovered = Ui.inside(mouseX, mouseY, x, ty, size, size);
-			if (e > 0.01f && x + dx < width && x + size + dx > -size) {
-				tile(ctx, items.get(i), x + dx, ty, size, focus, e, hovered, pictured);
+			if (e > 0.01f && x + dx < width && x + shown + dx > -shown) {
+				tile(ctx, items.get(i), x + dx, ty, shown, focus, e, hovered, pictured);
+				if (i == selected[tab] && focus > 0.98f) shine(ctx, x + dx, ty, shown, e);
 			}
 			tileBounds.add(new float[]{x, ty, size, size});
 			// The name follows the picked tile as it grows into place.
@@ -719,8 +756,8 @@ public final class ConsoleMenu extends Screen implements KeyNavigation {
 			x += size + gap;
 		}
 		Item picked = items.get(selected[tab]);
-		float labelY = top + b * 0.05f + s + (b - s - b * 0.05f) / 2f + b * 0.04f;
-		float appear = in(t, 0.5f, 0.35f) * Anim.easeOutCubic(hero.target(1f).get()) * swap;
+		float labelY = top + b * 0.015f + s + (b - s - b * 0.015f) / 2f;
+		float appear = (bootIntro ? in(t, 1.05f, 0.35f) : in(t, 0.5f, 0.35f)) * Anim.easeOutCubic(hero.target(1f).get()) * swap;
 		name(ctx, picked, labelX + s * 0.08f + (1f - appear) * 6f, labelY, appear, pictured);
 	}
 
@@ -729,8 +766,8 @@ public final class ConsoleMenu extends Screen implements KeyNavigation {
 		if (alpha <= 0.01f) return;
 		SdfFont bold = Fonts.bold();
 		SdfFont font = Fonts.medium();
-		float tagSize = Math.max(5f, Math.min(9f, height * 0.021f));
-		float nameSize = Math.max(8f, Math.min(16f, height * 0.04f));
+		float tagSize = Math.max(4.5f, Math.min(9f, height * 0.018f));
+		float nameSize = Math.max(7f, Math.min(15f, height * 0.031f));
 		float tagH = tagSize * 1.85f;
 		String tag = switch (item.kind) {
 			case HOME -> "V1ZIR";
@@ -822,56 +859,63 @@ public final class ConsoleMenu extends Screen implements KeyNavigation {
 		SdfFont font = Fonts.medium();
 		int shadow = ColorUtil.withAlpha(0x000000, Math.round(130 * Math.max(pictured, 0.4f)));
 		float x = pad;
-		float titleSize = Math.max(12f, Math.min(30f, height * 0.055f));
-		float e = stagger(base, 0f);
-		Render2D.textMiddle(ctx, bold, fit(bold, item.title, titleSize, width * 0.6f), x, height * 0.57f + (1f - e) * 8f, titleSize,
-			Render2D.TextStyle.of(ColorUtil.fade(TEXT, e)).shadow(ColorUtil.fade(shadow, e)));
-		e = stagger(base, 0.12f);
-		float subSize = Math.max(6.5f, Math.min(14f, height * 0.028f));
-		Render2D.textMiddle(ctx, font, item.subtitle, x, height * 0.635f + (1f - e) * 8f, subSize,
-			Render2D.TextStyle.of(ColorUtil.fade(DIM, e)).shadow(ColorUtil.fade(shadow, e)));
+		// As the console's: a small tag over the name, the name large, a line under it, and the buttons low down.
 		String chip = chip(item);
+		float e = stagger(base, 0f);
 		if (!chip.isEmpty()) {
-			e = stagger(base, 0.22f);
-			float chipH = Math.max(12f, Math.min(28f, height * 0.066f));
-			float chipSize = Math.max(6f, Math.min(12f, height * 0.025f));
-			float cw = font.width(chip, chipSize) + chipH * 1.35f;
-			float cy = height * 0.68f + (1f - e) * 8f;
-			Render2D.round(ctx, x, cy, cw, chipH, chipH * 0.3f, ColorUtil.fade(CHIP, e));
+			float chipSize = Math.max(4.5f, Math.min(10f, height * 0.019f));
+			float chipH = chipSize * 2.1f;
 			int dot = chipDot(item);
-			if (dot == 0) dot = ColorUtil.withAlpha(0xFFFFFF, Math.round(90 + 80 * (0.5f + 0.5f * (float) Math.sin(t * 6f))));
-			Render2D.circle(ctx, x + chipH * 0.45f, cy + chipH / 2f, chipH * 0.12f, ColorUtil.fade(dot, e));
-			Render2D.textMiddle(ctx, font, chip, x + chipH * 0.75f, cy + chipH / 2f, chipSize, ColorUtil.fade(0xE6FFFFFF, e));
+			boolean dotted = item.kind == SERVER;
+			float cw = font.width(chip, chipSize) + chipH * (dotted ? 1.25f : 0.8f);
+			float cy = height * 0.503f - chipH / 2f + (1f - e) * 8f;
+			Render2D.round(ctx, x, cy, cw, chipH, chipH * 0.22f, ColorUtil.fade(0x66000000, e));
+			Render2D.outline(ctx, x, cy, cw, chipH, chipH * 0.22f, 0.8f, ColorUtil.fade(0x40FFFFFF, e));
+			float tx = x + chipH * 0.4f;
+			if (dotted) {
+				if (dot == 0) dot = ColorUtil.withAlpha(0xFFFFFF, Math.round(90 + 80 * (0.5f + 0.5f * (float) Math.sin(t * 6f))));
+				Render2D.circle(ctx, tx + chipSize * 0.3f, cy + chipH / 2f, chipSize * 0.3f, ColorUtil.fade(dot, e));
+				tx += chipSize * 0.95f;
+			}
+			Render2D.textMiddle(ctx, font, chip, tx, cy + chipH / 2f, chipSize, ColorUtil.fade(0xF2FFFFFF, e));
 		}
-		// The buttons.
-		e = stagger(base, 0.3f);
-		playH = Math.max(16f, Math.min(44f, height * 0.093f));
+		float titleSize = Math.max(12f, Math.min(34f, height * 0.05f));
+		e = stagger(base, 0.08f);
+		Render2D.textMiddle(ctx, font, fit(font, item.title, titleSize, width * 0.6f), x, height * 0.578f + (1f - e) * 8f, titleSize,
+			Render2D.TextStyle.of(ColorUtil.fade(TEXT, e)).shadow(ColorUtil.fade(shadow, e)));
+		e = stagger(base, 0.16f);
+		float subSize = Math.max(6.5f, Math.min(14f, height * 0.026f));
+		Render2D.textMiddle(ctx, font, item.subtitle, x, height * 0.633f + (1f - e) * 8f, subSize,
+			Render2D.TextStyle.of(ColorUtil.fade(DIM, e)).shadow(ColorUtil.fade(shadow, e)));
+		// The buttons: Play, then "..." in a circle, glass grey until in focus, then white with dark words.
+		e = stagger(base, 0.26f);
+		playH = Math.max(15f, Math.min(40f, height * 0.07f));
 		SdfFont semibold = Fonts.semibold();
-		float playSize = Math.max(7f, Math.min(15f, height * 0.034f));
-		playW = Math.max(width * 0.2f, semibold.width(item.action, playSize) + playH * 2.2f);
+		float playSize = Math.max(6.5f, Math.min(14f, height * 0.026f));
+		playW = Math.max(width * 0.172f, semibold.width(item.action, playSize) + playH * 2f);
 		playX = x;
-		playY = Math.min(height * 0.85f, height - height * 0.05f - playH) + (1f - e) * 8f;
+		playY = height * 0.817f - playH / 2f + (1f - e) * 8f;
 		boolean overPlay = Ui.inside(mouseX, mouseY, playX, playY, playW, playH);
 		float hv = live ? buttonHover[0].target(overPlay || focus == 1 ? 1f : 0f).get() : 0f;
-		Render2D.shadow(ctx, playX, playY + 2f, playW, playH, playH / 2f, 9f, ColorUtil.withAlpha(0x000000, Math.round(110 * e)));
+		Render2D.shadow(ctx, playX, playY + 2f, playW, playH, playH / 2f, 8f, ColorUtil.withAlpha(0x000000, Math.round(70 * e)));
 		if (hv > 0.01f) {
-			// Picked, the pill gets a ring of its own a little outside it, as a console marks what the keys are on.
 			float o = playH * 0.12f;
-			Render2D.outline(ctx, playX - o, playY - o, playW + o * 2f, playH + o * 2f, playH / 2f + o, 1.6f, ColorUtil.fade(0xFFFFFFFF, hv * e));
+			Render2D.outline(ctx, playX - o, playY - o, playW + o * 2f, playH + o * 2f, playH / 2f + o, 1.4f, ColorUtil.fade(0xFFFFFFFF, hv * e));
 		}
-		Render2D.round(ctx, playX, playY, playW, playH, playH / 2f, ColorUtil.fade(0xFFFFFFFF, e));
+		Render2D.round(ctx, playX, playY, playW, playH, playH / 2f, ColorUtil.fade(ColorUtil.lerp(0x3DFFFFFF, 0xFFFFFFFF, hv), e));
 		int icon = item.kind == SERVER ? Icons.SERVER : item.kind == ALL ? Icons.LIST : Icons.PLAY;
 		float labelW = semibold.width(item.action, playSize);
 		float contentW = labelW + playSize * 1.6f;
 		float lx = playX + (playW - contentW) / 2f;
-		Render2D.textMiddle(ctx, semibold, item.action, lx, playY + playH / 2f, playSize, ColorUtil.fade(INK, e));
-		Render2D.icon(ctx, icon, lx + labelW + playSize * 1.0f, playY + playH / 2f, playSize * 1.05f, ColorUtil.fade(INK, e));
-		moreR = playH / 2f;
-		moreX = playX + playW + playH * 0.35f + moreR;
-		moreY = playY + moreR;
+		int ink = ColorUtil.lerp(TEXT, INK, hv);
+		Render2D.textMiddle(ctx, semibold, item.action, lx, playY + playH / 2f, playSize, ColorUtil.fade(ink, e));
+		Render2D.icon(ctx, icon, lx + labelW + playSize * 1.0f, playY + playH / 2f, playSize * 1.05f, ColorUtil.fade(ink, e));
+		moreR = playH * 0.44f;
+		moreX = playX + playW + playH * 0.32f + moreR;
+		moreY = playY + playH / 2f;
 		boolean overMore = (mouseX - moreX) * (mouseX - moreX) + (mouseY - moreY) * (mouseY - moreY) <= moreR * moreR;
 		float mh = live ? buttonHover[1].target(overMore || focus == 2 ? 1f : 0f).get() : 0f;
-		Render2D.circle(ctx, moreX, moreY, moreR, ColorUtil.fade(ColorUtil.lerp(0x38FFFFFF, 0xFFFFFFFF, mh), e));
+		Render2D.circle(ctx, moreX, moreY, moreR, ColorUtil.fade(ColorUtil.lerp(0x3DFFFFFF, 0xFFFFFFFF, mh), e));
 		Render2D.icon(ctx, Icons.ELLIPSIS, moreX, moreY, playSize * 1.25f, ColorUtil.fade(ColorUtil.lerp(TEXT, INK, mh), e));
 
 		// No picture: the icon, large, at the right.
@@ -957,18 +1001,40 @@ public final class ConsoleMenu extends Screen implements KeyNavigation {
 			latest = last != null ? (last.out() ? "You: " : newest.contact().displayName() + ": ") + last.text() : newest.contact().displayName();
 		}
 		boolean last = canContinue;
-		String activity = last ? "Continue " + LastPlayed.label() + (LastPlayed.server && LastPlayed.ping > 0 ? "  ·  " + LastPlayed.ping + " ms" : "")
-			: "Nothing played yet";
+		List<String> activity = new ArrayList<>();
+		if (last) {
+			activity.add("Continue " + LastPlayed.label());
+			activity.add(LastPlayed.server ? "Multiplayer" + (LastPlayed.ping > 0 ? "  ·  " + LastPlayed.ping + " ms" : "") : "Singleplayer");
+		} else {
+			activity.add("Nothing played yet");
+		}
+		// The newest conversations, newest first, as many as the card has room for.
+		List<String> talk = new ArrayList<>();
+		if (service != null) {
+			List<Conversation> recent = new ArrayList<>(service.conversations());
+			recent.sort((a, b) -> Long.compare(b.activity(), a.activity()));
+			for (Conversation c : recent) {
+				Message m = c.last();
+				talk.add(m != null ? (m.out() ? "You: " : c.contact().displayName() + ": ") + m.text() : c.contact().displayName());
+				if (talk.size() == 6) break;
+			}
+		}
+		if (talk.isEmpty()) talk.add(latest);
+		// As the console's welcome: a grid at the left under the row, a small card over a tall one, a tall one beside them.
 		float w = width, h = height;
-		float bottom = h * 0.97f;
-		set(cards[1], w * 0.636f, h * 0.586f, w * 0.336f, h * 0.2f);
-		set(cards[0], w * 0.196f, h * 0.785f, w * 0.427f, bottom - h * 0.785f);
-		set(cards[2], w * 0.636f, h * 0.816f, w * 0.336f, bottom - h * 0.816f);
-		card(ctx, cards[1], 0.6f, t, Icons.MESSAGE_CIRCLE, "Messages", latest, Messages.unread(), MESSAGE_DOT, true, mouseX, mouseY, live && focus == 2,
-			fade, live);
-		card(ctx, cards[0], 0.66f, t, Icons.GAMEPAD_2, "Recent activity", activity, 0, 0, false, mouseX, mouseY, live && focus == 1, fade, live);
-		card(ctx, cards[2], 0.72f, t, Icons.USERS, "Online", online > 0 ? names.toString() : "Nobody is online", online, ONLINE, true, mouseX, mouseY,
-			live && focus == 3, fade, live);
+		float left = rowLeft();
+		float colW = w * 0.264f, colGap = w * 0.011f;
+		float top = h * 0.49f, smallH = h * 0.14f, rowGap = h * 0.02f;
+		float bottom = h * 0.955f;
+		set(cards[2], left, top, colW, smallH);
+		set(cards[0], left, top + smallH + rowGap, colW, bottom - top - smallH - rowGap);
+		set(cards[1], left + colW + colGap, top, colW, bottom - top);
+		card(ctx, cards[2], 0.6f, t, Icons.USERS, "Online", List.of(online > 0 ? names.toString() : "Nobody is online"), online, ONLINE, true, null,
+			mouseX, mouseY, live && focus == 3, fade, live);
+		card(ctx, cards[0], 0.66f, t, Icons.GAMEPAD_2, "Recent activity", activity, 0, 0, false, last ? LastPlayedIcon.get() : null, mouseX, mouseY,
+			live && focus == 1, fade, live);
+		card(ctx, cards[1], 0.72f, t, Icons.MESSAGE_CIRCLE, "Messages", talk, Messages.unread(), MESSAGE_DOT, true, null, mouseX, mouseY,
+			live && focus == 2, fade, live);
 	}
 
 	private static void set(float[] bounds, float x, float y, float w, float h) {
@@ -978,33 +1044,63 @@ public final class ConsoleMenu extends Screen implements KeyNavigation {
 		bounds[3] = h;
 	}
 
-	private void card(DrawContext ctx, float[] b, float delay, float t, int icon, String title, String line, int count, int dot, boolean showCount,
-					  int mouseX, int mouseY, boolean keyed, float fade, boolean live) {
+	private void card(DrawContext ctx, float[] b, float delay, float t, int icon, String title, List<String> lines, int count, int dot, boolean showCount,
+					  @Nullable TextureSetup picture, int mouseX, int mouseY, boolean keyed, float fade, boolean live) {
 		float e = live ? in(t, delay, 0.5f) * Anim.easeOutCubic(hero.target(1f).get()) * Anim.easeOutCubic(tabSwap.get()) * fade : fade;
 		if (e <= 0.01f) return;
 		float x = b[0], y = b[1] + (1f - e) * 12f, w = b[2], h = b[3];
 		boolean hovered = Ui.inside(mouseX, mouseY, x, y, w, h) || keyed;
-		float r = Math.max(8f, Math.min(18f, height * 0.025f));
+		float r = Math.max(5f, Math.min(14f, height * 0.018f));
 		Render2D.shadow(ctx, x, y + 3f, w, h, r, 14f, ColorUtil.withAlpha(0x000000, Math.round(90 * e)));
 		Render2D.round(ctx, x, y, w, h, r, ColorUtil.fade(hovered ? cardColor(true) : cardColor(false), e));
 		Render2D.gradientV(ctx, x, y, w, h, r, ColorUtil.withAlpha(0xFFFFFF, Math.round(16 * e)), 0x00FFFFFF);
-		if (keyed) Render2D.outline(ctx, x, y, w, h, r, 1.5f, ColorUtil.fade(Theme.accent(), e));
+		if (keyed) Render2D.outline(ctx, x, y, w, h, r, 1.5f, ColorUtil.fade(0xFFFFFFFF, e));
 		SdfFont font = Fonts.medium();
-		float titleSize = Math.max(7f, Math.min(13f, height * 0.03f));
-		float lineSize = Math.max(6f, Math.min(11f, height * 0.026f));
-		float rowY = y + Math.max(9f, height * 0.046f);
-		float lx = x + Math.max(8f, height * 0.028f);
+		float titleSize = Math.max(6.5f, Math.min(13f, height * 0.026f));
+		float lineSize = Math.max(6f, Math.min(11f, height * 0.023f));
+		float inset = Math.max(7f, height * 0.024f);
+		float rowY = y + inset + titleSize * 0.5f;
+		float lx = x + inset;
 		Render2D.icon(ctx, icon, lx + titleSize * 0.5f, rowY, titleSize * 1.05f, ColorUtil.fade(TEXT, e));
 		Render2D.textMiddle(ctx, font, title, lx + titleSize * 1.5f, rowY, titleSize, ColorUtil.fade(TEXT, e));
 		if (showCount) {
 			String n = String.valueOf(count);
 			float nw = Fonts.semibold().width(n, titleSize);
-			float rx = x + w - Math.max(8f, height * 0.03f);
+			float rx = x + w - inset;
 			Render2D.textMiddle(ctx, Fonts.semibold(), n, rx - nw, rowY, titleSize, ColorUtil.fade(TEXT, e));
 			Render2D.circle(ctx, rx - nw - titleSize * 0.75f, rowY, titleSize * 0.36f, ColorUtil.fade(dot, e));
 		}
-		float lineY = y + Math.max(20f, height * 0.133f);
-		Render2D.textMiddle(ctx, font, fit(font, line, lineSize, w - (lx - x) * 2f), lx, Math.min(lineY, y + h - lineSize), lineSize, ColorUtil.fade(FAINT, e));
+		float contentY = rowY + titleSize * 0.5f + inset * 0.8f;
+		float textX = lx;
+		if (picture != null) {
+			// What was played last, its picture at the left as the console shows the friends' captures.
+			float ps = Math.min(y + h - inset - contentY, w * 0.34f);
+			if (ps > 8f) {
+				Render2D.image(ctx, picture, lx, contentY, ps, ps, ps * 0.12f, ColorUtil.fade(0xFFFFFFFF, e));
+				textX = lx + ps + inset * 0.8f;
+			}
+		}
+		float lineY = contentY + lineSize * 0.6f;
+		for (int i = 0; i < lines.size() && lineY + lineSize * 0.6f <= y + h - inset * 0.5f; i++) {
+			Render2D.textMiddle(ctx, font, fit(font, lines.get(i), lineSize, x + w - inset - textX), textX, lineY, lineSize,
+				ColorUtil.fade(i == 0 ? 0xE6FFFFFF : FAINT, e));
+			lineY += lineSize * 1.75f;
+		}
+	}
+
+	/**
+	 * The light that crosses the picked tile once it is picked, as the console's: a broad soft band from its top left to
+	 * its bottom right, a moment after the pick lands (TileShine).
+	 */
+	private void shine(DrawContext ctx, float x, float y, float size, float alpha) {
+		float p = Float.isNaN(shineTest) ? (System.nanoTime() - shineAt) / 0.8e9f : shineTest;
+		if (p <= 0f || p >= 1f) return;
+		TileShine.draw(ctx, x, y, size, size * 0.15f, smoothstep(p), 0.4f * alpha);
+	}
+
+	private static float smoothstep(float t) {
+		t = Anim.clamp01(t);
+		return t * t * (3f - 2f * t);
 	}
 
 	private static String fit(SdfFont font, String text, float size, float width) {
@@ -1021,7 +1117,7 @@ public final class ConsoleMenu extends Screen implements KeyNavigation {
 		return text;
 	}
 
-	private static String clock() {
+	static String clock() {
 		MainMenuModule module = ModuleManager.get(MainMenuModule.class);
 		boolean twelve = module != null && module.timeFormat.is("12-hour");
 		return LocalTime.now().format(DateTimeFormatter.ofPattern(twelve ? "h:mm" : "HH:mm", Locale.ROOT));

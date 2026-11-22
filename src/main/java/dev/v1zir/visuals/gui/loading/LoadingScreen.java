@@ -2,6 +2,7 @@ package dev.v1zir.visuals.gui.loading;
 
 import dev.v1zir.visuals.V1zir;
 import dev.v1zir.visuals.gui.UiSounds;
+import dev.v1zir.visuals.gui.menu.BootScreen;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.client.ThemeModule;
 import dev.v1zir.visuals.util.Anim;
@@ -34,6 +35,9 @@ import java.util.List;
  * capsule that fills with the progress, with a thin white rim a few pixels outside it, as the buttons of a console
  * mark their focus. When the load is done the capsule runs full and it all fades into the screen behind.
  * <p>
+ * With the PS5 style theme it is a console's start instead: the client's mark alone on black, as long as the load
+ * takes; at the first start the start itself takes over from it (BootScreen), drawing the same mark in the same place.
+ * <p>
  * Until the first load is done neither the game's fonts nor this mod's shaders exist, so it draws only with what the
  * Mojang screen itself draws with: plain fills, and textures through the pipeline of its logo. The name, the capsule's
  * ends, the track and the rim are made here as textures of their own, at the size they show at in pixels of the screen,
@@ -42,6 +46,7 @@ import java.util.List;
 public final class LoadingScreen {
 	private static final String NAME = "V1zir Visuals";
 	private static final String BOLD = "/assets/v1zir/fonts/inter_bold.ttf";
+	private static final String MARK_FILE = "/assets/v1zir/textures/gui/logo.png";
 
 	/** The overlay being drawn, and when it first showed: a new one starts its intro again. */
 	private static Object overlay;
@@ -57,6 +62,8 @@ public final class LoadingScreen {
 	/** The textures could not be made: the screen draws without them. */
 	private static boolean broken;
 	private static Glyphs title;
+	/** The PS5 style's mark, made at the size it shows at (BootScreen.MARK of the screen's height). */
+	private static Sprite mark;
 	/** A white disc as tall as the bar (its round ends), the bar's whole capsule (the track) and the rim around it. */
 	private static Sprite cap;
 	private static Sprite track;
@@ -95,8 +102,10 @@ public final class LoadingScreen {
 		// How much of what is behind it the loading screen covers, faded in and out as the Mojang screen is.
 		float cover;
 		Screen screen = mc.currentScreen;
+		boolean ps5 = Theme.ps5();
 		if (f >= 1f) {
-			cover = 1f - Anim.clamp01(f - 1f);
+			// The PS5 style's start draws the same mark on black where this leaves it: it takes over at once.
+			cover = ps5 && screen instanceof BootScreen ? 0f : 1f - Anim.clamp01(f - 1f);
 			if (screen != null) screen.render(ctx, 0, 0, delta);
 		} else if (reloading) {
 			cover = Anim.clamp01(g);
@@ -125,6 +134,14 @@ public final class LoadingScreen {
 		m.pushMatrix();
 		// Pixels of the screen from here on.
 		m.scale(1f / scale, 1f / scale);
+		if (ps5) {
+			// As a console starts: its mark, alone, on black.
+			ctx.fill(0, 0, w, h, ColorUtil.fade(0xFF000000, cover));
+			if (mark != null) sprite(ctx, mark, (w - mark.width) / 2f, (h - mark.height) / 2f, mark.width, mark.height, ColorUtil.fade(0xFFFFFFFF, cover));
+			m.popMatrix();
+			if (f >= 2f) release();
+			return;
+		}
 		int base = Theme.preset().base() | 0xFF000000;
 		ctx.fillGradient(0, 0, w, h, ColorUtil.fade(ColorUtil.darken(base, 0.35f), cover), ColorUtil.fade(base, cover));
 		float cx = w / 2f;
@@ -221,6 +238,10 @@ public final class LoadingScreen {
 			cap = register(V1zir.id("loading/cap"), capsule(bh, bh, 0f));
 			track = register(V1zir.id("loading/track"), capsule(bw, bh, 0f));
 			rim = register(V1zir.id("loading/rim"), capsule(bw + gap * 2, bh + gap * 2, rimWidth));
+			int size = Math.max(16, Math.round(h * BootScreen.MARK));
+			try (NativeImage logo = NativeImage.read(resource(MARK_FILE))) {
+				mark = register(V1zir.id("loading/mark"), shrink(logo, size));
+			}
 		} catch (IOException | RuntimeException e) {
 			V1zir.LOGGER.warn("Could not make the loading screen; it shows without its text", e);
 			broken = true;
@@ -233,6 +254,7 @@ public final class LoadingScreen {
 		for (Identifier id : MADE) textures.destroyTexture(id);
 		MADE.clear();
 		title = null;
+		mark = null;
 		cap = null;
 		track = null;
 		rim = null;
@@ -279,6 +301,42 @@ public final class LoadingScreen {
 				float a = Anim.clamp01(0.5f - d);
 				if (rim > 0f) a *= Anim.clamp01(0.5f + d + rim);
 				out.setColorArgb(x, y, Math.round(255f * a) << 24 | 0xFFFFFF);
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * The image made size x size pixels (it is square), each new pixel the average of the old ones it covers, weighted
+	 * by their cover, colours by their opacity (no dark fringe), so it shows sharp and smooth drawn pixel for pixel.
+	 */
+	private static NativeImage shrink(NativeImage source, int size) {
+		int sw = source.getWidth(), sh = source.getHeight();
+		NativeImage out = new NativeImage(NativeImage.Format.RGBA, size, size, false);
+		for (int y = 0; y < size; y++) {
+			float y0 = (float) y * sh / size, y1 = (float) (y + 1) * sh / size;
+			for (int x = 0; x < size; x++) {
+				float x0 = (float) x * sw / size, x1 = (float) (x + 1) * sw / size;
+				double a = 0, r = 0, g = 0, b = 0, weight = 0;
+				for (int sy = (int) y0; sy < Math.min(sh, (int) Math.ceil(y1)); sy++) {
+					float wy = Math.min(y1, sy + 1) - Math.max(y0, sy);
+					for (int sx = (int) x0; sx < Math.min(sw, (int) Math.ceil(x1)); sx++) {
+						float wx = Math.min(x1, sx + 1) - Math.max(x0, sx);
+						float cover = wx * wy;
+						int argb = source.getColorArgb(sx, sy);
+						double alpha = (argb >>> 24) / 255.0 * cover;
+						a += alpha;
+						r += ((argb >> 16) & 0xFF) * alpha;
+						g += ((argb >> 8) & 0xFF) * alpha;
+						b += (argb & 0xFF) * alpha;
+						weight += cover;
+					}
+				}
+				int pixel = 0;
+				if (a > 0) {
+					pixel = (int) Math.round(a / weight * 255.0) << 24 | (int) Math.round(r / a) << 16 | (int) Math.round(g / a) << 8 | (int) Math.round(b / a);
+				}
+				out.setColorArgb(x, y, pixel);
 			}
 		}
 		return out;

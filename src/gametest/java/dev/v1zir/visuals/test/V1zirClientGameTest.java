@@ -12,6 +12,7 @@ import dev.v1zir.visuals.chat.MqttTransport;
 import dev.v1zir.visuals.compat.voicechat.MusicFeed;
 import dev.v1zir.visuals.controller.Controller;
 import dev.v1zir.visuals.gui.clickgui.ClickGuiScreen;
+import dev.v1zir.visuals.gui.menu.BootScreen;
 import dev.v1zir.visuals.gui.menu.ConsoleMenu;
 import dev.v1zir.visuals.gui.menu.LockScreen;
 import dev.v1zir.visuals.gui.menu.MainMenus;
@@ -640,6 +641,46 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 	 * The loading screen while the resource packs reload, in the client's style and then in the PS5 style, and the PS5
 	 * style menu: home picked, then the next tile, then the Multiplayer tab with two servers in the list.
 	 */
+	/**
+	 * The PS5 style's start, as a console's (BootScreen), the first PS5 menu of the game: its clock stood at each moment
+	 * for a picture (the mark, the notice over the teal glow, the drifting lights, the dust, the stage, "Welcome back"
+	 * with the accounts), then Enter picks the account in focus and the home comes in from it, its row spreading over
+	 * the stage; last the picked tile's shine half way across it.
+	 */
+	private static void ps5Boot(ClientGameTestContext context) {
+		context.runOnClient(client -> BootScreen.testTime = 0.1f);
+		context.setScreen(MainMenus::create);
+		context.waitTicks(5);
+		String screen = context.computeOnClient(client -> client.currentScreen == null ? "null" : client.currentScreen.getClass().getName());
+		if (!screen.equals(BootScreen.class.getName())) throw new AssertionError("The first PS5 style menu is " + screen + ", not the start");
+		float[] moments = {0.1f, 2.0f, 3.9f, 5.25f, 6.6f, 9.0f};
+		String[] names = {"mark", "notice", "lights", "dust", "stage", "welcome"};
+		for (int i = 0; i < moments.length; i++) {
+			float at = moments[i];
+			context.runOnClient(client -> BootScreen.testTime = at);
+			context.waitTicks(i == moments.length - 1 ? 10 : 3);
+			context.takeScreenshot("ps5-boot-" + names[i]);
+		}
+		context.getInput().pressKey(GLFW.GLFW_KEY_ENTER);
+		context.runOnClient(client -> BootScreen.testTime = 9.3f);
+		context.waitTicks(3);
+		context.takeScreenshot("ps5-boot-picked");
+		// On past the pick: the start opens the home.
+		context.runOnClient(client -> BootScreen.testTime = 10.3f);
+		context.waitTicks(6);
+		context.runOnClient(client -> BootScreen.testTime = Float.NaN);
+		String home = context.computeOnClient(client -> client.currentScreen == null ? "null" : client.currentScreen.getClass().getName());
+		System.out.println("V1ZIR-BOOT after the pick: " + home);
+		context.takeScreenshot("ps5-boot-home-coming");
+		context.waitTicks(50);
+		context.runOnClient(client -> ConsoleMenu.shineTest = 0.45f);
+		context.waitTicks(2);
+		context.takeScreenshot("ps5-home-shine");
+		context.runOnClient(client -> ConsoleMenu.shineTest = Float.NaN);
+		context.waitTicks(2);
+		context.takeScreenshot("ps5-home");
+	}
+
 	private static void loadingAndPs5(ClientGameTestContext context) {
 		reloadShot(context, "loading-screen");
 		context.runOnClient(client -> {
@@ -652,6 +693,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			list.saveFile();
 			ModuleManager.get(ThemeModule.class).styleTheme.set("PS5");
 		});
+		ps5Boot(context);
 		context.setScreen(MainMenus::create);
 		context.waitTicks(40);
 		String screen = context.computeOnClient(client -> client.currentScreen == null ? "null" : client.currentScreen.getClass().getName());
