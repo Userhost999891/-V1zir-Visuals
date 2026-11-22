@@ -37,9 +37,10 @@ import java.util.function.Supplier;
  * The PS5 style's start, as a console boots. The loading screen shows the mark on black while the game loads; the
  * mark stays a while longer, fades, a health notice shows over a deep teal glow, soft lights drift through it, and a
  * dark stage under a spotlight comes up with dust floating in its light, where "Welcome back to V1zir" asks who is
- * playing: Add an account at the left, then the accounts by their heads, the one in focus larger with its name.
- * Picking one plays as it: it moves into the middle as the rest fades, and the home comes in (ConsoleMenu, its row
- * spreading from the middle over the same stage). Before the question any key or click skips to it. Only when the game
+ * playing: the accounts come out of the dark onto the stage by their heads (Add an account at the left), and the
+ * spotlight swings onto the one in focus, larger and lit with its name, the others in the half dark. Picking one plays
+ * as it: the light flares, a ring of light spreads from it as it moves into the middle and the rest fades, and the home
+ * comes in (ConsoleMenu, its row spreading from the middle over the same stage). Before the question any key or click skips to it. Only when the game
  * starts: once any main menu has shown, the menu is the home.
  */
 public final class BootScreen extends Screen implements KeyNavigation {
@@ -69,6 +70,9 @@ public final class BootScreen extends Screen implements KeyNavigation {
 	private float pickedAt;
 	private boolean left;
 	private final Anim powerHover = new Anim(0f, 20f);
+	/** Where the spotlight is turned (the middle of the account in focus), followed smoothly. */
+	private final Anim aimX = new Anim(0f, 6f);
+	private boolean aimPlaced;
 	/** Where each one is, as last drawn (middle x, then its diameter), and the row's middle; the power button. */
 	private float[] centers = new float[0];
 	private float[] sizes = new float[0];
@@ -124,10 +128,22 @@ public final class BootScreen extends Screen implements KeyNavigation {
 		float stage = smooth((t - 7.6f) / 1.2f);
 		if (stage > 0.004f) {
 			float scale = (float) client.getWindow().getScaleFactor();
+			// As the accounts come out of the dark the spotlight swings onto the one in focus and follows it; as one is
+			// picked the light flares.
+			float aim = smooth((t - ASK - 0.15f) / 0.9f);
+			int on = picked >= 0 ? picked : focus;
+			float x = on < centers.length && centers[on] > 0f ? centers[on] : width / 2f;
+			if (!aimPlaced) {
+				aimPlaced = true;
+				aimX.snap(x);
+			}
+			float pickT = picked >= 0 ? t - pickedAt : -1f;
+			float flash = pickT < 0f ? 0f : smooth(pickT / 0.2f) * (1f - smooth((pickT - 0.25f) / 0.6f));
 			Matrix3x2fStack m = ctx.getMatrices();
 			m.pushMatrix();
 			m.scale(1f / scale, 1f / scale);
-			Backdrop.stage(ctx, client.getWindow().getFramebufferWidth(), client.getWindow().getFramebufferHeight(), scale, stage);
+			Backdrop.stage(ctx, client.getWindow().getFramebufferWidth(), client.getWindow().getFramebufferHeight(), scale, stage,
+				aimX.target(x).get() * scale, rowY * scale, aim, flash);
 			m.popMatrix();
 		}
 		mark(ctx, t);
@@ -217,34 +233,49 @@ public final class BootScreen extends Screen implements KeyNavigation {
 
 		int n = people.size();
 		float spacing = Math.min(w * 0.184f, w * 0.86f / Math.max(1, n));
-		float little = h * 0.178f, big = h * 0.267f;
-		rowY = h * 0.5f;
-		float rowIn = smooth((since - 0.05f) / 0.35f);
-		// The one in focus grows a moment after the row has come, as on the console.
-		float focusIn = smooth((since - 0.75f) / 0.3f);
+		float little = h * 0.16f, big = h * 0.24f;
+		// Standing on the stage, a little lower than the middle.
+		rowY = h * 0.56f;
+		// The one in focus is lit a moment after they have come, as the light reaches it.
+		float focusIn = smooth((since - 0.75f) / 0.4f);
 		float nameSize = Math.max(6f, Math.min(22f, h * 0.026f));
 		for (int i = 0; i < n; i++) {
 			float g = grow.get(i).target(i == focus ? 1f : 0f).get() * focusIn;
 			float d = little + (big - little) * g;
 			float x = w / 2f + (i - (n - 1) / 2f) * spacing;
-			float a = rowIn * (i == picked ? all : rest * all);
+			// Out of the dark one after another, rising a little onto the stage.
+			float come = smooth((since - 0.15f - 0.12f * i) / 0.55f);
+			float y = rowY + (1f - come) * h * 0.06f;
+			float a = come * (i == picked ? all : rest * all);
+			float ring = 0f;
 			if (i == picked) {
 				float p = smooth(pickT / 0.45f);
 				x += (w / 2f - x) * p;
-				d *= 1f + 0.12f * p;
+				d *= 1f + 0.18f * p;
+				ring = pickT;
 			}
 			centers[i] = x;
 			sizes[i] = d;
 			if (a <= 0.004f) continue;
-			avatar(ctx, people.get(i), x, rowY, d, a, g);
+			// Its shadow on the floor.
+			Render2D.shadow(ctx, x - d * 0.42f, y + d * 0.5f + h * 0.025f, d * 0.84f, h * 0.022f, h * 0.011f, h * 0.03f,
+				ColorUtil.fade(0xFF000000, 0.55f * a));
+			// Lit in the spotlight, the others in the half dark.
+			avatar(ctx, people.get(i), x, y, d, a, g);
+			if (ring > 0f && ring < 0.9f) {
+				// Picked: a ring of light spreading out from it and fading.
+				float spread = smooth(ring / 0.8f);
+				Render2D.ring(ctx, x, y, d / 2f + spread * h * 0.22f, Math.max(1f, h * 0.006f * (1f - spread)),
+					ColorUtil.fade(0xFFFFF4E6, 0.7f * (1f - spread) * a));
+			}
 			Accounts.Account person = people.get(i);
 			String name = person == null ? "Add Account" : person.name();
-			float labelIn = smooth((since - 0.75f) / 0.3f) * (i == picked ? rest : 1f) * a;
-			Render2D.textCentered(ctx, i == focus ? semibold : font, name, x, Render2D.middle(font, rowY + big / 2f + h * 0.045f, nameSize), nameSize,
-				ColorUtil.fade(i == focus ? 0xFFFFFFFF : 0x99FFFFFF, labelIn));
+			float labelIn = smooth((since - 0.8f) / 0.3f) * (i == picked ? rest : 1f) * a;
+			Render2D.textCentered(ctx, i == focus ? semibold : font, name, x, Render2D.middle(font, y + big / 2f + h * 0.05f, nameSize), nameSize,
+				ColorUtil.fade(i == focus ? 0xFFFFFFFF : 0x80FFFFFF, labelIn));
 			if (i == focus && !Controller.name().isEmpty()) {
 				// The controller's mark over whoever it is on, as the console shows it.
-				Render2D.icon(ctx, Icons.GAMEPAD_2, x, rowY - big / 2f - h * 0.045f, nameSize * 1.1f, ColorUtil.fade(0xE6FFFFFF, labelIn));
+				Render2D.icon(ctx, Icons.GAMEPAD_2, x, y - big / 2f - h * 0.045f, nameSize * 1.1f, ColorUtil.fade(0xE6FFFFFF, labelIn));
 			}
 		}
 
@@ -271,12 +302,12 @@ public final class BootScreen extends Screen implements KeyNavigation {
 		float r = d / 2f;
 		Render2D.shadow(ctx, cx - r, cy - r + r * 0.06f, d, d, r, r * 0.35f, ColorUtil.fade(0x66000000, alpha));
 		if (person == null) {
-			Render2D.circle(ctx, cx, cy, r, ColorUtil.fade(0x2EFFFFFF, alpha));
-			Render2D.icon(ctx, Icons.PLUS, cx, cy, d * 0.34f, ColorUtil.fade(0xF2FFFFFF, alpha));
+			Render2D.circle(ctx, cx, cy, r, ColorUtil.fade(ColorUtil.lerp(0x1FFFFFFF, 0x38FFFFFF, focused), alpha));
+			Render2D.icon(ctx, Icons.PLUS, cx, cy, d * 0.34f, ColorUtil.fade(ColorUtil.lerp(0x99FFFFFF, 0xF2FFFFFF, focused), alpha));
 			return;
 		}
 		SkinTextures skin = skin(person);
-		int tint = ColorUtil.fade(ColorUtil.lerp(0xFFD0D0D0, 0xFFFFFFFF, focused), alpha);
+		int tint = ColorUtil.fade(ColorUtil.lerp(0xFF6C6C72, 0xFFFFFFFF, focused), alpha);
 		if (skin != null) {
 			Heads.skin(ctx, skin, cx - r, cy - r, d, r, tint);
 		} else {

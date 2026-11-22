@@ -112,29 +112,53 @@ public final class Backdrop {
 	 * of the screen). It needs the client's shaders (the haze), so only after the first load. alpha fades it all.
 	 */
 	public static void stage(DrawContext ctx, int w, int h, float scale, float alpha) {
+		stage(ctx, w, h, scale, alpha, Float.NaN, Float.NaN, 0f, 0f);
+	}
+
+	/**
+	 * The stage with its spotlight turned onto (aimX, aimY) (pixels) as much as aim says (0 to 1): the light swings
+	 * over and leans down onto that spot, where it makes a pool of light on the floor; flash (0 to 1) brightens it all.
+	 */
+	public static void stage(DrawContext ctx, int w, int h, float scale, float alpha, float aimX, float aimY, float aim, float flash) {
 		if (alpha <= 0.004f) return;
 		ctx.fillGradient(0, 0, w, h, ColorUtil.fade(0xFF111318, alpha), ColorUtil.fade(0xFF14161B, alpha));
 		// Cooler, bluer away from the light.
 		Render2D.gradientH(ctx, 0f, 0f, w, h, 0f, 0x000D1220, ColorUtil.fade(0xFF0D1220, 0.45f * alpha));
 		float t = time();
-		// The room lit warm around the light, at the left.
-		softDisc(ctx, w * 0.2f, h * 0.35f, h * 0.25f, h * 0.6f, ColorUtil.fade(0xFF3A3530, 0.35f * alpha));
+		boolean aimed = aim > 0.001f && !Float.isNaN(aimX);
 		float ox = w * 0.14f, oy = -h * 0.06f;
 		float angle = (float) Math.toRadians(70) + 0.01f * (float) Math.sin(t * 0.27f);
 		float length = (float) Math.hypot(w, h) * 0.95f;
-		float width = Math.max(w * 0.45f, h * 1.0f);
+		if (aimed) {
+			// The light comes from above and a little to the left of the spot it is on, turned down onto it.
+			float sx = aimX - w * 0.12f;
+			ox += (sx - ox) * aim;
+			float onto = (float) Math.atan2(aimY - oy, aimX - ox);
+			angle += (onto - angle) * aim;
+			length = Math.max(length, (float) Math.hypot(aimX - ox, aimY - oy) * 1.5f);
+		}
+		float lit = 1f + 0.6f * flash;
+		// The room lit warm around the light.
+		softDisc(ctx, ox + w * 0.06f, h * 0.35f, h * 0.25f, h * 0.6f, ColorUtil.fade(0xFF3A3530, Math.min(1f, 0.35f * alpha * lit)));
+		float width = Math.max(w * 0.45f, h * 1.0f) * (aimed ? 1f - 0.25f * aim : 1f);
 		if (ensureSoftBeam(w, h)) {
 			// A broad soft cone of light falling from above, as a spotlight's in a hazy room.
 			float breathe = 0.95f + 0.05f * (float) Math.sin(t * 0.5f);
-			softBeam(ctx, ox, oy, angle, length, width, ColorUtil.fade(0xFFD9CFC2, 0.2f * alpha * breathe));
-			softBeam(ctx, ox, oy, angle, length * 0.5f, width * 0.45f, ColorUtil.fade(0xFFE8DED0, 0.14f * alpha * breathe));
+			softBeam(ctx, ox, oy, angle, length, width, ColorUtil.fade(0xFFD9CFC2, Math.min(1f, 0.2f * alpha * breathe * lit)));
+			softBeam(ctx, ox, oy, angle, length * 0.5f, width * 0.45f, ColorUtil.fade(0xFFE8DED0, Math.min(1f, 0.14f * alpha * breathe * lit)));
 		}
 		// Where it comes in, a glow.
-		softDisc(ctx, ox, -h * 0.02f, h * 0.08f, h * 0.2f, ColorUtil.fade(0xFFF0E6D8, 0.3f * alpha));
+		softDisc(ctx, ox, -h * 0.02f, h * 0.08f, h * 0.2f, ColorUtil.fade(0xFFF0E6D8, Math.min(1f, 0.3f * alpha * lit)));
 		// The haze on the floor: light lying low, brightest at the left under the spotlight.
 		Render2D.round(ctx, 0f, h * 0.68f, w, h * 0.32f + 1f, 0f, 0x003C4248, 0x003C4248, ColorUtil.fade(0xFF3C4248, 0.07f * alpha),
 			ColorUtil.fade(0xFF3C4248, 0.45f * alpha));
 		Render2D.shadow(ctx, w * 0.02f, h * 0.83f, w * 0.4f, h * 0.06f, h * 0.03f, h * 0.08f, ColorUtil.fade(0xFF8E959D, 0.16f * alpha));
+		if (aimed) {
+			// The pool of light on the floor where the spotlight is on.
+			float floor = Math.max(aimY + h * 0.12f, h * 0.74f);
+			Render2D.shadow(ctx, aimX - h * 0.2f, floor - h * 0.025f, h * 0.4f, h * 0.05f, h * 0.025f, h * 0.09f,
+				ColorUtil.fade(0xFFE6DCCD, Math.min(1f, 0.32f * aim * alpha * lit)));
+		}
 		dust(ctx, w, h, scale, t, ox, oy, angle, length, width, alpha);
 	}
 
