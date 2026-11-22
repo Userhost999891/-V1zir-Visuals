@@ -34,18 +34,19 @@ import java.util.Map;
 import java.util.function.Supplier;
 
 /**
- * The PS5 style's start, timed as a console boots. The loading screen shows the mark on black while the game loads;
- * then the mark fades, a health notice shows over a deep teal glow, soft lights drift through it, golden dust bursts
- * and settles, and a dark stage under a spotlight comes up, where "Welcome back to V1zir" asks who is playing: Add an
- * account at the left, then the accounts by their heads, the one in focus larger with its name. Picking one plays as
- * it: it moves into the middle as the rest fades, and the home comes in (ConsoleMenu, its row spreading from the
- * middle over the same stage). Before the question any key or click skips to it. Once per start of the game.
+ * The PS5 style's start, as a console boots. The loading screen shows the mark on black while the game loads; the
+ * mark stays a while longer, fades, a health notice shows over a deep teal glow, soft lights drift through it, and a
+ * dark stage under a spotlight comes up with dust floating in its light, where "Welcome back to V1zir" asks who is
+ * playing: Add an account at the left, then the accounts by their heads, the one in focus larger with its name.
+ * Picking one plays as it: it moves into the middle as the rest fades, and the home comes in (ConsoleMenu, its row
+ * spreading from the middle over the same stage). Before the question any key or click skips to it. Only when the game
+ * starts: once any main menu has shown, the menu is the home.
  */
 public final class BootScreen extends Screen implements KeyNavigation {
 	/** The mark's box, as tall as this part of the screen (the loading screen draws it the same). */
 	public static final float MARK = 0.1f;
 	/** When the question comes, in seconds after the loading screen has gone. */
-	private static final float ASK = 7.5f;
+	private static final float ASK = 9.6f;
 	private static final String[] NOTICE = {
 		"PHOTOSENSITIVE EPILEPSY: SOME PEOPLE MAY HAVE SEIZURES WHEN THEY SEE FLASHING LIGHTS OR PATTERNS, EVEN WITH NO",
 		"HISTORY OF EPILEPSY. IF YOU OR ANYONE IN YOUR FAMILY HAS EVER HAD SEIZURES, ASK A DOCTOR BEFORE PLAYING, AND",
@@ -53,7 +54,7 @@ public final class BootScreen extends Screen implements KeyNavigation {
 	};
 	/** Tests stand the boot's clock here (seconds) to take each moment of it; NaN lets it run. */
 	public static float testTime = Float.NaN;
-	/** It has played in this start of the game: the menu is the home from then on. */
+	/** It has played, or a main menu has shown, in this start of the game: the menu is the home from then on. */
 	private static boolean played;
 
 	private final long start = System.nanoTime();
@@ -81,9 +82,14 @@ public final class BootScreen extends Screen implements KeyNavigation {
 		played = true;
 	}
 
-	/** Whether the start is still to play in this start of the game (MainMenus). */
+	/** Whether the start is still to play: the game has just started and no main menu has shown yet (MainMenus). */
 	public static boolean due() {
 		return !played;
+	}
+
+	/** A main menu shows (either style's): the start is for the game's start only, never later. */
+	public static void menuShown() {
+		played = true;
 	}
 
 	@Override
@@ -115,7 +121,7 @@ public final class BootScreen extends Screen implements KeyNavigation {
 		float t = time();
 		ctx.fill(0, 0, width, height, 0xFF000000);
 		glow(ctx, t);
-		float stage = smooth((t - 5.2f) / 1.1f);
+		float stage = smooth((t - 7.6f) / 1.2f);
 		if (stage > 0.004f) {
 			float scale = (float) client.getWindow().getScaleFactor();
 			Matrix3x2fStack m = ctx.getMatrices();
@@ -124,7 +130,6 @@ public final class BootScreen extends Screen implements KeyNavigation {
 			Backdrop.stage(ctx, client.getWindow().getFramebufferWidth(), client.getWindow().getFramebufferHeight(), scale, stage);
 			m.popMatrix();
 		}
-		burst(ctx, t);
 		mark(ctx, t);
 		notice(ctx, t);
 		if (t >= ASK - 0.05f) welcome(ctx, t, mouseX, mouseY);
@@ -138,9 +143,9 @@ public final class BootScreen extends Screen implements KeyNavigation {
 
 	// ------------------------------------------------------------------ the start
 
-	/** The mark on black, as the loading screen left it, fading. */
+	/** The mark on black, as the loading screen left it, a while longer, then fading. */
 	private void mark(DrawContext ctx, float t) {
-		float a = 1f - smooth((t - 0.25f) / 0.5f);
+		float a = 1f - smooth((t - 2.0f) / 0.8f);
 		if (a <= 0.004f) return;
 		float size = height * MARK;
 		Render2D.setAlpha(a);
@@ -150,7 +155,7 @@ public final class BootScreen extends Screen implements KeyNavigation {
 
 	/** The health notice, small, left aligned in a block in the middle. */
 	private void notice(DrawContext ctx, float t) {
-		float a = smooth((t - 1.0f) / 0.25f) * (1f - smooth((t - 2.75f) / 0.3f));
+		float a = smooth((t - 3.2f) / 0.5f) * (1f - smooth((t - 6.7f) / 0.5f));
 		if (a <= 0.004f) return;
 		SdfFont font = Fonts.medium();
 		float size = Math.max(4f, height * 0.019f);
@@ -161,21 +166,21 @@ public final class BootScreen extends Screen implements KeyNavigation {
 		for (int i = 0; i < NOTICE.length; i++) Render2D.textMiddle(ctx, font, NOTICE[i], x, y + i * size * 1.55f, size, ColorUtil.fade(0xFFC6C9CE, a));
 	}
 
-	/** A deep teal glow swelling behind the notice, then soft lights drifting through it, all gone as the dust bursts. */
+	/** A deep teal glow swelling behind the notice, then soft lights drifting through it, all gone as the stage comes up. */
 	private void glow(DrawContext ctx, float t) {
-		float a = smooth((t - 1.25f) / 2.2f) * (1f - smooth((t - 4.6f) / 1.0f));
+		float a = smooth((t - 3.4f) / 2.4f) * (1f - smooth((t - 7.4f) / 1.0f));
 		if (a <= 0.004f) return;
 		float w = width, h = height;
-		float swell = 1f + 0.08f * smooth((t - 1.25f) / 4f);
+		float swell = 1f + 0.08f * smooth((t - 3.4f) / 4.5f);
 		disc(ctx, w * 0.6f, h * 0.5f, h * 0.62f * swell, 0.55f, 0.9f, 0xFF10343F, 0.85f * a);
-		disc(ctx, w * 0.3f, h * 0.72f, h * 0.45f * swell, 0.55f, 0.9f, 0xFF0B2830, 0.6f * a * smooth((t - 1.8f) / 1.5f));
-		float lights = smooth((t - 3.0f) / 0.9f) * (1f - smooth((t - 4.4f) / 0.9f));
+		disc(ctx, w * 0.3f, h * 0.72f, h * 0.45f * swell, 0.55f, 0.9f, 0xFF0B2830, 0.6f * a * smooth((t - 4.0f) / 1.5f));
+		float lights = smooth((t - 5.6f) / 0.9f) * (1f - smooth((t - 7.2f) / 0.9f));
 		if (lights <= 0.004f) return;
 		for (int i = 0; i < 9; i++) {
 			float h1 = hash(i * 1.7f + 0.4f), h2 = hash(i * 4.3f + 2.2f), h3 = hash(i * 2.9f + 7.1f);
 			float r = h * (0.06f + 0.09f * h1);
-			float x = w * (0.25f + 0.55f * h2) + (t - 3f) * w * 0.05f * (h3 - 0.5f);
-			float y = h * (0.12f + 0.6f * h3) - (t - 3f) * h * 0.02f;
+			float x = w * (0.25f + 0.55f * h2) + (t - 5.6f) * w * 0.05f * (h3 - 0.5f);
+			float y = h * (0.12f + 0.6f * h3) - (t - 5.6f) * h * 0.02f;
 			disc(ctx, x, y, r, 0.85f, 0.3f, 0xFF557680, (0.16f + 0.2f * h1) * lights);
 		}
 	}
@@ -185,30 +190,6 @@ public final class BootScreen extends Screen implements KeyNavigation {
 		if (alpha <= 0.004f) return;
 		float c = r * core;
 		Render2D.shadow(ctx, cx - c, cy - c, c * 2f, c * 2f, c, r * blur, ColorUtil.fade(color, alpha));
-	}
-
-	/** Golden dust bursting from the middle, slowing, rising a little and fading as the stage comes up. */
-	private void burst(DrawContext ctx, float t) {
-		float start = 4.75f;
-		if (t < start || t > 7.4f) return;
-		float w = width, h = height;
-		float cx = w * 0.55f, cy = h * 0.45f;
-		for (int i = 0; i < 160; i++) {
-			float h1 = hash(i * 1.31f + 0.7f), h2 = hash(i * 6.07f + 3.3f), h3 = hash(i * 2.53f + 8.8f), h4 = hash(i * 9.17f + 1.1f);
-			float age = t - start - 0.25f * h4;
-			float life = 1.0f + 1.3f * h3;
-			if (age <= 0f || age > life) continue;
-			float angle = h1 * 6.2832f;
-			float speed = (0.15f + 0.6f * h2 * h2) * h;
-			float d = speed * (1f - (float) Math.exp(-2.2f * age)) / 2.2f;
-			float x = cx + (float) Math.cos(angle) * d * 1.5f;
-			float y = cy + (float) Math.sin(angle) * d - age * h * 0.02f;
-			float a = Math.min(1f, age / 0.12f) * (1f - smooth(age / life));
-			int color = h3 < 0.55f ? 0xFFFFD58A : h3 < 0.8f ? 0xFFFFEBC4 : 0xFFFFFFFF;
-			float size = 0.35f + 1.1f * h4 * h4;
-			if (h4 > 0.86f) Render2D.shadow(ctx, x - size, y - size, size * 2f, size * 2f, size, size * 2.6f, ColorUtil.fade(color, a * 0.45f));
-			Render2D.circle(ctx, x, y, size * 0.6f, ColorUtil.fade(color, a));
-		}
 	}
 
 	// ------------------------------------------------------------------ who is playing
@@ -320,10 +301,10 @@ public final class BootScreen extends Screen implements KeyNavigation {
 		return time() >= ASK;
 	}
 
-	/** Any key or click before the question skips to it (the stage up, the dust settling). */
+	/** Any key or click before the question skips to it (the stage coming up). */
 	private void skipToQuestion() {
 		float t = time();
-		if (t < ASK - 0.6f) skip += ASK - 0.6f - t;
+		if (t < ASK - 0.8f) skip += ASK - 0.8f - t;
 	}
 
 	private void move(int by) {

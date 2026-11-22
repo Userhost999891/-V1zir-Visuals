@@ -120,6 +120,7 @@ public final class V1zirMainMenu extends Screen implements KeyNavigation {
 		super(Text.literal(V1zir.NAME));
 		introScale = playedIntro ? 0.45f : 1f;
 		playedIntro = true;
+		BootScreen.menuShown();
 	}
 
 	@Override

@@ -643,7 +643,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 	 */
 	/**
 	 * The PS5 style's start, as a console's (BootScreen), the first PS5 menu of the game: its clock stood at each moment
-	 * for a picture (the mark, the notice over the teal glow, the drifting lights, the dust, the stage, "Welcome back"
+	 * for a picture (the mark, the notice over the teal glow, the drifting lights, the stage, "Welcome back"
 	 * with the accounts), then Enter picks the account in focus and the home comes in from it, its row spreading over
 	 * the stage; last the picked tile's shine half way across it.
 	 */
@@ -653,8 +653,8 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.waitTicks(5);
 		String screen = context.computeOnClient(client -> client.currentScreen == null ? "null" : client.currentScreen.getClass().getName());
 		if (!screen.equals(BootScreen.class.getName())) throw new AssertionError("The first PS5 style menu is " + screen + ", not the start");
-		float[] moments = {0.1f, 2.0f, 3.9f, 5.25f, 6.6f, 9.0f};
-		String[] names = {"mark", "notice", "lights", "dust", "stage", "welcome"};
+		float[] moments = {0.5f, 4.6f, 7.25f, 8.9f, 11.1f};
+		String[] names = {"mark", "notice", "lights", "stage", "welcome"};
 		for (int i = 0; i < moments.length; i++) {
 			float at = moments[i];
 			context.runOnClient(client -> BootScreen.testTime = at);
@@ -662,11 +662,11 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			context.takeScreenshot("ps5-boot-" + names[i]);
 		}
 		context.getInput().pressKey(GLFW.GLFW_KEY_ENTER);
-		context.runOnClient(client -> BootScreen.testTime = 9.3f);
+		context.runOnClient(client -> BootScreen.testTime = 11.4f);
 		context.waitTicks(3);
 		context.takeScreenshot("ps5-boot-picked");
 		// On past the pick: the start opens the home.
-		context.runOnClient(client -> BootScreen.testTime = 10.3f);
+		context.runOnClient(client -> BootScreen.testTime = 12.4f);
 		context.waitTicks(6);
 		context.runOnClient(client -> BootScreen.testTime = Float.NaN);
 		String home = context.computeOnClient(client -> client.currentScreen == null ? "null" : client.currentScreen.getClass().getName());

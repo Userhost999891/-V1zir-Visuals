@@ -156,6 +156,9 @@ public final class ConsoleMenu extends Screen implements KeyNavigation {
 	private final List<Item> art = new ArrayList<>();
 	private int swapDirection = 1;
 	private long openedAt = -1L;
+	private final Anim pillX = new Anim(0f, 14f);
+	private final Anim pillW = new Anim(0f, 14f);
+	private boolean pillPlaced;
 	/** Opened from the start (BootScreen): its stage fades out under the row spreading from the middle. */
 	private boolean bootIntro;
 	/** When the picked tile's shine starts (System.nanoTime); tests can stand it at one point of its way (0 to 1). */
@@ -185,6 +188,7 @@ public final class ConsoleMenu extends Screen implements KeyNavigation {
 	public ConsoleMenu() {
 		super(Text.literal(V1zir.NAME));
 		tab = lastTab;
+		BootScreen.menuShown();
 	}
 
 	@Override
@@ -220,6 +224,7 @@ public final class ConsoleMenu extends Screen implements KeyNavigation {
 		icons.add(new TopIcon(Icons.SETTINGS, () -> client.setScreen(new OptionsScreen(this, client.options))));
 		if (FabricLoader.getInstance().isModLoaded("modmenu")) icons.add(new TopIcon(Icons.PUZZLE, this::openModMenu));
 		icons.add(new TopIcon(Icons.MESSAGE_CIRCLE, () -> Messages.open(this, null, null)));
+		pillPlaced = false;
 		showArt();
 	}
 
@@ -628,24 +633,33 @@ public final class ConsoleMenu extends Screen implements KeyNavigation {
 	private void renderTop(DrawContext ctx, int mouseX, int mouseY, float t, float pad) {
 		float appear = in(t, 0.05f, 0.45f);
 		SdfFont font = Fonts.medium();
-		SdfFont bold = Fonts.semibold();
-		float size = Math.max(7f, Math.min(14f, height * 0.031f));
+		float size = Math.max(7f, Math.min(12f, height * 0.031f));
 		tabH = Math.max(12f, Math.min(24f, height * 0.06f));
-		float centerY = Math.max(11f, height * 0.058f);
+		float centerY = Math.max(11f, height * 0.062f);
 		tabY = centerY - tabH / 2f;
-		float inner = tabH * 0.3f;
+		float inner = tabH * 0.55f;
 		String[] names = {label("menu.singleplayer"), label("menu.multiplayer")};
 		float x = pad - inner;
 		for (int i = 0; i < 2; i++) {
-			tabW[i] = (i == tab ? bold : font).width(names[i], size) + inner * 2f;
+			tabW[i] = font.width(names[i], size) + inner * 2f;
 			tabX[i] = x;
-			x += tabW[i] + size * 1.1f;
+			x += tabW[i] + 4f;
 		}
+		if (!pillPlaced) {
+			pillPlaced = true;
+			pillX.snap(tabX[tab]);
+			pillW.snap(tabW[tab]);
+		}
+		float px = pillX.target(tabX[tab]).get(), pw = pillW.target(tabW[tab]).get();
+		Render2D.shadow(ctx, px, tabY + 1f, pw, tabH, tabH / 2f, 6f, ColorUtil.withAlpha(0x000000, Math.round(80 * appear)));
+		Render2D.round(ctx, px, tabY, pw, tabH, tabH / 2f, ColorUtil.fade(0xFFFFFFFF, appear));
 		for (int i = 0; i < 2; i++) {
-			// As the console's: only words, the open tab white and bold, the other grey (lighter under the pointer).
+			// Over the pill the words are dark, beside it white.
+			float overlap = Math.max(0f, Math.min(px + pw, tabX[i] + tabW[i]) - Math.max(px, tabX[i])) / tabW[i];
 			boolean over = Ui.inside(mouseX, mouseY, tabX[i], tabY, tabW[i], tabH);
-			int color = i == tab ? TEXT : over ? 0xD9FFFFFF : 0x80FFFFFF;
-			Render2D.textMiddle(ctx, i == tab ? bold : font, names[i], tabX[i] + inner, centerY, size, ColorUtil.fade(color, appear));
+			int beside = over ? TEXT : 0xD9FFFFFF;
+			int color = ColorUtil.lerp(beside, INK, Anim.clamp01(overlap));
+			Render2D.textMiddle(ctx, font, names[i], tabX[i] + inner, centerY, size, ColorUtil.fade(color, appear));
 			if (focus == TOP && top == i) {
 				// In focus from the keys: a ring of its own a little outside it, as on the Play button.
 				float o = tabH * 0.14f;
