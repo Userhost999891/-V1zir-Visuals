@@ -656,8 +656,8 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.runOnClient(client -> BootScreen.testTime = 0.1f);
 		context.setScreen(BootScreen::new);
 		context.waitTicks(5);
-		float[] moments = {0.5f, 4.6f, 7.25f, 8.9f, 11.1f};
-		String[] names = {"mark", "notice", "lights", "stage", "welcome"};
+		float[] moments = {0.5f, 4.6f, 6.5f, 8.2f, 8.9f, 10.2f, 12.5f};
+		String[] names = {"mark", "notice", "bokeh", "focus", "dust", "stage", "welcome"};
 		for (int i = 0; i < moments.length; i++) {
 			float at = moments[i];
 			context.runOnClient(client -> BootScreen.testTime = at);
@@ -665,11 +665,11 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			context.takeScreenshot("ps5-boot-" + names[i]);
 		}
 		context.getInput().pressKey(GLFW.GLFW_KEY_ENTER);
-		context.runOnClient(client -> BootScreen.testTime = 11.4f);
+		context.runOnClient(client -> BootScreen.testTime = 12.62f);
 		context.waitTicks(3);
 		context.takeScreenshot("ps5-boot-picked");
 		// On past the pick: the start opens the home.
-		context.runOnClient(client -> BootScreen.testTime = 12.4f);
+		context.runOnClient(client -> BootScreen.testTime = 13.4f);
 		context.waitTicks(6);
 		context.runOnClient(client -> BootScreen.testTime = Float.NaN);
 		String home = context.computeOnClient(client -> client.currentScreen == null ? "null" : client.currentScreen.getClass().getName());
