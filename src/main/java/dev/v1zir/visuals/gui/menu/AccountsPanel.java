@@ -1,6 +1,7 @@
 package dev.v1zir.visuals.gui.menu;
 
 import dev.v1zir.visuals.account.Accounts;
+import dev.v1zir.visuals.gui.UiSounds;
 import dev.v1zir.visuals.gui.clickgui.Ui;
 import dev.v1zir.visuals.render.BackdropBlur;
 import dev.v1zir.visuals.render.font.Fonts;
@@ -21,6 +22,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
@@ -31,6 +33,11 @@ import java.util.function.Supplier;
  */
 final class AccountsPanel {
 	static final float WIDTH = 184f;
+	/** The PS5 style's card: the account in use at the top with its head, then the others to switch to, then Add. */
+	static final float CONSOLE_WIDTH = 214f;
+	private static final float CONSOLE_HEADER = 56f;
+	private static final float CONSOLE_ROW = 25f;
+	private static final int INK = 0xFF121215;
 	private static final float ROW = 22f;
 	private static final float HEADER = 20f;
 	private static final float FIELD = 20f;
@@ -49,10 +56,16 @@ final class AccountsPanel {
 	private long errorUntil;
 	/** The first account row shown, when they do not all fit. */
 	private int first;
+	/** The PS5 style's Add Account page, opened from the panel's last row (set by the menu). */
+	private Consumer<Boolean> onAdd = keys -> {
+	};
+	/** In the PS5 style: the row the keys are on (the accounts, then Add), -1 until the keys are used. */
+	private int keyed = -1;
 	// Layout of the last frame.
 	private float x;
 	private float y;
 	private float h;
+	private float w = WIDTH;
 	private float listY;
 	private float fieldY;
 	private int visible;
@@ -66,16 +79,26 @@ final class AccountsPanel {
 		else shown = true;
 	}
 
+	/** Opened or closed with the keys (or a controller): in the PS5 style the keys start on the account in use. */
+	void toggleKeyed() {
+		toggle();
+		if (shown && Theme.ps5()) keyed = Math.max(0, Accounts.all().indexOf(Accounts.current()));
+	}
+
 	void close() {
 		shown = false;
 		typing = false;
+		keyed = -1;
 	}
 
-	/** Opens it with its name field ready for a new account (Add picked at the start). */
-	void startAdding() {
-		shown = true;
-		typing = true;
-		draft = "";
+	/** What its Add Account row opens (the PS5 style's page for it); given whether the keys picked it. */
+	void onAdd(Consumer<Boolean> action) {
+		onAdd = action;
+	}
+
+	/** Its width as it is drawn now (the PS5 style's card is wider). */
+	float width() {
+		return Theme.ps5() ? CONSOLE_WIDTH : WIDTH;
 	}
 
 	/** Draws it dropping in under (px, py) on a screen that tall; nothing once it has closed. */
@@ -85,6 +108,11 @@ final class AccountsPanel {
 			h = 0f;
 			return;
 		}
+		if (Theme.ps5()) {
+			renderConsole(ctx, client, px, py, screenH, mouseX, mouseY, a);
+			return;
+		}
+		w = WIDTH;
 		List<Accounts.Account> accounts = Accounts.all();
 		int count = accounts.size();
 		float fixed = HEADER + PAD + FIELD + HINT + PAD;
@@ -191,14 +219,151 @@ final class AccountsPanel {
 		}
 	}
 
+	/**
+	 * The PS5 style's look, as the console's own account card: dark and plain, the account in use at the top with its
+	 * head large, its name and what kind it is; under a line "Switch Account" and the accounts, the one in focus (under
+	 * the pointer or the keys) a white pill with dark words, the one in use ticked, a cross on an offline one to forget
+	 * it; last "Add Account", which opens a page of its own.
+	 */
+	private void renderConsole(DrawContext ctx, MinecraftClient client, float px, float py, float screenH, int mouseX, int mouseY, float a) {
+		List<Accounts.Account> accounts = Accounts.all();
+		int count = accounts.size();
+		float top = CONSOLE_HEADER + 22f;
+		int rows = count + 1;
+		visible = Math.min(rows, Math.max(2, (int) ((screenH - py - top - 14f) / CONSOLE_ROW)));
+		first = Math.max(0, Math.min(first, rows - visible));
+		if (keyed >= 0) {
+			// Keep the row the keys are on in view.
+			if (keyed < first) first = keyed;
+			if (keyed >= first + visible) first = keyed - visible + 1;
+		}
+		w = CONSOLE_WIDTH;
+		x = px;
+		y = py - (1f - Anim.easeOutCubic(a)) * 6f;
+		h = top + visible * CONSOLE_ROW + 8f;
+		float alpha = Render2D.alpha();
+		Render2D.setAlpha(alpha * a);
+		Render2D.shadow(ctx, x, y + 4f, w, h, 12f, 20f, 0x99000000);
+		Render2D.round(ctx, x, y, w, h, 12f, 0xF21C1C21);
+		Render2D.outline(ctx, x, y, w, h, 12f, 0.8f, 0x1FFFFFFF);
+		SdfFont bold = Fonts.semibold();
+		SdfFont font = Fonts.medium();
+
+		Accounts.Account current = Accounts.current();
+		float headS = 36f;
+		float hx = x + 12f, hy = y + (CONSOLE_HEADER - headS) / 2f;
+		SkinTextures own = current != null ? skin(client, current) : null;
+		if (own != null) Heads.skin(ctx, own, hx, hy, headS, headS / 2f, 0xFFFFFFFF);
+		else {
+			Render2D.circle(ctx, hx + headS / 2f, hy + headS / 2f, headS / 2f, 0x33FFFFFF);
+			Render2D.icon(ctx, Icons.USER, hx + headS / 2f, hy + headS / 2f, headS * 0.45f, 0xCCFFFFFF);
+		}
+		float tx = hx + headS + 10f;
+		String name = current != null ? current.name() : "";
+		Render2D.textMiddle(ctx, bold, bold.trim(name, 9f, x + w - tx - 10f), tx, y + CONSOLE_HEADER / 2f - 5f, 9f, 0xFFFFFFFF);
+		Render2D.circle(ctx, tx + 2.5f, y + CONSOLE_HEADER / 2f + 7f, 2.5f, 0xFF3DDC84);
+		Render2D.textMiddle(ctx, font, current != null && current.launcher() ? "Launcher account" : "Offline account", tx + 8f,
+			y + CONSOLE_HEADER / 2f + 7f, 6.2f, 0x99FFFFFF);
+		Render2D.rect(ctx, x + 10f, y + CONSOLE_HEADER, w - 20f, 0.8f, 0x1FFFFFFF);
+		Render2D.textMiddle(ctx, font, "Switch Account", x + 14f, y + CONSOLE_HEADER + 11f, 6.2f, 0x80FFFFFF);
+
+		listY = y + top;
+		for (int r = 0; r < visible; r++) {
+			int index = first + r;
+			float ry = listY + r * CONSOLE_ROW;
+			boolean over = Ui.inside(mouseX, mouseY, x + 6f, ry, w - 12f, CONSOLE_ROW - 3f);
+			boolean lit = keyed >= 0 ? keyed == index : over;
+			if (lit) Render2D.round(ctx, x + 6f, ry, w - 12f, CONSOLE_ROW - 3f, (CONSOLE_ROW - 3f) / 2f, 0xFFFFFFFF);
+			int ink = lit ? INK : 0xF2FFFFFF;
+			float cy = ry + (CONSOLE_ROW - 3f) / 2f;
+			float head = CONSOLE_ROW - 9f;
+			float ix = x + 14f;
+			if (index == count) {
+				// Add Account, last.
+				Render2D.circle(ctx, ix + head / 2f, cy, head / 2f, lit ? 0x1F121215 : 0x26FFFFFF);
+				Render2D.icon(ctx, Icons.PLUS, ix + head / 2f, cy, head * 0.55f, ink);
+				Render2D.textMiddle(ctx, bold, "Add Account", ix + head + 8f, cy, 7.2f, ink);
+				continue;
+			}
+			Accounts.Account account = accounts.get(index);
+			SkinTextures skin = skin(client, account);
+			if (skin != null) Heads.skin(ctx, skin, ix, cy - head / 2f, head, head / 2f, 0xFFFFFFFF);
+			else Render2D.icon(ctx, Icons.USER, ix + head / 2f, cy, head * 0.7f, ink);
+			Render2D.textMiddle(ctx, bold, bold.trim(account.name(), 7.2f, w - 70f), ix + head + 8f, cy, 7.2f, ink);
+			float ex = x + w - 20f;
+			if (over && !account.launcher()) {
+				boolean onCross = Ui.inside(mouseX, mouseY, ex - 7f, cy - 7f, 14f, 14f);
+				Render2D.circle(ctx, ex, cy, 6.5f, onCross ? DANGER : lit ? 0x1F121215 : 0x1FFFFFFF);
+				Render2D.icon(ctx, Icons.X, ex, cy, 6f, onCross ? 0xFFFFFFFF : ink);
+			} else if (account.equals(current)) {
+				Render2D.icon(ctx, Icons.CHECK, ex, cy, 7.5f, lit ? INK : 0xFFFFFFFF);
+			}
+		}
+		if (visible < rows) {
+			float trackH = visible * CONSOLE_ROW - 6f;
+			float barH = Math.max(10f, trackH * visible / rows);
+			float barY = listY + 1f + (trackH - barH) * first / (float) (rows - visible);
+			Render2D.round(ctx, x + w - 4f, barY, 2f, barH, 1f, 0x3DFFFFFF);
+		}
+		Render2D.setAlpha(alpha);
+	}
+
+	/** A click on the PS5 style's card: an account plays (or its cross forgets it), Add opens its page. */
+	private boolean consoleClicked(MinecraftClient client, double mx, double my) {
+		for (int r = 0; r < visible; r++) {
+			int index = first + r;
+			float ry = listY + r * CONSOLE_ROW;
+			if (!Ui.inside(mx, my, x + 6f, ry, w - 12f, CONSOLE_ROW - 3f)) continue;
+			choose(client, index, mx, my, ry);
+			return true;
+		}
+		return true;
+	}
+
+	private void choose(MinecraftClient client, int index, double mx, double my, float ry) {
+		List<Accounts.Account> accounts = Accounts.all();
+		if (index >= accounts.size()) {
+			add(false);
+			return;
+		}
+		Accounts.Account account = accounts.get(index);
+		float ex = x + w - 20f, cy = ry + (CONSOLE_ROW - 3f) / 2f;
+		if (!account.launcher() && Ui.inside(mx, my, ex - 7f, cy - 7f, 14f, 14f)) {
+			UiSounds.play(UiSounds.BACK);
+			Accounts.remove(client, account);
+		} else {
+			play(client, account);
+		}
+	}
+
+	/** Plays as the account picked on the card, which then closes (as switching user does on a console). */
+	private void play(MinecraftClient client, Accounts.Account account) {
+		UiSounds.play(UiSounds.CONFIRM);
+		if (!account.equals(Accounts.current())) Accounts.use(client, account);
+		close();
+	}
+
+	private void step(int row) {
+		if (row != keyed && keyed >= 0) UiSounds.play(UiSounds.MOVE);
+		keyed = row;
+	}
+
+	private void add(boolean keys) {
+		UiSounds.play(UiSounds.CONFIRM);
+		close();
+		onAdd.accept(keys);
+	}
+
 	/** Whether the point is on the panel as last drawn. */
 	boolean over(double mx, double my) {
-		return shown && h > 0f && Ui.inside(mx, my, x, y, WIDTH, h);
+		return shown && h > 0f && Ui.inside(mx, my, x, y, w, h);
 	}
 
 	/** A click while it shows: true when it was on the panel (and did what it hit); false means a click outside. */
 	boolean mouseClicked(MinecraftClient client, double mx, double my) {
 		if (!over(mx, my)) return false;
+		keyed = -1;
+		if (Theme.ps5()) return consoleClicked(client, mx, my);
 		List<Accounts.Account> accounts = Accounts.all();
 		for (int row = 0; row < visible && first + row < accounts.size(); row++) {
 			float ry = listY + row * ROW;
@@ -231,6 +396,26 @@ final class AccountsPanel {
 	/** Keys while it shows; returns whether it used them. */
 	boolean keyPressed(MinecraftClient client, int key, int modifiers) {
 		if (!shown) return false;
+		if (Theme.ps5()) {
+			// The PS5 style's card: up and down through the accounts and Add, Enter takes the one in focus.
+			List<Accounts.Account> accounts = Accounts.all();
+			int rows = accounts.size() + 1;
+			switch (key) {
+				case GLFW.GLFW_KEY_ESCAPE, GLFW.GLFW_KEY_BACKSPACE -> {
+					UiSounds.play(UiSounds.BACK);
+					close();
+				}
+				case GLFW.GLFW_KEY_UP, GLFW.GLFW_KEY_W -> step(keyed < 0 ? rows - 1 : Math.max(0, keyed - 1));
+				case GLFW.GLFW_KEY_DOWN, GLFW.GLFW_KEY_S -> step(keyed < 0 ? 0 : Math.min(rows - 1, keyed + 1));
+				case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER, GLFW.GLFW_KEY_SPACE -> {
+					if (keyed >= rows - 1) add(true);
+					else if (keyed >= 0) play(client, accounts.get(keyed));
+				}
+				default -> {
+				}
+			}
+			return true;
+		}
 		boolean shortcut = (modifiers & (GLFW.GLFW_MOD_CONTROL | GLFW.GLFW_MOD_SUPER)) != 0;
 		switch (key) {
 			case GLFW.GLFW_KEY_ESCAPE -> {
@@ -257,7 +442,7 @@ final class AccountsPanel {
 
 	/** Letters, digits and underscores of a nickname (up to 16): typing while it shows goes into the field. */
 	boolean charTyped(String text) {
-		if (!shown) return false;
+		if (!shown || Theme.ps5()) return shown;
 		typing = true;
 		StringBuilder name = new StringBuilder(draft);
 		for (int i = 0; i < text.length() && name.length() < MAX_NAME; i++) {

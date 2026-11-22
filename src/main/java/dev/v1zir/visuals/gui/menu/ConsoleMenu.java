@@ -109,8 +109,6 @@ public final class ConsoleMenu extends Screen implements KeyNavigation {
 	private static int lastTab;
 	/** The next menu opens from the start (BootScreen): over its stage, the row spreading from the middle. */
 	static boolean fromBoot;
-	/** ...and with the account panel open to add one (Add was picked there). */
-	static boolean addAccount;
 	/** Finding a server's address can take a while: the pings start off the render thread, as the server list's do. */
 	private static final ExecutorService PINGS = Executors.newFixedThreadPool(2, task -> {
 		Thread thread = new Thread(task, "V1zir menu pings");
@@ -214,10 +212,8 @@ public final class ConsoleMenu extends Screen implements KeyNavigation {
 			fromBoot = false;
 			// The picked tile shines once the row has come in.
 			shineAt = openedAt + (bootIntro ? 1_350_000_000L : 650_000_000L);
-			if (addAccount) {
-				addAccount = false;
-				accounts.startAdding();
-			}
+			accounts.onAdd(keys -> client.setScreen(new AddAccountScreen(this, () -> {
+			}, keys)));
 		}
 		icons.clear();
 		icons.add(new TopIcon(Icons.POWER, () -> client.scheduleStop()));
@@ -586,7 +582,7 @@ public final class ConsoleMenu extends Screen implements KeyNavigation {
 			renderHero(ctx, item, mx, my, t, pad, pictured, fadeIn, true);
 		}
 		popup.render(ctx, width, height, mouseX, mouseY);
-		accounts.render(ctx, client, Math.min(width - pad - AccountsPanel.WIDTH, avatarX), avatarY + avatarS + 6f, height, mouseX, mouseY);
+		accounts.render(ctx, client, Math.min(width - pad - accounts.width(), avatarX), avatarY + avatarS + 6f, height, mouseX, mouseY);
 	}
 
 	/**
@@ -1290,7 +1286,7 @@ public final class ConsoleMenu extends Screen implements KeyNavigation {
 					icons.get(top - 2).action.run();
 				} else {
 					UiSounds.play(accounts.shown() ? UiSounds.BACK : UiSounds.TAB);
-					accounts.toggle();
+					accounts.toggleKeyed();
 				}
 			}
 			default -> {
@@ -1300,10 +1296,10 @@ public final class ConsoleMenu extends Screen implements KeyNavigation {
 		return true;
 	}
 
-	/** The D-pad goes through the menu as the arrow keys do; over the open accounts panel it moves the pointer. */
+	/** The D-pad goes through the menu as the arrow keys do, and through the accounts card in the PS5 style. */
 	@Override
 	public boolean keysNow() {
-		return !accounts.shown();
+		return !accounts.shown() || Theme.ps5();
 	}
 
 	private void moveFocus(int next) {

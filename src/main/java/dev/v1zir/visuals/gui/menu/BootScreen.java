@@ -97,6 +97,13 @@ public final class BootScreen extends Screen implements KeyNavigation {
 	protected void init() {
 		if (!people.isEmpty()) return;
 		Accounts.init(client);
+		refreshPeople();
+	}
+
+	/** Add, then the accounts, the one in use in focus (the one just added, back from adding it). */
+	private void refreshPeople() {
+		people.clear();
+		grow.clear();
 		if (Accounts.available()) people.add(null);
 		people.addAll(Accounts.all());
 		focus = Math.max(0, people.indexOf(Accounts.current()));
@@ -139,7 +146,6 @@ public final class BootScreen extends Screen implements KeyNavigation {
 		if (picked >= 0 && t - pickedAt > 0.55f && !left) {
 			left = true;
 			ConsoleMenu.fromBoot = true;
-			ConsoleMenu.addAccount = people.get(picked) == null;
 			client.setScreen(MainMenus.create());
 		}
 	}
@@ -345,8 +351,14 @@ public final class BootScreen extends Screen implements KeyNavigation {
 		UiSounds.play(UiSounds.MOVE);
 	}
 
-	private void pick(int i) {
+	private void pick(int i, boolean keys) {
 		if (i < 0 || i >= people.size()) return;
+		if (people.get(i) == null) {
+			// Add: a page of its own to make the account, back here with it in focus.
+			UiSounds.play(UiSounds.CONFIRM);
+			client.setScreen(new AddAccountScreen(this, this::refreshPeople, keys));
+			return;
+		}
 		picked = i;
 		focus = i;
 		pickedAt = time();
@@ -374,7 +386,7 @@ public final class BootScreen extends Screen implements KeyNavigation {
 		switch (input.key()) {
 			case GLFW.GLFW_KEY_LEFT, GLFW.GLFW_KEY_A -> move(-1);
 			case GLFW.GLFW_KEY_RIGHT, GLFW.GLFW_KEY_D -> move(1);
-			case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER, GLFW.GLFW_KEY_SPACE -> pick(focus);
+			case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER, GLFW.GLFW_KEY_SPACE -> pick(focus, true);
 			default -> {
 				return super.keyPressed(input);
 			}
@@ -392,7 +404,7 @@ public final class BootScreen extends Screen implements KeyNavigation {
 		if (click.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT) return true;
 		int i = at(click.x(), click.y());
 		if (i >= 0) {
-			pick(i);
+			pick(i, false);
 			return true;
 		}
 		if (Math.hypot(click.x() - powerX, click.y() - powerY) <= powerR * 1.4f) {

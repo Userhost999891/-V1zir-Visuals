@@ -12,6 +12,7 @@ import dev.v1zir.visuals.chat.MqttTransport;
 import dev.v1zir.visuals.compat.voicechat.MusicFeed;
 import dev.v1zir.visuals.controller.Controller;
 import dev.v1zir.visuals.gui.clickgui.ClickGuiScreen;
+import dev.v1zir.visuals.gui.menu.AddAccountScreen;
 import dev.v1zir.visuals.gui.menu.BootScreen;
 import dev.v1zir.visuals.gui.menu.ConsoleMenu;
 import dev.v1zir.visuals.gui.menu.LockScreen;
@@ -682,6 +683,58 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.runOnClient(client -> ConsoleMenu.shineTest = Float.NaN);
 		context.waitTicks(2);
 		context.takeScreenshot("ps5-home");
+		ps5Accounts(context);
+	}
+
+	/**
+	 * The PS5 style's accounts card and its Add Account page, with the keys as a controller's D-pad works them: up onto
+	 * the top bar, along it to the head, Enter opens the card on the account in use; down to Add Account, Enter opens
+	 * its page with the focus on the keyboard. A name is typed, one more letter with the keyboard on the screen, and
+	 * Add (under the keys) makes the account, which plays; the card then lists it, and it is forgotten again.
+	 */
+	private static void ps5Accounts(ClientGameTestContext context) {
+		String launcher = context.computeOnClient(client -> client.getSession().getUsername());
+		context.getInput().pressKey(GLFW.GLFW_KEY_UP);
+		context.getInput().pressKey(GLFW.GLFW_KEY_UP);
+		for (int i = 0; i < 12; i++) context.getInput().pressKey(GLFW.GLFW_KEY_RIGHT);
+		context.getInput().pressKey(GLFW.GLFW_KEY_ENTER);
+		context.waitTicks(12);
+		context.takeScreenshot("ps5-accounts");
+		context.getInput().pressKey(GLFW.GLFW_KEY_DOWN);
+		context.waitTicks(4);
+		context.takeScreenshot("ps5-accounts-add");
+		context.getInput().pressKey(GLFW.GLFW_KEY_ENTER);
+		context.waitForScreen(AddAccountScreen.class);
+		context.getInput().typeChars("V1zirPad");
+		context.waitTicks(10);
+		context.takeScreenshot("ps5-add-account");
+		// The keys start on q: up to 1, right to 2, Cross types it.
+		context.getInput().pressKey(GLFW.GLFW_KEY_UP);
+		context.getInput().pressKey(GLFW.GLFW_KEY_RIGHT);
+		context.waitTicks(4);
+		context.takeScreenshot("ps5-add-account-keys");
+		context.getInput().pressKey(GLFW.GLFW_KEY_ENTER);
+		for (int i = 0; i < 4; i++) context.getInput().pressKey(GLFW.GLFW_KEY_DOWN);
+		context.waitTicks(4);
+		context.takeScreenshot("ps5-add-account-ready");
+		context.getInput().pressKey(GLFW.GLFW_KEY_ENTER);
+		context.waitForScreen(ConsoleMenu.class);
+		context.waitTicks(20);
+		String playing = context.computeOnClient(client -> client.getSession().getUsername());
+		if (!"V1zirPad2".equals(playing)) throw new AssertionError("Playing as " + playing + " after adding V1zirPad2 on its page");
+		// The keys are still on the head: Enter shows the card with the new account in it.
+		context.getInput().pressKey(GLFW.GLFW_KEY_ENTER);
+		context.waitTicks(12);
+		context.takeScreenshot("ps5-accounts-added");
+		context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
+		context.waitTicks(6);
+		context.runOnClient(client -> {
+			for (Accounts.Account account : Accounts.all()) {
+				if (account.name().equals("V1zirPad2")) Accounts.remove(client, account);
+			}
+			String name = client.getSession().getUsername();
+			if (!launcher.equals(name)) throw new AssertionError("Playing as " + name + " after forgetting V1zirPad2, not as " + launcher);
+		});
 	}
 
 	private static void loadingAndPs5(ClientGameTestContext context) {
