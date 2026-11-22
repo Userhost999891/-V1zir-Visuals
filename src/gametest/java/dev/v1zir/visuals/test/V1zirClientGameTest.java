@@ -642,17 +642,20 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 	 * style menu: home picked, then the next tile, then the Multiplayer tab with two servers in the list.
 	 */
 	/**
-	 * The PS5 style's start, as a console's (BootScreen), the first PS5 menu of the game: its clock stood at each moment
+	 * The PS5 style's start, as a console's (BootScreen; it plays only when the game starts, so here it is opened as it
+	 * is, after checking it would not play again): its clock stood at each moment
 	 * for a picture (the mark, the notice over the teal glow, the drifting lights, the stage, "Welcome back"
 	 * with the accounts), then Enter picks the account in focus and the home comes in from it, its row spreading over
 	 * the stage; last the picked tile's shine half way across it.
 	 */
 	private static void ps5Boot(ClientGameTestContext context) {
+		// Only when the game starts: the Normal style's menu has shown already, so the PS5 style's menu is the home.
+		boolean due = context.computeOnClient(client -> BootScreen.due());
+		System.out.println("V1ZIR-BOOT due after a main menu showed: " + due);
+		if (due) throw new AssertionError("The start would play again after a main menu showed");
 		context.runOnClient(client -> BootScreen.testTime = 0.1f);
-		context.setScreen(MainMenus::create);
+		context.setScreen(BootScreen::new);
 		context.waitTicks(5);
-		String screen = context.computeOnClient(client -> client.currentScreen == null ? "null" : client.currentScreen.getClass().getName());
-		if (!screen.equals(BootScreen.class.getName())) throw new AssertionError("The first PS5 style menu is " + screen + ", not the start");
 		float[] moments = {0.5f, 4.6f, 7.25f, 8.9f, 11.1f};
 		String[] names = {"mark", "notice", "lights", "stage", "welcome"};
 		for (int i = 0; i < moments.length; i++) {
