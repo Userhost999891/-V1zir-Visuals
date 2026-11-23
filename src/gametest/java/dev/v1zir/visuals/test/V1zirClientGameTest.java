@@ -645,8 +645,8 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 	/**
 	 * The PS5 style's start, as a console's (BootScreen; it plays only when the game starts, so here it is opened as it
 	 * is, after checking it would not play again): its clock stood at each moment
-	 * for a picture (the mark, the notice over the teal glow, the drifting lights, the stage, "Welcome back"
-	 * with the accounts), then Enter picks the account in focus and the home comes in from it, its row spreading over
+	 * for a picture (the mark, the notice over the teal glow, the glow alone, the warm discs, the pull of focus, the
+	 * specks sharp, the dust on black, the stage, "Welcome back" with the accounts), then Enter picks the account in focus and the home comes in from it, its row spreading over
 	 * the stage; last the picked tile's shine half way across it.
 	 */
 	private static void ps5Boot(ClientGameTestContext context) {
@@ -657,8 +657,8 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.runOnClient(client -> BootScreen.testTime = 0.1f);
 		context.setScreen(BootScreen::new);
 		context.waitTicks(5);
-		float[] moments = {0.5f, 4.6f, 6.5f, 8.2f, 8.9f, 10.2f, 12.5f};
-		String[] names = {"mark", "notice", "bokeh", "focus", "dust", "stage", "welcome"};
+		float[] moments = {0.5f, 4.6f, 8.05f, 8.75f, 8.95f, 9.12f, 9.33f, 10.4f, 12.5f};
+		String[] names = {"mark", "notice", "glow", "bokeh", "focus", "specks", "dust", "stage", "welcome"};
 		for (int i = 0; i < moments.length; i++) {
 			float at = moments[i];
 			context.runOnClient(client -> BootScreen.testTime = at);
