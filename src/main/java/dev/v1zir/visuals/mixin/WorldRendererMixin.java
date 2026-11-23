@@ -5,6 +5,7 @@ import dev.v1zir.visuals.module.impl.world.BlockHighlightModule;
 import dev.v1zir.visuals.module.impl.world.BreakEffectsModule;
 import dev.v1zir.visuals.optimize.GpuTimer;
 import dev.v1zir.visuals.render.Reflections;
+import dev.v1zir.visuals.render.cosmetic.CosmeticsFeature;
 import dev.v1zir.visuals.render.sky.SkyRenderer;
 import dev.v1zir.visuals.render.world.WorldEffectRenderer;
 import net.minecraft.client.render.RenderTickCounter;
@@ -24,6 +25,17 @@ public abstract class WorldRendererMixin {
 	 * bobbing, the hurt tilt and nausea; the third is a plain one vanilla only uses for frustum
 	 * culling, so a sky drawn with it would swim against the terrain while walking.
 	 */
+	/** Players drawn from here to the end of render() are in the world (their capes' cloth is the world's). */
+	@Inject(method = "render", at = @At("HEAD"))
+	private void v1zir$worldPassStarts(CallbackInfo ci) {
+		CosmeticsFeature.worldPass = true;
+	}
+
+	@Inject(method = "render", at = @At("TAIL"))
+	private void v1zir$worldPassEnds(CallbackInfo ci) {
+		CosmeticsFeature.worldPass = false;
+	}
+
 	@Inject(method = "render", at = @At("HEAD"))
 	private void v1zir$captureMatrices(CallbackInfo ci,
 									   @Local(argsOnly = true, ordinal = 0) Matrix4f positionMatrix,

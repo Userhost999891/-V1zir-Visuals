@@ -2033,6 +2033,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		});
 		context.waitTicks(15);
 		context.takeScreenshot("cosmetics-back-2");
+		cosmeticsCloseUp(context, singleplayer);
 		context.runOnClient(client -> client.options.setPerspective(Perspective.FIRST_PERSON));
 		context.runOnClient(client -> setStatic(ClickGuiScreen.class, "tab", Category.COSMETICS.ordinal()));
 		context.setScreen(ClickGuiScreen::new);
@@ -2046,6 +2047,74 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			cosmetics.wings.reset();
 			cosmetics.cape.reset();
 		});
+	}
+
+	/**
+	 * Close-ups of the cosmetics (a large window, the view narrowed): three sets of the new items from the front and
+	 * from behind, then the cape's cloth while walking, strafing and sneaking, seen from behind.
+	 */
+	private static void cosmeticsCloseUp(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
+		resize(context, 1280, 720);
+		int fov = context.computeOnClient(client -> {
+			int was = client.options.getFov().getValue();
+			client.options.getFov().setValue(30);
+			return was;
+		});
+		String[][] sets = {
+			{"Headphones", "Phoenix Wings", "Royal Cape"},
+			{"Cowboy Hat", "Mecha Wings", "Ember Cape"},
+			{"Antlers", "Crystal Wings", "Sakura Cape"},
+		};
+		for (int i = 0; i < sets.length; i++) {
+			String[] set = sets[i];
+			context.runOnClient(client -> {
+				CosmeticsModule cosmetics = ModuleManager.get(CosmeticsModule.class);
+				cosmetics.hat.set(set[0]);
+				cosmetics.wings.set(set[1]);
+				cosmetics.cape.set(set[2]);
+				client.options.setPerspective(Perspective.THIRD_PERSON_FRONT);
+			});
+			context.waitTicks(15);
+			context.takeScreenshot("cosmetics-set-" + (i + 1) + "-front");
+			context.runOnClient(client -> client.options.setPerspective(Perspective.THIRD_PERSON_BACK));
+			context.waitTicks(15);
+			context.takeScreenshot("cosmetics-set-" + (i + 1) + "-back");
+		}
+		// The cloth on the move: a cape alone, then walking, strafing and sneaking.
+		context.runOnClient(client -> {
+			CosmeticsModule cosmetics = ModuleManager.get(CosmeticsModule.class);
+			cosmetics.hat.set("Propeller Cap");
+			cosmetics.wings.set("None");
+			cosmetics.cape.set("Twilight Cape");
+			client.options.setPerspective(Perspective.THIRD_PERSON_BACK);
+		});
+		context.waitTicks(20);
+		context.takeScreenshot("cosmetics-cape-still");
+		context.getInput().holdKey(options -> options.forwardKey);
+		context.waitTicks(14);
+		context.takeScreenshot("cosmetics-cape-walk");
+		context.getInput().holdKey(options -> options.sprintKey);
+		context.waitTicks(14);
+		context.takeScreenshot("cosmetics-cape-run");
+		context.getInput().releaseKey(options -> options.sprintKey);
+		context.getInput().releaseKey(options -> options.forwardKey);
+		context.getInput().holdKey(options -> options.leftKey);
+		context.waitTicks(14);
+		context.takeScreenshot("cosmetics-cape-strafe");
+		context.getInput().releaseKey(options -> options.leftKey);
+		context.getInput().holdKey(options -> options.backKey);
+		context.waitTicks(14);
+		context.takeScreenshot("cosmetics-cape-backwards");
+		context.getInput().releaseKey(options -> options.backKey);
+		context.getInput().holdKey(options -> options.sneakKey);
+		context.getInput().holdKey(options -> options.forwardKey);
+		context.waitTicks(14);
+		context.takeScreenshot("cosmetics-cape-sneak");
+		context.getInput().releaseKey(options -> options.forwardKey);
+		context.getInput().releaseKey(options -> options.sneakKey);
+		context.waitTicks(4);
+		context.runOnClient(client -> client.options.getFov().setValue(fov));
+		resize(context, 854, 480);
 	}
 
 	/**

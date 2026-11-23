@@ -16,13 +16,26 @@ public enum Cosmetic {
 	BEANIE(Slot.HAT, "Beanie", CosmeticModels::beanie, Motion.NONE),
 	HORNS(Slot.HAT, "Horns", CosmeticModels::horns, Motion.NONE),
 	FLOWER_CROWN(Slot.HAT, "Flower Crown", CosmeticModels::flowerCrown, Motion.NONE),
+	HEADPHONES(Slot.HAT, "Headphones", CosmeticModels::headphones, Motion.NONE),
+	COWBOY_HAT(Slot.HAT, "Cowboy Hat", CosmeticModels::cowboyHat, Motion.NONE),
+	ANTLERS(Slot.HAT, "Antlers", CosmeticModels::antlers, Motion.NONE),
+	PROPELLER_CAP(Slot.HAT, "Propeller Cap", CosmeticModels::propellerCap, Motion.PROPELLER),
 	ANGEL_WINGS(Slot.WINGS, "Angel Wings", CosmeticModels::angelWings, Motion.WINGS),
 	DEMON_WINGS(Slot.WINGS, "Demon Wings", CosmeticModels::demonWings, Motion.WINGS),
 	BUTTERFLY_WINGS(Slot.WINGS, "Butterfly Wings", CosmeticModels::butterflyWings, Motion.FLUTTER),
 	ENERGY_WINGS(Slot.WINGS, "Energy Wings", CosmeticModels::energyWings, Motion.WINGS),
-	TWILIGHT_CAPE(Slot.CAPE, "Twilight Cape", () -> CosmeticModels.cape(0xFF3B1E8C, 0xFF1EC8D8, SILK, 0xFFFFFFFF), Motion.CAPE),
-	GALAXY_CAPE(Slot.CAPE, "Galaxy Cape", () -> CosmeticModels.cape(0xFF4A38A8, 0xFF1A1450, GALAXY, 0xFFFFFFFF), Motion.CAPE),
-	AURORA_CAPE(Slot.CAPE, "Aurora Cape", () -> CosmeticModels.cape(0xFF22D3A6, 0xFF2A64E0, SWIRL, 0xFF16202A), Motion.CAPE);
+	PHOENIX_WINGS(Slot.WINGS, "Phoenix Wings", CosmeticModels::phoenixWings, Motion.WINGS),
+	MECHA_WINGS(Slot.WINGS, "Mecha Wings", CosmeticModels::mechaWings, Motion.WINGS),
+	CRYSTAL_WINGS(Slot.WINGS, "Crystal Wings", CosmeticModels::crystalWings, Motion.WINGS),
+	TWILIGHT_CAPE(Slot.CAPE, "Twilight Cape",
+		() -> CosmeticModels.cape(0xFF3B1E8C, 0xFF1EC8D8, SILK, 0xFF1B1446, SATIN, 0xFFFFFFFF, GOLD, 0xFFFFFFFF, 0xFF7FE8FF), Motion.CAPE),
+	GALAXY_CAPE(Slot.CAPE, "Galaxy Cape",
+		() -> CosmeticModels.cape(0xFF4A38A8, 0xFF1A1450, GALAXY, 0xFF231A4A, SATIN, 0xFFD8DCE8, SILVER, 0xFFD8DCE8, 0xFFB48CFF), Motion.CAPE),
+	AURORA_CAPE(Slot.CAPE, "Aurora Cape",
+		() -> CosmeticModels.cape(0xFF22D3A6, 0xFF2A64E0, SWIRL, 0xFF0F2A33, SATIN, 0xFF16202A, SATIN, 0xFFD8DCE8, 0xFF3FF2C4), Motion.CAPE),
+	ROYAL_CAPE(Slot.CAPE, "Royal Cape", CosmeticModels::royalCape, Motion.CAPE),
+	EMBER_CAPE(Slot.CAPE, "Ember Cape", CosmeticModels::emberCape, Motion.CAPE),
+	SAKURA_CAPE(Slot.CAPE, "Sakura Cape", CosmeticModels::sakuraCape, Motion.CAPE);
 
 	public static final String NONE = "None";
 	private static final Cosmetic[] VALUES = values();
@@ -95,7 +108,9 @@ public enum Cosmetic {
 		WINGS,
 		/** A butterfly's quick flutter. */
 		FLUTTER,
-		/** Cloth that lifts and ripples with movement. */
-		CAPE
+		/** Cloth, simulated (CapeCloth). */
+		CAPE,
+		/** Part 1 spins about its pivot, faster on the move. */
+		PROPELLER
 	}
 }

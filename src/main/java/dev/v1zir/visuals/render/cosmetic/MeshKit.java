@@ -517,6 +517,53 @@ final class MeshKit {
 		return this;
 	}
 
+	/** A point of a surface at (u, v), both 0 to 1, written into out as x, y, z. */
+	interface Surface {
+		void at(float u, float v, float[] out);
+	}
+
+	/**
+	 * A surface over a grid of nu by nv quads with its points from f, its normals from its slopes (across u, then v;
+	 * flip turns them over). Pattern coordinates: pixels along u and along v. One-sided: give it a back as well (or
+	 * close it) where it can be seen from both sides.
+	 */
+	MeshKit surface(Surface f, int nu, int nv, boolean flip) {
+		int w = nu + 1;
+		float[] pts = new float[w * (nv + 1) * 3];
+		float[] at = new float[3];
+		for (int j = 0; j <= nv; j++) {
+			for (int i = 0; i <= nu; i++) {
+				f.at(i / (float) nu, j / (float) nv, at);
+				System.arraycopy(at, 0, pts, (j * w + i) * 3, 3);
+			}
+		}
+		int[] idx = new int[w * (nv + 1)];
+		float[] along = new float[w];
+		for (int j = 0; j <= nv; j++) {
+			float acrossU = 0f;
+			for (int i = 0; i <= nu; i++) {
+				int o = (j * w + i) * 3;
+				int l = (j * w + Math.max(0, i - 1)) * 3, r = (j * w + Math.min(nu, i + 1)) * 3;
+				int d = (Math.max(0, j - 1) * w + i) * 3, u = (Math.min(nv, j + 1) * w + i) * 3;
+				float ax = pts[r] - pts[l], ay = pts[r + 1] - pts[l + 1], az = pts[r + 2] - pts[l + 2];
+				float bx = pts[u] - pts[d], by = pts[u + 1] - pts[d + 1], bz = pts[u + 2] - pts[d + 2];
+				float nx = ay * bz - az * by, ny = az * bx - ax * bz, nz = ax * by - ay * bx;
+				if (flip) {
+					nx = -nx;
+					ny = -ny;
+					nz = -nz;
+				}
+				if (i > 0) acrossU += dist3(pts, (o / 3) - 1, o / 3);
+				if (j > 0) along[i] += dist3(pts, ((j - 1) * w + i), (j * w + i));
+				idx[j * w + i] = vertex(pts[o], pts[o + 1], pts[o + 2], nx, ny, nz, acrossU, along[i]);
+			}
+		}
+		for (int j = 0; j < nv; j++) {
+			for (int i = 0; i < nu; i++) quad(idx[j * w + i], idx[j * w + i + 1], idx[(j + 1) * w + i + 1], idx[(j + 1) * w + i]);
+		}
+		return this;
+	}
+
 	private static float dist(float a, float b) {
 		return (float) Math.sqrt(a * a + b * b);
 	}

@@ -6,8 +6,8 @@ import java.util.Map;
 
 /**
  * How one wearer's cosmetics move this frame: the time for animated materials, how far the wings stand open and
- * their beat, and the cape's lift, sideways sway and ripple. Driven by the wearer's movement (velocity from their
- * position between frames, sneaking, gliding, swimming), smoothed with springs so nothing jumps.
+ * their beat. Driven by the wearer's movement (velocity from their position between frames, sneaking, gliding,
+ * swimming), smoothed with springs so nothing jumps. Capes are cloth of their own (CapeCloth).
  */
 public final class CosmeticMotion {
 	private static final Map<Integer, CosmeticMotion> BY_ENTITY = new HashMap<>();
@@ -20,13 +20,10 @@ public final class CosmeticMotion {
 	/** Degrees the wings stand open from the back, and their current beat on top. */
 	float wingOpen = 35f;
 	float wingBeat;
-	/** Cape: lift from hanging straight (degrees), sideways skew per pixel of length, ripple amplitude (degrees). */
-	float capeLift = 6f;
-	float capeSway;
-	float capeRipple = 2.5f;
+	/** Degrees a propeller has turned: steadily, faster on the move and in the air. */
+	float spin;
 
 	private float wingOpenVel;
-	private float liftVel;
 	private float phase;
 	private double lastX;
 	private double lastY;
@@ -83,11 +80,6 @@ public final class CosmeticMotion {
 		lastZ = z;
 		time += dt;
 
-		double yaw = Math.toRadians(bodyYaw);
-		float fx = (float) -Math.sin(yaw);
-		float fz = (float) Math.cos(yaw);
-		float forward = vx * fx + vz * fz;
-		float side = vx * -fz + vz * fx;
 		float speed = (float) Math.sqrt(vx * vx + vz * vz);
 		boolean airborne = gliding || vy < -2.5f;
 
@@ -102,18 +94,6 @@ public final class CosmeticMotion {
 		phase += dt * rate * (float) (Math.PI * 2.0);
 		if (phase > Math.PI * 2000.0) phase -= (float) (Math.PI * 2000.0);
 		wingBeat = (float) Math.sin(phase) * amplitude;
-
-		// Cape: lifted by running forward and by falling, a little more when sneaking; it swings sideways with strafing.
-		float liftTarget = 6f + clamp(forward * 11f, -4f, 62f) + clamp(-vy * 7f, 0f, 40f) + (sneaking ? 20f : 0f) + (gliding ? 50f : 0f);
-		float lo = 6f;
-		float liftAccel = lo * lo * (liftTarget - capeLift) - 2f * 0.7f * lo * liftVel;
-		liftVel += liftAccel * dt;
-		capeLift += liftVel * dt;
-		capeSway += (clamp(side * 0.015f, -0.07f, 0.07f) - capeSway) * (1f - (float) Math.exp(-dt * 5f));
-		capeRipple = 2.5f + Math.min(speed, 7f) * 2.2f;
-	}
-
-	private static float clamp(float v, float lo, float hi) {
-		return Math.max(lo, Math.min(hi, v));
+		spin = (spin + dt * (420f + Math.min(speed, 8f) * 90f + (airborne ? 500f : 0f))) % 360f;
 	}
 }

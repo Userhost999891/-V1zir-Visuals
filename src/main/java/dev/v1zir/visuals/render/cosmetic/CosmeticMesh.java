@@ -32,6 +32,24 @@ public final class CosmeticMesh {
 	public static final int SILVER = 16;
 	/** Emissive swirl of light (animated). */
 	public static final int SWIRL = 17;
+	/** Velvet: deep in the folds, a soft bright rim where it turns away, a fine nap. */
+	public static final int VELVET = 18;
+	/** White fur set with black tails in a staggered pattern (the tint is the fur). */
+	public static final int ERMINE = 19;
+	/** Dark cloth burning at the hem: flames rise and flicker over it (animated, lit by itself). */
+	public static final int FLAME = 20;
+	/** Silk scattered with five-petalled blossoms in a deeper pink (animated: they sway a little). */
+	public static final int PETALS = 21;
+	/** Brushed metal in the tint: fine streaks, the studio reflected, a broad highlight. */
+	public static final int METAL = 22;
+	/** A feather of fire: red at the quill, gold at the tip, the tip glowing and flickering (animated). */
+	public static final int EMBER = 23;
+	/** Clear crystal: the surroundings bent through it, bright edges, a spectrum at grazing angles. */
+	public static final int CRYSTAL = 24;
+	/** Leather: grain, worn lighter in patches, a dull sheen. */
+	public static final int LEATHER = 25;
+	/** Glossy plastic. */
+	public static final int PLASTIC = 26;
 
 	final float[] data;
 	final int[] color;

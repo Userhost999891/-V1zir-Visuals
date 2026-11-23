@@ -6,6 +6,7 @@ import net.minecraft.client.render.RenderSetup;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.command.OrderedRenderCommandQueue;
 import net.minecraft.client.util.math.MatrixStack;
+import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
@@ -16,15 +17,15 @@ import java.util.Arrays;
  * Draws cosmetic models through the game's render command queue, lit like the wearer (light map, vanilla's lights,
  * fog): solid parts with the cosmetic pipeline, glowing and translucent ones blended after them. Matrices arrive in
  * the space of the body part (model space, y down); the meshes are in pixels with y up, so each draw is turned and
- * scaled into it. Each part's motion (wing beats, a halo's float, a cape's lift and ripple) is applied here; capes
- * bend vertex by vertex as they are written. Draw objects come from a pool reused every frame.
+ * scaled into it. Each part's motion (wing beats, a halo's float, a propeller's spin) is applied here; a cape is laid
+ * vertex by vertex onto its simulated cloth (CapeCloth) as it is written. Draw objects come from a pool reused every
+ * frame.
  */
 public final class CosmeticRenderer {
 	private static final float DEG = (float) (Math.PI / 180.0);
 	/** Mesh pixels (x right, y up) into model space (x left, y down): half a turn about z, 1/16 block per pixel. */
 	private static final Quaternionf FLIP = new Quaternionf().rotationZ((float) Math.PI);
 	private static final Quaternionf TURN = new Quaternionf();
-	private static final int CAPE_ROWS = 17;
 
 	private static RenderLayer solid;
 	private static RenderLayer glow;
@@ -49,18 +50,20 @@ public final class CosmeticRenderer {
 		return glow;
 	}
 
-	/** Submits an item worn on the body part whose space the matrices are in. */
-	public static void submit(MatrixStack matrices, OrderedRenderCommandQueue queue, Cosmetic item, int light, CosmeticMotion motion) {
+	/** Submits an item worn on the body part whose space the matrices are in; a cape lies on its cloth (or hangs straight). */
+	public static void submit(MatrixStack matrices, OrderedRenderCommandQueue queue, Cosmetic item, int light, CosmeticMotion motion,
+							  @Nullable CapeCloth cloth) {
 		CosmeticMesh mesh = item.mesh();
 		matrices.push();
 		matrices.multiply(FLIP);
 		matrices.scale(1f / 16f, 1f / 16f, 1f / 16f);
 		CosmeticMesh.Part[] parts = mesh.parts();
+		boolean cape = item.motion == Cosmetic.Motion.CAPE && cloth != null;
 		for (int i = 0; i < parts.length; i++) {
 			CosmeticMesh.Part part = parts[i];
 			matrices.push();
 			move(matrices, item.motion, i, part, motion);
-			queue.submitCustom(matrices, part.glow() ? glow() : solid(), draw(mesh, part, light, motion, item.motion == Cosmetic.Motion.CAPE));
+			queue.submitCustom(matrices, part.glow() ? glow() : solid(), draw(mesh, part, light, motion, cape ? cloth : null));
 			matrices.pop();
 		}
 		matrices.pop();
@@ -84,7 +87,15 @@ public final class CosmeticRenderer {
 				matrices.multiply(TURN.rotationZ(side * twitch * DEG));
 				matrices.translate(-part.pivotX(), -part.pivotY(), -part.pivotZ());
 			}
+			case PROPELLER -> {
+				if (index != 1) return;
+				matrices.translate(part.pivotX(), part.pivotY(), part.pivotZ());
+				matrices.multiply(TURN.rotationY(motion.spin * DEG));
+				matrices.translate(-part.pivotX(), -part.pivotY(), -part.pivotZ());
+			}
 			case WINGS, FLUTTER -> {
+				// Parts 0 and 1 are the wings; any others (a pack on the back) stay still.
+				if (index > 1) return;
 				// Open from the built sweep (28 degrees back) to the wearer's opening, plus the beat; mirrored per side.
 				float beat = kind == Cosmetic.Motion.FLUTTER ? motion.wingBeat * 1.6f : motion.wingBeat;
 				float open = motion.wingOpen + beat - 28f;
@@ -98,7 +109,7 @@ public final class CosmeticRenderer {
 		}
 	}
 
-	private static Draw draw(CosmeticMesh mesh, CosmeticMesh.Part part, int light, CosmeticMotion motion, boolean cape) {
+	private static Draw draw(CosmeticMesh mesh, CosmeticMesh.Part part, int light, CosmeticMotion motion, @Nullable CapeCloth cloth) {
 		if (used == draws.length) draws = Arrays.copyOf(draws, used * 2);
 		Draw draw = draws[used];
 		if (draw == null) draws[used] = draw = new Draw();
@@ -107,31 +118,10 @@ public final class CosmeticRenderer {
 		draw.part = part;
 		draw.light = light;
 		draw.time = ((int) (motion.time * 50f) & 0x7FFF) << 16;
-		draw.cape = cape;
-		if (cape) bend(draw, motion);
+		draw.cape = cloth != null;
+		// The cloth as it is now: the queue draws later, after other wearers may have moved theirs.
+		if (cloth != null) cloth.frames(draw.cloth);
 		return draw;
-	}
-
-	/**
-	 * The cape's centre line, row by row from the shoulders: each row turned back by the lift (more towards the hem,
-	 * as cloth trails), plus a ripple running down it; integrated into positions so the cloth keeps its length.
-	 */
-	private static void bend(Draw draw, CosmeticMotion motion) {
-		float y = CosmeticModels.CAPE_TOP;
-		float z = 0f;
-		for (int r = 0; r < CAPE_ROWS; r++) {
-			float s = r / (float) (CAPE_ROWS - 1);
-			float angle = motion.capeLift * (float) Math.pow(s, 0.7f) + motion.capeRipple * s * (float) Math.sin(motion.time * 6f - r * 0.55f);
-			float a = angle * DEG;
-			draw.rowY[r] = y;
-			draw.rowZ[r] = z;
-			draw.rowSin[r] = (float) Math.sin(a);
-			draw.rowCos[r] = (float) Math.cos(a);
-			// The next row is one pixel further along the cloth, in this row's direction.
-			y -= draw.rowCos[r];
-			z += draw.rowSin[r];
-		}
-		draw.sway = motion.capeSway;
 	}
 
 	/** One part of one item this frame; writes its triangles when the queue reaches it. */
@@ -141,11 +131,9 @@ public final class CosmeticRenderer {
 		int light;
 		int time;
 		boolean cape;
-		float sway;
-		final float[] rowY = new float[CAPE_ROWS];
-		final float[] rowZ = new float[CAPE_ROWS];
-		final float[] rowSin = new float[CAPE_ROWS];
-		final float[] rowCos = new float[CAPE_ROWS];
+		/** The cloth's frames (CapeCloth.frames) when this is a cape. */
+		final float[] cloth = new float[CapeCloth.COUNT * 12];
+		private final float[] at = new float[12];
 
 		@Override
 		public void render(MatrixStack.Entry entry, VertexConsumer consumer) {
@@ -164,20 +152,29 @@ public final class CosmeticRenderer {
 				float ny = data[o + 4];
 				float nz = data[o + 5];
 				if (cape) {
-					// Row position along the cape and depth across the cloth, then laid along the bent centre line.
-					float s = Math.max(0f, Math.min(CAPE_ROWS - 1f, CosmeticModels.CAPE_TOP - y));
-					int r0 = Math.min((int) s, CAPE_ROWS - 2);
-					float f = s - r0;
-					float cy = rowY[r0] + (rowY[r0 + 1] - rowY[r0]) * f;
-					float cz = rowZ[r0] + (rowZ[r0 + 1] - rowZ[r0]) * f;
-					float sin = rowSin[r0] + (rowSin[r0 + 1] - rowSin[r0]) * f;
-					float cos = rowCos[r0] + (rowCos[r0 + 1] - rowCos[r0]) * f;
+					// Where the vertex sits on the straight cape (down the rows, across the columns), then the same place
+					// on the cloth: its point there, off it by the vertex's depth along the cloth's normal, its normal
+					// turned with the cloth. Past the cloth's edges (a clasp, a collar) along its tangents.
+					float s = CosmeticModels.CAPE_TOP - y;
+					float sc = Math.max(0f, Math.min(CapeCloth.ROWS - 1f, s));
+					int r0 = Math.min((int) sc, CapeCloth.ROWS - 2);
+					float f = sc - r0;
+					float half = CapeCloth.half(sc);
+					float u = (x / half + 1f) * 0.5f * (CapeCloth.COLS - 1);
+					float uc = Math.max(0f, Math.min(CapeCloth.COLS - 1f, u));
+					int c0 = Math.min((int) uc, CapeCloth.COLS - 2);
+					float g = uc - c0;
+					sample(r0, c0, f, g);
+					float across = (u - uc) * 2f * half / (CapeCloth.COLS - 1);
+					float along = sc - s;
 					float d = z - CosmeticModels.CAPE_Z;
-					x += sway * s * 16f / CAPE_ROWS * (x > 0 ? 0.9f : 1.1f);
-					y = cy + sin * d;
-					z = CosmeticModels.CAPE_Z + cz + cos * d;
-					float rny = ny * cos + nz * sin;
-					float rnz = -ny * sin + nz * cos;
+					x = at[0] + at[3] * across + at[6] * along + at[9] * d;
+					y = at[1] + at[4] * across + at[7] * along + at[10] * d;
+					z = at[2] + at[5] * across + at[8] * along + at[11] * d;
+					float rnx = at[3] * nx + at[6] * ny + at[9] * nz;
+					float rny = at[4] * nx + at[7] * ny + at[10] * nz;
+					float rnz = at[5] * nx + at[8] * ny + at[11] * nz;
+					nx = rnx;
 					ny = rny;
 					nz = rnz;
 				}
@@ -196,6 +193,16 @@ public final class CosmeticRenderer {
 					pose.m02() * x + pose.m12() * y + pose.m22() * z + pose.m32(),
 					mesh.color[v], data[o + 6], data[o + 7], mesh.material[v] | time, light, tx, ty, tz);
 			}
+		}
+
+		/** The cloth's frame bilinearly between its grid points (r0, c0) and (r0 + 1, c0 + 1), into at. */
+		private void sample(int r0, int c0, float f, float g) {
+			int a = (r0 * CapeCloth.COLS + c0) * 12;
+			int b = a + 12;
+			int c = a + CapeCloth.COLS * 12;
+			int d = c + 12;
+			float wa = (1f - f) * (1f - g), wb = (1f - f) * g, wc = f * (1f - g), wd = f * g;
+			for (int k = 0; k < 12; k++) at[k] = cloth[a + k] * wa + cloth[b + k] * wb + cloth[c + k] * wc + cloth[d + k] * wd;
 		}
 	}
 }
