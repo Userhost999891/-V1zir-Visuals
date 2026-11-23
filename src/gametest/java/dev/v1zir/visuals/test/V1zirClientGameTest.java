@@ -2055,6 +2055,9 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 	 * tests have it (later ones click at its pixels).
 	 */
 	private static void cosmeticsCloseUp(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
+		// Up out of any hole earlier tests left, so the legs show and walking moves the player.
+		singleplayer.getServer().runCommand("execute as @a at @s positioned over world_surface run tp @s ~ ~ ~");
+		context.waitTicks(5);
 		int fov = context.computeOnClient(client -> {
 			int was = client.options.getFov().getValue();
 			client.options.getFov().setValue(30);
