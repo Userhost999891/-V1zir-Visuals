@@ -2050,11 +2050,11 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 	}
 
 	/**
-	 * Close-ups of the cosmetics (a large window, the view narrowed): three sets of the new items from the front and
-	 * from behind, then the cape's cloth while walking, strafing and sneaking, seen from behind.
+	 * Close-ups of the cosmetics (the view narrowed): three sets of the new items from the front and from behind,
+	 * then the cape's cloth while walking, strafing and sneaking, seen from behind. The window stays as the world's
+	 * tests have it (later ones click at its pixels).
 	 */
 	private static void cosmeticsCloseUp(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
-		resize(context, 1280, 720);
 		int fov = context.computeOnClient(client -> {
 			int was = client.options.getFov().getValue();
 			client.options.getFov().setValue(30);
@@ -2114,7 +2114,6 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.getInput().releaseKey(options -> options.sneakKey);
 		context.waitTicks(4);
 		context.runOnClient(client -> client.options.getFov().setValue(fov));
-		resize(context, 854, 480);
 	}
 
 	/**
