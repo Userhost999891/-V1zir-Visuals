@@ -53,6 +53,10 @@ public final class SnowRenderer {
 	private static int mapZ;
 	private static int mapBase;
 	private static boolean broken;
+	/** How far the wind has carried the snow, added up frame by frame and wrapped round the box. */
+	private static double driftX;
+	private static double driftZ;
+	private static long lastFrame;
 
 	private SnowRenderer() {
 	}
@@ -63,8 +67,8 @@ public final class SnowRenderer {
 
 	/**
 	 * Draws the snow over the world just rendered: count flakes (up to MAX_FLAKES) of size (blocks), falling at fall
-	 * blocks a second with the wind's drift (blocks a second), lit by the day and the weather; outdoors only when
-	 * roofs is set.
+	 * blocks a second and carried by the wind (windX, windZ in blocks a second, free to change every frame), lit by
+	 * the day and the weather; outdoors only when roofs is set.
 	 */
 	public static void render(float tickDelta, int count, float size, float fall, float windX, float windZ, boolean roofs) {
 		if (broken || count <= 0) return;
@@ -82,9 +86,15 @@ public final class SnowRenderer {
 			p.camera[1] = (float) (cy - Math.floor(cy / BOX_Y) * BOX_Y);
 			p.camera[2] = (float) (cz - Math.floor(cz / BOX_Z) * BOX_Z);
 			p.camera[3] = V1zir.time() % 7200f;
-			p.wind[0] = windX;
+			// The wind changes with every gust, so its drift is added up here rather than worked out from the time.
+			long now = System.nanoTime();
+			double dt = lastFrame == 0L ? 0.0 : Math.min(0.1, Math.max(0.0, (now - lastFrame) / 1.0e9));
+			lastFrame = now;
+			driftX = wrap(driftX + windX * dt, BOX_X);
+			driftZ = wrap(driftZ + windZ * dt, BOX_Z);
+			p.wind[0] = (float) driftX;
 			p.wind[1] = fall;
-			p.wind[2] = windZ;
+			p.wind[2] = (float) driftZ;
 			p.wind[3] = size;
 			// Light: bright and faintly blue by day, dim blue at night, greyer in a storm.
 			double t = (Math.floorMod(world.getTimeOfDay(), 24000L) + tickDelta) / 24000.0 - 0.25;
@@ -122,6 +132,10 @@ public final class SnowRenderer {
 			broken = true;
 			V1zir.LOGGER.warn("Snow turned off: {}", e.toString());
 		}
+	}
+
+	private static double wrap(double v, double box) {
+		return v - Math.floor(v / box) * box;
 	}
 
 	/** The flakes' static buffer: four corners each with the flake's random numbers, made the first time. */

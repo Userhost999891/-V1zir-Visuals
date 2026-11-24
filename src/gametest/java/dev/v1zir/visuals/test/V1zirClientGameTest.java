@@ -2130,12 +2130,31 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		singleplayer.getServer().runCommand("execute as @a at @s positioned over world_surface run tp @s ~ ~ ~");
 		singleplayer.getServer().runCommand("time set 3500");
 		look(singleplayer, 30f, -4f);
-		context.runOnClient(client -> {
-			ModuleManager.get(WinterModule.class).setEnabled(true, false);
-			client.options.setPerspective(Perspective.FIRST_PERSON);
-		});
+		context.runOnClient(client -> client.options.setPerspective(Perspective.FIRST_PERSON));
+		context.waitTicks(10);
+		bench(context, "winter-off");
+		context.runOnClient(client -> ModuleManager.get(WinterModule.class).setEnabled(true, false));
+		// The block columns the snow cover reads are complete after 16 ticks.
 		context.waitTicks(30);
+		bench(context, "winter-on");
 		context.takeScreenshot("winter-day");
+		// Up close: a wall of stone bricks (snow on top, a lip over its sides), leaves (patches) and a pool (clear).
+		for (String command : List.of(
+			"execute as @a at @s run fill ~1 ~ ~3 ~3 ~1 ~4 minecraft:stone_bricks",
+			"execute as @a at @s run fill ~-3 ~ ~3 ~-2 ~ ~4 minecraft:oak_leaves[persistent=true]",
+			"execute as @a at @s run fill ~-1 ~-1 ~6 ~1 ~-1 ~7 minecraft:water")) {
+			singleplayer.getServer().runCommand(command);
+		}
+		look(singleplayer, 0f, 38f);
+		context.waitTicks(25);
+		context.takeScreenshot("winter-ground");
+		for (String command : List.of(
+			"execute as @a at @s run fill ~1 ~ ~3 ~3 ~1 ~4 minecraft:air",
+			"execute as @a at @s run fill ~-3 ~ ~3 ~-2 ~ ~4 minecraft:air",
+			"execute as @a at @s run fill ~-1 ~-1 ~6 ~1 ~-1 ~7 minecraft:grass_block")) {
+			singleplayer.getServer().runCommand(command);
+		}
+		look(singleplayer, 30f, -4f);
 		context.runOnClient(client -> {
 			CosmeticsModule cosmetics = ModuleManager.get(CosmeticsModule.class);
 			cosmetics.setEnabled(true, false);

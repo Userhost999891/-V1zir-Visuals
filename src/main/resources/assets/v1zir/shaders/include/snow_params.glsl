@@ -4,7 +4,8 @@ layout(std140) uniform SnowParams {
 	mat4 SnowView;
 	// xyz = the camera's position modulo the box (blocks), w = time (seconds)
 	vec4 SnowCamera;
-	// xz = drift of the wind (blocks a second), y = how fast flakes fall, w = flake size (blocks)
+	// xz = how far the wind has carried the snow so far (blocks, wrapped round the box), y = how fast flakes
+	// fall (blocks a second), w = flake size (blocks)
 	vec4 SnowWind;
 	// xyz = the box of snow around the camera (blocks), w = how far before its edge flakes fade out
 	vec4 SnowBox;

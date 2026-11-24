@@ -228,6 +228,8 @@ public final class V1zirPipelines {
 	public static final RenderPipeline REFLECT_TRACE = reflectPipeline("reflect_trace", 6);
 	/** Composites the traced reflections and the wet look back onto the frame. */
 	public static final RenderPipeline REFLECT_COMPOSITE = reflectPipeline("reflect_composite", 6);
+	/** Winter's snow on the ground, over a copy of the frame with the reflections' surface helpers (render/Reflections). */
+	public static final RenderPipeline SNOW_COVER = reflectPipeline("snow_cover", 5);
 
 	/** Mist and light shafts over the world (render/PostFx): the frame and its depth. */
 	public static final RenderPipeline ATMOSPHERE = postPipeline("atmosphere", 2);
@@ -543,6 +545,7 @@ public final class V1zirPipelines {
 		RenderPipelines.register(BLOOM_COMPOSITE);
 		RenderPipelines.register(REFLECT_TRACE);
 		RenderPipelines.register(REFLECT_COMPOSITE);
+		RenderPipelines.register(SNOW_COVER);
 		RenderPipelines.register(GUI_TRANSITION);
 		RenderPipelines.register(GUI_SHARDS);
 		RenderPipelines.register(BLUR_DOWN);

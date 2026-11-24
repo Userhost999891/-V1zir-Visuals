@@ -24,9 +24,12 @@ void main() {
 	// Larger flakes fall a little faster; all drift with the wind and sway in loose loops as they tumble.
 	vec3 p = seed * SnowBox.xyz;
 	p.y -= t * SnowWind.y * mix(0.78, 1.22, big);
-	p.xz += t * SnowWind.xz * mix(0.85, 1.15, Color.b);
-	p.x += sin(t * 0.9 + phase) * 0.32 + sin(t * 2.3 + phase * 1.7) * 0.08;
-	p.z += cos(t * 0.75 + phase * 1.3) * 0.32;
+	// The wind's drift is added up on the CPU frame by frame (it changes with every gust); each flake
+	// answers it a little differently, in loose loops of its own.
+	p.xz += SnowWind.xz;
+	float own = mix(0.7, 1.3, Color.b);
+	p.x += sin(t * 0.9 * own + phase) * 0.32 + sin(t * 2.3 + phase * 1.7) * 0.08;
+	p.z += cos(t * 0.75 * own + phase * 1.3) * 0.32;
 	p.y += sin(t * 1.4 + phase * 2.1) * 0.06;
 	// The box of snow travels with the camera: every flake wraps round inside it.
 	vec3 rel = mod(p - SnowCamera.xyz, SnowBox.xyz) - SnowBox.xyz * 0.5;
@@ -43,7 +46,7 @@ void main() {
 		}
 	}
 	// Close flakes are out of focus: a little larger and softer, as a lens sees them.
-	soft = smoothstep(2.5, 0.6, d);
+	soft = 1.0 - smoothstep(0.6, 2.5, d);
 	float size = SnowWind.w * mix(0.55, 1.45, big * big) * (1.0 + soft * 0.8);
 	if (fade <= 0.0) {
 		gl_Position = vec4(0.0, 0.0, 2.0, 1.0);

@@ -14,7 +14,8 @@ import net.minecraft.world.World;
 /**
  * Winter: snow and the feel of Christmas. Snow falls round you, thousands of flakes of every size tumbling and
  * drifting in the wind, close ones soft as a lens sees them, lit by the day; it stops at roofs and trees as the
- * game's own does, and takes the place of the game's rain and snow while on. All of it is worked out on the graphics
+ * game's own does, and takes the place of the game's rain and snow while on. Snow lies on everything under the open
+ * sky, with a lip over the edges of blocks (render/Reflections and snow_cover.fsh). All of it is worked out on the graphics
  * card (SnowRenderer): one draw, nothing per flake on the CPU, so it costs no frames to speak of. On screen, frost
  * creeps in from the edges, the world takes a cold cast, a string of Christmas lights twinkles along the top, and
  * snow falls in the menus and lies on their panels.
@@ -25,6 +26,7 @@ public final class WinterModule extends Module implements WorldEffect {
 	public final NumberSetting flakeSize = add(new NumberSetting("Flake size", 1.0, 0.5, 2.0, 0.05).suffix("x").visibleIf(snow::on));
 	public final NumberSetting wind = add(new NumberSetting("Wind", 0.7, 0.0, 2.0, 0.05).visibleIf(snow::on));
 	public final BoolSetting outdoorsOnly = add(new BoolSetting("Only outdoors", true).visibleIf(snow::on));
+	public final BoolSetting cover = add(new BoolSetting("Snow cover", true));
 	public final BoolSetting frost = add(new BoolSetting("Frost", true));
 	public final BoolSetting coldTint = add(new BoolSetting("Cold tint", true));
 	public final BoolSetting lights = add(new BoolSetting("Christmas lights", true));
@@ -42,6 +44,12 @@ public final class WinterModule extends Module implements WorldEffect {
 	public static boolean snowing() {
 		WinterModule m = ModuleManager.get(WinterModule.class);
 		return m != null && m.isEnabled() && m.snow.on();
+	}
+
+	/** Whether snow lies on the world (render/Reflections draws it, over the finished world). */
+	public static boolean covers() {
+		WinterModule m = ModuleManager.get(WinterModule.class);
+		return m != null && m.isEnabled() && m.cover.on();
 	}
 
 	@Override
