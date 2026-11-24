@@ -83,14 +83,14 @@ public final class Theme {
 
 		public static Style byTitle(String title) {
 			for (Style style : values()) if (style.title.equals(title)) return style;
-			return BLUR;
+			return NORMAL;
 		}
 	}
 
 	/** Resolved once per settings change: every widget asks for these several times a frame. */
 	private static ThemeModule module;
 	private static String styleTitle;
-	private static Style style = Style.BLUR;
+	private static Style style = Style.NORMAL;
 	private static String presetTitle;
 	private static Preset preset = Preset.V1ZIR;
 
@@ -99,7 +99,7 @@ public final class Theme {
 
 	public static Style style() {
 		ThemeModule m = module();
-		if (m == null) return Style.BLUR;
+		if (m == null) return Style.NORMAL;
 		String title = m.style.get();
 		if (title != styleTitle) {
 			styleTitle = title;
@@ -158,42 +158,47 @@ public final class Theme {
 
 	public static float panelOpacity() {
 		ThemeModule m = module();
-		return m == null ? 0.72f : m.panelOpacity.f();
+		return m == null ? 0.85f : m.panelOpacity.f();
 	}
 
-	/** Main panel colour (translucent, lies on top of the blurred world). */
+	/** The black the panels are made of: near black, with a breath of the preset's own base in it. */
+	private static int black() {
+		return ColorUtil.lerp(0xFF060607, preset().base(), 0.35f);
+	}
+
+	/** Main panel colour of the Blur style: a deep black tint over the blur, so it reads as dark glass, not grey frost. */
 	public static int panel() {
-		return ColorUtil.withAlpha(preset().base(), Math.round(255 * panelOpacity()));
+		return ColorUtil.withAlpha(black(), Math.round(255 * Math.max(0.72f, panelOpacity())));
 	}
 
-	/** Opaque neutral grey of the Normal style. */
+	/** The Normal style's panel: solid black. */
 	public static int solidPanel() {
-		return ColorUtil.withAlpha(ColorUtil.brighten(preset().base(), 0.075f), Math.round(255 * Math.max(0.93f, panelOpacity())));
+		return ColorUtil.withAlpha(ColorUtil.brighten(black(), 0.02f), Math.round(255 * Math.max(0.96f, panelOpacity())));
 	}
 
 	/** Header strip / slightly raised surfaces. */
 	public static int surface() {
-		return ColorUtil.withAlpha(ColorUtil.brighten(preset().base(), 0.06f), Math.round(255 * Math.min(1f, panelOpacity() + 0.08f)));
+		return ColorUtil.withAlpha(ColorUtil.brighten(black(), 0.04f), Math.round(255 * Math.max(0.9f, panelOpacity())));
 	}
 
-	/** Raised matte sub-surface (sidebar, cards): a step lighter than the panel, slightly see-through. */
+	/** Raised sub-surface (sidebar, cards): a breath lighter than the black under it. */
 	public static int raised() {
-		return ColorUtil.withAlpha(ColorUtil.brighten(preset().base(), 0.1f), 120);
+		return 0x0CFFFFFF;
 	}
 
 	/** A raised surface that is lit: hovered, or an enabled module (a trace of the accent mixes in). */
 	public static int raisedLit() {
-		return ColorUtil.withAlpha(ColorUtil.lerp(ColorUtil.brighten(preset().base(), 0.18f), accent(), 0.035f), 165);
+		return ColorUtil.withAlpha(ColorUtil.lerp(0xFFFFFFFF, accent(), 0.12f), 22);
 	}
 
 	/** Recessed well (tracks, fields) cut into a surface. */
 	public static int well() {
-		return 0x30000000;
+		return 0x40000000;
 	}
 
 	/** Soft 1 px rim of panels and cards. */
 	public static int outline() {
-		return ColorUtil.withAlpha(0xFFFFFF, 24);
+		return ColorUtil.withAlpha(0xFFFFFF, 18);
 	}
 
 	public static int text() {
@@ -209,7 +214,7 @@ public final class Theme {
 	}
 
 	public static int shadow() {
-		return 0x8C000000;
+		return 0xA0000000;
 	}
 
 	public static boolean textShadow() {

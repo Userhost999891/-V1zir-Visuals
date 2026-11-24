@@ -284,6 +284,24 @@ public final class V1zirPipelines {
 
 	public static final RenderPipeline BLUR_DOWN = blurPipeline("blur_down");
 	public static final RenderPipeline BLUR_UP = blurPipeline("blur_up");
+	/** One direction of the separable Gaussian blur behind glass panels. */
+	public static final RenderPipeline BLUR_GAUSS = blurPipeline("blur_gauss");
+	/**
+	 * The Winter module's snowfall (render/winter/SnowRenderer): a static buffer of flakes moved and turned to the eye
+	 * in the vertex shader, which reads where snow can fall from a height map in Sampler0; blended, depth tested.
+	 */
+	public static final RenderPipeline SNOW = RenderPipeline.builder()
+		.withLocation(V1zir.id("pipeline/snow"))
+		.withVertexShader(V1zir.id("core/snow"))
+		.withFragmentShader(V1zir.id("core/snow"))
+		.withVertexFormat(VertexFormats.POSITION_TEXTURE_COLOR, VertexFormat.DrawMode.QUADS)
+		.withUniform("SnowParams", UniformType.UNIFORM_BUFFER)
+		.withSampler("Sampler0")
+		.withDepthTestFunction(DepthTestFunction.LEQUAL_DEPTH_TEST)
+		.withDepthWrite(false)
+		.withBlend(BlendFunction.TRANSLUCENT)
+		.withCull(false)
+		.build();
 
 	/** World effects (target ESP, jump circles, trails...) - additive glow, depth tested. */
 	public static final RenderPipeline WORLD_GLOW = worldPipeline("world_glow", ADDITIVE, true);
@@ -529,6 +547,8 @@ public final class V1zirPipelines {
 		RenderPipelines.register(GUI_SHARDS);
 		RenderPipelines.register(BLUR_DOWN);
 		RenderPipelines.register(BLUR_UP);
+		RenderPipelines.register(BLUR_GAUSS);
+		RenderPipelines.register(SNOW);
 		RenderPipelines.register(WORLD_GLOW);
 		RenderPipelines.register(WORLD_TRANSLUCENT);
 		RenderPipelines.register(WORLD_GLOW_SEE_THROUGH);

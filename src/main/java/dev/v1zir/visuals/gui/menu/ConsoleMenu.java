@@ -1,5 +1,6 @@
 package dev.v1zir.visuals.gui.menu;
 
+import dev.v1zir.visuals.render.winter.WinterGui;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.FilterMode;
 import dev.v1zir.visuals.V1zir;
@@ -550,6 +551,7 @@ public final class ConsoleMenu extends Screen implements KeyNavigation {
 		boolean blocked = popup.shown() || accounts.shown();
 		int mx = blocked ? -1000 : mouseX, my = blocked ? -1000 : mouseY;
 		float pictured = renderArt(ctx);
+		WinterGui.snow(ctx, width, height, 1f);
 		if (bootIntro) {
 			float stage = 1f - smoothstep((now - 0.6f) / 0.8f);
 			if (stage > 0.004f) {

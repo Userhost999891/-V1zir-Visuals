@@ -1,5 +1,6 @@
 package dev.v1zir.visuals.module;
 
+import dev.v1zir.visuals.module.impl.visuals.WinterModule;
 import dev.v1zir.visuals.V1zir;
 import dev.v1zir.visuals.module.impl.client.ClickGuiModule;
 import dev.v1zir.visuals.module.impl.client.ControllerModule;
@@ -154,6 +155,7 @@ public final class ModuleManager {
 		register(new CrystalChamsModule());
 		// impl.world
 		register(new WorldParticlesModule());
+		register(new WinterModule());
 		register(new BlockHighlightModule());
 		register(new BreakEffectsModule());
 		register(new TrajectoriesModule());

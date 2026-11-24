@@ -32,6 +32,7 @@ import dev.v1zir.visuals.module.impl.client.ClickGuiModule;
 import dev.v1zir.visuals.module.impl.client.MainMenuModule;
 import dev.v1zir.visuals.module.impl.client.ThemeModule;
 import dev.v1zir.visuals.module.impl.cosmetics.CosmeticsModule;
+import dev.v1zir.visuals.module.impl.visuals.WinterModule;
 import dev.v1zir.visuals.module.impl.effects.ChamsModule;
 import dev.v1zir.visuals.module.impl.effects.ChinaHatModule;
 import dev.v1zir.visuals.module.impl.effects.CrosshairModule;
@@ -193,6 +194,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			handChams(context, singleplayer);
 			knives(context, singleplayer);
 			cosmetics(context, singleplayer);
+			winter(context, singleplayer);
 			packs(context, singleplayer);
 			reflections(context, singleplayer);
 			farWater(context, singleplayer);
@@ -2117,6 +2119,61 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.getInput().releaseKey(options -> options.sneakKey);
 		context.waitTicks(4);
 		context.runOnClient(client -> client.options.getFov().setValue(fov));
+	}
+
+	/**
+	 * Winter: snow over open ground by day, the player from behind and in front in a Santa hat and the royal cape, at
+	 * night, and under a roof (none falls there, it does beyond); then the click GUI with snow falling behind it and
+	 * lying on its window. The frost, the cold cast and the lights are on screen throughout.
+	 */
+	private static void winter(ClientGameTestContext context, TestSingleplayerContext singleplayer) {
+		singleplayer.getServer().runCommand("execute as @a at @s positioned over world_surface run tp @s ~ ~ ~");
+		singleplayer.getServer().runCommand("time set 3500");
+		look(singleplayer, 30f, -4f);
+		context.runOnClient(client -> {
+			ModuleManager.get(WinterModule.class).setEnabled(true, false);
+			client.options.setPerspective(Perspective.FIRST_PERSON);
+		});
+		context.waitTicks(30);
+		context.takeScreenshot("winter-day");
+		context.runOnClient(client -> {
+			CosmeticsModule cosmetics = ModuleManager.get(CosmeticsModule.class);
+			cosmetics.setEnabled(true, false);
+			cosmetics.hat.set("Santa Hat");
+			cosmetics.wings.set("None");
+			cosmetics.cape.set("Royal Cape");
+			client.options.setPerspective(Perspective.THIRD_PERSON_BACK);
+		});
+		context.waitTicks(20);
+		context.takeScreenshot("winter-third-person");
+		context.runOnClient(client -> client.options.setPerspective(Perspective.THIRD_PERSON_FRONT));
+		context.waitTicks(15);
+		context.takeScreenshot("winter-santa-hat");
+		context.runOnClient(client -> client.options.setPerspective(Perspective.FIRST_PERSON));
+		singleplayer.getServer().runCommand("time set 15000");
+		context.waitTicks(20);
+		context.takeScreenshot("winter-night");
+		singleplayer.getServer().runCommand("time set 3500");
+		// A roof over the player: no snow under it, snow beyond it.
+		singleplayer.getServer().runCommand("execute as @a at @s run fill ~-4 ~3 ~-4 ~4 ~3 ~4 minecraft:spruce_planks");
+		look(singleplayer, 30f, 12f);
+		context.waitTicks(30);
+		context.takeScreenshot("winter-under-roof");
+		singleplayer.getServer().runCommand("execute as @a at @s run fill ~-4 ~3 ~-4 ~4 ~3 ~4 minecraft:air");
+		context.runOnClient(client -> setStatic(ClickGuiScreen.class, "tab", Category.SHADERS.ordinal()));
+		context.setScreen(ClickGuiScreen::new);
+		context.waitTicks(30);
+		context.takeScreenshot("winter-clickgui");
+		context.setScreen(() -> null);
+		context.runOnClient(client -> {
+			ModuleManager.get(WinterModule.class).setEnabled(false, false);
+			CosmeticsModule cosmetics = ModuleManager.get(CosmeticsModule.class);
+			cosmetics.setEnabled(false, false);
+			cosmetics.hat.reset();
+			cosmetics.wings.reset();
+			cosmetics.cape.reset();
+		});
+		context.waitTicks(5);
 	}
 
 	/**

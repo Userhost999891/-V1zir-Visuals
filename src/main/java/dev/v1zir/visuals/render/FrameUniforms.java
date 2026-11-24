@@ -56,6 +56,7 @@ public final class FrameUniforms {
 		KnifeRenderer.flip();
 		KnifePreview.flip();
 		CosmeticRenderer.flip();
+		dev.v1zir.visuals.render.winter.SnowRenderer.flip();
 		CosmeticPreview.flip();
 		GuiCapture.flip();
 		Optimizations.endFrame();

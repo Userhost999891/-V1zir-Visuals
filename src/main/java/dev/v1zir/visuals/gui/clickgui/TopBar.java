@@ -17,9 +17,9 @@ import net.minecraft.client.gui.DrawContext;
  * The logo is the shared brand mark (render/ui/Logo), drawn at 20x20 GUI pixels.
  */
 final class TopBar {
-	private static final float LOGO_SIZE = 20f;
-	private static final float BUTTON = 20f;
-	private static final float SEARCH_H = 20f;
+	private static final float LOGO_SIZE = 16f;
+	private static final float BUTTON = 17f;
+	private static final float SEARCH_H = 17f;
 	private static final String PLACEHOLDER = "Search modules";
 	private static final String SHORTCUT = "Ctrl F";
 	private static final String BRAND = "V1zir Visuals";
@@ -48,20 +48,20 @@ final class TopBar {
 
 	void render(DrawContext ctx, float x, float y, float w, double mx, double my, String search, boolean focused) {
 		float mid = y + Ui.BAR / 2f;
-		float lx = x + 12f;
+		float lx = x + 10f;
 		Logo.draw(ctx, lx, mid - LOGO_SIZE / 2f, LOGO_SIZE);
 		// Product name in the interface face, the version beside it as plain secondary text.
 		SdfFont brand = Fonts.semibold();
-		float tx = lx + LOGO_SIZE + 8f;
-		Render2D.textMiddle(ctx, brand, BRAND, tx, mid, 8.5f, Theme.text());
-		Render2D.textMiddle(ctx, Fonts.regular(), version, tx + brandWidth.width(brand, BRAND, 8.5f) + 8f, mid, Ui.TINY, Theme.textFaint());
+		float tx = lx + LOGO_SIZE + 7f;
+		Render2D.textMiddle(ctx, brand, BRAND, tx, mid, 7.5f, Theme.text());
+		Render2D.textMiddle(ctx, Fonts.regular(), version, tx + brandWidth.width(brand, BRAND, 7.5f) + 6f, mid, Ui.TINY, Theme.textFaint());
 
-		searchW = Math.max(112f, Math.min(168f, w * 0.27f));
-		searchX = x + w - 12f - searchW;
+		searchW = Math.max(100f, Math.min(150f, w * 0.26f));
+		searchX = x + w - 10f - searchW;
 		searchY = mid - SEARCH_H / 2f;
 		renderSearch(ctx, mx, my, search, focused);
 
-		hudX = searchX - 8f - BUTTON;
+		hudX = searchX - 6f - BUTTON;
 		hudY = mid - BUTTON / 2f;
 		float hh = hudHover.target(Ui.inside(mx, my, hudX, hudY, BUTTON, BUTTON) ? 1f : 0f).get();
 		float hp = hudPress.target(hudPressed ? 1f : 0f).get();
@@ -80,9 +80,9 @@ final class TopBar {
 		Render2D.rim(ctx, searchX, searchY, searchW, SEARCH_H, r,
 			ColorUtil.lerp(ColorUtil.withAlpha(0xFFFFFF, Math.round(20 + 16 * hv)), ColorUtil.withAlpha(accent, 190), focus), Ui.LIT);
 		float mid = searchY + SEARCH_H / 2f;
-		Render2D.icon(ctx, Icons.SEARCH, searchX + 10f, mid, 7f, ColorUtil.lerp(Theme.textDim(), Theme.text(), focus));
-		float tx = searchX + 20f;
-		float size = 6.5f;
+		Render2D.icon(ctx, Icons.SEARCH, searchX + 9f, mid, 6.5f, ColorUtil.lerp(Theme.textDim(), Theme.text(), focus));
+		float tx = searchX + 18f;
+		float size = 6f;
 		if (search.isEmpty() && !focused) {
 			Render2D.textMiddle(ctx, font, PLACEHOLDER, tx, mid, size, Theme.textFaint());
 			float sw = shortcutWidth.width(Fonts.medium(), SHORTCUT, 5.5f);

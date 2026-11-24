@@ -20,8 +20,8 @@ import org.lwjgl.glfw.GLFW;
  * accent once starred) makes the module a favourite; keyboard focus draws an accent ring.
  */
 final class ModuleCard {
-	private static final float NAME = 7.5f;
-	private static final float PAD = 12f;
+	private static final float NAME = 6.8f;
+	private static final float PAD = 9f;
 	private static final float BAND = 48f;
 
 	final Module module;
@@ -115,7 +115,7 @@ final class ModuleCard {
 			// An enabled card carries a faint wash of the accent from its edge across half of it.
 			Render2D.gradientH(ctx, x, cy, w * 0.55f, ch, r, ColorUtil.withAlpha(accent, Math.round(34 * e)), ColorUtil.withAlpha(accent, 0));
 			// The edge line grows from its middle as the module turns on.
-			float lh = (ch - 24f) * e;
+			float lh = (ch - 18f) * e;
 			Render2D.round(ctx, x + 1f, cy + ch / 2f - lh / 2f, 2f, lh, 1f, ColorUtil.fade(accent, e));
 		}
 		if (s < 0.999f) {
@@ -130,7 +130,7 @@ final class ModuleCard {
 
 		float left = x + PAD;
 		float right = x + w - PAD;
-		float top = cy + 14f;
+		float top = cy + ch * 0.36f;
 		if (module.canToggle()) Ui.toggle(ctx, right - Ui.SWITCH_W, top - Ui.SWITCH_H / 2f, e, h);
 		else Render2D.icon(ctx, Icons.SLIDERS_HORIZONTAL, right - 4f, top, 7f, ColorUtil.lerp(Theme.textDim(), Theme.text(), h));
 		renderStar(module.canToggle() ? right - Ui.SWITCH_W - 10f : right - 18f, top, ctx, mx, my, h, accent);
@@ -147,7 +147,7 @@ final class ModuleCard {
 			Ui.keyChip(ctx, keyWidth, keyName, left + nameWidth.width(font, label, NAME) + 6f, top, Theme.textDim());
 		}
 
-		float descY = cy + 27f;
+		float descY = cy + ch * 0.7f;
 		float maxDesc = w - PAD * 2f - (hasSettings ? 12f : 0f);
 		if (maxDesc != descriptionWidth) {
 			descriptionWidth = maxDesc;
@@ -200,7 +200,7 @@ final class ModuleCard {
 
 	/** The settings chevron at the end of the description line (a left click there opens the settings). */
 	boolean overChevron(double mx, double my) {
-		return hasSettings && Ui.inside(mx, my, x + w - 24f, y + 18f, 24f, Ui.CARD_HEIGHT - 18f);
+		return hasSettings && Ui.inside(mx, my, x + w - 22f, y + Ui.CARD_HEIGHT * 0.5f, 22f, Ui.CARD_HEIGHT * 0.5f);
 	}
 
 	void press() {

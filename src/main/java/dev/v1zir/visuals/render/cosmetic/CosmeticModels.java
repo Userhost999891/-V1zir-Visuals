@@ -245,6 +245,24 @@ final class CosmeticModels {
 	}
 
 	/**
+	 * A Santa hat: a thick white fur band fitted round the head (its corners inside, the hat layer's too), soft red
+	 * velvet rising from it and flopping over to the wearer's left and back, a fur pompom at its tip.
+	 */
+	static CosmeticMesh santaHat() {
+		MeshKit k = new MeshKit();
+		k.paint(0xFFC8102E, VELVET);
+		k.tube(new float[]{0f, 8.25f, 0f, 0f, 10.0f, 0.4f, 0.4f, 11.8f, 1.0f, 0.9f, 13.3f, 1.9f, -0.6f, 14.3f, 2.9f, -2.6f, 14.25f, 3.6f, -4.4f, 13.0f,
+			3.8f, -5.4f, 11.4f, 3.6f}, new float[]{4.75f, 4.1f, 3.1f, 2.1f, 1.4f, 0.95f, 0.6f, 0.35f}, 28, false, true);
+		k.paint(0xFFF5F2EC, FUR);
+		k.roundedLoft(new float[]{4.85f, 5.15f, 5.28f, 5.15f, 4.85f}, new float[]{1.0f, 1.3f, 1.45f, 1.3f, 1.0f},
+			new float[]{6.35f, 6.5f, 7.4f, 8.3f, 8.45f}, 6);
+		// Its top, closed over the head, under the velvet.
+		k.disc(4.85f, 8.45f, 24, true);
+		k.ellipsoid(-5.6f, 10.6f, 3.5f, 1.3f, 1.2f, 1.3f, 18, 12);
+		return k.build();
+	}
+
+	/**
 	 * Over-ear headphones: a padded band arching over the head clear of its corners, cups over the ears with leather
 	 * cushions, a ring of light round each and a brushed metal plate in the middle; metal sliders join them.
 	 */

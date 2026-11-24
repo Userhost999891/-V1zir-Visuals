@@ -156,7 +156,7 @@ public final class WorldEffectRenderer {
 	}
 
 	/** Opens a pass on the world's colour and depth targets, or on the overrides vanilla sets while it renders into other targets. */
-	static RenderPass openPass(Supplier<String> label) {
+	public static RenderPass openPass(Supplier<String> label) {
 		MinecraftClient mc = V1zir.mc();
 		GpuTextureView color = RenderSystem.outputColorTextureOverride != null ? RenderSystem.outputColorTextureOverride : mc.getFramebuffer().getColorAttachmentView();
 		GpuTextureView depth = RenderSystem.outputDepthTextureOverride != null ? RenderSystem.outputDepthTextureOverride : mc.getFramebuffer().getDepthAttachmentView();

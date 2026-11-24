@@ -10,36 +10,36 @@ import dev.v1zir.visuals.util.Theme;
 import net.minecraft.client.gui.DrawContext;
 
 /**
- * Shared metrics and small widgets of the click GUI. Metrics sit on a 4 px grid; radii step down from the
- * window (10) to panels (8), cards (6) and controls (4). The accent marks state only: the selected tab,
+ * Shared metrics and small widgets of the click GUI: a slim, compact black window. Radii step down from the
+ * window (8) to panels (6), cards (5) and controls (3.5). The accent marks state only: the selected tab,
  * enabled modules and focused or active controls. Everything else stays neutral.
  */
 public final class Ui {
 	/** Corner radius of the window. */
-	public static final float RADIUS = 10f;
+	public static final float RADIUS = 8f;
 	/** Corner radius of panels inside the window (sidebar, settings column, groups). */
-	public static final float PANEL_RADIUS = 8f;
+	public static final float PANEL_RADIUS = 6f;
 	/** Height of the top bar (logo, title, search). */
-	public static final float BAR = 32f;
+	public static final float BAR = 26f;
 	/** Margin between the window edge and its panels, and between panels. */
-	public static final float PAD = 8f;
-	public static final float CARD_HEIGHT = 40f;
-	public static final float CARD_GAP = 8f;
-	public static final float CARD_RADIUS = 6f;
+	public static final float PAD = 6f;
+	public static final float CARD_HEIGHT = 32f;
+	public static final float CARD_GAP = 6f;
+	public static final float CARD_RADIUS = 5f;
 	/** Corner radius of chips, buttons, fields and other controls. */
-	public static final float CELL_RADIUS = 4f;
-	public static final float TEXT = 7f;
-	public static final float SMALL = 6.5f;
+	public static final float CELL_RADIUS = 3.5f;
+	public static final float TEXT = 6.5f;
+	public static final float SMALL = 6f;
 	/** Size of setting labels. */
-	public static final float LABEL = 7f;
+	public static final float LABEL = 6.5f;
 	/** Size of descriptions and hints. */
-	public static final float TINY = 6f;
+	public static final float TINY = 5.5f;
 	/** Size of interface icons. */
-	public static final float ICON = 8f;
-	public static final float SWITCH_W = 16f;
-	public static final float SWITCH_H = 8f;
+	public static final float ICON = 7.5f;
+	public static final float SWITCH_W = 14f;
+	public static final float SWITCH_H = 7f;
 	/** Hairline separators and quiet rims. */
-	public static final int HAIRLINE = 0x14FFFFFF;
+	public static final int HAIRLINE = 0x12FFFFFF;
 	/** Shapes that catch the cursor light. */
 	public static final int LIT = ShapeElement.LIT;
 

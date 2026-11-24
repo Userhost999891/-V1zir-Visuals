@@ -24,10 +24,12 @@ import java.util.List;
  */
 final class SettingsPage {
 	private static final float HEADING = 8f;
-	private static final float GROUP_PAD = 12f;
-	private static final float SECTION_GAP = 16f;
-	private static final float PRESET_H = 32f;
-	private static final float PRESET_GAP = 8f;
+	private static final float GROUP_PAD = 9f;
+	private static final float SECTION_GAP = 12f;
+	/** Theme presets are small chips: a dot of the preset's two colours and its name. */
+	private static final float PRESET_H = 15f;
+	private static final float PRESET_GAP = 4f;
+	private static final float PRESET_TEXT = 5.8f;
 	private static final Theme.Preset[] PRESETS = Theme.Preset.values();
 
 	private final List<SettingComponent<?>> theme = new ArrayList<>();
@@ -37,9 +39,9 @@ final class SettingsPage {
 	private final List<SettingComponent<?>> all = new ArrayList<>();
 	private final List<ModuleCard> cards;
 	private final Anim[] presetHover = new Anim[PRESETS.length];
-	/** Preset swatch layout of the last frame: x and y per preset. */
-	private final float[] presetPos = new float[PRESETS.length * 2];
-	private float presetW;
+	/** Preset chip layout of the last frame: x, y and width per preset. */
+	private final float[] presetPos = new float[PRESETS.length * 3];
+	private final Label[] presetWidth = new Label[PRESETS.length];
 	private final Scroller scroller = new Scroller();
 	private float viewX;
 	private float viewY;
@@ -49,7 +51,10 @@ final class SettingsPage {
 
 	SettingsPage(List<ModuleCard> clientCards) {
 		this.cards = clientCards;
-		for (int i = 0; i < PRESETS.length; i++) presetHover[i] = new Anim(0f, 20f);
+		for (int i = 0; i < PRESETS.length; i++) {
+			presetHover[i] = new Anim(0f, 20f);
+			presetWidth[i] = new Label();
+		}
 		ThemeModule themeModule = ModuleManager.get(ThemeModule.class);
 		if (themeModule != null) {
 			for (Setting<?> setting : themeModule.settings()) if (setting != themeModule.preset) theme.add(SettingComponent.of(setting));
@@ -125,37 +130,50 @@ final class SettingsPage {
 		Render2D.setAlpha(alpha * Ui.edgeFade(y, y + HEADING, viewY, viewY + viewH));
 		Ui.heading(ctx, x, y, icon, title);
 		Render2D.setAlpha(alpha);
-		return y + HEADING + 8f;
+		return y + HEADING + 6f;
 	}
 
-	/** Preset swatches: the preset's base with its two accents; the selected one wears an accent rim and a check. */
+	/**
+	 * Preset chips, flowing in rows: a dot of the preset's two colours and its name; the selected one is lit with its
+	 * accent's rim and a soft wash of it.
+	 */
 	private float presets(DrawContext ctx, float x, float y, float w, float viewY, float viewH, double mx, double my) {
 		ThemeModule module = ModuleManager.get(ThemeModule.class);
 		if (module == null) return y;
-		int cols = w >= 420f ? 5 : 4;
-		presetW = (w - PRESET_GAP * (cols - 1)) / cols;
 		float alpha = Render2D.alpha();
+		float cx = x;
+		float cy = y;
 		for (int i = 0; i < PRESETS.length; i++) {
 			Theme.Preset p = PRESETS[i];
-			float px = x + (i % cols) * (presetW + PRESET_GAP);
-			float py = y + (i / cols) * (PRESET_H + PRESET_GAP);
-			presetPos[i * 2] = px;
-			presetPos[i * 2 + 1] = py;
+			float cw = 18f + presetWidth[i].width(Fonts.medium(), p.title(), PRESET_TEXT) + 7f;
+			if (cx > x && cx + cw > x + w) {
+				cx = x;
+				cy += PRESET_H + PRESET_GAP;
+			}
+			presetPos[i * 3] = cx;
+			presetPos[i * 3 + 1] = cy;
+			presetPos[i * 3 + 2] = cw;
 			boolean selected = module.preset.is(p.title());
-			float hv = presetHover[i].target(Ui.inside(mx, my, px, py, presetW, PRESET_H) ? 1f : 0f).get();
+			float hv = presetHover[i].target(Ui.inside(mx, my, cx, cy, cw, PRESET_H) ? 1f : 0f).get();
 			int a1 = p == Theme.Preset.CUSTOM ? module.accent.argb() : p.accent();
 			int a2 = p == Theme.Preset.CUSTOM ? module.accent2.argb() : p.accent2();
-			Render2D.setAlpha(alpha * Ui.edgeFade(py, py + PRESET_H, viewY, viewY + viewH));
-			Render2D.matte(ctx, px, py - hv, presetW, PRESET_H, Ui.CARD_RADIUS, ColorUtil.withAlpha(ColorUtil.brighten(p.base(), 0.05f + 0.04f * hv), 235), Ui.LIT);
-			Render2D.rim(ctx, px, py - hv, presetW, PRESET_H, Ui.CARD_RADIUS, selected ? a1 : ColorUtil.withAlpha(0xFFFFFF, Math.round(20 + 24 * hv)), Ui.LIT);
-			Render2D.textMiddle(ctx, Fonts.medium(), p.title(), px + 8f, py - hv + 11f, 6.5f, selected ? Theme.text() : Theme.textDim());
-			// The preset's own two colours, as a preview.
-			Render2D.gradientH(ctx, px + 8f, py - hv + PRESET_H - 10f, presetW - 16f, 2f, 1f, a1, a2);
-			if (selected) Render2D.icon(ctx, Icons.CHECK, px + presetW - 10f, py - hv + 11f, 6.5f, a1);
+			Render2D.setAlpha(alpha * Ui.edgeFade(cy, cy + PRESET_H, viewY, viewY + viewH));
+			int fill = selected ? ColorUtil.withAlpha(a1, 30) : ColorUtil.withAlpha(0xFFFFFF, Math.round(7 + 9 * hv));
+			Render2D.round(ctx, cx, cy, cw, PRESET_H, PRESET_H / 2f, fill);
+			Render2D.rim(ctx, cx, cy, cw, PRESET_H, PRESET_H / 2f, selected ? ColorUtil.withAlpha(a1, 200) : ColorUtil.withAlpha(0xFFFFFF, Math.round(16 + 20 * hv)), 0);
+			// The preset's own two colours as a dot, split down its middle.
+			float dot = 4f;
+			float dx = cx + 4f + dot;
+			float dy = cy + PRESET_H / 2f;
+			Render2D.circle(ctx, dx, dy, dot, a1);
+			ctx.enableScissor((int) Math.floor(dx), (int) Math.floor(dy - dot - 1f), (int) Math.ceil(dx + dot + 1f), (int) Math.ceil(dy + dot + 1f));
+			Render2D.circle(ctx, dx, dy, dot, a2);
+			ctx.disableScissor();
+			Render2D.textMiddle(ctx, Fonts.medium(), p.title(), cx + 18f, dy, PRESET_TEXT, selected ? Theme.text() : ColorUtil.lerp(Theme.textDim(), Theme.text(), hv));
+			cx += cw + PRESET_GAP;
 		}
 		Render2D.setAlpha(alpha);
-		int rows = (PRESETS.length + cols - 1) / cols;
-		return y + rows * (PRESET_H + PRESET_GAP) - PRESET_GAP;
+		return cy + PRESET_H;
 	}
 
 	/** A matte group box with the components flowing into two balanced columns; returns its bottom. */
@@ -208,7 +226,7 @@ final class SettingsPage {
 		if (!over(mx, my)) return false;
 		ThemeModule module = ModuleManager.get(ThemeModule.class);
 		for (int i = 0; i < PRESETS.length; i++) {
-			if (module != null && Ui.inside(mx, my, presetPos[i * 2], presetPos[i * 2 + 1], presetW, PRESET_H)) {
+			if (module != null && Ui.inside(mx, my, presetPos[i * 3], presetPos[i * 3 + 1], presetPos[i * 3 + 2], PRESET_H)) {
 				module.preset.set(PRESETS[i].title());
 				return true;
 			}

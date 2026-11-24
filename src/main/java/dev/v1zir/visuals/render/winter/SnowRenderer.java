@@ -1,0 +1,223 @@
+package dev.v1zir.visuals.render.winter;
+
+import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.blaze3d.buffers.Std140Builder;
+import com.mojang.blaze3d.buffers.Std140SizeCalculator;
+import com.mojang.blaze3d.systems.RenderPass;
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.textures.FilterMode;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import dev.v1zir.visuals.V1zir;
+import dev.v1zir.visuals.render.V1zirPipelines;
+import dev.v1zir.visuals.render.world.WorldEffectRenderer;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gl.DynamicUniformStorage;
+import net.minecraft.client.texture.NativeImage;
+import net.minecraft.client.texture.NativeImageBackedTexture;
+import net.minecraft.client.world.ClientWorld;
+import net.minecraft.world.Heightmap;
+import org.jetbrains.annotations.Nullable;
+import org.lwjgl.system.MemoryUtil;
+
+import java.nio.ByteBuffer;
+import java.util.Random;
+
+/**
+ * Snowfall round the camera, worked out on the graphics card: a static buffer holds every flake as four corners
+ * and a handful of random numbers, uploaded once; each frame only a few numbers change (the time, the camera, the
+ * wind and the light), and the vertex shader moves every flake, wraps it round inside a box that travels with the
+ * camera, and turns it to face the eye. One draw call however many flakes there are, nothing per flake on the CPU.
+ * Snow stops where the game's own does: a small map of the highest block in every column round the camera (read
+ * every half second) keeps it from falling under roofs and trees. Render thread only.
+ */
+public final class SnowRenderer {
+	/** Most flakes drawn: the buffer holds this many, the intensity draws a share of them. */
+	public static final int MAX_FLAKES = 20000;
+	private static final int STRIDE = 24;
+	private static final int USAGE_VERTEX = 32;
+	private static final int MAP = 128;
+	private static final float BOX_X = 48f;
+	private static final float BOX_Y = 36f;
+	private static final float BOX_Z = 48f;
+	private static final int UBO_SIZE = new Std140SizeCalculator().putMat4f().putMat4f().putVec4().putVec4().putVec4().putVec4().putVec4().get();
+
+	@Nullable
+	private static GpuBuffer flakes;
+	@Nullable
+	private static NativeImageBackedTexture heights;
+	private static DynamicUniformStorage<Params> storage;
+	private static final Params PARAMS = new Params();
+	private static long mapAt;
+	private static int mapX = Integer.MIN_VALUE;
+	private static int mapZ;
+	private static int mapBase;
+	private static boolean broken;
+
+	private SnowRenderer() {
+	}
+
+	public static void flip() {
+		if (storage != null) storage.clear();
+	}
+
+	/**
+	 * Draws the snow over the world just rendered: count flakes (up to MAX_FLAKES) of size (blocks), falling at fall
+	 * blocks a second with the wind's drift (blocks a second), lit by the day and the weather; outdoors only when
+	 * roofs is set.
+	 */
+	public static void render(float tickDelta, int count, float size, float fall, float windX, float windZ, boolean roofs) {
+		if (broken || count <= 0) return;
+		MinecraftClient mc = V1zir.mc();
+		ClientWorld world = mc.world;
+		if (world == null) return;
+		try {
+			GpuBuffer buffer = flakes();
+			if (roofs) updateMap(world);
+			double cx = WorldEffectRenderer.camX;
+			double cy = WorldEffectRenderer.camY;
+			double cz = WorldEffectRenderer.camZ;
+			Params p = PARAMS;
+			p.camera[0] = (float) (cx - Math.floor(cx / BOX_X) * BOX_X);
+			p.camera[1] = (float) (cy - Math.floor(cy / BOX_Y) * BOX_Y);
+			p.camera[2] = (float) (cz - Math.floor(cz / BOX_Z) * BOX_Z);
+			p.camera[3] = V1zir.time() % 7200f;
+			p.wind[0] = windX;
+			p.wind[1] = fall;
+			p.wind[2] = windZ;
+			p.wind[3] = size;
+			// Light: bright and faintly blue by day, dim blue at night, greyer in a storm.
+			double t = (Math.floorMod(world.getTimeOfDay(), 24000L) + tickDelta) / 24000.0 - 0.25;
+			float day = (float) Math.max(0.0, Math.min(1.0, 0.5 + Math.cos(t * Math.PI * 2.0) * 1.3));
+			float storm = world.getRainGradient(tickDelta);
+			float bright = (0.3f + 0.7f * day) * (1f - 0.25f * storm);
+			p.light[0] = bright * (0.9f + 0.05f * day);
+			p.light[1] = bright * (0.93f + 0.04f * day);
+			p.light[2] = bright * 1.0f;
+			p.light[3] = 0.95f;
+			p.height[0] = (float) (cy - mapBase);
+			p.height[1] = roofs && heights != null ? 1f : 0f;
+			p.height[2] = (float) (cx - Math.floor(cx));
+			p.height[3] = (float) (cz - Math.floor(cz));
+			if (roofs && heights != null) {
+				// The map is laid out round the column the camera was in when it was read.
+				p.height[2] += (float) (Math.floor(cx) - mapX);
+				p.height[3] += (float) (Math.floor(cz) - mapZ);
+			}
+			if (storage == null) storage = new DynamicUniformStorage<>("V1zir snow UBO", UBO_SIZE, 2);
+			GpuBufferSlice params = storage.write(p);
+			int flakesDrawn = Math.min(count, MAX_FLAKES);
+			var indices = RenderSystem.getSequentialBuffer(VertexFormat.DrawMode.QUADS);
+			int indexCount = flakesDrawn * 6;
+			GpuBuffer indexBuffer = indices.getIndexBuffer(indexCount);
+			try (RenderPass pass = WorldEffectRenderer.openPass(() -> "V1zir snow")) {
+				pass.setPipeline(V1zirPipelines.SNOW);
+				pass.setUniform("SnowParams", params);
+				pass.bindTexture("Sampler0", heightsView(), RenderSystem.getSamplerCache().get(FilterMode.NEAREST));
+				pass.setVertexBuffer(0, buffer);
+				pass.setIndexBuffer(indexBuffer, indices.getIndexType());
+				pass.drawIndexed(0, 0, indexCount, 1);
+			}
+		} catch (RuntimeException e) {
+			broken = true;
+			V1zir.LOGGER.warn("Snow turned off: {}", e.toString());
+		}
+	}
+
+	/** The flakes' static buffer: four corners each with the flake's random numbers, made the first time. */
+	private static GpuBuffer flakes() {
+		if (flakes != null) return flakes;
+		ByteBuffer data = MemoryUtil.memAlloc(MAX_FLAKES * 4 * STRIDE);
+		try {
+			Random random = new Random(0x5A0F1AE5L);
+			float[] cu = {-1f, -1f, 1f, 1f};
+			float[] cv = {1f, -1f, -1f, 1f};
+			for (int i = 0; i < MAX_FLAKES; i++) {
+				float a = random.nextFloat();
+				float b = random.nextFloat();
+				float c = random.nextFloat();
+				byte size = (byte) random.nextInt(256);
+				byte phase = (byte) random.nextInt(256);
+				byte drift = (byte) random.nextInt(256);
+				byte spin = (byte) random.nextInt(256);
+				for (int k = 0; k < 4; k++) {
+					data.putFloat(a).putFloat(b).putFloat(c);
+					data.putFloat(cu[k]).putFloat(cv[k]);
+					data.put(size).put(phase).put(drift).put(spin);
+				}
+			}
+			data.flip();
+			flakes = RenderSystem.getDevice().createBuffer(() -> "V1zir snowflakes", USAGE_VERTEX, data);
+		} finally {
+			MemoryUtil.memFree(data);
+		}
+		return flakes;
+	}
+
+	private static com.mojang.blaze3d.textures.GpuTextureView heightsView() {
+		if (heights == null) {
+			NativeImage image = new NativeImage(NativeImage.Format.RGBA, MAP, MAP, false);
+			for (int y = 0; y < MAP; y++) for (int x = 0; x < MAP; x++) image.setColorArgb(x, y, 0xFF000000);
+			heights = new NativeImageBackedTexture(() -> "V1zir snow heights", image);
+			heights.upload();
+		}
+		return heights.getGlTextureView();
+	}
+
+	/** Reads the highest block snow stops on in every column round the camera, twice a second or after a move. */
+	private static void updateMap(ClientWorld world) {
+		int x = (int) Math.floor(WorldEffectRenderer.camX);
+		int z = (int) Math.floor(WorldEffectRenderer.camZ);
+		long now = System.nanoTime();
+		boolean moved = Math.abs(x - mapX) > 6 || Math.abs(z - mapZ) > 6;
+		if (!moved && now - mapAt < 500_000_000L) return;
+		mapAt = now;
+		mapX = x;
+		mapZ = z;
+		mapBase = (int) Math.floor(WorldEffectRenderer.camY) - 128;
+		heightsView();
+		NativeImage image = heights.getImage();
+		if (image == null) return;
+		for (int dz = 0; dz < MAP; dz++) {
+			for (int dx = 0; dx < MAP; dx++) {
+				int top = world.getTopY(Heightmap.Type.MOTION_BLOCKING, x - 64 + dx, z - 64 + dz);
+				int h = Math.max(0, Math.min(255, top - mapBase));
+				image.setColorArgb(dx, dz, 0xFF000000 | h << 16);
+			}
+		}
+		heights.upload();
+	}
+
+	private static final org.joml.Matrix4f PROJ = new org.joml.Matrix4f();
+	private static final org.joml.Matrix4f VIEW = new org.joml.Matrix4f();
+
+	/** SnowParams (snow_params.glsl). */
+	private static final class Params implements DynamicUniformStorage.Uploadable {
+		final float[] camera = new float[4];
+		final float[] wind = new float[4];
+		final float[] light = new float[4];
+		final float[] height = new float[4];
+
+		@Override
+		public void write(ByteBuffer buffer) {
+			Std140Builder.intoBuffer(buffer)
+				.putMat4f(PROJ.set(WorldEffectRenderer.projection()))
+				.putMat4f(VIEW.set(WorldEffectRenderer.view()))
+				.putVec4(camera[0], camera[1], camera[2], camera[3])
+				.putVec4(wind[0], wind[1], wind[2], wind[3])
+				.putVec4(BOX_X, BOX_Y, BOX_Z, 4f)
+				.putVec4(light[0], light[1], light[2], light[3])
+				.putVec4(height[0], height[1], height[2], height[3]);
+		}
+
+		@Override
+		public boolean equals(Object o) {
+			return false;
+		}
+
+		@Override
+		public int hashCode() {
+			return System.identityHashCode(this);
+		}
+	}
+}

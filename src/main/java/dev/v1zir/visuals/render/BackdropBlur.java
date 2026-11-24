@@ -26,20 +26,25 @@ import java.nio.ByteBuffer;
 import java.util.OptionalInt;
 
 /**
- * Dual Kawase blur of the world behind the GUI. GUI code only requests it; the passes run
- * right before vanilla's GuiRenderer draws (see GuiRendererMixin), so glass panels sample the
- * freshly rendered frame. Glass panels request the area they cover: every pass is then scissored
- * to those areas plus the reach of the remaining passes, so small HUD panels do not blur the whole
- * frame (texels outside the areas keep stale values no panel ever samples).
+ * Gaussian blur of the world behind the GUI: the frame is taken down to a quarter of its size in two smooth steps,
+ * blurred there by a separable Gaussian (across, then down) whose width follows the theme's blur strength, and
+ * brought back up to half size with a tent filter for the glass to sample. No level smaller than a quarter is used,
+ * so nothing goes blocky or crawls as the view moves. GUI code only requests it; the passes run right before
+ * vanilla's GuiRenderer draws (see GuiRendererMixin), so glass panels sample the freshly rendered frame. Glass
+ * panels request the area they cover: every pass is then scissored to those areas plus the reach of the passes, so
+ * small HUD panels do not blur the whole frame (texels outside the areas keep stale values no panel ever samples).
  */
 public final class BackdropBlur {
-	private static final int MAX_LEVELS = 5;
+	/** Half and quarter size; the Gaussian runs at the quarter, through the spare texture. */
+	private static final int MAX_LEVELS = 2;
 	private static final int BLUR_SIZE = new Std140SizeCalculator().putVec4().get();
 
 	private static final GpuTexture[] textures = new GpuTexture[MAX_LEVELS];
 	private static final GpuTextureView[] views = new GpuTextureView[MAX_LEVELS];
 	private static final int[] widths = new int[MAX_LEVELS];
 	private static final int[] heights = new int[MAX_LEVELS];
+	private static GpuTexture spare;
+	private static GpuTextureView spareView;
 	private static TextureSetup setup;
 	private static int sourceWidth = -1;
 	private static int sourceHeight = -1;
@@ -51,8 +56,8 @@ public final class BackdropBlur {
 	private static final int[] regions = new int[MAX_REGIONS * 4];
 	private static int regionCount;
 	private static boolean fullFrame;
-	/** Margin in framebuffer pixels each level's passes must cover around a region. */
-	private static final int[] margins = new int[MAX_LEVELS];
+	/** Margin in framebuffer pixels the passes must cover around a region (the reach of all of them). */
+	private static int margin;
 	private static DynamicUniformStorage<BlurData> storage;
 	private static final BlurData BLUR = new BlurData();
 
@@ -146,6 +151,10 @@ public final class BackdropBlur {
 			textures[i] = RenderSystem.getDevice().createTexture("V1zir blur " + i, 15, TextureFormat.RGBA8, widths[i], heights[i], 1, 1);
 			views[i] = RenderSystem.getDevice().createTextureView(textures[i]);
 		}
+		if (spareView != null) spareView.close();
+		if (spare != null) spare.close();
+		spare = RenderSystem.getDevice().createTexture("V1zir blur spare", 15, TextureFormat.RGBA8, widths[1], heights[1], 1, 1);
+		spareView = RenderSystem.getDevice().createTextureView(spare);
 		sourceWidth = width;
 		sourceHeight = height;
 		setup = TextureSetup.of(views[0], RenderSystem.getSamplerCache().get(FilterMode.LINEAR));
@@ -161,8 +170,8 @@ public final class BackdropBlur {
 
 		ThemeModule theme = ModuleManager.get(ThemeModule.class);
 		float strength = theme != null ? theme.blurStrength.f() : 0.6f;
-		int levels = Math.max(2, Math.min(MAX_LEVELS, 2 + Math.round(strength * 3f)));
-		float offset = 1.0f + strength * 1.5f;
+		// The Gaussian's width in quarter size texels: about 6 to 34 pixels of the frame.
+		float sigma = 1.5f + strength * 7f;
 
 		GpuTextureView source = fb.getColorAttachmentView();
 		int sw = fb.textureWidth;
@@ -175,35 +184,28 @@ public final class BackdropBlur {
 			sh = wallpaper.height();
 		}
 		boolean scissored = !fullFrame && regionCount > 0;
-		if (scissored) prepareRegions(levels, offset);
-		for (int i = 0; i < levels; i++) {
-			pass(V1zirPipelines.BLUR_DOWN, source, sw, sh, i, offset, scissored);
-			source = views[i];
-			sw = widths[i];
-			sh = heights[i];
-		}
-		for (int i = levels - 1; i > 0; i--) {
-			pass(V1zirPipelines.BLUR_UP, views[i], widths[i], heights[i], i - 1, offset, scissored);
-		}
+		if (scissored) prepareRegions(sigma);
+		// Down to half, then to a quarter, each a smooth five tap step.
+		pass(V1zirPipelines.BLUR_DOWN, source, 1f / sw, 1f / sh, 1f, views[0], widths[0], heights[0], 2, scissored);
+		pass(V1zirPipelines.BLUR_DOWN, views[0], 1f / widths[0], 1f / heights[0], 1f, views[1], widths[1], heights[1], 4, scissored);
+		// The Gaussian at a quarter: across into the spare texture, then down back into the quarter.
+		pass(V1zirPipelines.BLUR_GAUSS, views[1], 1f / widths[1], 0f, sigma, spareView, widths[1], heights[1], 4, scissored);
+		pass(V1zirPipelines.BLUR_GAUSS, spareView, 0f, 1f / heights[1], sigma, views[1], widths[1], heights[1], 4, scissored);
+		// Up to half size for the glass, with a tent filter.
+		pass(V1zirPipelines.BLUR_UP, views[1], 1f / widths[1], 1f / heights[1], 1f, views[0], widths[0], heights[0], 2, scissored);
 		fullFrame = false;
 		regionCount = 0;
 	}
 
 	/**
-	 * Margins per level and merged regions. An up pass reads up to offset + 1 texels of its source level
-	 * around each target texel, a down pass 0.5 * offset + 1; walking back from the final level gives how far
-	 * around a panel every level must be valid. Regions whose reach overlaps become one (no area is blurred twice),
-	 * and so do regions close enough that the box around both is hardly larger; panels far apart (a HUD's corners)
-	 * stay apart, so the passes cover the panels and not the frame between them.
+	 * The passes' reach and merged regions. Around each panel every pass must be valid as far as all the later passes
+	 * read: the Gaussian three sigmas of a quarter texel each way, the steps down and up a few texels. Regions whose
+	 * reach overlaps become one (no area is blurred twice), and so do regions close enough that the box around both
+	 * is hardly larger; panels far apart (a HUD's corners) stay apart.
 	 */
-	private static void prepareRegions(int levels, float offset) {
-		int up = (int) Math.ceil(offset + 1f);
-		int down = (int) Math.ceil(offset * 0.5f + 1f);
-		int margin = 2;
-		for (int j = 1; j < levels; j++) margin += up << (j + 1);
-		margins[levels - 1] = margin;
-		for (int i = levels - 2; i >= 0; i--) margins[i] = margins[i + 1] + (down << (i + 1));
-		int reach = margins[0];
+	private static void prepareRegions(float sigma) {
+		margin = (int) Math.ceil((sigma * 3f + 4f) * 4f) + 16;
+		int reach = margin;
 		for (boolean merged = true; merged; ) {
 			merged = false;
 			for (int a = 0; a < regionCount && !merged; a++) {
@@ -230,15 +232,14 @@ public final class BackdropBlur {
 	}
 
 	/**
-	 * One blur pass into the given level, over the whole level or (scissored) only around the requested regions: one
-	 * render pass for the level, one draw per region.
+	 * One blur pass from source into target (texel: frame pixels per target texel), over the whole target or (scissored)
+	 * only around the requested regions: one render pass, one draw per region.
 	 */
-	private static void pass(RenderPipeline pipeline, GpuTextureView source, int sourceW, int sourceH, int level, float offset, boolean scissored) {
-		BLUR.set(1f / sourceW, 1f / sourceH, offset);
+	private static void pass(RenderPipeline pipeline, GpuTextureView source, float stepX, float stepY, float param, GpuTextureView target,
+							 int targetW, int targetH, int texel, boolean scissored) {
+		BLUR.set(stepX, stepY, param);
 		GpuBufferSlice params = storage.write(BLUR);
-		int texel = 2 << level;
-		int margin = margins[level];
-		try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(() -> "V1zir backdrop blur", views[level], OptionalInt.empty())) {
+		try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(() -> "V1zir backdrop blur", target, OptionalInt.empty())) {
 			pass.setPipeline(pipeline);
 			pass.bindTexture("Sampler0", source, RenderSystem.getSamplerCache().get(FilterMode.LINEAR));
 			pass.setUniform("BlurParams", params);
@@ -250,8 +251,8 @@ public final class BackdropBlur {
 			for (int r = 0; r < regionCount * 4; r += 4) {
 				int x0 = Math.max(0, Math.floorDiv(regions[r] - margin, texel));
 				int y0 = Math.max(0, Math.floorDiv(regions[r + 1] - margin, texel));
-				int x1 = Math.min(widths[level], -Math.floorDiv(-(regions[r + 2] + margin), texel));
-				int y1 = Math.min(heights[level], -Math.floorDiv(-(regions[r + 3] + margin), texel));
+				int x1 = Math.min(targetW, -Math.floorDiv(-(regions[r + 2] + margin), texel));
+				int y1 = Math.min(targetH, -Math.floorDiv(-(regions[r + 3] + margin), texel));
 				if (x1 <= x0 || y1 <= y0) continue;
 				pass.enableScissor(x0, y0, x1 - x0, y1 - y0);
 				pass.draw(0, 3);

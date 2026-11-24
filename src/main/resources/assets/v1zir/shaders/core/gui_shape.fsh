@@ -45,6 +45,7 @@ void main() {
 			color = vec4(color.rgb + light * 0.07, color.a + (1.0 - color.a) * light * 0.05);
 		}
 	}
-	if ((flags & V1ZIR_MATTE) != 0) color.rgb += v1zirGrain(gl_FragCoord.xy) * 0.03;
+	// Matte surfaces are clean now: only half a step of dither against banding, below visible grain.
+	if ((flags & V1ZIR_MATTE) != 0) color.rgb += v1zirGrain(gl_FragCoord.xy) * (1.0 / 255.0);
 	fragColor = vec4(color.rgb, color.a * coverage) * ColorModulator;
 }

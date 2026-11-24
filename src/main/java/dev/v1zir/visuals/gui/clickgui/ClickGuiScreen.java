@@ -1,5 +1,6 @@
 package dev.v1zir.visuals.gui.clickgui;
 
+import dev.v1zir.visuals.render.winter.WinterGui;
 import com.google.gson.JsonObject;
 import dev.v1zir.visuals.config.ConfigManager;
 import dev.v1zir.visuals.controller.Targets;
@@ -47,7 +48,7 @@ import java.util.Map;
  */
 public final class ClickGuiScreen extends Screen {
 	private static final Category[] TABS = Category.values();
-	private static final float HEADER = 24f;
+	private static final float HEADER = 20f;
 	/** Selected sub-category chip of every tab. */
 	private static final Map<Category, String> SUBS = new EnumMap<>(Category.class);
 	/** Selected tab (Category ordinal); static so it is remembered between openings. */
@@ -186,14 +187,14 @@ public final class ClickGuiScreen extends Screen {
 	private void layout() {
 		float sw = spaceW();
 		float sh = spaceH();
-		winW = Math.min(sw - 16f, Math.max(420f, Math.min(780f, sw * 0.70f)));
-		winH = Math.min(sh - 16f, Math.max(250f, Math.min(470f, sh * 0.72f)));
+		winW = Math.min(sw - 16f, Math.max(400f, Math.min(660f, sw * 0.6f)));
+		winH = Math.min(sh - 16f, Math.max(236f, Math.min(390f, sh * 0.64f)));
 		winX = Math.round((sw - winW) / 2f);
 		winY = Math.round((sh - winH) / 2f);
 		float side = Sidebar.width(winW);
-		contentX = winX + Ui.PAD + side + 12f;
+		contentX = winX + Ui.PAD + side + 10f;
 		contentY = winY + Ui.BAR + Ui.PAD;
-		contentW = winX + winW - 12f - contentX;
+		contentW = winX + winW - 10f - contentX;
 		contentH = winH - Ui.BAR - Ui.PAD * 2f;
 	}
 
@@ -249,6 +250,8 @@ public final class ClickGuiScreen extends Screen {
 			if (inWorld && BackdropBlur.available()) Render2D.glass(ctx, 0, 0, width, height, 0, 0x34000000);
 			else Render2D.rect(ctx, 0, 0, width, height, inWorld ? 0x80000000 : 0xB0000000);
 		}
+		Render2D.setAlpha(t * (1f - edit));
+		WinterGui.snow(ctx, width, height, 1f);
 		if (edit < 0.999f) {
 			DrawContext swing = edit < 0.001f ? WindowTransition.openTarget(mouseX, mouseY) : null;
 			if (swing != null) {
@@ -290,23 +293,22 @@ public final class ClickGuiScreen extends Screen {
 			my = -1000;
 		}
 
-		Render2D.panelShadow(ctx, winX, winY + 6f, winW, winH, Ui.RADIUS, 28f, 0x8C000000, winX, winY, winW, winH);
-		// A faint glow of the accent all around the window, the light of the theme on the glass.
-		Render2D.glow(ctx, winX, winY, winW, winH, Ui.RADIUS, 22f, ColorUtil.withAlpha(Theme.accent(), 26), ColorUtil.withAlpha(Theme.accent2(), 18));
+		Render2D.panelShadow(ctx, winX, winY + 4f, winW, winH, Ui.RADIUS, 22f, 0xA0000000, winX, winY, winW, winH);
 		Render2D.panel(ctx, winX, winY, winW, winH, Ui.RADIUS, 0, Ui.LIT);
-		// A thin line of the accents along the top edge, fading out towards the corners.
-		float lineW = winW * 0.55f;
+		// A hairline of the accents along the top edge, fading out towards the corners.
+		float lineW = winW * 0.4f;
 		Render2D.gradientH(ctx, winX + (winW - lineW) * 0.5f, winY, lineW * 0.5f, 1f, 0f, ColorUtil.withAlpha(Theme.accent(), 0),
-			ColorUtil.withAlpha(Theme.accent(), 170));
-		Render2D.gradientH(ctx, winX + winW * 0.5f, winY, lineW * 0.5f, 1f, 0f, ColorUtil.withAlpha(Theme.accent2(), 170),
+			ColorUtil.withAlpha(Theme.accent(), 120));
+		Render2D.gradientH(ctx, winX + winW * 0.5f, winY, lineW * 0.5f, 1f, 0f, ColorUtil.withAlpha(Theme.accent2(), 120),
 			ColorUtil.withAlpha(Theme.accent2(), 0));
+		WinterGui.cap(ctx, winX, winY, winW, Ui.RADIUS);
 		topBar.render(ctx, winX, winY, winW, mx, my, search, searchFocused);
 		sidebar.render(ctx, winX + Ui.PAD, contentY, Sidebar.width(winW), contentH, tab, searching(), mx, my);
 
 		boolean mouseFree = !drawer.over(mx, my);
 		renderHeader(ctx, mx, my, mouseFree);
-		float bodyY = contentY + HEADER + 8f;
-		float bodyH = contentH - HEADER - 8f;
+		float bodyY = contentY + HEADER + 6f;
+		float bodyH = contentH - HEADER - 6f;
 		Module drawerModule = drawer.module();
 		float slide = tabSlide.get();
 		float windowAlpha = Render2D.alpha();

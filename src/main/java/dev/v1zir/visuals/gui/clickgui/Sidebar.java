@@ -25,10 +25,10 @@ import java.util.List;
  */
 final class Sidebar {
 	private static final Category[] TABS = Category.values();
-	private static final float TAB_H = 28f;
-	private static final float TAB_GAP = 4f;
-	private static final float TABS_TOP = 8f;
-	private static final float FOOTER = 36f;
+	private static final float TAB_H = 22f;
+	private static final float TAB_GAP = 3f;
+	private static final float TABS_TOP = 6f;
+	private static final float FOOTER = 30f;
 
 	/** Top of the selection pill relative to the sidebar, so it can glide to the pinned Settings tab too. */
 	private final Anim pill;
@@ -70,7 +70,7 @@ final class Sidebar {
 	}
 
 	static float width(float windowW) {
-		return Math.max(112f, Math.min(150f, windowW * 0.24f));
+		return Math.max(96f, Math.min(126f, windowW * 0.2f));
 	}
 
 	/** selected is the tab's ordinal; searching dims the pill, since results span every tab. */
@@ -86,13 +86,13 @@ final class Sidebar {
 		float scale = Math.max(0.6f, Math.min(1f, room / ((listed + 1) * TAB_H + (listed + 2) * TAB_GAP)));
 		tabH = TAB_H * scale;
 		tabGap = TAB_GAP * scale;
-		float barInset = Math.min(8f, tabH * 0.29f);
+		float barInset = Math.min(6f, tabH * 0.28f);
 		int accent = Theme.accent();
 		Render2D.matte(ctx, x, y, w, h, Ui.PANEL_RADIUS, Theme.raised(), Ui.LIT);
 		Render2D.rim(ctx, x, y, w, h, Ui.PANEL_RADIUS, Ui.HAIRLINE, Ui.LIT);
 
-		float tx = x + 8f;
-		float tw = w - 16f;
+		float tx = x + 6f;
+		float tw = w - 12f;
 		float slide = pill.target(tabY(selected)).get();
 		float fade = pillFade.target(searching ? 0.35f : 1f).get();
 		float py = y + slide;
@@ -119,15 +119,15 @@ final class Sidebar {
 			if (hv > 0.01f) Render2D.matte(ctx, tx, ry, tw, tabH, Ui.CELL_RADIUS + 2f, ColorUtil.withAlpha(0xFFFFFF, Math.round(9 * hv)), Ui.LIT);
 			float light = Math.max(near, hv * 0.7f);
 			int iconColor = ColorUtil.lerp(ColorUtil.lerp(Theme.textDim(), Theme.text(), hv), accent, near);
-			Render2D.icon(ctx, TABS[i].icon(), tx + 14f, ry + tabH / 2f, Ui.ICON, iconColor);
-			Render2D.textMiddle(ctx, font, TABS[i].title(), tx + 26f, ry + tabH / 2f, 7.5f, ColorUtil.lerp(Theme.textDim(), Theme.text(), light));
+			Render2D.icon(ctx, TABS[i].icon(), tx + 12f, ry + tabH / 2f, Ui.ICON, iconColor);
+			Render2D.textMiddle(ctx, font, TABS[i].title(), tx + 22f, ry + tabH / 2f, 6.8f, ColorUtil.lerp(Theme.textDim(), Theme.text(), light));
 			if (enabled[i] > 0 && TABS[i] != Category.SETTINGS) {
 				if (enabled[i] != counts[i]) {
 					counts[i] = enabled[i];
 					countText[i] = Integer.toString(enabled[i]);
 				}
-				float cw = countWidth[i].width(Fonts.medium(), countText[i], 6f);
-				Render2D.textMiddle(ctx, Fonts.medium(), countText[i], tx + tw - 8f - cw, ry + tabH / 2f, 6f, Theme.textFaint());
+				float cw = countWidth[i].width(Fonts.medium(), countText[i], 5.5f);
+				Render2D.textMiddle(ctx, Fonts.medium(), countText[i], tx + tw - 7f - cw, ry + tabH / 2f, 5.5f, Theme.textFaint());
 			}
 		}
 		footer = false;
@@ -156,8 +156,8 @@ final class Sidebar {
 		if (hv > 0.01f) Render2D.matte(ctx, fx + 6f, fy + 4f, fw - 12f, FOOTER - 7f, Ui.CELL_RADIUS + 2f, ColorUtil.withAlpha(0xFFFFFF, Math.round(10 * hv)), Ui.LIT);
 		Render2D.icon(ctx, profiles.isOpen() ? Icons.CHEVRON_DOWN : Icons.CHEVRON_UP, fx + fw - 16f, fy + FOOTER / 2f, 6.5f,
 			ColorUtil.lerp(Theme.textFaint(), Theme.text(), hv));
-		float head = 16f;
-		float hx = fx + 12f;
+		float head = 14f;
+		float hx = fx + 10f;
 		float hy = fy + (FOOTER - head) / 2f;
 		Heads.skin(ctx, mc.player.getSkin(), hx, hy, head, Ui.CELL_RADIUS, 0xFFFFFFFF);
 		Render2D.outline(ctx, hx, hy, head, head, Ui.CELL_RADIUS, 1f, ColorUtil.withAlpha(0xFFFFFF, 30));
@@ -166,16 +166,16 @@ final class Sidebar {
 		if (!name.equals(shownName) || maxName != nameMax) {
 			shownName = name;
 			nameMax = maxName;
-			trimmedName = Fonts.semibold().trim(name, 7f, maxName);
+			trimmedName = Fonts.semibold().trim(name, 6.5f, maxName);
 		}
-		Render2D.textMiddle(ctx, Fonts.semibold(), trimmedName, hx + head + 8f, hy + 4f, 7f, Theme.text());
+		Render2D.textMiddle(ctx, Fonts.semibold(), trimmedName, hx + head + 7f, hy + 3.5f, 6.5f, Theme.text());
 		String profile = ConfigManager.profile();
 		if (!profile.equals(profileShown) || maxName != profileMax) {
 			profileShown = profile;
 			profileMax = maxName;
-			profileLabel = Fonts.regular().trim(profile + " config", 6f, maxName);
+			profileLabel = Fonts.regular().trim(profile + " config", 5.5f, maxName);
 		}
-		Render2D.textMiddle(ctx, Fonts.regular(), profileLabel, hx + head + 8f, hy + 12f, 6f, Theme.textDim());
+		Render2D.textMiddle(ctx, Fonts.regular(), profileLabel, hx + head + 7f, hy + 10.5f, 5.5f, Theme.textDim());
 	}
 
 	private boolean overFooter(double mx, double my) {
@@ -205,8 +205,8 @@ final class Sidebar {
 
 	/** The tab under the mouse, or -1. */
 	int tabAt(double mx, double my) {
-		float tx = x + 8f;
-		float tw = w - 16f;
+		float tx = x + 6f;
+		float tw = w - 12f;
 		for (int i = 0; i < TABS.length; i++) {
 			if (Ui.inside(mx, my, tx, y + tabY(i), tw, tabH)) return i;
 		}
@@ -215,7 +215,7 @@ final class Sidebar {
 
 	/** Top of a tab relative to the sidebar: listed from the top, Settings just above the footer. */
 	private float tabY(int index) {
-		if (TABS[index] == Category.SETTINGS) return h - FOOTER - 8f - tabH;
+		if (TABS[index] == Category.SETTINGS) return h - FOOTER - 6f - tabH;
 		return TABS_TOP + index * (tabH + tabGap);
 	}
 }

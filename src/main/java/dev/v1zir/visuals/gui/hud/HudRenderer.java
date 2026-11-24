@@ -1,5 +1,6 @@
 package dev.v1zir.visuals.gui.hud;
 
+import dev.v1zir.visuals.render.winter.WinterGui;
 import dev.v1zir.visuals.V1zir;
 import dev.v1zir.visuals.gui.clickgui.ClickGuiScreen;
 import dev.v1zir.visuals.gui.messages.MessageBanners;
@@ -41,6 +42,9 @@ public final class HudRenderer {
 		HudElementRegistry.attachElementAfter(VanillaHudElements.MISC_OVERLAYS, V1zir.id("damage_tint"), (ctx, tickCounter) -> {
 			DamageTintModule tint = ModuleManager.get(DamageTintModule.class);
 			if (tint != null && tint.isEnabled() && !V1zir.mc().options.hudHidden) tint.render(ctx);
+		});
+		HudElementRegistry.attachElementAfter(VanillaHudElements.MISC_OVERLAYS, V1zir.id("winter"), (ctx, tickCounter) -> {
+			if (!V1zir.mc().options.hudHidden) WinterGui.hud(ctx, ctx.getScaledWindowWidth(), ctx.getScaledWindowHeight());
 		});
 		HudElementRegistry.attachElementAfter(VanillaHudElements.MISC_OVERLAYS, V1zir.id("world_overlays"), (ctx, tickCounter) -> {
 			if (V1zir.mc().options.hudHidden) return;

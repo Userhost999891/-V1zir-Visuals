@@ -20,6 +20,7 @@ public enum Cosmetic {
 	COWBOY_HAT(Slot.HAT, "Cowboy Hat", CosmeticModels::cowboyHat, Motion.NONE),
 	ANTLERS(Slot.HAT, "Antlers", CosmeticModels::antlers, Motion.NONE),
 	PROPELLER_CAP(Slot.HAT, "Propeller Cap", CosmeticModels::propellerCap, Motion.PROPELLER),
+	SANTA_HAT(Slot.HAT, "Santa Hat", CosmeticModels::santaHat, Motion.NONE),
 	ANGEL_WINGS(Slot.WINGS, "Angel Wings", CosmeticModels::angelWings, Motion.WINGS),
 	DEMON_WINGS(Slot.WINGS, "Demon Wings", CosmeticModels::demonWings, Motion.WINGS),
 	BUTTERFLY_WINGS(Slot.WINGS, "Butterfly Wings", CosmeticModels::butterflyWings, Motion.FLUTTER),

@@ -1,5 +1,6 @@
 package dev.v1zir.visuals.gui.menu;
 
+import dev.v1zir.visuals.render.winter.WinterGui;
 import dev.v1zir.visuals.controller.KeyNavigation;
 import dev.v1zir.visuals.controller.Targets;
 import dev.v1zir.visuals.V1zir;
@@ -342,6 +343,7 @@ public final class V1zirMainMenu extends Screen implements KeyNavigation {
 				}
 				Render2D.setAlpha(fade * (1f - exit));
 				renderParticles(ctx, dt, px, py);
+				WinterGui.snow(ctx, width, height, shown);
 				renderMenu(ctx, interactive ? mouseX : -10000, interactive ? mouseY : -10000, t, px, py, shown * fade);
 				if (zoom) ctx.getMatrices().popMatrix();
 			}
