@@ -5,22 +5,30 @@
 in vec2 corner;
 in float fade;
 in float soft;
+in vec4 seed4;
+in vec3 sunView;
 
 out vec4 fragColor;
 
 void main() {
-	float r = length(corner);
-	// A small bright flake with a soft rim; out of focus, a soft round disc.
-	float rim = mix(0.25, 0.75, soft);
-	float body = 1.0 - smoothstep(1.0 - rim, 1.0, r);
-	float core = 1.0 - smoothstep(0.0, 0.55, r);
-	// Six faint arms catch the light on the sharp ones.
-	// cos(3a) straight from the direction: no atan, which is undefined at the very centre.
-	vec2 n = corner / max(r, 0.0001);
-	float c3 = n.x * (4.0 * n.x * n.x - 3.0);
-	float arms = pow(abs(c3), 12.0) * (1.0 - smoothstep(0.2, 0.95, r)) * (1.0 - soft);
-	float alpha = (body * mix(0.92, 0.5, soft) + arms * 0.25) * fade * SnowLight.a;
+	// A fluffy clump of crystals: a few soft lobes round its middle, each its own size and place, so its edge is uneven
+	// and soft; out of focus close by it melts into a round blur.
+	float edge = mix(0.42, 0.05, soft);
+	float body = 1.0 - smoothstep(edge, 1.0, length(corner) / 0.6);
+	for (int i = 0; i < 4; i++) {
+		float k = float(i);
+		float a = seed4.g * 6.2831853 + k * 1.7 + seed4.a * 3.0;
+		vec2 o = vec2(cos(a), sin(a)) * (0.2 + 0.14 * fract(seed4.b * 7.0 + k * 0.37)) * (1.0 - soft * 0.6);
+		float r = mix(0.42, 0.62, fract(seed4.r * 5.3 + k * 0.61));
+		body = max(body, 1.0 - smoothstep(edge, 1.0, length(corner - o) / r));
+	}
+	float alpha = body * mix(0.95, 0.55, soft) * fade * SnowLight.a;
 	if (alpha < 0.004) discard;
-	vec3 color = SnowLight.rgb * (0.86 + 0.22 * core + arms * 0.2);
-	fragColor = vec4(color, alpha);
+	// Lit as a small ball of snow: brighter on the side towards the sun or the moon, and glowing round its rim when
+	// the light is behind it.
+	vec2 q = corner * 0.9;
+	vec3 normal = vec3(q, sqrt(max(1.0 - dot(q, q), 0.0)));
+	float lit = 0.78 + 0.3 * max(dot(normal, sunView), 0.0) * SnowSun.w - 0.08 * (1.0 - normal.z);
+	float rim = pow(1.0 - normal.z, 2.0) * max(-sunView.z, 0.0) * 0.45 * SnowSun.w;
+	fragColor = vec4(SnowLight.rgb * (lit + rim), alpha);
 }

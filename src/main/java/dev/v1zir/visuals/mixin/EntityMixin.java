@@ -2,9 +2,12 @@ package dev.v1zir.visuals.mixin;
 
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.visuals.FreeLookModule;
+import dev.v1zir.visuals.module.impl.visuals.WinterModule;
 import dev.v1zir.visuals.module.impl.visuals.ZoomModule;
+import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.Entity;
+import net.minecraft.util.math.BlockPos;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -12,7 +15,10 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/** Mouse turning of the local player: slower while zoomed, and redirected to the camera by Free Look. */
+/**
+ * Mouse turning of the local player: slower while zoomed, and redirected to the camera by Free Look. Its steps crunch in
+ * snow out under the sky while Winter's snow lies.
+ */
 @Mixin(Entity.class)
 public abstract class EntityMixin {
 	@ModifyVariable(method = "changeLookDirection", at = @At("HEAD"), argsOnly = true, ordinal = 0)
@@ -30,6 +36,12 @@ public abstract class EntityMixin {
 		if ((Object) this != MinecraftClient.getInstance().player) return;
 		FreeLookModule freeLook = ModuleManager.get(FreeLookModule.class);
 		if (freeLook != null && freeLook.isEnabled() && freeLook.turn(cursorDeltaX, cursorDeltaY)) ci.cancel();
+	}
+
+	@Inject(method = "playStepSound", at = @At("HEAD"), cancellable = true, require = 0)
+	private void v1zir$snowStep(BlockPos pos, BlockState state, CallbackInfo ci) {
+		if ((Object) this != MinecraftClient.getInstance().player) return;
+		if (WinterModule.snowStep((Entity) (Object) this, pos, state)) ci.cancel();
 	}
 
 	@Unique

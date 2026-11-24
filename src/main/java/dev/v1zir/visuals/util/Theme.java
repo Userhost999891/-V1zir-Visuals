@@ -163,7 +163,7 @@ public final class Theme {
 
 	/** The black the panels are made of: near black, with a breath of the preset's own base in it. */
 	private static int black() {
-		return ColorUtil.lerp(0xFF060607, preset().base(), 0.35f);
+		return ColorUtil.lerp(0xFF030304, preset().base(), 0.3f);
 	}
 
 	/** Main panel colour of the Blur style: a deep black tint over the blur, so it reads as dark glass, not grey frost. */
@@ -173,22 +173,22 @@ public final class Theme {
 
 	/** The Normal style's panel: solid black. */
 	public static int solidPanel() {
-		return ColorUtil.withAlpha(ColorUtil.brighten(black(), 0.02f), Math.round(255 * Math.max(0.96f, panelOpacity())));
+		return ColorUtil.withAlpha(black(), Math.round(255 * Math.max(0.96f, panelOpacity())));
 	}
 
 	/** Header strip / slightly raised surfaces. */
 	public static int surface() {
-		return ColorUtil.withAlpha(ColorUtil.brighten(black(), 0.04f), Math.round(255 * Math.max(0.9f, panelOpacity())));
+		return ColorUtil.withAlpha(ColorUtil.brighten(black(), 0.03f), Math.round(255 * Math.max(0.9f, panelOpacity())));
 	}
 
 	/** Raised sub-surface (sidebar, cards): a breath lighter than the black under it. */
 	public static int raised() {
-		return 0x0CFFFFFF;
+		return 0x09FFFFFF;
 	}
 
 	/** A raised surface that is lit: hovered, or an enabled module (a trace of the accent mixes in). */
 	public static int raisedLit() {
-		return ColorUtil.withAlpha(ColorUtil.lerp(0xFFFFFFFF, accent(), 0.12f), 22);
+		return ColorUtil.withAlpha(ColorUtil.lerp(0xFFFFFFFF, accent(), 0.12f), 16);
 	}
 
 	/** Recessed well (tracks, fields) cut into a surface. */

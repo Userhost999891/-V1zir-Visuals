@@ -14,6 +14,7 @@ import net.minecraft.client.texture.TextureSetup;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Random;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * The Winter module's touches on screen: snow falling in the menus, snow lying on the top of panels, a string of
@@ -24,7 +25,12 @@ public final class WinterGui {
 	private static final int[] BULBS = {0xFFFF3B3B, 0xFF2EE66B, 0xFFFFC23D, 0xFF3D8BFF, 0xFFFF6BD5};
 	@Nullable
 	private static TextureSetup frost;
+	@Nullable
+	private static CompletableFuture<NativeImage> frostJob;
 	private static boolean frostBroken;
+	/** How far the frost has thawed (0 to 1), following the warmth round the player. */
+	private static float thaw;
+	private static long thawAt;
 
 	private WinterGui() {
 	}
@@ -74,55 +80,83 @@ public final class WinterGui {
 	}
 
 	/**
-	 * Snow lying along the top edge of a panel (x, y, w; corner radius r): a soft ridge of drifts a few pixels high,
-	 * rounded at its ends short of the corners, with a bluish shade under it and a few small icicles hanging below.
+	 * Snow lying along the top edge of a panel (x, y, w; corner radius r): a soft band of snow over the edge, fluffy
+	 * drifts piled on it in a wavy line (white on top, blue-grey in their shade, each catching the light on its crown),
+	 * its shadow on the panel, and a few clear icicles tapering down from it.
 	 */
 	public static void cap(DrawContext ctx, float x, float y, float w, float r) {
 		if (!menus() || w < 30f) return;
-		// Render2D fades the shapes with the window itself.
-		float alpha = 1f;
 		Random random = new Random(Float.floatToIntBits(w) * 31L + 7L);
-		float left = x + r * 0.55f;
-		float right = x + w - r * 0.55f;
-		// The shade it casts on the panel, then the snow itself.
-		Render2D.round(ctx, left + 1f, y + 0.5f, right - left - 2f, 2.2f, 1.1f, ColorUtil.fade(0xFF8FA6C8, 0.35f * alpha));
-		Render2D.round(ctx, left, y - 2.2f, right - left, 3.4f, 1.7f, ColorUtil.fade(0xFFF7FAFF, alpha));
-		float at = left + 2f;
-		while (at < right - 6f) {
-			float bump = 7f + random.nextFloat() * 16f;
-			float tall = 1.2f + random.nextFloat() * 2.4f;
-			float bw = Math.min(bump, right - at - 1f);
-			Render2D.round(ctx, at, y - 2.2f - tall, bw, tall * 2f + 1f, Math.min(bw, tall * 2f + 1f) / 2f, ColorUtil.fade(0xFFF7FAFF, alpha));
-			// Light from above on the drift's top.
-			Render2D.round(ctx, at + bw * 0.2f, y - 2.2f - tall + 0.3f, bw * 0.55f, 0.9f, 0.45f, ColorUtil.fade(0xFFFFFFFF, 0.8f * alpha));
-			at += bump * (0.55f + random.nextFloat() * 0.35f);
+		float left = x + r * 0.3f;
+		float right = x + w - r * 0.3f;
+		// The snow comes down a little over the panel's edge.
+		float foot = y + 1.4f;
+		float band = y - 3f;
+		Render2D.shadow(ctx, left + 3f, foot - 1.2f, right - left - 6f, 2.4f, 1.2f, 3.5f, 0x55607A9E);
+		Render2D.gradientV(ctx, left, band, right - left, foot - band, 2.2f, 0xFFF7FAFF, 0xFFC6D5EC);
+		float at = left + 1f;
+		while (at < right - 3f) {
+			float half = 3.5f + random.nextFloat() * 8f;
+			float tall = 1.3f + random.nextFloat() * 3.6f;
+			float cx = Math.min(at + half, right - half);
+			float top = band - tall;
+			float h = foot - top;
+			Render2D.gradientV(ctx, cx - half, top, half * 2f, h, Math.min(half, h / 2f), 0xFFFFFFFF, 0xFFCAD8EE);
+			// Light on the crown of the drift.
+			Render2D.round(ctx, cx - half * 0.55f, top + 0.45f, half * 1.1f, 1.2f, 0.6f, 0xD9FFFFFF);
+			at += half * (0.85f + random.nextFloat() * 0.6f);
 		}
-		// Icicles.
-		int icicles = (int) (w / 70f);
+		// Icicles: clear and tapering, a bright line down one side.
+		int icicles = Math.max(2, (int) (w / 55f));
 		for (int i = 0; i < icicles; i++) {
-			float ix = left + 8f + random.nextFloat() * (right - left - 16f);
-			float len = 2.5f + random.nextFloat() * 4.5f;
-			Render2D.round(ctx, ix - 0.7f, y, 1.4f, len, 0.7f, ColorUtil.fade(0xFFD8ECFF, 0.85f * alpha));
+			float ix = left + 10f + random.nextFloat() * (right - left - 20f);
+			float len = 3f + random.nextFloat() * 6.5f;
+			Render2D.round(ctx, ix - 1.2f, foot - 0.6f, 2.4f, len * 0.4f + 0.6f, 1.2f, 0xE0E3EEFF);
+			Render2D.round(ctx, ix - 0.8f, foot - 0.6f, 1.6f, len * 0.75f, 0.8f, 0xCCD3E4FA);
+			Render2D.round(ctx, ix - 0.42f, foot - 0.6f, 0.84f, len, 0.42f, 0xB3C9DDF5);
+			Render2D.round(ctx, ix - 0.6f, foot, 0.36f, len * 0.6f, 0.18f, 0xE6FFFFFF);
 		}
 	}
 
 	// ------------------------------------------------------------------ in game
 
-	/** The HUD's winter layer, under the hotbar and the client's HUD: the cold cast, the frost, the lights. */
+	/**
+	 * The HUD's winter layer, under the hotbar and the client's HUD: the cold cast, the frost, the lights. Warmth thaws
+	 * the frost: by a fire it melts back off the screen in a few seconds and a warm glow rises from below; in the cold it
+	 * creeps back, slowly.
+	 */
 	public static void hud(DrawContext ctx, float w, float h) {
 		WinterModule m = module();
 		if (m == null || V1zir.mc().world == null) return;
-		if (m.coldTint.on()) Render2D.rect(ctx, 0, 0, w, h, 0x10A8C8FF);
-		if (m.frost.on()) frost(ctx, w, h, 0.85f);
+		long now = System.nanoTime();
+		float dt = thawAt == 0L ? 0f : Math.min(0.1f, (now - thawAt) / 1.0e9f);
+		thawAt = now;
+		float warmth = m.warmth();
+		float rate = warmth > thaw ? 1.3f : 0.16f;
+		thaw += (warmth - thaw) * (1f - (float) Math.exp(-rate * dt));
+		if (m.coldTint.on()) Render2D.rect(ctx, 0, 0, w, h, ColorUtil.fade(0x10A8C8FF, 1f - thaw));
+		if (thaw > 0.01f) {
+			// The warmth of the fire, rising from below.
+			Render2D.gradientV(ctx, 0, h * 0.45f, w, h * 0.55f, 0f, 0x00FF9A4A, ColorUtil.withAlpha(0xFF9A4A, Math.round(30 * thaw)));
+		}
+		if (m.frost.on() && thaw < 0.98f) {
+			// Frost catches the light: bright by day, dim at night.
+			float day = SnowRenderer.daylight(V1zir.mc().world, V1zir.mc().getRenderTickCounter().getTickProgress(false));
+			frost(ctx, w, h, 0.8f * (0.32f + 0.68f * day) * (1f - 0.92f * thaw), thaw);
+		}
 		if (m.lights.on()) lights(ctx, w, 0f);
 	}
 
-	/** Frost creeping in from the screen's edges: feathery crystals over a soft white rim. */
-	public static void frost(DrawContext ctx, float w, float h, float opacity) {
+	/**
+	 * Frost creeping in from the screen's edges: feathery crystals over a soft white rim. As it thaws (0 to 1) it fades
+	 * and draws back towards the edges and off the screen.
+	 */
+	public static void frost(DrawContext ctx, float w, float h, float opacity, float thawed) {
 		TextureSetup texture = frostTexture();
 		if (texture == null) return;
 		float breathe = 0.92f + 0.08f * (float) Math.sin(V1zir.time() * 0.35f);
-		Render2D.image(ctx, texture, 0, 0, w, h, 0, ColorUtil.fade(0xFFFFFFFF, opacity * breathe));
+		float grow = 1f + 0.3f * thawed;
+		Render2D.image(ctx, texture, -w * (grow - 1f) / 2f, -h * (grow - 1f) / 2f, w * grow, h * grow, 0, ColorUtil.fade(0xFFFFFFFF, opacity * breathe));
 	}
 
 	/**
@@ -189,61 +223,11 @@ public final class WinterGui {
 	@Nullable
 	private static TextureSetup frostTexture() {
 		if (frost != null || frostBroken) return frost;
+		// Made on another thread the first time (a few tens of milliseconds), shown once it is ready.
+		if (frostJob == null) frostJob = CompletableFuture.supplyAsync(WinterGui::makeFrost);
+		if (!frostJob.isDone()) return null;
 		try {
-			int w = 480, h = 270;
-			NativeImage image = new NativeImage(NativeImage.Format.RGBA, w, h, false);
-			float[] alpha = new float[w * h];
-			// A soft rim, uneven: thicker in some places along the edges than others.
-			for (int y = 0; y < h; y++) {
-				for (int x = 0; x < w; x++) {
-					float u = x / (float) w, v = y / (float) h;
-					float edge = Math.min(Math.min(u, 1f - u) * (w / (float) h), Math.min(v, 1f - v));
-					float n = fbm(u * 7f, v * 7f);
-					float d = edge - 0.05f * n;
-					alpha[y * w + x] = smooth(0.16f, 0.0f, d) * (0.35f + 0.45f * n);
-				}
-			}
-			// Crystals: feathery branches growing in from the edges.
-			Random random = new Random(0xF0057L);
-			for (int i = 0; i < 230; i++) {
-				int side = random.nextInt(4);
-				float sx, sy, dir;
-				float along = random.nextFloat();
-				float inset = random.nextFloat() * 0.05f;
-				switch (side) {
-					case 0 -> {
-						sx = along * w;
-						sy = inset * h;
-						dir = 90f;
-					}
-					case 1 -> {
-						sx = along * w;
-						sy = h - inset * h;
-						dir = -90f;
-					}
-					case 2 -> {
-						sx = inset * h;
-						sy = along * h;
-						dir = 0f;
-					}
-					default -> {
-						sx = w - inset * h;
-						sy = along * h;
-						dir = 180f;
-					}
-				}
-				// Fewer towards the middle of the long edges, more round the corners.
-				float corner = Math.min(along, 1f - along);
-				if (random.nextFloat() < corner * 1.2f) continue;
-				branch(alpha, w, h, sx, sy, dir + (random.nextFloat() - 0.5f) * 70f, 10f + random.nextFloat() * 34f, 1.1f, random, 0);
-			}
-			for (int y = 0; y < h; y++) {
-				for (int x = 0; x < w; x++) {
-					float a = Math.min(1f, alpha[y * w + x]);
-					image.setColorArgb(x, y, Math.round(a * 220f) << 24 | 0xE6F3FF);
-				}
-			}
-			NativeImageBackedTexture texture = new NativeImageBackedTexture(() -> "V1zir frost", image);
+			NativeImageBackedTexture texture = new NativeImageBackedTexture(() -> "V1zir frost", frostJob.join());
 			frost = TextureSetup.of(texture.getGlTextureView(), RenderSystem.getSamplerCache().get(FilterMode.LINEAR));
 		} catch (RuntimeException e) {
 			V1zir.LOGGER.warn("Could not make the frost", e);
@@ -252,18 +236,78 @@ public final class WinterGui {
 		return frost;
 	}
 
-	/** A crystal branch: a straight arm with smaller arms off it at sixty degrees, each again with smaller ones. */
+	/** The frost's picture: a soft uneven rim round the edges and fine feathery crystals growing in from them. */
+	private static NativeImage makeFrost() {
+		int w = 768, h = 432;
+		float[] alpha = new float[w * h];
+		for (int y = 0; y < h; y++) {
+			for (int x = 0; x < w; x++) {
+				float u = x / (float) w, v = y / (float) h;
+				float edge = Math.min(Math.min(u, 1f - u) * (w / (float) h), Math.min(v, 1f - v));
+				float n = fbm(u * 7f, v * 7f);
+				float d = edge - 0.05f * n;
+				alpha[y * w + x] = smooth(0.15f, 0.0f, d) * (0.3f + 0.42f * n);
+			}
+		}
+		Random random = new Random(0xF0057L);
+		for (int i = 0; i < 320; i++) {
+			int side = random.nextInt(4);
+			float sx, sy, dir;
+			float along = random.nextFloat();
+			float inset = random.nextFloat() * 0.045f;
+			switch (side) {
+				case 0 -> {
+					sx = along * w;
+					sy = inset * h;
+					dir = 90f;
+				}
+				case 1 -> {
+					sx = along * w;
+					sy = h - inset * h;
+					dir = -90f;
+				}
+				case 2 -> {
+					sx = inset * h;
+					sy = along * h;
+					dir = 0f;
+				}
+				default -> {
+					sx = w - inset * h;
+					sy = along * h;
+					dir = 180f;
+				}
+			}
+			// Fewer towards the middle of the long edges, more round the corners.
+			float corner = Math.min(along, 1f - along);
+			if (random.nextFloat() < corner * 1.2f) continue;
+			branch(alpha, w, h, sx, sy, dir + (random.nextFloat() - 0.5f) * 70f, 14f + random.nextFloat() * 50f, 0.95f, random, 0);
+		}
+		NativeImage image = new NativeImage(NativeImage.Format.RGBA, w, h, false);
+		for (int y = 0; y < h; y++) {
+			for (int x = 0; x < w; x++) {
+				float a = Math.min(1f, alpha[y * w + x]);
+				image.setColorArgb(x, y, Math.round(a * 215f) << 24 | 0xE6F3FF);
+			}
+		}
+		return image;
+	}
+
+	/**
+	 * A crystal branch: a straight arm, thinning and fading towards its tip, with smaller arms off it at sixty degrees,
+	 * each again with smaller ones. Drawn in half-pixel steps, so the lines are whole.
+	 */
 	private static void branch(float[] alpha, int w, int h, float x, float y, float dir, float length, float width, Random random, int depth) {
 		double a = Math.toRadians(dir);
 		float dx = (float) Math.cos(a), dy = (float) Math.sin(a);
-		int steps = Math.max(2, Math.round(length));
+		int steps = Math.max(4, Math.round(length * 2f));
 		for (int s = 0; s <= steps; s++) {
-			float px = x + dx * s, py = y + dy * s;
+			float along = s * 0.5f;
+			float px = x + dx * along, py = y + dy * along;
 			float fall = 1f - s / (float) steps * 0.7f;
-			stamp(alpha, w, h, px, py, width * fall, 0.85f * fall);
-			if (depth < 2 && s > 2 && s % 4 == 0 && random.nextFloat() < 0.75f) {
+			stamp(alpha, w, h, px, py, width * fall, 0.8f * fall);
+			if (depth < 2 && s > 5 && s % 7 == 0 && random.nextFloat() < 0.75f) {
 				float side = random.nextBoolean() ? 60f : -60f;
-				branch(alpha, w, h, px, py, dir + side, length * (0.28f + random.nextFloat() * 0.2f) * fall, width * 0.7f, random, depth + 1);
+				branch(alpha, w, h, px, py, dir + side, length * (0.26f + random.nextFloat() * 0.2f) * fall, width * 0.72f, random, depth + 1);
 			}
 		}
 	}

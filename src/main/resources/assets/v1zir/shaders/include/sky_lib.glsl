@@ -30,6 +30,7 @@
 #define PRESET_CUSTOM 8
 #define PRESET_PLASMA 9
 #define PRESET_LAGOON 10
+#define PRESET_WINTER 11
 
 // ---------------------------------------------------------------------------
 //  Hashing & noise (sine-free hashes keep the patterns stable on every GPU)
@@ -1578,6 +1579,97 @@ vec3 vSkyBloodMoon(vec3 rd, float t, int quality) {
 	return vToDisplay(vTonemap(col * 1.3));
 }
 
+// The Christmas star, high in the south: a bright core in a soft halo, four long rays (the one pointing down the
+// longest) and four short ones between them, twinkling slowly.
+vec3 vChristmasStar(vec3 rd, float t) {
+	vec3 sd = normalize(vec3(0.3, 0.62, 0.72));
+	if (dot(rd, sd) < 0.95) return vec3(0.0);
+	vec3 sr = normalize(cross(vec3(0.0, 1.0, 0.0), sd));
+	vec3 su = cross(sd, sr);
+	vec2 q = vec2(dot(rd, sr), dot(rd, su));
+	float r = length(q);
+	float twinkle = 0.86 + 0.14 * sin(t * 1.7) * sin(t * 2.9 + 1.3);
+	float w = 0.0016;
+	float core = exp(-r * r / 4.0e-6) * 9.0 + exp(-r / 0.004) * 0.9 + exp(-r / 0.028) * 0.13;
+	float upright = exp(-abs(q.x) / w) * exp(-abs(q.y) / (q.y < 0.0 ? 0.12 : 0.065));
+	float across = exp(-abs(q.y) / w) * exp(-abs(q.x) / 0.058);
+	vec2 d = vec2(q.x + q.y, q.x - q.y) * 0.70710678;
+	float diagonal = exp(-abs(d.x) / (w * 0.8)) * exp(-abs(d.y) / 0.024) + exp(-abs(d.y) / (w * 0.8)) * exp(-abs(d.x) / 0.024);
+	return vec3(1.0, 0.92, 0.76) * (core + (upright + across) * 0.9 + diagonal * 0.45) * twinkle;
+}
+
+// Winter, the Winter module's festive sky: the realistic sky made wintry. By day the air is crisp, a little paler
+// and bluer, the horizon icy, and snow clouds drift low; around sunset the sky glows pink and violet. At night a deep
+// blue full of stars and the Milky Way, a soft aurora of green and red over the north, the moon, and high in the south
+// the Christmas star.
+vec3 vSkyWinter(vec3 rd, float t, int quality) {
+	vec3 sunDir = normalize(SunDir.xyz);
+	vec3 moonDir = normalize(MoonDir.xyz);
+	float rain = Timing.z;
+	float storm = max(rain, Timing.y);
+	float phase = MoonDir.w;
+	float moonLit = 0.5 + 0.5 * cos(phase * V_TAU);
+	int steps = quality == 0 ? 8 : (quality == 1 ? 10 : 14);
+	float ex = vDayExposure(sunDir.y);
+	float moonI = 0.05 * (0.1 + 0.9 * moonLit) * smoothstep(0.15, 0.0, sunDir.y);
+	vec3 air = vAtmosphere(rd, sunDir, V_SUN_I, moonDir, moonI, steps, 0.7) * ex;
+	float night = smoothstep(0.05, -0.2, sunDir.y);
+	float e = abs(rd.y);
+	// A winter night: a deep blue, lighter and a touch violet towards the horizon.
+	vec3 nightAir = mix(vec3(0.02, 0.021, 0.056), vec3(0.005, 0.009, 0.03), smoothstep(0.0, 0.55, e)) * night;
+	air += nightAir;
+	// Crisp cold air by day: a little paler and bluer, the horizon icy white.
+	float lum = dot(air, vec3(0.2126, 0.7152, 0.0722));
+	air = mix(air, lum * vec3(0.9, 0.98, 1.14), 0.22 * (1.0 - night));
+	air = mix(air, vec3(lum * 1.06), 0.3 * exp(-e * 9.0) * (1.0 - night));
+	// Dusk: a pink and violet glow over the horizon while the sun is just down, strongest towards it.
+	float dusk = smoothstep(0.1, -0.02, sunDir.y) * smoothstep(-0.26, -0.06, sunDir.y);
+	float towards = max(dot(normalize(rd.xz + 1e-4), normalize(sunDir.xz + 1e-4)), 0.0);
+	air += vec3(0.11, 0.035, 0.1) * dusk * exp(-e * 4.0) * (0.45 + 0.55 * towards);
+
+	vec3 space = vec3(0.0);
+	float starVis = smoothstep(-0.03, -0.17, sunDir.y) * (1.0 - storm) * smoothstep(-0.02, 0.1, rd.y);
+	if (starVis > 0.001) {
+		// A clear winter night: more stars, a brighter Milky Way.
+		space += vStarsW(rd, t, Settings.z * 1.35, starVis * Timing.w);
+		space += vMilkyWay(rd, 0.75) * starVis;
+		// The aurora, green below and red above, over the northern half of the sky (north is -z).
+		float north = smoothstep(0.35, -0.45, rd.z / max(length(rd.xz), 1e-3));
+		if (north > 0.001) space += vAurora(rd, t, vec3(0.16, 1.0, 0.42), vec3(1.0, 0.16, 0.26), quality) * 0.75 * north * smoothstep(-0.02, 0.03, rd.y) * starVis;
+		space += vChristmasStar(rd, t) * starVis;
+	}
+
+	vec3 col = air + space;
+	if (Extra.z < 0.5 && rd.y > -0.02) {
+		float horizonCut = smoothstep(-0.004, 0.004, rd.y) * (1.0 - storm * 0.92);
+		vec3 sunCol = V_SUN_I * vLightTransmittance(V_OBSERVER, sunDir.y) * ex;
+		float cover;
+		vec3 moonT = vLightTransmittance(V_OBSERVER, max(moonDir.y, 0.0));
+		vec3 moonTint = vec3(0.96, 0.98, 1.0) * mix(vec3(1.0), moonT / max(moonT.r, 1e-4), 0.4) * (0.75 + 0.25 * moonT.r);
+		vec3 moon = vMoon(rd, moonDir, phase, moonTint, 1.5, cover);
+		float moonVis = smoothstep(-0.04, 0.02, moonDir.y) * horizonCut;
+		col = air + space * (1.0 - cover * moonVis) + moon * moonVis;
+		gStarWeight *= 1.0 - cover * moonVis;
+		col += vSunDisk(rd, sunDir, sunCol, 1.6) * horizonCut;
+	}
+
+	if (Extra.y > 0.5 && rd.y > -0.02) {
+		VCloudLight L = vSkyCloudLight(sunDir, moonDir, moonI, ex, nightAir);
+		L.color *= 1.0 - storm * 0.85;
+		// Snow clouds by day; at night fewer, so the stars show.
+		float coverage = mix(mix(Settings.y, 0.62, 0.4), Settings.y * 0.45, night);
+		coverage = mix(coverage, 1.0, rain * 0.85);
+		col = vOver(col, vClouds(rd, L, coverage, t, Camera.xyz, quality));
+	}
+
+	col = vBelowHorizon(col, rd);
+	float grey = dot(col, vec3(0.2126, 0.7152, 0.0722));
+	col = mix(col, vec3(grey) * 0.75, storm * 0.6);
+	col *= 1.0 - Timing.y * 0.45;
+	col *= Settings.x;
+	return vToDisplay(vTonemap(col));
+}
+
 // A tone curve that leaves colours up to 0.8 exactly as they are and rolls brighter light off
 // towards white with its hue intact, so a custom gradient shows the picked colours.
 vec3 vSoftClip(vec3 c) {
@@ -1641,6 +1733,7 @@ vec3 v1zirSkyD(vec3 rd, vec2 fragCoord, vec3 rdDx, vec3 rdDy) {
 	else if (preset == PRESET_CUSTOM) col = vSkyCustom(rd, t, quality);
 	else if (preset == PRESET_PLASMA) col = vSkyPlasma(rd, t);
 	else if (preset == PRESET_LAGOON) col = vSkyLagoon(rd, t);
+	else if (preset == PRESET_WINTER) col = vSkyWinter(rd, t, quality);
 	else col = vSkyRealistic(rd, t, quality);
 
 #ifndef V1ZIR_SKY_CACHE

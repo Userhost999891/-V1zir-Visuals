@@ -1,10 +1,12 @@
 #version 150
 
 // Snow lying on the world (the Winter module's Snow cover, render/Reflections), over the finished world and under
-// the falling snow. Every surface that faces up under the open sky is covered, the tops of the sides below it get
-// a lip of snow hanging over their edge, leaves are dappled and water and lava stay clear. The snow is lit by what
-// lit the surface (the frame's own brightness, so shade, darkened corners and torches carry over) and by the day,
-// glitters in the sun up close, and fades into the render distance fog. Pixels it leaves alone are discarded.
+// the falling snow; close by the snow lies on it as real geometry too (snow_layer.vsh). Every surface that faces up
+// under the open sky is covered, leaves are dappled and water and lava stay clear; further off than the geometry
+// reaches, a lip of snow over the top of the sides below stands in for its overhang. No texture: smooth snow that
+// rises and falls softly in drifts, lit by what lit the surface (the frame's own brightness, so shade, darkened
+// corners and torches carry over) and by the day, bluish in the shade, tiny grains glittering in the sun up close,
+// fading into the render distance fog. Pixels it leaves alone are discarded.
 #moj_import <v1zir:reflect.glsl>
 
 out vec4 fragColor;
@@ -49,16 +51,17 @@ void main() {
 		// top of its column and still is.
 		cover = smoothstep(0.5, 0.85, n.y) * clamp((world.y - column.x + 0.7) * 5.0, 0.0, 1.0);
 		// Leaves hold it in patches.
-		if (material == FOLIAGE) cover *= 0.9 * smoothstep(0.3, 0.62, sNoise(world.xz * 1.9) * 0.65 + sHash(ivec2(floor(world.xz * 16.0))) * 0.35);
-	} else if (abs(n.y) < 0.3 && material != FOLIAGE) {
-		// The side of a column's top block: a lip of snow hanging over its top edge, uneven along it, with a longer
-		// tongue here and there.
+		if (material == FOLIAGE) cover *= 0.95 * smoothstep(0.12, 0.42, sNoise(world.xz * 1.9) * 0.7 + sNoise(world.xz * 6.1 + 3.0) * 0.3);
+	} else if (abs(n.y) < 0.3 && material != FOLIAGE && (SnowTint.w <= 0.0 || length(pos.xz) > 20.0)) {
+		// The side of a column's top block, further off than the snow lying as geometry reaches: a lip of snow hanging
+		// over its top edge, uneven along it, with a longer tongue here and there.
 		float below = column.x - world.y;
 		float along = abs(n.x) > 0.5 ? world.z : world.x;
 		float side = n.x * 7.0 + n.z * 13.0;
 		float lip = 0.05 + 0.07 * sNoise(vec2(along * 4.0, side));
 		lip += 0.12 * pow(sNoise(vec2(along * 7.0 + 31.0, side + 5.0)), 5.0);
 		cover = below > -0.01 ? 1.0 - smoothstep(lip - 0.02, lip, below) : 0.0;
+		if (SnowTint.w > 0.0) cover *= smoothstep(20.0, 24.0, length(pos.xz));
 	}
 	cover *= SnowCover.x;
 	if (cover <= 0.004) discard;
@@ -69,22 +72,19 @@ void main() {
 	// day's light keeps snow on dark blocks from turning grey.
 	float lit = clamp(luma / 0.42, 0.0, 1.3);
 	lit = mix(lit, max(lit, SnowCover.z), 0.6);
-	// Snow: white with the faintest blue, a grain of its own the size of the game's texels, and soft drifts.
-	vec2 plane = top ? world.xz : vec2(abs(n.x) > 0.5 ? world.z : world.x, world.y);
-	ivec2 texel = ivec2(floor(plane * 16.0));
-	float grain = sHash(texel) - 0.5;
-	float drift = sNoise(world.xz * 0.35) * 0.6 + sNoise(world.xz * 1.7) * 0.4;
-	vec3 color = vec3(0.93, 0.955, 1.0) * SnowTint.rgb * (0.94 + 0.045 * grain + 0.05 * drift);
+	// Snow: white with the faintest blue, rising and falling softly in drifts, bluish where it is in shade.
+	float drift = sNoise(world.xz * 0.35) * 0.6 + sNoise(world.xz * 1.3) * 0.4;
+	vec3 color = vec3(0.93, 0.955, 1.0) * SnowTint.rgb * (0.95 + 0.06 * drift);
 	// The lip's underside is in its own shade.
 	if (!top) color *= 0.9;
-	color *= lit;
+	color *= lit * mix(vec3(0.88, 0.94, 1.06), vec3(1.0), smoothstep(0.3, 0.85, lit));
 	float dist = length(pos);
-	// Glitter: here and there a grain catches the sun, from some angles only, close by.
-	if (top && LightDir.w > 0.0 && dist < 24.0) {
-		float h = sHash(texel + ivec2(911, 377));
-		float facing = fract(h * 7.31 + dot(pos / max(dist, 0.001), vec3(5.3, 2.1, 4.7)));
-		float glint = step(0.992, h) * smoothstep(0.8, 0.97, facing) * (1.0 - smoothstep(8.0, 24.0, dist));
-		color += vec3(1.0, 0.98, 0.94) * glint * LightDir.w * SnowCover.w * smoothstep(0.45, 0.8, lit) * 0.9;
+	// Glitter: tiny grains catch the sun here and there, from some angles only, close by.
+	if (top && LightDir.w > 0.0 && dist < 20.0) {
+		float h = sHash(ivec2(floor(world.xz * 48.0)) + ivec2(911, 377));
+		float facing = fract(h * 7.31 + dot(pos / max(dist, 0.001), vec3(5.3, 2.1, 4.7)) * 3.0);
+		float glint = step(0.985, h) * smoothstep(0.86, 0.98, facing) * (1.0 - smoothstep(6.0, 20.0, dist));
+		color += vec3(1.0, 0.98, 0.95) * glint * LightDir.w * SnowCover.w * smoothstep(0.45, 0.8, lit) * 1.2;
 	}
 	// The render distance fog, as the game's: over the last stretch of the cylindrical distance.
 	float fogEnd = SnowCover.y;

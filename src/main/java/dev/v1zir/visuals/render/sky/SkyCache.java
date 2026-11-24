@@ -169,7 +169,7 @@ public final class SkyCache {
 	private static float costWeight(SkyUniforms.Data d) {
 		int preset = Math.round(d.camera.w);
 		boolean clouds = d.extra.y > 0.5f && (preset == SkyPreset.REALISTIC.index() || preset == SkyPreset.SUNSET.index()
-			|| preset == SkyPreset.BLOOD_MOON.index() || preset == SkyPreset.CUSTOM.index());
+			|| preset == SkyPreset.BLOOD_MOON.index() || preset == SkyPreset.CUSTOM.index() || preset == SkyPreset.WINTER.index());
 		float weight = clouds ? CLOUD_WEIGHT : (preset == SkyPreset.AURORA.index() ? AURORA_WEIGHT : 1f);
 		int quality = Math.round(d.settings.w);
 		float scale = quality <= 0 ? 1.5f : (quality >= 2 ? 0.7f : 1f);

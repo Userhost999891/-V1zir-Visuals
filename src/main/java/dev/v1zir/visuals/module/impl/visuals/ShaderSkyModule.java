@@ -70,7 +70,9 @@ public final class ShaderSkyModule extends Module {
 		return mode == PRESET_COLORS && p == SkyPreset.CUSTOM ? CUSTOM_COLORS : mode;
 	}
 
+	/** The preset drawn: the chosen one, or Winter's festive sky while that is on. */
 	public SkyPreset currentPreset() {
+		if (WinterModule.festiveSky()) return SkyPreset.WINTER;
 		return SkyPreset.byTitle(preset.get());
 	}
 

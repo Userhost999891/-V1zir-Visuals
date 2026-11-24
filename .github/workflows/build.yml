@@ -50,7 +50,7 @@ jobs:
                    net.minecraft.client.input.KeyInput net.minecraft.client.Mouse net.minecraft.client.input.KeyboardInput \
                    net.minecraft.client.input.Input net.minecraft.util.PlayerInput \
                    net.minecraft.client.gui.screen.option.GameOptionsScreen net.minecraft.client.gui.screen.option.VideoOptionsScreen \
-                   net.minecraft.client.gui.widget.OptionListWidget; do
+                   net.minecraft.client.gui.widget.OptionListWidget net.minecraft.entity.Entity net.minecraft.state.State; do
             echo "=== SIG $c"; sig "$c"
           done
           echo "=== CODE HeldItemFeatureRenderer.renderItem"; code net.minecraft.client.render.entity.feature.HeldItemFeatureRenderer renderItem

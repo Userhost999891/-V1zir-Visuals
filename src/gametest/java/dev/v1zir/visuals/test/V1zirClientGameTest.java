@@ -923,7 +923,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		skyShot(context, singleplayer, SkyPreset.REALISTIC, 18000, "sky-realistic-night");
 		look(singleplayer, 0, -25);
 		for (SkyPreset preset : List.of(SkyPreset.MAGMA, SkyPreset.AURORA, SkyPreset.NEBULA, SkyPreset.SUNSET,
-			SkyPreset.INK, SkyPreset.SYNTHWAVE, SkyPreset.BLOOD_MOON, SkyPreset.PLASMA, SkyPreset.LAGOON)) {
+			SkyPreset.INK, SkyPreset.SYNTHWAVE, SkyPreset.BLOOD_MOON, SkyPreset.PLASMA, SkyPreset.LAGOON, SkyPreset.WINTER)) {
 			skyShot(context, singleplayer, preset, 18000, "sky-" + preset.name().toLowerCase().replace('_', '-'));
 		}
 		// Recoloured: Ink in two picked colours and as a rainbow, Magma and the Blood Moon in colours of their own.
@@ -2133,7 +2133,11 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.runOnClient(client -> client.options.setPerspective(Perspective.FIRST_PERSON));
 		context.waitTicks(10);
 		bench(context, "winter-off");
-		context.runOnClient(client -> ModuleManager.get(WinterModule.class).setEnabled(true, false));
+		context.runOnClient(client -> {
+			ModuleManager.get(WinterModule.class).setEnabled(true, false);
+			// The festive sky drawn straight away: the sky cache takes two refreshes to show a new preset, long at CI's frame rate.
+			ModuleManager.get(ShaderSkyModule.class).cache.set(false);
+		});
 		// The block columns the snow cover reads are complete after 16 ticks.
 		context.waitTicks(30);
 		bench(context, "winter-on");
@@ -2155,6 +2159,22 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			singleplayer.getServer().runCommand(command);
 		}
 		look(singleplayer, 30f, -4f);
+		// Steps out under the sky crunch in snow.
+		context.getInput().holdKey(options -> options.forwardKey);
+		context.waitTicks(16);
+		context.getInput().releaseKey(options -> options.forwardKey);
+		int steps = context.computeOnClient(client -> WinterModule.snowSteps);
+		System.out.println("V1ZIR-WINTER snow steps while walking: " + steps);
+		// By a campfire the frost on the screen thaws and a warm glow rises.
+		singleplayer.getServer().runCommand("execute as @a at @s positioned over world_surface run tp @s ~ ~ ~ 0 20");
+		singleplayer.getServer().runCommand("execute as @a at @s run setblock ~ ~ ~2 minecraft:campfire[lit=true]");
+		context.waitTicks(80);
+		float warmth = context.computeOnClient(client -> ModuleManager.get(WinterModule.class).warmth());
+		System.out.println("V1ZIR-WINTER warmth by the campfire: " + warmth);
+		context.takeScreenshot("winter-campfire");
+		singleplayer.getServer().runCommand("execute as @a at @s run setblock ~ ~ ~2 minecraft:air");
+		look(singleplayer, 30f, -4f);
+		context.waitTicks(5);
 		context.runOnClient(client -> {
 			CosmeticsModule cosmetics = ModuleManager.get(CosmeticsModule.class);
 			cosmetics.setEnabled(true, false);
@@ -2172,6 +2192,14 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		singleplayer.getServer().runCommand("time set 15000");
 		context.waitTicks(20);
 		context.takeScreenshot("winter-night");
+		// The festive night sky: the Christmas star high in the south, the aurora over the north.
+		singleplayer.getServer().runCommand("time set 18000");
+		look(singleplayer, -22.6f, -38f);
+		context.waitTicks(10);
+		context.takeScreenshot("winter-sky-star");
+		look(singleplayer, 180f, -22f);
+		context.waitTicks(10);
+		context.takeScreenshot("winter-sky-aurora");
 		singleplayer.getServer().runCommand("time set 3500");
 		// A roof over the player: no snow under it, snow beyond it.
 		singleplayer.getServer().runCommand("execute as @a at @s run fill ~-4 ~3 ~-4 ~4 ~3 ~4 minecraft:spruce_planks");
@@ -2186,6 +2214,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.setScreen(() -> null);
 		context.runOnClient(client -> {
 			ModuleManager.get(WinterModule.class).setEnabled(false, false);
+			ModuleManager.get(ShaderSkyModule.class).cache.reset();
 			CosmeticsModule cosmetics = ModuleManager.get(CosmeticsModule.class);
 			cosmetics.setEnabled(false, false);
 			cosmetics.hat.reset();

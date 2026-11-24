@@ -7,6 +7,7 @@ import com.mojang.blaze3d.textures.GpuTextureView;
 import dev.v1zir.visuals.V1zir;
 import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.visuals.ShaderSkyModule;
+import dev.v1zir.visuals.module.impl.visuals.WinterModule;
 import dev.v1zir.visuals.optimize.GpuTimer;
 import dev.v1zir.visuals.render.Fullscreen;
 import dev.v1zir.visuals.render.V1zirPipelines;
@@ -43,9 +44,10 @@ public final class SkyRenderer {
 		captured = true;
 	}
 
+	/** The Shader Sky module while the shader sky is drawn: while it is on, or while Winter's festive sky is (even with it off). */
 	public static ShaderSkyModule module() {
 		ShaderSkyModule sky = ModuleManager.get(ShaderSkyModule.class);
-		return sky != null && sky.isEnabled() ? sky : null;
+		return sky != null && (sky.isEnabled() || WinterModule.festiveSky()) ? sky : null;
 	}
 
 	public static boolean active() {

@@ -230,6 +230,26 @@ public final class V1zirPipelines {
 	public static final RenderPipeline REFLECT_COMPOSITE = reflectPipeline("reflect_composite", 6);
 	/** Winter's snow on the ground, over a copy of the frame with the reflections' surface helpers (render/Reflections). */
 	public static final RenderPipeline SNOW_COVER = reflectPipeline("snow_cover", 5);
+	/**
+	 * Winter's snow lying close by as real geometry (render/winter/SnowLayer): a static template of columns placed in the
+	 * vertex shader from the block columns (Sampler2, Sampler4) and the snow texture (Sampler5), lit from a copy of the
+	 * frame (Sampler0); opaque, depth tested and written.
+	 */
+	public static final RenderPipeline SNOW_LAYER = RenderPipeline.builder()
+		.withLocation(V1zir.id("pipeline/snow_layer"))
+		.withVertexShader(V1zir.id("core/snow_layer"))
+		.withFragmentShader(V1zir.id("core/snow_layer"))
+		.withVertexFormat(VertexFormats.POSITION_TEXTURE_COLOR, VertexFormat.DrawMode.QUADS)
+		.withUniform("ReflectParams", UniformType.UNIFORM_BUFFER)
+		.withSampler("Sampler0")
+		.withSampler("Sampler2")
+		.withSampler("Sampler4")
+		.withSampler("Sampler5")
+		.withDepthTestFunction(DepthTestFunction.LEQUAL_DEPTH_TEST)
+		.withDepthWrite(true)
+		.withoutBlend()
+		.withCull(false)
+		.build();
 
 	/** Mist and light shafts over the world (render/PostFx): the frame and its depth. */
 	public static final RenderPipeline ATMOSPHERE = postPipeline("atmosphere", 2);
@@ -546,6 +566,7 @@ public final class V1zirPipelines {
 		RenderPipelines.register(REFLECT_TRACE);
 		RenderPipelines.register(REFLECT_COMPOSITE);
 		RenderPipelines.register(SNOW_COVER);
+		RenderPipelines.register(SNOW_LAYER);
 		RenderPipelines.register(GUI_TRANSITION);
 		RenderPipelines.register(GUI_SHARDS);
 		RenderPipelines.register(BLUR_DOWN);

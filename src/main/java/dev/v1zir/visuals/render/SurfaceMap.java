@@ -13,7 +13,11 @@ import net.minecraft.fluid.FluidState;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.tag.FluidTags;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Box;
+import net.minecraft.util.math.Direction;
+import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.world.Heightmap;
+import net.minecraft.world.LightType;
 import net.minecraft.world.chunk.ChunkSection;
 import net.minecraft.world.chunk.WorldChunk;
 import org.lwjgl.system.MemoryUtil;
@@ -35,6 +39,9 @@ import java.nio.ByteBuffer;
  *   is on. Alpha holds bits 9 to 11 of the block's x and z besides the known flag, so a texel still
  *   holding the column from the other side of the window (the camera moved since it was refreshed) is
  *   told apart and not trusted.</li>
+ *   <li>Snow, 128 x 128 like the columns, kept while Winter's snow lies (render/winter/SnowLayer): in R
+ *   the height in sixteenths at which snow lies on the column's top block (0 where its top is not flat
+ *   and whole, or is water), in G the block light above it, in B 1 for leaves; alpha 0 where not known.</li>
  * </ul>
  */
 public final class SurfaceMap {
@@ -70,7 +77,13 @@ public final class SurfaceMap {
 
 	private static final BlockPos.Mutable POS = new BlockPos.Mutable();
 	private static final Reference2ByteOpenHashMap<BlockState> MATERIALS = new Reference2ByteOpenHashMap<>();
+	private static final Reference2ByteOpenHashMap<BlockState> SNOW_TOPS = new Reference2ByteOpenHashMap<>();
 	private static ByteBuffer columns;
+	private static ByteBuffer snow;
+	private static GpuTexture snowTexture;
+	private static GpuTextureView snowView;
+	/** The snow rows are refreshed and sent with the columns (Winter's snow lies). */
+	private static boolean snowKept;
 	private static ByteBuffer far;
 	private static ByteBuffer grid;
 	private static GpuTexture columnTexture;
@@ -100,15 +113,17 @@ public final class SurfaceMap {
 
 	static {
 		MATERIALS.defaultReturnValue((byte) -1);
+		SNOW_TOPS.defaultReturnValue((byte) -1);
 	}
 
 	private SurfaceMap() {
 	}
 
-	/** Refreshes the next rows around the camera block; materials only when the grid is needed. */
-	public static void tick(ClientWorld w, int x, int y, int z, boolean materials) {
+	/** Refreshes the next rows around the camera block; materials only when the grid is needed, snow when it lies. */
+	public static void tick(ClientWorld w, int x, int y, int z, boolean materials, boolean snowLayer) {
 		if (columns == null) {
 			columns = MemoryUtil.memCalloc(COLUMNS * COLUMNS * 4);
+			snow = MemoryUtil.memCalloc(COLUMNS * COLUMNS * 4);
 			grid = MemoryUtil.memCalloc(GRID * GRID * LAYERS);
 			far = MemoryUtil.memCalloc(FAR * FAR * 4);
 		}
@@ -116,6 +131,7 @@ public final class SurfaceMap {
 			live = true;
 			world = w;
 			MemoryUtil.memSet(columns, 0);
+			MemoryUtil.memSet(snow, 0);
 			MemoryUtil.memSet(grid, 0);
 			dirtyBands = (1 << COLUMNS / BAND) - 1;
 			dirtyTiles = (1 << LAYERS / 4) - 1;
@@ -125,6 +141,12 @@ public final class SurfaceMap {
 		lastX = x;
 		lastY = y;
 		lastZ = z;
+		if (snowLayer && !snowKept) {
+			// Rows refreshed before the snow was wanted hold none: all of them are rewritten from now on.
+			MemoryUtil.memSet(snow, 0);
+			dirtyBands = (1 << COLUMNS / BAND) - 1;
+		}
+		snowKept = snowLayer;
 		refreshColumns(x, z);
 		if (materials) {
 			refreshLayers(x, y, z);
@@ -164,6 +186,11 @@ public final class SurfaceMap {
 		return farView;
 	}
 
+	/** The snow texture (see the class comment); null until the first upload. */
+	public static GpuTextureView snow() {
+		return snowView;
+	}
+
 	/**
 	 * Sends the rows refreshed since the last frame to the GPU (render thread, once per frame).
 	 * Returns false until the map has been ticked since it was last idle.
@@ -177,6 +204,8 @@ public final class SurfaceMap {
 			gridView = RenderSystem.getDevice().createTextureView(gridTexture);
 			farTexture = RenderSystem.getDevice().createTexture("V1zir surface far columns", 15, TextureFormat.RGBA8, FAR, FAR, 1, 1);
 			farView = RenderSystem.getDevice().createTextureView(farTexture);
+			snowTexture = RenderSystem.getDevice().createTexture("V1zir surface snow", 15, TextureFormat.RGBA8, COLUMNS, COLUMNS, 1, 1);
+			snowView = RenderSystem.getDevice().createTextureView(snowTexture);
 			dirtyBands = (1 << COLUMNS / BAND) - 1;
 			dirtyTiles = (1 << LAYERS / 4) - 1;
 			dirtyFar = -1L;
@@ -190,8 +219,13 @@ public final class SurfaceMap {
 			int from = band * BAND * COLUMNS * 4;
 			columns.limit(from + BAND * COLUMNS * 4).position(from);
 			encoder.writeToTexture(columnTexture, columns, NativeImage.Format.RGBA, 0, 0, 0, band * BAND, COLUMNS, BAND);
+			if (snowKept) {
+				snow.limit(from + BAND * COLUMNS * 4).position(from);
+				encoder.writeToTexture(snowTexture, snow, NativeImage.Format.RGBA, 0, 0, 0, band * BAND, COLUMNS, BAND);
+			}
 		}
 		columns.clear();
+		snow.clear();
 		for (int tile = 0; dirtyTiles != 0; tile++) {
 			if ((dirtyTiles & 1 << tile) == 0) continue;
 			dirtyTiles &= ~(1 << tile);
@@ -225,13 +259,24 @@ public final class SurfaceMap {
 				int top = world.getTopY(Heightmap.Type.MOTION_BLOCKING, x, z);
 				if (top <= bottom) {
 					columns.putInt(i, 0);
+					if (snowKept) snow.putInt(i, 0);
 					continue;
 				}
 				int height = Math.min(top - bottom, 0xFFFF);
+				BlockState state = world.getBlockState(POS.set(x, top - 1, z));
+				byte material = classify(state);
 				columns.put(i, (byte) (height >> 8));
 				columns.put(i + 1, (byte) height);
-				columns.put(i + 2, classify(world.getBlockState(POS.set(x, top - 1, z))));
+				columns.put(i + 2, material);
 				columns.put(i + 3, (byte) 0xFF);
+				if (snowKept) {
+					byte lies = snowTop(state, material);
+					int light = lies > 0 ? world.getLightLevel(LightType.BLOCK, POS.set(x, top, z)) : 0;
+					snow.put(i, lies);
+					snow.put(i + 1, (byte) (light * 17));
+					snow.put(i + 2, (byte) (material == FOLIAGE ? 1 : 0));
+					snow.put(i + 3, (byte) 0xFF);
+				}
 			}
 		}
 		dirtyBands |= 1 << nextBand;
@@ -334,6 +379,36 @@ public final class SurfaceMap {
 			MATERIALS.put(state, material);
 		}
 		return material;
+	}
+
+	/**
+	 * Sixteenths of a block at which snow lies on top of the state (1 to 16): 0 where its top is not flat and whole
+	 * (stairs, fences, plants, torches) or where there is water or lava. Worked out once per state (POS must hold a
+	 * position of it).
+	 */
+	private static byte snowTop(BlockState state, byte material) {
+		byte top = SNOW_TOPS.getByte(state);
+		if (top < 0) {
+			top = flatTop(state, material);
+			SNOW_TOPS.put(state, top);
+		}
+		return top;
+	}
+
+	private static byte flatTop(BlockState state, byte material) {
+		if (material == AIR || material == WATER || material == LAVA) return 0;
+		VoxelShape shape = state.getOutlineShape(world, POS);
+		if (shape.isEmpty()) return 0;
+		double max = shape.getMax(Direction.Axis.Y);
+		if (max > 1.0001) return 0;
+		// The whole square at the top, or the snow would hang over nothing.
+		double area = 0.0;
+		for (Box box : shape.getBoundingBoxes()) {
+			if (box.maxY < max - 1.0e-4) continue;
+			area += Math.max(0.0, Math.min(box.maxX, 1.0) - Math.max(box.minX, 0.0)) * Math.max(0.0, Math.min(box.maxZ, 1.0) - Math.max(box.minZ, 0.0));
+		}
+		if (area < 0.97) return 0;
+		return (byte) Math.max(1, Math.min(16, Math.round(max * 16.0)));
 	}
 
 	private static byte material(BlockState state) {

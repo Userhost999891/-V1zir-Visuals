@@ -19,6 +19,7 @@ import dev.v1zir.visuals.module.impl.visuals.WinterModule;
 import dev.v1zir.visuals.gui.hud.Notifications;
 import dev.v1zir.visuals.render.font.Icons;
 import dev.v1zir.visuals.render.sky.SkyCache;
+import dev.v1zir.visuals.render.winter.SnowLayer;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.DynamicUniformStorage;
 import net.minecraft.client.gl.Framebuffer;
@@ -95,7 +96,7 @@ public final class Reflections {
 		}
 		Vec3d cam = client.gameRenderer.getCamera().getCameraPos();
 		// Snow needs the far columns (and the materials near the camera) as reflections do.
-		SurfaceMap.tick(client.world, (int) Math.floor(cam.x), (int) Math.floor(cam.y), (int) Math.floor(cam.z), reflections || snow);
+		SurfaceMap.tick(client.world, (int) Math.floor(cam.x), (int) Math.floor(cam.y), (int) Math.floor(cam.z), reflections || snow, snow);
 	}
 
 	/** Winter's snow lies on the overworld only. */
@@ -189,7 +190,10 @@ public final class Reflections {
 		}
 	}
 
-	/** Winter's snow on the ground, over a fresh copy of the frame (the reflections may have changed it). */
+	/**
+	 * Winter's snow on the ground, over a fresh copy of the frame (the reflections may have changed it), then the snow
+	 * lying close by as geometry over it.
+	 */
 	private static void drawSnow(MinecraftClient mc, GpuBufferSlice params) {
 		Framebuffer fb = mc.getFramebuffer();
 		GpuSampler nearest = RenderSystem.getSamplerCache().get(FilterMode.NEAREST);
@@ -201,6 +205,7 @@ public final class Reflections {
 			pass.setVertexBuffer(0, Fullscreen.buffer());
 			pass.draw(0, 3);
 		}
+		if (WinterModule.depth() > 0f) SnowLayer.draw(params, copyView);
 	}
 
 	private static void bindScene(RenderPass pass, GpuBufferSlice params, GpuSampler colorSampler, GpuSampler nearest) {
@@ -241,7 +246,7 @@ public final class Reflections {
 		float day = (float) Math.max(0.0, Math.min(1.0, 0.5 + Math.cos(t * Math.PI * 2.0) * 1.3));
 		float storm = world.getRainGradient(tickDelta);
 		p.snowCover.set(snow ? 1f : 0f, mc.options.getClampedViewDistance() * 16f, (0.2f + 0.8f * day) * (1f - 0.25f * storm), 1f - 0.8f * storm);
-		p.snowTint.set(0.78f + 0.2f * day, 0.83f + 0.16f * day, 1f, 0f);
+		p.snowTint.set(0.78f + 0.2f * day, 0.83f + 0.16f * day, 1f, snow ? WinterModule.depth() : 0f);
 	}
 
 	/** Direction and colour of the sun, or of the moon at night, for the glints; none outside the overworld. */

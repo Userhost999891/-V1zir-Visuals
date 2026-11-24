@@ -14,4 +14,8 @@ layout(std140) uniform SnowParams {
 	// x = the camera's height above the height map's base, y = 1 when the map is used,
 	// zw = the camera's position within its block (x, z)
 	vec4 SnowHeight;
+	// xyz = the near box, a third of SnowBox each way (dense snow close by), w = the frame's height in pixels
+	vec4 SnowNear;
+	// xyz = towards the sun, or the moon at night (world axes), w = its strength (0 when hidden)
+	vec4 SnowSun;
 };

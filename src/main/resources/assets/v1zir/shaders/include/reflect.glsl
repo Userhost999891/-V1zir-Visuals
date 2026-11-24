@@ -18,7 +18,7 @@ layout(std140) uniform ReflectParams {
 	vec4 SkyInfo;     // x = 1 while the trace pass has the Shader Sky's panorama (reflect_trace.fsh)
 	vec4 SnowCover;   // Winter's snow on the ground (snow_cover.fsh): x = amount, y = render distance (blocks),
 	                  // z = the day's light, w = glitter
-	vec4 SnowTint;    // rgb = the colour of the light on the snow
+	vec4 SnowTint;    // rgb = the colour of the light on the snow, w = how deep it lies close by (blocks, 0 for none)
 };
 
 uniform sampler2D Sampler0; // the frame

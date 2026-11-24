@@ -15,6 +15,8 @@ public enum SkyPreset {
 	BLOOD_MOON("Blood Moon", 7, 0xFF1C0305),
 	PLASMA("Plasma", 9, 0xFF0A0614),
 	LAGOON("Lagoon", 10, 0xFF062A3A),
+	/** The Winter module's festive sky (it takes the place of any preset while Winter's Festive sky is on). */
+	WINTER("Winter", 11, 0),
 	CUSTOM("Custom", 8, 0);
 
 	private final String title;
