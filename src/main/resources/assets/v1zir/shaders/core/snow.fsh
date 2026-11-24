@@ -28,7 +28,8 @@ void main() {
 	// the light is behind it.
 	vec2 q = corner * 0.9;
 	vec3 normal = vec3(q, sqrt(max(1.0 - dot(q, q), 0.0)));
-	float lit = 0.78 + 0.3 * max(dot(normal, sunView), 0.0) * SnowSun.w - 0.08 * (1.0 - normal.z);
-	float rim = pow(1.0 - normal.z, 2.0) * max(-sunView.z, 0.0) * 0.45 * SnowSun.w;
+	// Never darker than the snow on the ground: white on white, as falling snow is.
+	float lit = 0.96 + 0.16 * max(dot(normal, sunView), 0.0) * SnowSun.w - 0.04 * (1.0 - normal.z);
+	float rim = pow(1.0 - normal.z, 2.0) * max(-sunView.z, 0.0) * 0.4 * SnowSun.w;
 	fragColor = vec4(SnowLight.rgb * (lit + rim), alpha);
 }

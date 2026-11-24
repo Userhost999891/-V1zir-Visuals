@@ -8,7 +8,8 @@
 // on the CPU. The depth thins out towards the edge of the layer, where the flat cover (snow_cover.fsh) takes over.
 #moj_import <v1zir:reflect.glsl>
 
-// Snow per column (render/SurfaceMap): r = sixteenths at which it lies on the top block, g = block light, b = leaves.
+// Snow per column (render/SurfaceMap): r = sixteenths at which it lies on the top block, g = block light,
+// b = 1 on leaves (2 on something hot, where r is 0).
 uniform sampler2D Sampler5;
 
 // Position.xz: where in its column the vertex lies (0..1); Position.y: 0 on the snow's surface, 1 at the foot of a
@@ -50,7 +51,7 @@ vec3 lSnow(ivec2 v) {
 	vec4 s = texelFetch(Sampler5, (ivec2(CameraBlock.xz) + v + 256) & 127, 0);
 	int lies = rUnpack(s.r);
 	if (column.x < -1.0e8 || lies == 0 || s.a < 0.5) return vec3(-1.0e9, 0.0, 0.0);
-	bool leaves = s.b > 0.5;
+	bool leaves = rUnpack(s.b) == 1;
 	if (leaves && lHash(ivec2(floor(CameraPos.xz)) + v + ivec2(57, 113)) < 0.15) return vec3(-1.0e9, 0.0, 0.0);
 	return vec3(column.x - 1.0 + float(lies) / 16.0, s.g, leaves ? 1.0 : 0.0);
 }

@@ -104,7 +104,7 @@ public final class SnowRenderer {
 			// Light: the same as the snow on the ground has (so flakes never show darker than it), a little brighter as
 			// they catch the light from every side; faintly blue by day, bluer at night.
 			float day = daylight(world, tickDelta);
-			float bright = Math.min(1f, skyLight(world, tickDelta) * 1.08f);
+			float bright = Math.min(1f, skyLight(world, tickDelta) * 1.1f);
 			p.light[0] = bright * (0.9f + 0.05f * day);
 			p.light[1] = bright * (0.93f + 0.04f * day);
 			p.light[2] = bright * 1.0f;
@@ -146,7 +146,8 @@ public final class SnowRenderer {
 	 */
 	public static float skyLight(ClientWorld world, float tickDelta) {
 		double gamma = V1zir.mc().options.getGamma().getValue();
-		float night = 0.16f + 0.22f * (float) Math.max(0.0, Math.min(1.0, gamma));
+		// Snow catches what moonlight there is: lighter at night than the ground round it would be.
+		float night = 0.22f + 0.25f * (float) Math.max(0.0, Math.min(1.0, gamma));
 		float day = daylight(world, tickDelta);
 		return (night + (1f - night) * day) * (1f - 0.25f * world.getRainGradient(tickDelta));
 	}

@@ -73,8 +73,10 @@ void main() {
 	// block under it.
 	float torch = 0.0;
 	if (max(abs(v.x), abs(v.z)) <= 60) {
-		float blockLight = texelFetch(Sampler5, (ivec2(CameraBlock.xz) + v.xz + 256) & 127, 0).g;
-		torch = blockLight * blockLight;
+		vec4 data = texelFetch(Sampler5, (ivec2(CameraBlock.xz) + v.xz + 256) & 127, 0);
+		// Nothing lies on a fire, a campfire, magma or a lit furnace: it melts at once.
+		if (rUnpack(data.b) == 2 && world.y > column.x - 1.0) discard;
+		torch = data.g * data.g;
 	}
 	vec3 light = vec3(SnowCover.z) + vec3(1.0, 0.8, 0.56) * torch;
 	float lit = dot(light, vec3(0.3333));

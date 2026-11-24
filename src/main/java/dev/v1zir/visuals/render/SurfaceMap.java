@@ -6,11 +6,14 @@ import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.textures.TextureFormat;
 import it.unimi.dsi.fastutil.objects.Reference2ByteOpenHashMap;
+import net.minecraft.block.AbstractFurnaceBlock;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.Blocks;
 import net.minecraft.client.texture.NativeImage;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.fluid.FluidState;
 import net.minecraft.registry.Registries;
+import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.registry.tag.FluidTags;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
@@ -41,7 +44,8 @@ import java.nio.ByteBuffer;
  *   told apart and not trusted.</li>
  *   <li>Snow, 128 x 128 like the columns, kept while Winter's snow lies (render/winter/SnowLayer): in R
  *   the height in sixteenths at which snow lies on the column's top block (0 where its top is not flat
- *   and whole, or is water), in G the block light above it, in B 1 for leaves; alpha 0 where not known.</li>
+ *   and whole, or is water), in G the block light above it, in B 1 for leaves and 2 for something hot that
+ *   melts any snow (fire, a campfire, magma, lava, a lit furnace); alpha 0 where not known.</li>
  * </ul>
  */
 public final class SurfaceMap {
@@ -270,11 +274,13 @@ public final class SurfaceMap {
 				columns.put(i + 2, material);
 				columns.put(i + 3, (byte) 0xFF);
 				if (snowKept) {
-					byte lies = snowTop(state, material);
-					int light = lies > 0 ? world.getLightLevel(LightType.BLOCK, POS.set(x, top, z)) : 0;
-					snow.put(i, lies);
+					byte top16 = snowTop(state, material);
+					boolean hot = (top16 & HOT) != 0;
+					int lies = top16 & 31;
+					int light = hot ? 15 : world.getLightLevel(LightType.BLOCK, POS.set(x, top, z));
+					snow.put(i, (byte) lies);
 					snow.put(i + 1, (byte) (light * 17));
-					snow.put(i + 2, (byte) (material == FOLIAGE ? 1 : 0));
+					snow.put(i + 2, (byte) (hot ? 2 : material == FOLIAGE ? 1 : 0));
 					snow.put(i + 3, (byte) 0xFF);
 				}
 			}
@@ -381,10 +387,13 @@ public final class SurfaceMap {
 		return material;
 	}
 
+	/** In snowTop's answer: the state is hot and melts any snow on it. */
+	private static final int HOT = 32;
+
 	/**
 	 * Sixteenths of a block at which snow lies on top of the state (1 to 16): 0 where its top is not flat and whole
-	 * (stairs, fences, plants, torches) or where there is water or lava. Worked out once per state (POS must hold a
-	 * position of it).
+	 * (stairs, fences, plants, torches) or where there is water or lava; HOT added for fire, campfires, magma, lava and
+	 * a lit furnace, on which no snow lies at all. Worked out once per state (POS must hold a position of it).
 	 */
 	private static byte snowTop(BlockState state, byte material) {
 		byte top = SNOW_TOPS.getByte(state);
@@ -396,7 +405,11 @@ public final class SurfaceMap {
 	}
 
 	private static byte flatTop(BlockState state, byte material) {
-		if (material == AIR || material == WATER || material == LAVA) return 0;
+		if (material == LAVA || state.isIn(BlockTags.FIRE) || state.isIn(BlockTags.CAMPFIRES) || state.isOf(Blocks.MAGMA_BLOCK)
+			|| state.getBlock() instanceof AbstractFurnaceBlock && state.getOrEmpty(AbstractFurnaceBlock.LIT).orElse(false)) {
+			return (byte) HOT;
+		}
+		if (material == AIR || material == WATER) return 0;
 		VoxelShape shape = state.getOutlineShape(world, POS);
 		if (shape.isEmpty()) return 0;
 		double max = shape.getMax(Direction.Axis.Y);
