@@ -101,12 +101,10 @@ public final class SnowRenderer {
 			p.wind[1] = fall;
 			p.wind[2] = (float) driftZ;
 			p.wind[3] = size;
-			// Light: bright and faintly blue by day, a dimmer blue at night (about as bright as the snow on the ground
-			// then, so flakes never show darker than it), greyer in a storm.
-			double t = (Math.floorMod(world.getTimeOfDay(), 24000L) + tickDelta) / 24000.0 - 0.25;
-			float day = (float) Math.max(0.0, Math.min(1.0, 0.5 + Math.cos(t * Math.PI * 2.0) * 1.3));
-			float storm = world.getRainGradient(tickDelta);
-			float bright = (0.55f + 0.45f * day) * (1f - 0.25f * storm);
+			// Light: the same as the snow on the ground has (so flakes never show darker than it), a little brighter as
+			// they catch the light from every side; faintly blue by day, bluer at night.
+			float day = daylight(world, tickDelta);
+			float bright = Math.min(1f, skyLight(world, tickDelta) * 1.08f);
 			p.light[0] = bright * (0.9f + 0.05f * day);
 			p.light[1] = bright * (0.93f + 0.04f * day);
 			p.light[2] = bright * 1.0f;
@@ -140,6 +138,17 @@ public final class SnowRenderer {
 			broken = true;
 			V1zir.LOGGER.warn("Snow turned off: {}", e.toString());
 		}
+	}
+
+	/**
+	 * The sky's light on snow out in the open (0 to 1): full by day, by night as bright as the game's own light is set
+	 * (Brightness, from Moody to Bright), greyer in a storm. The snow on the ground and the flakes in the air share it.
+	 */
+	public static float skyLight(ClientWorld world, float tickDelta) {
+		double gamma = V1zir.mc().options.getGamma().getValue();
+		float night = 0.16f + 0.22f * (float) Math.max(0.0, Math.min(1.0, gamma));
+		float day = daylight(world, tickDelta);
+		return (night + (1f - night) * day) * (1f - 0.25f * world.getRainGradient(tickDelta));
 	}
 
 	/** How much of the day's light there is: 1 at noon, 0 through the night, between them at dawn and dusk. */

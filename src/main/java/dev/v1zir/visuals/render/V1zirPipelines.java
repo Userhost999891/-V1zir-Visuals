@@ -229,11 +229,11 @@ public final class V1zirPipelines {
 	/** Composites the traced reflections and the wet look back onto the frame. */
 	public static final RenderPipeline REFLECT_COMPOSITE = reflectPipeline("reflect_composite", 6);
 	/** Winter's snow on the ground, over a copy of the frame with the reflections' surface helpers (render/Reflections). */
-	public static final RenderPipeline SNOW_COVER = reflectPipeline("snow_cover", 5);
+	public static final RenderPipeline SNOW_COVER = reflectPipeline("snow_cover", 6);
 	/**
 	 * Winter's snow lying close by as real geometry (render/winter/SnowLayer): a static template of columns placed in the
-	 * vertex shader from the block columns (Sampler2, Sampler4) and the snow texture (Sampler5), lit from a copy of the
-	 * frame (Sampler0); opaque, depth tested and written.
+	 * vertex shader from the block columns (Sampler2, Sampler4) and the snow texture (Sampler5); opaque, depth tested and
+	 * written.
 	 */
 	public static final RenderPipeline SNOW_LAYER = RenderPipeline.builder()
 		.withLocation(V1zir.id("pipeline/snow_layer"))
@@ -241,7 +241,6 @@ public final class V1zirPipelines {
 		.withFragmentShader(V1zir.id("core/snow_layer"))
 		.withVertexFormat(VertexFormats.POSITION_TEXTURE_COLOR, VertexFormat.DrawMode.QUADS)
 		.withUniform("ReflectParams", UniformType.UNIFORM_BUFFER)
-		.withSampler("Sampler0")
 		.withSampler("Sampler2")
 		.withSampler("Sampler4")
 		.withSampler("Sampler5")

@@ -4,9 +4,10 @@
 // the falling snow; close by the snow lies on it as real geometry too (snow_layer.vsh). Every surface that faces up
 // under the open sky is covered, leaves are dappled and water and lava stay clear; further off than the geometry
 // reaches, a lip of snow over the top of the sides below stands in for its overhang. No texture: smooth snow that
-// rises and falls softly in drifts, lit by what lit the surface (the frame's own brightness, so shade, darkened
-// corners and torches carry over) and by the day, bluish in the shade, tiny grains glittering in the sun up close,
+// rises and falls softly in drifts, in the sky's whole light (by day or by night, as bright as the game's own light
+// is set) and warm torchlight close to a light, bluish in the shade, tiny grains glittering in the sun up close,
 // fading into the render distance fog. Pixels it leaves alone are discarded.
+uniform sampler2D Sampler5; // snow per column (render/SurfaceMap): g = block light
 #moj_import <v1zir:reflect.glsl>
 
 out vec4 fragColor;
@@ -67,17 +68,22 @@ void main() {
 	if (cover <= 0.004) discard;
 
 	vec4 scene = texelFetch(Sampler0, p, 0);
-	float luma = dot(scene.rgb, vec3(0.2126, 0.7152, 0.0722));
-	// The frame's own brightness is what lit the surface, taking most blocks to be of middling brightness; the
-	// day's light keeps snow on dark blocks from turning grey.
-	float lit = clamp(luma / 0.42, 0.0, 1.3);
-	lit = mix(lit, max(lit, SnowCover.z), 0.6);
+	// The light on the snow: out under the sky it has the sky's whole light, and torchlight near a light (the block
+	// light above its column, known close by). Never the frame's own brightness, which carries the texture of the
+	// block under it.
+	float torch = 0.0;
+	if (max(abs(v.x), abs(v.z)) <= 60) {
+		float blockLight = texelFetch(Sampler5, (ivec2(CameraBlock.xz) + v.xz + 256) & 127, 0).g;
+		torch = blockLight * blockLight;
+	}
+	vec3 light = vec3(SnowCover.z) + vec3(1.0, 0.8, 0.56) * torch;
+	float lit = dot(light, vec3(0.3333));
 	// Snow: white with the faintest blue, rising and falling softly in drifts, bluish where it is in shade.
 	float drift = sNoise(world.xz * 0.35) * 0.6 + sNoise(world.xz * 1.3) * 0.4;
 	vec3 color = vec3(0.93, 0.955, 1.0) * SnowTint.rgb * (0.95 + 0.06 * drift);
 	// The lip's underside is in its own shade.
-	if (!top) color *= 0.9;
-	color *= lit * mix(vec3(0.88, 0.94, 1.06), vec3(1.0), smoothstep(0.3, 0.85, lit));
+	if (!top) color *= 0.86;
+	color *= light * mix(vec3(0.88, 0.94, 1.06), vec3(1.0), smoothstep(0.3, 0.85, lit));
 	float dist = length(pos);
 	// Glitter: tiny grains catch the sun here and there, from some angles only, close by.
 	if (top && LightDir.w > 0.0 && dist < 20.0) {

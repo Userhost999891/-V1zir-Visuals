@@ -2133,14 +2133,14 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.runOnClient(client -> client.options.setPerspective(Perspective.FIRST_PERSON));
 		context.waitTicks(10);
 		bench(context, "winter-off");
-		context.runOnClient(client -> {
-			ModuleManager.get(WinterModule.class).setEnabled(true, false);
-			// The festive sky drawn straight away: the sky cache takes two refreshes to show a new preset, long at CI's frame rate.
-			ModuleManager.get(ShaderSkyModule.class).cache.set(false);
-		});
-		// The block columns the snow cover reads are complete after 16 ticks.
+		context.runOnClient(client -> ModuleManager.get(WinterModule.class).setEnabled(true, false));
+		// The block columns the snow cover reads are complete after 16 ticks. Measured with the sky cache, as in play.
 		context.waitTicks(30);
 		bench(context, "winter-on");
+		// The festive sky drawn straight away for the pictures: the sky cache takes two refreshes to show a new preset,
+		// long at CI's frame rate.
+		context.runOnClient(client -> ModuleManager.get(ShaderSkyModule.class).cache.set(false));
+		context.waitTicks(6);
 		context.takeScreenshot("winter-day");
 		// Up close: a wall of stone bricks (snow on top, a lip over its sides), leaves (patches) and a pool (clear).
 		for (String command : List.of(
@@ -2172,7 +2172,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		float warmth = context.computeOnClient(client -> ModuleManager.get(WinterModule.class).warmth());
 		System.out.println("V1ZIR-WINTER warmth by the campfire: " + warmth);
 		context.takeScreenshot("winter-campfire");
-		singleplayer.getServer().runCommand("execute as @a at @s run setblock ~ ~ ~2 minecraft:air");
+		singleplayer.getServer().runCommand("execute as @a at @s run fill ~-4 ~-2 ~-4 ~4 ~2 ~4 minecraft:air replace minecraft:campfire");
 		look(singleplayer, 30f, -4f);
 		context.waitTicks(5);
 		context.runOnClient(client -> {

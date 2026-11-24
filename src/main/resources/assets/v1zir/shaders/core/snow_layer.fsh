@@ -1,10 +1,9 @@
 #version 150
 
-// The snow lying close by (snow_layer.vsh), lit as the flat snow cover further off is (snow_cover.fsh): by the
-// brightness of the frame behind it, which is the block it lies on, so the sky's light, shade, darkened corners and
-// torches carry over and the two agree by day and at night. On that its own shape: slopes towards the sun or the moon
-// a little brighter, those away from it and its sides darker, its own shade at the foot of its sides, bluish where it
-// is in shade. No texture: smooth snow, tiny grains glittering in the sun up close, and the render distance fog as the
+// The snow lying close by (snow_layer.vsh), lit as the flat snow cover further off is (snow_cover.fsh), so the two
+// agree by day and at night: the sky's whole light (as bright as the game's own light is set) and warm torchlight near
+// a light. On that its own shape: slopes towards the sun or the moon a little brighter, those away from it and its
+// sides darker, its own shade at the foot of its sides, bluish where it is in shade. No texture: smooth snow, tiny grains glittering in the sun up close, and the render distance fog as the
 // game's terrain has it.
 #moj_import <v1zir:reflect.glsl>
 
@@ -24,12 +23,12 @@ float fHash(ivec2 c) {
 
 void main() {
 	vec3 n = normalize(vNormal);
-	float luma = dot(texelFetch(Sampler0, ivec2(gl_FragCoord.xy), 0).rgb, vec3(0.2126, 0.7152, 0.0722));
-	float lit = clamp(luma / 0.42, 0.0, 1.3);
-	lit = mix(lit, max(lit, SnowCover.z), 0.6);
+	vec3 sky = vec3(SnowCover.z);
+	vec3 torch = vec3(1.0, 0.8, 0.56) * (vLight * vLight);
 	float shape = 0.9 + 0.1 * n.y + 0.22 * LightDir.w * (max(dot(n, LightDir.xyz), 0.0) - LightDir.y * 0.8);
-	float light = lit * shape * vShade;
-	vec3 color = vec3(0.93, 0.955, 1.0) * SnowTint.rgb * light * mix(vec3(0.88, 0.94, 1.06), vec3(1.0), smoothstep(0.3, 0.85, light));
+	vec3 lightRgb = sky * shape * vShade + torch * mix(0.7, 1.0, vShade);
+	float lit = dot(lightRgb, vec3(0.3333));
+	vec3 color = vec3(0.93, 0.955, 1.0) * SnowTint.rgb * lightRgb * mix(vec3(0.88, 0.94, 1.06), vec3(1.0), smoothstep(0.3, 0.85, lit));
 	float dist = length(vRel);
 	// Glitter: tiny grains catch the sun here and there, from some angles only, close by.
 	if (n.y > 0.5 && LightDir.w > 0.0 && dist < 20.0) {

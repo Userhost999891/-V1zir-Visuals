@@ -20,6 +20,7 @@ import dev.v1zir.visuals.gui.hud.Notifications;
 import dev.v1zir.visuals.render.font.Icons;
 import dev.v1zir.visuals.render.sky.SkyCache;
 import dev.v1zir.visuals.render.winter.SnowLayer;
+import dev.v1zir.visuals.render.winter.SnowRenderer;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.DynamicUniformStorage;
 import net.minecraft.client.gl.Framebuffer;
@@ -195,6 +196,7 @@ public final class Reflections {
 	 * lying close by as geometry over it.
 	 */
 	private static void drawSnow(MinecraftClient mc, GpuBufferSlice params) {
+		if (SurfaceMap.snow() == null) return;
 		Framebuffer fb = mc.getFramebuffer();
 		GpuSampler nearest = RenderSystem.getSamplerCache().get(FilterMode.NEAREST);
 		CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
@@ -202,10 +204,11 @@ public final class Reflections {
 		try (RenderPass pass = encoder.createRenderPass(() -> "V1zir snow cover", fb.getColorAttachmentView(), OptionalInt.empty())) {
 			pass.setPipeline(V1zirPipelines.SNOW_COVER);
 			bindScene(pass, params, nearest, nearest);
+			pass.bindTexture("Sampler5", SurfaceMap.snow(), nearest);
 			pass.setVertexBuffer(0, Fullscreen.buffer());
 			pass.draw(0, 3);
 		}
-		if (WinterModule.depth() > 0f) SnowLayer.draw(params, copyView);
+		if (WinterModule.depth() > 0f) SnowLayer.draw(params);
 	}
 
 	private static void bindScene(RenderPass pass, GpuBufferSlice params, GpuSampler colorSampler, GpuSampler nearest) {
@@ -242,10 +245,9 @@ public final class Reflections {
 		// The camera looks down -Z: its forward axis is the negated third row of the view rotation.
 		p.forward.set(-VIEW.m02(), -VIEW.m12(), -VIEW.m22(), 0f);
 		// Snow's light: bright and faintly blue by day, dim blue at night, greyer in a storm.
-		double t = (Math.floorMod(world.getTimeOfDay(), 24000L) + tickDelta) / 24000.0 - 0.25;
-		float day = (float) Math.max(0.0, Math.min(1.0, 0.5 + Math.cos(t * Math.PI * 2.0) * 1.3));
+		float day = SnowRenderer.daylight(world, tickDelta);
 		float storm = world.getRainGradient(tickDelta);
-		p.snowCover.set(snow ? 1f : 0f, mc.options.getClampedViewDistance() * 16f, (0.2f + 0.8f * day) * (1f - 0.25f * storm), 1f - 0.8f * storm);
+		p.snowCover.set(snow ? 1f : 0f, mc.options.getClampedViewDistance() * 16f, SnowRenderer.skyLight(world, tickDelta), 1f - 0.8f * storm);
 		p.snowTint.set(0.78f + 0.2f * day, 0.83f + 0.16f * day, 1f, snow ? WinterModule.depth() : 0f);
 	}
 

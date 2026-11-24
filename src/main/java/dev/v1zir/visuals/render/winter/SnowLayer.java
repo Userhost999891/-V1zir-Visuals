@@ -40,11 +40,8 @@ public final class SnowLayer {
 	private SnowLayer() {
 	}
 
-	/**
-	 * Draws the snow over the world's colour and depth with the reflections' parameters (ReflectParams); frame is a copy
-	 * of the frame before the snow, which it is lit from.
-	 */
-	public static void draw(GpuBufferSlice params, GpuTextureView frame) {
+	/** Draws the snow over the world's colour and depth with the reflections' parameters (ReflectParams). */
+	public static void draw(GpuBufferSlice params) {
 		GpuTextureView snow = SurfaceMap.snow();
 		if (snow == null || SurfaceMap.columns() == null || SurfaceMap.far() == null) return;
 		Framebuffer fb = V1zir.mc().getFramebuffer();
@@ -57,7 +54,6 @@ public final class SnowLayer {
 			fb.getColorAttachmentView(), OptionalInt.empty(), fb.getDepthAttachmentView(), OptionalDouble.empty())) {
 			pass.setPipeline(V1zirPipelines.SNOW_LAYER);
 			pass.setUniform("ReflectParams", params);
-			pass.bindTexture("Sampler0", frame, nearest);
 			pass.bindTexture("Sampler2", SurfaceMap.columns(), nearest);
 			pass.bindTexture("Sampler4", SurfaceMap.far(), nearest);
 			pass.bindTexture("Sampler5", snow, nearest);
