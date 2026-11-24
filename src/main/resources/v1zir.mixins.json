@@ -57,6 +57,7 @@
     "optimize.BlockEntityCullingMixin",
     "optimize.ChunkUploadMixin",
     "optimize.EntityCullingMixin",
+    "optimize.FramePacingMixin",
     "optimize.MinimizedMixin",
     "optimize.ParticleLimitMixin",
     "optimize.SignTextMixin",

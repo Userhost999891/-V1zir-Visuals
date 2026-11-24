@@ -23,9 +23,15 @@ public final class Optimizations {
 	public static final BoolSetting PARTICLES = new BoolSetting("Particle limit", true);
 	public static final BoolSetting BACKGROUND = new BoolSetting("Background FPS limit", true);
 	public static final BoolSetting UPLOADS = new BoolSetting("Chunk upload pacing", true);
+	/** A capped frame rate held to an even beat (FramePacer). */
+	public static final BoolSetting PACING = new BoolSetting("Frame pacing", true);
+	/** The render thread first, background workers a step lower (ThreadTuning). */
+	public static final BoolSetting THREADS = new BoolSetting("Thread priorities", true);
+	/** No sky panorama refresh while no sky light reaches the camera (deep underground). */
+	public static final BoolSetting SKY_IDLE = new BoolSetting("Idle sky underground", true);
 	/** Once: VSync off and no frame rate limit, the two settings that hold a fast computer at its screen's 60 Hz. */
 	public static final BoolSetting UNLOCK = new BoolSetting("Unlock frame rate", true);
-	private static final List<Setting<?>> SETTINGS = List.of(OCCLUSION, DISTANCE, PARTICLES, BACKGROUND, UPLOADS, UNLOCK);
+	private static final List<Setting<?>> SETTINGS = List.of(OCCLUSION, DISTANCE, PARTICLES, BACKGROUND, UPLOADS, PACING, THREADS, SKY_IDLE, UNLOCK);
 	/** The highest Max Framerate the game offers, which it shows as Unlimited. */
 	private static final int UNLIMITED = 260;
 	/** The frame rate was unlocked once already: what the player sets after that is theirs. */
@@ -37,6 +43,8 @@ public final class Optimizations {
 	private static final boolean IRIS = loaded("iris") || loaded("oculus");
 	private static final boolean MORE_CULLING = loaded("moreculling");
 	private static final boolean DYNAMIC_FPS = loaded("dynamic_fps");
+	/** ThreadTweak sets the threads' priorities itself. */
+	private static final boolean THREAD_TWEAK = loaded("threadtweak");
 	/** Sodium replaces vanilla's chunk building and uploads with its own. */
 	private static final boolean SODIUM = loaded("sodium") || loaded("embeddium");
 	private static int frame;
@@ -85,11 +93,25 @@ public final class Optimizations {
 		return UPLOADS.on() && !SODIUM;
 	}
 
+	public static boolean pacing() {
+		return PACING.on() && !DYNAMIC_FPS;
+	}
+
+	public static boolean threads() {
+		return THREADS.on() && !THREAD_TWEAK;
+	}
+
+	public static boolean skyIdle() {
+		return SKY_IDLE.on();
+	}
+
 	public static void logCompatibility() {
 		if (ENTITY_CULLING_MOD || IRIS) V1zir.LOGGER.info("Entity culling stands down: {} is installed", ENTITY_CULLING_MOD ? "Entity Culling" : "a shader mod");
 		if (MORE_CULLING) V1zir.LOGGER.info("Distance culling stands down: More Culling is installed");
 		if (DYNAMIC_FPS) V1zir.LOGGER.info("Background FPS limit stands down: Dynamic FPS is installed");
 		if (SODIUM) V1zir.LOGGER.info("Chunk upload pacing stands down: Sodium renders the chunks");
+		if (DYNAMIC_FPS) V1zir.LOGGER.info("Frame pacing stands down: Dynamic FPS paces the frames");
+		if (THREAD_TWEAK) V1zir.LOGGER.info("Thread priorities stand down: ThreadTweak sets them");
 	}
 
 	/**

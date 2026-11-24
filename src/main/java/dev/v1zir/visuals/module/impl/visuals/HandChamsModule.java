@@ -166,6 +166,7 @@ public final class HandChamsModule extends Module {
 			case BLOOD_MOON -> 0xFFFF3B3B;
 			case PLASMA -> 0xFFFF6BE0;
 			case LAGOON -> 0xFF5CE8FF;
+			case WINTER -> 0xFFDCEEFF;
 			case CUSTOM -> skyColorA.argb();
 		};
 	}

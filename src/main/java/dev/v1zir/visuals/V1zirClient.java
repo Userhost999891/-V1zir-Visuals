@@ -20,6 +20,7 @@ import dev.v1zir.visuals.optimize.GpuCheck;
 import dev.v1zir.visuals.optimize.GpuOption;
 import dev.v1zir.visuals.optimize.HitchMonitor;
 import dev.v1zir.visuals.optimize.Optimizations;
+import dev.v1zir.visuals.optimize.ThreadTuning;
 import dev.v1zir.visuals.render.Reflections;
 import dev.v1zir.visuals.render.V1zirPipelines;
 import dev.v1zir.visuals.render.world.Effects;
@@ -31,6 +32,7 @@ import net.minecraft.client.gui.screen.TitleScreen;
 import org.lwjgl.glfw.GLFW;
 
 public final class V1zirClient implements ClientModInitializer {
+	private static int threadTicks;
 	@Override
 	public void onInitializeClient() {
 		V1zirPipelines.register();
@@ -54,6 +56,8 @@ public final class V1zirClient implements ClientModInitializer {
 				client.setScreen(MainMenus.create());
 			}
 			ModuleManager.tick();
+			// New background threads (pools start them as needed) get their priority every ten seconds.
+			if (++threadTicks % 200 == 0) ThreadTuning.apply();
 			Reflections.tick(client);
 			Effects.tick(client);
 			HudRenderer.tick(client);
@@ -64,6 +68,8 @@ public final class V1zirClient implements ClientModInitializer {
 		});
 		// Once the game has started (its options are loaded): Unlock frame rate, a single time.
 		ClientLifecycleEvents.CLIENT_STARTED.register(Optimizations::unlockFrameRate);
+		// The render thread first: raised once, background workers lowered a step.
+		ClientLifecycleEvents.CLIENT_STARTED.register(client -> ThreadTuning.apply());
 		// Laptops: a dedicated graphics card the game does not use is worth saying at once.
 		ClientLifecycleEvents.CLIENT_STARTED.register(GpuCheck::check);
 		GpuOption.register();

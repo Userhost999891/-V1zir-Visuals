@@ -105,8 +105,9 @@ public final class SkyCache {
 	 * @param data   this frame's sky parameters (the build snapshots them at its start)
 	 * @param params the same parameters already uploaded, for the screen pass
 	 * @param period seconds one complete panorama build takes
+	 * @param idle   the sky can hardly be seen (no sky light at the camera): the panorama is drawn but not refreshed
 	 */
-	public static void render(SkyUniforms.Data data, GpuBufferSlice params, GpuTextureView target, float period) {
+	public static void render(SkyUniforms.Data data, GpuBufferSlice params, GpuTextureView target, float period, boolean idle) {
 		ensureTextures();
 		drawnFrame = frame;
 		if (storage == null) storage = new DynamicUniformStorage<>("V1zir sky cache UBO", UBO_SIZE, 4);
@@ -145,7 +146,7 @@ public final class SkyCache {
 			previousValid = false;
 			rush = false;
 			startBuild(data);
-		} else {
+		} else if (!idle) {
 			float from = progress;
 			boolean hurry = rush && dt < RUSH_DT;
 			float maxStep = MAX_STEP * costWeight(data) * (hurry ? RUSH : 1f);

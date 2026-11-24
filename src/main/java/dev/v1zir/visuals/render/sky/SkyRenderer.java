@@ -9,11 +9,13 @@ import dev.v1zir.visuals.module.ModuleManager;
 import dev.v1zir.visuals.module.impl.visuals.ShaderSkyModule;
 import dev.v1zir.visuals.module.impl.visuals.WinterModule;
 import dev.v1zir.visuals.optimize.GpuTimer;
+import dev.v1zir.visuals.optimize.Optimizations;
 import dev.v1zir.visuals.render.Fullscreen;
 import dev.v1zir.visuals.render.V1zirPipelines;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gl.Framebuffer;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.LightType;
 import org.joml.Matrix4d;
 import org.joml.Matrix4f;
 
@@ -92,6 +94,14 @@ public final class SkyRenderer {
 		}
 	}
 
+	/**
+	 * No sky light reaches the camera (deep in a cave, a sealed room): the sky can hardly be seen, so its panorama stops
+	 * refreshing (what is cached is still drawn, wherever it shows) until it can.
+	 */
+	private static boolean skyOutOfReach(MinecraftClient mc) {
+		return mc.world != null && mc.world.getLightLevel(LightType.SKY, mc.gameRenderer.getCamera().getBlockPos()) == 0;
+	}
+
 	/** How far the frame's projection is zoomed in from the field of view set in the options. */
 	private static float zoom(MinecraftClient mc) {
 		double fov = Math.toRadians(mc.options.getFov().getValue());
@@ -111,7 +121,7 @@ public final class SkyRenderer {
 				? RenderSystem.outputColorTextureOverride
 				: mc.getFramebuffer().getColorAttachmentView();
 			if (sky.cache.on() && sky.currentPreset().cacheable() && RenderSystem.outputColorTextureOverride == null && zoom(mc) < CACHE_MAX_ZOOM) {
-				SkyCache.render(DATA, params, color, sky.cacheRefresh.f());
+				SkyCache.render(DATA, params, color, sky.cacheRefresh.f(), Optimizations.skyIdle() && skyOutOfReach(mc));
 				return true;
 			}
 			float scale = sky.renderScale.f();
