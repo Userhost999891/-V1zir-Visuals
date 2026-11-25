@@ -3,6 +3,7 @@ package dev.v1zir.visuals.module.impl.hud;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.FilterMode;
 import com.mojang.blaze3d.textures.GpuTextureView;
+import dev.v1zir.visuals.V1zir;
 import dev.v1zir.visuals.browser.Browser;
 import dev.v1zir.visuals.gui.browser.BrowserScreen;
 import dev.v1zir.visuals.module.setting.KeySetting;
@@ -19,6 +20,8 @@ import net.minecraft.client.texture.TextureSetup;
 import org.lwjgl.glfw.GLFW;
 
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * A small Chromium browser on the HUD, as MCEF gives: a live view of the page in a window, with Search, YouTube and
@@ -144,21 +147,85 @@ public final class BrowserModule extends HudModule {
 				Render2D.textCentered(ctx, Fonts.semibold(), "Click to open", viewX + viewW / 2f, viewY + viewH - 9f, 6f, 0xEEFFFFFF);
 			}
 		} else {
-			Render2D.round(ctx, viewX, viewY, viewW, viewH, 5f, 0xFF0B0B0D);
-			Render2D.icon(ctx, Icons.GLOBE, viewX + viewW / 2f, viewY + viewH / 2f - 8f, 14f, Theme.textDim());
-			String status = Browser.status();
-			Render2D.textCentered(ctx, Fonts.medium(), Fonts.medium().trim(status, 6f, viewW - 12f), viewX + viewW / 2f, viewY + viewH / 2f + 6f, 6f,
-				Theme.textDim());
-			float progress = Browser.progress();
-			if (progress >= 0f) {
-				float bw = viewW * 0.6f;
-				float bx = viewX + (viewW - bw) / 2f;
-				float by = viewY + viewH / 2f + 14f;
-				Render2D.round(ctx, bx, by, bw, 3f, 1.5f, 0x22FFFFFF);
-				Render2D.round(ctx, bx, by, Math.max(3f, bw * progress), 3f, 1.5f, Theme.accent());
-			}
+			loading(ctx);
 		}
 		Render2D.setAlpha(1f);
+	}
+
+	/**
+	 * The window while the browser starts: how far the download (or unpacking, or start) of Chromium has got, in big
+	 * numbers and a bar, with the time left; or why it failed.
+	 */
+	private void loading(DrawContext ctx) {
+		Render2D.round(ctx, viewX, viewY, viewW, viewH, 5f, 0xFF0B0B0D);
+		float cx = viewX + viewW / 2f;
+		float cy = viewY + viewH / 2f;
+		String failure = Browser.failure();
+		if (failure != null) {
+			Render2D.icon(ctx, Icons.INFO, cx, cy - 14f, 12f, 0xFFFF6B6B);
+			Render2D.textCentered(ctx, Fonts.semibold(), "The browser could not start", cx, cy - 3f, 6f, Theme.text());
+			List<String> lines = wrap(failure, 5f, viewW - 16f);
+			for (int i = 0; i < Math.min(3, lines.size()); i++) {
+				Render2D.textCentered(ctx, Fonts.medium(), lines.get(i), cx, cy + 7f + i * 7f, 5f, Theme.textDim());
+			}
+			return;
+		}
+		float progress = Browser.progress();
+		boolean measured = progress >= 0f;
+		float s = Math.min(1.4f, viewH / 112f);
+		if (measured) {
+			Render2D.textCentered(ctx, Fonts.semibold(), Math.round(progress * 100f) + "%", cx, cy - 13f * s, 15f * s, Theme.text());
+		} else {
+			Render2D.icon(ctx, Icons.GLOBE, cx, cy - 13f * s, 14f * s, Theme.textDim());
+		}
+		Render2D.textCentered(ctx, Fonts.medium(), Browser.stage(), cx, cy + 1f * s, 6f, Theme.textDim());
+		float bw = viewW * 0.72f;
+		float bh = 4f;
+		float bx = cx - bw / 2f;
+		float by = cy + 8f * s;
+		Render2D.round(ctx, bx, by, bw, bh, bh / 2f, 0x22FFFFFF);
+		if (measured) {
+			Render2D.round(ctx, bx, by, Math.max(bh, bw * progress), bh, bh / 2f, Theme.accent());
+		} else {
+			// No measure yet: a segment sweeping along the bar.
+			float seg = bw * 0.3f;
+			float t = (V1zir.time() * 0.55f) % 1f;
+			float from = Math.max(bx, bx - seg + (bw + seg) * t);
+			float to = Math.min(bx + bw, bx + (bw + seg) * t);
+			if (to - from > 1f) Render2D.round(ctx, from, by, to - from, bh, bh / 2f, Theme.accent());
+		}
+		int left = Browser.secondsLeft();
+		String detail;
+		if (Browser.downloading()) {
+			detail = "About 150 MB, only the first time" + (left >= 0 ? " \u00b7 " + timeLeft(left) : "");
+		} else {
+			detail = left >= 0 ? timeLeft(left) : "Chromium starts in the background";
+		}
+		Render2D.textCentered(ctx, Fonts.medium(), Fonts.medium().trim(detail, 5f, viewW - 12f), cx, by + bh + 7f, 5f, Theme.textFaint());
+	}
+
+	/** Words over lines no wider than max (a word longer than a line is cut short). */
+	private static List<String> wrap(String text, float size, float max) {
+		List<String> lines = new ArrayList<>();
+		String line = "";
+		for (String word : text.split(" ")) {
+			String next = line.isEmpty() ? word : line + " " + word;
+			if (!line.isEmpty() && Fonts.medium().width(next, size) > max) {
+				lines.add(Fonts.medium().trim(line, size, max));
+				line = word;
+			} else {
+				line = next;
+			}
+		}
+		if (!line.isEmpty()) lines.add(Fonts.medium().trim(line, size, max));
+		return lines;
+	}
+
+	private static String timeLeft(int seconds) {
+		if (seconds < 5) return "almost done";
+		if (seconds < 60) return "about " + (seconds + 4) / 5 * 5 + " s left";
+		int minutes = Math.round(seconds / 60f);
+		return "about " + minutes + " min left";
 	}
 
 	private static String host(String url) {

@@ -85,8 +85,18 @@ dependencies {
 	// nothing has to be installed. It downloads Chromium for the system the first time the browser is used.
 	modImplementation "maven.modrinth:mcef-modern:${project.mcef_modern_version}"
 	include "maven.modrinth:mcef-modern:${project.mcef_modern_version}"
-	// java-cef's API (navigation: load, back, forward, reload), which MCEF Modern brings inside its own jar.
-	compileOnly "me.friwi:jcef-api:${project.jcef_api_version}"
+	// MCEF's own libraries, java-cef's API and jcefmaven (which downloads Chromium), are inside its jar, two jars deep
+	// in ours; a launcher that does not open jars that deep loses them ("NoClassDefFoundError: jcefmaven"). They sit
+	// in the mod's jar directly as well (the loader keeps one copy of each).
+	implementation "me.friwi:jcef-api:${project.jcef_api_version}"
+	include "me.friwi:jcef-api:${project.jcef_api_version}"
+	implementation("me.friwi:jcefmaven:${project.jcefmaven_version}") {
+		transitive = false
+	}
+	include "me.friwi:jcefmaven:${project.jcefmaven_version}"
+	// A real game with the built jar in its mods (as players run it), for CI: the browser's libraries are checked and
+	// Chromium is downloaded and started (BrowserCheck, with -Dv1zir.prodcheck).
+	productionRuntimeMods "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 	// Sodium's config API, to be built against only: with Sodium there, its Video Settings get the GPU page
 	// (SodiumGpuOption); the oldest 0.8 release for 1.21.11, whose API the later ones keep.
 	modCompileOnly "net.caffeinemc:sodium-fabric-api:0.8.0+mc1.21.11"
@@ -113,4 +123,9 @@ java {
 
 jar {
 	from('LICENSE-ASSETS.md')
+}
+
+tasks.register('runProductionCheck', net.fabricmc.loom.task.prod.ClientProductionRunTask) {
+	jvmArgs.add('-Dv1zir.prodcheck=true')
+	runDir = layout.buildDirectory.dir('run/production')
 }

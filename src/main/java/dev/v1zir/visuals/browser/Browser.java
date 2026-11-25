@@ -32,6 +32,10 @@ public final class Browser {
 	private static String first = GOOGLE;
 	private static int width = -1;
 	private static int height = -1;
+	/** Progress and when it was sampled, and how fast it goes (per second, smoothed), for secondsLeft. */
+	private static float sampleProgress = -1f;
+	private static long sampleTime;
+	private static float rate = -1f;
 
 	private Browser() {
 	}
@@ -63,7 +67,7 @@ public final class Browser {
 			width = -1;
 			height = -1;
 		} catch (Throwable t) {
-			failure = t.getClass().getSimpleName() + (t.getMessage() != null ? ": " + t.getMessage() : "");
+			failure = describe(t);
 			V1zir.LOGGER.warn("Browser could not start", t);
 		}
 	}
@@ -76,24 +80,44 @@ public final class Browser {
 	public static String status() {
 		if (failure != null) return "Browser failed: " + failure;
 		if (browser != null) return "";
+		float progress = progress();
+		return stage() + (progress >= 0f ? String.format(Locale.ROOT, " %d%%", Math.round(progress * 100f)) : "");
+	}
+
+	/** Why the browser could not start, or null. */
+	@Nullable
+	public static String failure() {
+		return failure;
+	}
+
+	/** The step the browser's start is at: downloading, unpacking or installing Chromium, or starting it. */
+	public static String stage() {
 		if (!started) return "Starting the browser";
 		try {
-			MCEFApi.Initialization init = MCEFApi.initialize();
-			float pct = init.getPercentage();
-			String amount = pct >= 0f ? String.format(Locale.ROOT, " %d%%", Math.round(pct)) : "";
-			return switch (init.getStage()) {
-				case DOWNLOADING -> "Downloading Chromium (first time only)" + amount;
-				case EXTRACTING -> "Unpacking Chromium" + amount;
-				case INSTALL -> "Installing Chromium" + amount;
+			return switch (MCEFApi.initialize().getStage()) {
+				case DOWNLOADING -> "Downloading Chromium";
+				case EXTRACTING -> "Unpacking Chromium";
+				case INSTALL -> "Installing Chromium";
 				case INITIALIZING -> "Starting Chromium";
-				default -> "Starting the browser";
+				case DONE -> "Opening the page";
+				default -> "Looking for Chromium";
 			};
 		} catch (Throwable t) {
-			return "Browser unavailable";
+			return "Starting the browser";
 		}
 	}
 
-	/** 0 to 1 while Chromium downloads or unpacks, -1 when there is no measure. */
+	/** Whether Chromium is being downloaded, which happens only the first time. */
+	public static boolean downloading() {
+		if (!started || browser != null || failure != null) return false;
+		try {
+			return MCEFApi.initialize().getStage() == MCEFApi.Initialization.Stage.DOWNLOADING;
+		} catch (Throwable t) {
+			return false;
+		}
+	}
+
+	/** 0 to 1 while Chromium downloads, unpacks or installs, -1 when there is no measure. */
 	public static float progress() {
 		if (browser != null || failure != null || !started) return -1f;
 		try {
@@ -102,6 +126,31 @@ public final class Browser {
 		} catch (Throwable t) {
 			return -1f;
 		}
+	}
+
+	/**
+	 * Roughly how many seconds the current step has left, from how fast its progress has gone lately; -1 while that is
+	 * not known yet. Called every frame the loading window is drawn.
+	 */
+	public static int secondsLeft() {
+		float p = progress();
+		long now = System.nanoTime();
+		if (p < 0f || sampleProgress < 0f || p < sampleProgress) {
+			// No measure, the first one, or a new step that starts again from zero.
+			sampleProgress = p;
+			sampleTime = now;
+			rate = -1f;
+			return -1;
+		}
+		double elapsed = (now - sampleTime) / 1.0e9;
+		if (elapsed >= 0.5) {
+			float latest = (float) ((p - sampleProgress) / elapsed);
+			rate = rate < 0f ? latest : rate * 0.75f + latest * 0.25f;
+			sampleProgress = p;
+			sampleTime = now;
+		}
+		if (rate <= 1.0e-4f) return -1;
+		return Math.round((1f - p) / rate);
 	}
 
 	/** The browser's page as a texture, or null before it has painted. */
@@ -207,9 +256,15 @@ public final class Browser {
 		try {
 			future.join();
 			return "unknown";
-		} catch (Exception e) {
-			Throwable cause = e.getCause() != null ? e.getCause() : e;
-			return cause.getClass().getSimpleName() + (cause.getMessage() != null ? ": " + cause.getMessage() : "");
+		} catch (Throwable t) {
+			return describe(t);
 		}
+	}
+
+	/** The innermost cause of a failure (MCEF and the future wrap it twice), as its kind and message. */
+	private static String describe(Throwable t) {
+		Throwable root = t;
+		while (root.getCause() != null && root.getCause() != root) root = root.getCause();
+		return root.getClass().getSimpleName() + (root.getMessage() != null ? ": " + root.getMessage() : "");
 	}
 }

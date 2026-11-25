@@ -1,5 +1,6 @@
 package dev.v1zir.visuals;
 
+import dev.v1zir.visuals.browser.BrowserCheck;
 import dev.v1zir.visuals.render.cosmetic.CosmeticsFeature;
 import net.fabricmc.fabric.api.client.rendering.v1.LivingEntityFeatureRendererRegistrationCallback;
 import net.minecraft.client.render.entity.PlayerEntityRenderer;
@@ -55,6 +56,8 @@ public final class V1zirClient implements ClientModInitializer {
 		});
 
 		HitchMonitor.start();
+		// Only in CI's run of the built jar (-Dv1zir.prodcheck): the browser checked in a real game.
+		BrowserCheck.register();
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			long begun = HitchMonitor.begin();
 			// Safety net for any code path that shows the vanilla title screen without setScreen.
