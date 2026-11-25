@@ -78,6 +78,7 @@ import dev.v1zir.visuals.module.impl.visuals.ViewModelModule;
 import dev.v1zir.visuals.module.impl.visuals.WorldParticlesModule;
 import dev.v1zir.visuals.module.impl.visuals.ZoomModule;
 import dev.v1zir.visuals.module.impl.world.BlockHighlightModule;
+import dev.v1zir.visuals.module.impl.world.CobwebsModule;
 import dev.v1zir.visuals.module.impl.world.BreakEffectsModule;
 import dev.v1zir.visuals.module.impl.world.ItemPhysicsModule;
 import dev.v1zir.visuals.module.impl.world.SkyLanternsModule;
@@ -158,6 +159,7 @@ public final class ModuleManager {
 		register(new WorldParticlesModule());
 		register(new WinterModule());
 		register(new BlockHighlightModule());
+		register(new CobwebsModule());
 		register(new BreakEffectsModule());
 		register(new TrajectoriesModule());
 		register(new ItemPhysicsModule());

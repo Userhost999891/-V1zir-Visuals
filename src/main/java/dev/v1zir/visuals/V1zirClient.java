@@ -23,10 +23,13 @@ import dev.v1zir.visuals.optimize.Optimizations;
 import dev.v1zir.visuals.optimize.ThreadTuning;
 import dev.v1zir.visuals.render.Reflections;
 import dev.v1zir.visuals.render.V1zirPipelines;
+import dev.v1zir.visuals.render.world.CobwebModel;
 import dev.v1zir.visuals.render.world.Effects;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.model.loading.v1.ModelLoadingPlugin;
+import net.minecraft.block.Blocks;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.TitleScreen;
 import org.lwjgl.glfw.GLFW;
@@ -43,6 +46,9 @@ public final class V1zirClient implements ClientModInitializer {
 		Optimizations.logCompatibility();
 		HudRenderer.register();
 		MessagesUi.register();
+		// The cobweb's model, wrapped so Cobwebs can draw it translucent (it stays vanilla's while the module is off).
+		ModelLoadingPlugin.register(plugin -> plugin.modifyBlockModelAfterBake().register((model, context) ->
+			context.state().isOf(Blocks.COBWEB) ? new CobwebModel(model) : model));
 		// Cosmetics ride on the player model as one more feature of the player renderers.
 		LivingEntityFeatureRendererRegistrationCallback.EVENT.register((entityType, renderer, helper, context) -> {
 			if (entityType == EntityType.PLAYER && renderer instanceof PlayerEntityRenderer<?> players) helper.register(new CosmeticsFeature(players));

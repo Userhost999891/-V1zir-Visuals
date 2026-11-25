@@ -46,7 +46,8 @@ krawędzie w każdej skali GUI), rozmyte "szklane" panele i własne fonty render
 ### Visuals
 View Model, Swing Animations, Hand Chams (zabarwienie albo świecący obrys), Zoom (C), Free Look (Left Alt), Camera Tweaks
 (kamera przez bloki, dystans w trzeciej osobie, bez trzęsienia), Aspect Ratio, No Render,
-Jump Circles (tylko przy skoku), China Hat, Trails, Block Highlight, Break Effects, Item Physics.
+Jump Circles (tylko przy skoku), China Hat, Trails, Block Highlight, Break Effects, Item Physics,
+**Cobwebs** (półprzezroczyste pajęczyny z obrysem od fioletu u góry do czerni u dołu; działa też z Sodium).
 
 ### Combat
 **Chams** (gracze i opcjonalnie moby jako Glass – szkło z jasną krawędzią, Glow – świecąca
@@ -76,6 +77,17 @@ z liczbami zamiast ikon), Coordinates, Compass, Clock, Speed, Server Info (ping,
 Performance (FPS i wykres czasu klatki), Keystrokes (z CPS), Inventory, Armor, Item Counter,
 powiadomienia (**Dynamic Island** u góry ekranu – włączanie modułów, otwarcie i zamknięcie menu,
 zmiana utworu – albo klasyczne dymki). Wszystko przesuwa się w edytorze HUD.
+
+**Browser** – mała przeglądarka Chromium na HUD z podglądem strony na żywo i skrótami do wyszukiwarki,
+YouTube i Discorda. Przy otwartym czacie kliknięcie w okno powiększa je na cały ekran, gdzie się w nim
+klika, przewija i pisze (pasek z wstecz, dalej, odśwież i adresem); Escape zmniejsza je z powrotem.
+Silnik to wbudowany MCEF Modern, więc niczego nie trzeba instalować; przy pierwszym włączeniu pobiera
+Chromium (ok. 150 MB) do `config/mcef-modern`.
+
+### Czat
+Emotki jak na Discordzie: `:sob:`, `:skull:`, `:heart:` i reszta nazw z Discorda (ok. 1900 emotek). Dwukropek
+i dwie litery otwierają nad polem czatu listę pasujących emotek (strzałki wybierają, Tab albo Enter wstawia).
+Emotki w czacie są kolorowe, a wysyłane jako zwykłe emoji Unicode, więc inni widzą je u siebie.
 
 ### Spotify
 Bez konfiguracji: Windows 10/11 (systemowe sterowanie multimediami), macOS (aplikacja Spotify)

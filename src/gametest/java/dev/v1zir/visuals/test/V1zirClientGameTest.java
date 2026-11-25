@@ -28,6 +28,7 @@ import dev.v1zir.visuals.mixin.HandledScreenAccessor;
 import dev.v1zir.visuals.module.Category;
 import dev.v1zir.visuals.module.Module;
 import dev.v1zir.visuals.module.ModuleManager;
+import dev.v1zir.visuals.module.impl.world.CobwebsModule;
 import dev.v1zir.visuals.module.impl.client.ClickGuiModule;
 import dev.v1zir.visuals.module.impl.client.MainMenuModule;
 import dev.v1zir.visuals.module.impl.client.ThemeModule;
@@ -86,6 +87,7 @@ import dev.v1zir.visuals.util.Theme;
 import net.fabricmc.fabric.api.client.gametest.v1.FabricClientGameTest;
 import net.fabricmc.fabric.api.client.gametest.v1.context.ClientGameTestContext;
 import net.fabricmc.fabric.api.client.gametest.v1.context.TestSingleplayerContext;
+import net.minecraft.block.Blocks;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.hud.DebugHud;
 import net.minecraft.client.gui.screen.AccessibilityOnboardingScreen;
@@ -196,6 +198,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			knives(context, singleplayer);
 			cosmetics(context, singleplayer);
 			winter(context, singleplayer);
+			cobwebs(context, singleplayer, "");
 			chatEmoji(context);
 			packs(context, singleplayer);
 			reflections(context, singleplayer);
@@ -2227,6 +2230,37 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 	}
 
 	/**
+	 * Cobwebs: three by two webs in front of a light blue wall, first as vanilla draws them, then see-through with the
+	 * purple to black outline. The pictures are named with the prefix (the run with Sodium has its own).
+	 */
+	private static void cobwebs(ClientGameTestContext context, TestSingleplayerContext singleplayer, String prefix) {
+		singleplayer.getServer().runCommand("time set 6000");
+		for (String command : List.of(
+			"execute as @a at @s run fill ~-3 ~ ~6 ~3 ~3 ~6 minecraft:light_blue_concrete",
+			"execute as @a at @s run fill ~-1 ~ ~3 ~1 ~1 ~3 minecraft:cobweb")) {
+			singleplayer.getServer().runCommand(command);
+		}
+		look(singleplayer, 0f, 12f);
+		context.waitTicks(10);
+		singleplayer.getClientWorld().waitForChunksRender();
+		context.takeScreenshot(prefix + "cobwebs-vanilla");
+		context.runOnClient(client -> ModuleManager.get(CobwebsModule.class).setEnabled(true, false));
+		context.waitTicks(10);
+		singleplayer.getClientWorld().waitForChunksRender();
+		context.waitTicks(2);
+		String found = context.computeOnClient(client -> "model " + client.getBlockRenderManager().getModel(Blocks.COBWEB.getDefaultState()).getClass().getSimpleName()
+			+ ", outlined webs " + ModuleManager.get(CobwebsModule.class).outlines());
+		System.out.println("V1ZIR-COBWEBS " + prefix + found);
+		context.takeScreenshot(prefix + "cobwebs");
+		context.runOnClient(client -> ModuleManager.get(CobwebsModule.class).setEnabled(false, false));
+		for (String command : List.of(
+			"execute as @a at @s run fill ~-3 ~ ~6 ~3 ~3 ~6 minecraft:air",
+			"execute as @a at @s run fill ~-1 ~ ~3 ~1 ~1 ~3 minecraft:air")) {
+			singleplayer.getServer().runCommand(command);
+		}
+	}
+
+	/**
 	 * Emoji in chat: ":so" opens the suggestions over the chat box, Tab puts the first in, more is typed with
 	 * :shortcodes: and sent; the chat line comes back with the emoji in colour.
 	 */
@@ -2379,6 +2413,17 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 	 */
 	private static void sodium(ClientGameTestContext context) {
 		context.waitTicks(20);
+		// In a world first: the see-through cobwebs, which Sodium must keep translucent.
+		resize(context, 854, 480);
+		try (TestSingleplayerContext singleplayer = context.worldBuilder().create()) {
+			singleplayer.getClientWorld().waitForChunksRender();
+			resize(context, 1280, 720);
+			singleplayer.getServer().runCommand("weather clear 1000000");
+			singleplayer.getServer().runCommand("effect give @a minecraft:night_vision 9999 0 true");
+			cobwebs(context, singleplayer, "sodium-");
+			context.runOnClient(client -> MainMenuModule.suspended = true);
+		}
+		context.runOnClient(client -> MainMenuModule.suspended = false);
 		String found = context.computeOnClient(client -> {
 			try {
 				Object config = Class.forName("net.caffeinemc.mods.sodium.client.config.ConfigManager").getField("CONFIG").get(null);
