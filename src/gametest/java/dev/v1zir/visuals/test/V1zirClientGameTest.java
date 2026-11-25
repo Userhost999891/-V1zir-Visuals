@@ -92,7 +92,6 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.hud.DebugHud;
 import net.minecraft.client.gui.screen.AccessibilityOnboardingScreen;
 import net.minecraft.client.gui.screen.TitleScreen;
-import net.minecraft.client.gui.screen.ChatScreen;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.screen.ingame.CreativeInventoryScreen;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
@@ -199,7 +198,6 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			cosmetics(context, singleplayer);
 			winter(context, singleplayer);
 			cobwebs(context, singleplayer, "");
-			chatEmoji(context);
 			packs(context, singleplayer);
 			reflections(context, singleplayer);
 			farWater(context, singleplayer);
@@ -348,6 +346,28 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.runOnClient(client -> bot.typing(bot.find(me)));
 		context.waitTicks(6);
 		context.takeScreenshot("messages-conversation");
+
+		// Emoji, as on Discord: ":so" lists the emoji over the field (:sob: first), Tab puts it in, ":fire:" turns into
+		// its emoji as its colon is typed; sent, the bubble shows them in colour and the text carries the real emoji.
+		context.getInput().typeChars(":so");
+		context.waitTicks(4);
+		context.takeScreenshot("messages-emoji-suggestions");
+		context.getInput().pressKey(GLFW.GLFW_KEY_TAB);
+		context.getInput().typeChars("haha :fire: :heart: :skull:");
+		context.waitTicks(4);
+		context.takeScreenshot("messages-emoji-typed");
+		context.getInput().pressKey(GLFW.GLFW_KEY_ENTER);
+		context.waitTicks(10);
+		context.takeScreenshot("messages-emoji");
+		String sentText = context.computeOnClient(client -> {
+			Conversation conversation = Messages.service().find("V1zirBot");
+			Message last = conversation == null ? null : conversation.last();
+			return last == null ? "" : last.text();
+		});
+		System.out.println("V1ZIR-MESSAGES emoji sent: " + sentText);
+		if (!sentText.startsWith(Character.toString(0x1F62D)) || !sentText.contains(Character.toString(0x1F525))) {
+			throw new AssertionError("The message should start with the sob emoji and carry the fire one, it is: " + sentText);
+		}
 		int state = context.computeOnClient(client -> {
 			Conversation conversation = Messages.service().find("V1zirBot");
 			Message last = conversation == null ? null : conversation.last();
@@ -2258,27 +2278,6 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			"execute as @a at @s run fill ~-1 ~ ~3 ~1 ~1 ~3 minecraft:air")) {
 			singleplayer.getServer().runCommand(command);
 		}
-	}
-
-	/**
-	 * Emoji in chat: ":so" opens the suggestions over the chat box, Tab puts the first in, more is typed with
-	 * :shortcodes: and sent; the chat line comes back with the emoji in colour.
-	 */
-	private static void chatEmoji(ClientGameTestContext context) {
-		context.setScreen(() -> new ChatScreen(":so", false));
-		context.waitTicks(5);
-		context.takeScreenshot("chat-emoji-suggestions");
-		context.getInput().pressKey(GLFW.GLFW_KEY_TAB);
-		context.getInput().typeChars("lol :skull: :heart: :thinking: :fire: :joy: :+1:");
-		context.waitTicks(3);
-		context.takeScreenshot("chat-emoji-typed");
-		context.getInput().pressKey(GLFW.GLFW_KEY_ENTER);
-		context.waitTicks(10);
-		context.setScreen(() -> new ChatScreen("", false));
-		context.waitTicks(5);
-		context.takeScreenshot("chat-emoji");
-		context.setScreen(() -> null);
-		context.waitTicks(3);
 	}
 
 	/**

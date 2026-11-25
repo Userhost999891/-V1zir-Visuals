@@ -20,10 +20,10 @@ Aesthetic Visuals is original work, apart from the components below, which are u
 
 ## Assets
 
-### Twemoji (chat emoji)
+### Twemoji (emoji in Messages)
 - Emoji graphics: **Twemoji**, Copyright 2019 Twitter, Inc and other contributors (now maintained at
   https://github.com/jdecked/twemoji). Licensed under **CC-BY 4.0**: https://creativecommons.org/licenses/by/4.0/
-- Changes: the 32 px images were laid out in one atlas (`assets/v1zir/textures/font/emoji.png`) for the game's font.
+- Changes: the 32 px images were laid out in one atlas (`assets/v1zir/textures/font/emoji.png`), drawn in Messages.
 
 ### Emoji data
 - Sequences, names and categories from **emoji-data** by Cal Henderson (https://github.com/iamcal/emoji-data), MIT

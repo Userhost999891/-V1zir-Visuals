@@ -5,9 +5,6 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import dev.v1zir.visuals.V1zir;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.Style;
-import net.minecraft.text.Text;
 
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -17,29 +14,26 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Emoji in chat, as on Discord: typed as :shortcode: (Discord's names, such as :sob: and :skull:, and the common
- * aliases), sent as the real Unicode emoji, and shown in colour (Twemoji, CC-BY 4.0) wherever this client draws chat.
+ * Emoji in Messages (this client's own chat), as on Discord: typed as :shortcode: (Discord's names, such as :sob: and
+ * :skull:, and the common aliases), sent as the real Unicode emoji, and shown in colour (Twemoji, CC-BY 4.0) by
+ * EmojiText. The game's own chat is left alone.
  * <p>
- * Every emoji has a glyph in the game's default font at a code point of the Supplementary Private Use Area-A
- * (U+F0000 plus its index; assets/minecraft/font/default.json, assets/v1zir/textures/font/emoji.png): nothing else
- * uses those code points, so the glyphs never clash with the game's own font or other packs, and a chat line is made
- * to show them by putting those code points where the emoji's sequence was. The data (sequences, names, categories)
- * is assets/v1zir/emoji/emoji.json, the index being the place in it.
+ * Every emoji has a glyph code point in the Supplementary Private Use Area-A (U+F0000 plus its index, the place of its
+ * image in assets/v1zir/textures/font/emoji.png): text to be drawn has its emoji sequences swapped for those (toGlyphs),
+ * which nothing else uses. The data (sequences, names, categories) is assets/v1zir/emoji/emoji.json, the index being
+ * the place in it.
  */
 public final class Emojis {
 	private static final int BASE = 0xF0000;
 	private static final Pattern SHORTCODE = Pattern.compile(":([a-z0-9_+\\-]{1,40}):");
-	/** Commands that carry chat to other players: their text gets emoji too; other commands are left as typed. */
-	private static final String[] MESSAGE_COMMANDS = {"/msg ", "/tell ", "/w ", "/me ", "/r ", "/reply ", "/teammsg ", "/tm ", "/say "};
 
 	/** One emoji: its glyph's index, its sequences (fully qualified first), its names and its category. */
 	public record Emoji(int index, String unicode, List<String> names, String category) {
-		/** The glyph that shows it in the game's font. */
+		/** The glyph code point that stands for it in text to be drawn (EmojiText draws its image). */
 		public String glyph() {
 			return Character.toString(BASE + index);
 		}
@@ -80,8 +74,11 @@ public final class Emojis {
 				for (JsonElement s : o.getAsJsonArray("s")) seqs.add(s.getAsString());
 				List<String> ns = new ArrayList<>();
 				for (JsonElement n : o.getAsJsonArray("n")) ns.add(n.getAsString());
+				String category = o.get("c").getAsString();
+				// Flags go by flag_xx as on Discord, not by the bare country code (":so" is not Somalia).
+				if ("Flags".equals(category)) ns.removeIf(n -> n.length() == 2);
 				if (seqs.isEmpty() || ns.isEmpty()) continue;
-				Emoji emoji = new Emoji(i, seqs.get(0), List.copyOf(ns), o.get("c").getAsString());
+				Emoji emoji = new Emoji(i, seqs.get(0), List.copyOf(ns), category);
 				list.add(emoji);
 				for (String n : ns) names.putIfAbsent(n, emoji);
 				for (String s : seqs) {
@@ -106,19 +103,10 @@ public final class Emojis {
 		return byName == null ? null : byName.get(name.toLowerCase(Locale.ROOT));
 	}
 
-	/**
-	 * A chat line on its way out: every :shortcode: becomes its emoji, and every glyph typed from the suggestions
-	 * becomes the real emoji, so other players see them (as emoji, or as their game shows them). Commands other than
-	 * the ones that carry chat to other players are left as typed.
-	 */
-	public static String outgoing(String text) {
+	/** Every :shortcode: in the text as its emoji (unknown names stay as typed). */
+	public static String replaceShortcodes(String text) {
 		load();
-		if (all == null || text.isEmpty()) return text;
-		if (text.startsWith("/")) {
-			boolean message = false;
-			for (String command : MESSAGE_COMMANDS) if (text.startsWith(command)) message = true;
-			if (!message) return text;
-		}
+		if (all == null || text.indexOf(':') < 0) return text;
 		Matcher m = SHORTCODE.matcher(text);
 		StringBuilder out = new StringBuilder(text.length());
 		while (m.find()) {
@@ -126,7 +114,29 @@ public final class Emojis {
 			m.appendReplacement(out, Matcher.quoteReplacement(emoji != null ? emoji.unicode() : m.group()));
 		}
 		m.appendTail(out);
-		return fromGlyphs(out.toString());
+		return out.toString();
+	}
+
+	/**
+	 * When the text ends with a :name: of an emoji that starts a word (the closing colon just typed), the text with that
+	 * emoji in its place; else null. As on Discord, the emoji shows as soon as its name is closed.
+	 */
+	public static String closeShortcode(String text) {
+		load();
+		if (all == null || !text.endsWith(":") || text.length() < 3) return null;
+		int open = text.lastIndexOf(':', text.length() - 2);
+		if (open < 0) return null;
+		if (open > 0 && !Character.isWhitespace(text.charAt(open - 1)) && text.charAt(open - 1) < 0x2000) return null;
+		String name = text.substring(open + 1, text.length() - 1);
+		if (name.isEmpty() || !SHORTCODE.matcher(":" + name + ":").matches()) return null;
+		Emoji emoji = byName.get(name.toLowerCase(Locale.ROOT));
+		return emoji == null ? null : text.substring(0, open) + emoji.unicode();
+	}
+
+	/** The index of the emoji a glyph code point stands for, or -1 for any other code point. */
+	public static int glyphIndex(int codePoint) {
+		int index = codePoint - BASE;
+		return index >= 0 && all != null && index < all.size() ? index : -1;
 	}
 
 	/** Glyphs back into the emoji they stand for. */
@@ -186,23 +196,10 @@ public final class Emojis {
 		return out.toString();
 	}
 
-	/** A chat line with its emoji as glyphs, every style (colours, clicks, hovers) kept. */
-	public static Text toGlyphs(Text text) {
-		load();
-		if (all == null) return text;
-		String plain = text.getString();
-		if (!mayHaveEmoji(plain)) return text;
-		MutableText out = Text.empty();
-		text.visit((style, part) -> {
-			out.append(Text.literal(toGlyphs(part)).setStyle(style));
-			return Optional.empty();
-		}, Style.EMPTY);
-		return out;
-	}
-
 	/**
-	 * The emoji whose names start with what was typed (best first: an exact name, then the most common emoji), then
-	 * those whose names contain it elsewhere; at most limit.
+	 * The emoji whose names start with what was typed, best first: the exact name, then the shortest names (":so" gives
+	 * :sob: before :soccer:), the more common emoji first among equals; then those whose names contain it elsewhere.
+	 * At most limit.
 	 */
 	public static List<Emoji> suggest(String typed, int limit) {
 		load();
@@ -211,15 +208,15 @@ public final class Emojis {
 		String q = typed.toLowerCase(Locale.ROOT);
 		Emoji exact = byName.get(q);
 		if (exact != null) found.add(exact);
+		List<Emoji> starting = new ArrayList<>();
 		for (Emoji e : all) {
+			if (e != exact && shortestStarting(e, q) > 0) starting.add(e);
+		}
+		// Shorter matching names first; the sort is stable, so the emoji list's order (the common ones first) breaks ties.
+		starting.sort(java.util.Comparator.comparingInt(e -> shortestStarting(e, q)));
+		for (Emoji e : starting) {
 			if (found.size() >= limit) return found;
-			if (e == exact) continue;
-			for (String n : e.names()) {
-				if (n.startsWith(q)) {
-					found.add(e);
-					break;
-				}
-			}
+			found.add(e);
 		}
 		for (Emoji e : all) {
 			if (found.size() >= limit) return found;
@@ -232,6 +229,15 @@ public final class Emojis {
 			}
 		}
 		return found;
+	}
+
+	/** The length of the emoji's shortest name that starts with q, or 0 when none does. */
+	private static int shortestStarting(Emoji e, String q) {
+		int best = 0;
+		for (String n : e.names()) {
+			if (n.startsWith(q) && (best == 0 || n.length() < best)) best = n.length();
+		}
+		return best;
 	}
 
 	/** Every emoji (keycaps and text symbols shown as emoji too, by their variation selector) has a char past U+2000. */

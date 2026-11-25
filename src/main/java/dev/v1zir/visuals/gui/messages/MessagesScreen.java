@@ -1,5 +1,6 @@
 package dev.v1zir.visuals.gui.messages;
 
+import dev.v1zir.visuals.chat.Emojis;
 import dev.v1zir.visuals.chat.ChatService;
 import dev.v1zir.visuals.chat.Contact;
 import dev.v1zir.visuals.chat.Conversation;
@@ -73,6 +74,8 @@ public final class MessagesScreen extends Screen {
 	private long highlightAt;
 	private boolean scrollToHighlight;
 	private String draft = "";
+	/** The emoji list over the field while a :name is typed. */
+	private final EmojiSuggestions emojiList = new EmojiSuggestions();
 	/** The field for a new conversation's name has the keyboard. */
 	private boolean naming;
 	private String newName = "";
@@ -557,7 +560,7 @@ public final class MessagesScreen extends Screen {
 			preview = contact.notFound(now) ? "Not on Aesthetic Visuals yet" : "Say hi";
 			previewColor = 0x66FFFFFF;
 		} else {
-			preview = (last.out() ? "You: " : "") + last.text();
+			preview = (last.out() ? "You: " : "") + EmojiText.of(last.text());
 		}
 		float badge = 0f;
 		if (conversation.unread() > 0) {
@@ -568,7 +571,7 @@ public final class MessagesScreen extends Screen {
 			badge = bw + 4f;
 		}
 		preview = TextWrap.ellipsize(font, preview, 6f, right - badge - tx);
-		Render2D.textMiddle(ctx, font, preview, tx, y + 22.5f, 6f, previewColor);
+		EmojiText.drawMiddle(ctx, font, preview, tx, y + 22.5f, 6f, previewColor);
 	}
 
 	private void renderOff(DrawContext ctx) {
@@ -744,7 +747,7 @@ public final class MessagesScreen extends Screen {
 		}
 		SdfFont font = Fonts.regular();
 		for (int i = 0; i < item.lines.size(); i++) {
-			Render2D.textMiddle(ctx, font, item.lines.get(i), x + PAD_X, y + PAD_Y + LINE * i + LINE / 2f - 0.5f, TEXT, 0xF7FFFFFF);
+			EmojiText.drawMiddle(ctx, font, item.lines.get(i), x + PAD_X, y + PAD_Y + LINE * i + LINE / 2f - 0.5f, TEXT, 0xF7FFFFFF);
 		}
 		if (!item.last) return;
 		// Under the last of a group: the time, and for mine how far it got.
@@ -776,11 +779,11 @@ public final class MessagesScreen extends Screen {
 			Render2D.textMiddle(ctx, font, "Message " + contact.displayName() + "…", fx + 11f, cy, 6.6f, 0x66FFFFFF);
 			if (active && caret()) Render2D.rect(ctx, fx + 10.5f, cy - 4.5f, 0.8f, 9f, 0xE6FFFFFF);
 		} else {
-			// The end of what is written shows when it is longer than the field.
-			String shown = draft;
-			while (font.width(shown, 6.6f) > room && shown.length() > 1) shown = shown.substring(shown.offsetByCodePoints(0, 1));
-			Render2D.textMiddle(ctx, font, shown, fx + 11f, cy, 6.6f, 0xF7FFFFFF);
-			if (active && caret()) Render2D.rect(ctx, fx + 11.5f + font.width(shown, 6.6f), cy - 4.5f, 0.8f, 9f, 0xE6FFFFFF);
+			// The end of what is written shows when it is longer than the field; emoji in colour.
+			String shown = EmojiText.of(draft);
+			while (EmojiText.width(font, shown, 6.6f) > room && shown.length() > 1) shown = shown.substring(shown.offsetByCodePoints(0, 1));
+			float shownW = EmojiText.drawMiddle(ctx, font, shown, fx + 11f, cy, 6.6f, 0xF7FFFFFF);
+			if (active && caret()) Render2D.rect(ctx, fx + 11.5f + shownW, cy - 4.5f, 0.8f, 9f, 0xE6FFFFFF);
 			int length = draft.codePointCount(0, draft.length());
 			if (length > ChatService.MAX_TEXT - 80) {
 				String left = String.valueOf(ChatService.MAX_TEXT - length);
@@ -795,6 +798,11 @@ public final class MessagesScreen extends Screen {
 		Render2D.circle(ctx, sendX, sendY, FIELD_H / 2f, ColorUtil.lerp(ColorUtil.withAlpha(0xFFFFFF, 22),
 			ColorUtil.lerp(Theme.accent(), 0xFFFFFFFF, over ? 0.15f : 0f), lit));
 		Render2D.icon(ctx, Icons.SEND_HORIZONTAL, sendX + 0.5f, sendY, 9f, ColorUtil.lerp(0x80FFFFFF, 0xFFFFFFFF, lit));
+		// Emoji whose names start with the :name being typed, over the field.
+		if (active) {
+			emojiList.update(draft);
+			emojiList.render(ctx, fx + 4f, fieldY - 4f, mx, my);
+		}
 	}
 
 	// ------------------------------------------------------------------ layout of the messages
@@ -840,9 +848,9 @@ public final class MessagesScreen extends Screen {
 			Message next = i + 1 < messages.size() ? messages.get(i + 1) : null;
 			boolean last = next == null || next.system() || next.out() != message.out() || next.time() - message.time() >= GROUP_MS
 				|| !day(next.time()).equals(day);
-			List<String> lines = TextWrap.wrap(font, message.text(), TEXT, maxBubble - PAD_X * 2f);
+			List<String> lines = TextWrap.wrap(font, EmojiText.of(message.text()), TEXT, maxBubble - PAD_X * 2f);
 			float textW = 0f;
-			for (String line : lines) textW = Math.max(textW, font.width(line, TEXT));
+			for (String line : lines) textW = Math.max(textW, EmojiText.width(font, line, TEXT));
 			Item bubble = new Item(BUBBLE, message, lines, textW + PAD_X * 2f, lines.size() * LINE + PAD_Y * 2f - 1f);
 			bubble.y = y;
 			bubble.first = !grouped;
@@ -869,6 +877,13 @@ public final class MessagesScreen extends Screen {
 			else if (Ui.inside(mx, my, saveX, saveY, saveW, 18f)) saveProfile(service);
 			else if (Ui.inside(mx, my, cancelX, saveY, cancelW, 18f) || !Ui.inside(mx, my, edX, edY, edW, edH)) editing = false;
 			return true;
+		}
+		if (!naming && selected != null) {
+			String next = emojiList.mouseClicked(mx, my, draft);
+			if (next != null) {
+				draft = next;
+				return true;
+			}
 		}
 		if (Ui.inside(mx, my, winX + Ui.PAD + 4f, profileY + 3f, SIDE - 8f, PROFILE_H - 6f)) {
 			openEditor(service);
@@ -948,6 +963,13 @@ public final class MessagesScreen extends Screen {
 			else if (key == GLFW.GLFW_KEY_V && shortcut) type(client.keyboard.getClipboard());
 			return true;
 		}
+		if (!naming && selected != null) {
+			String next = emojiList.keyPressed(key, draft);
+			if (next != null) {
+				draft = next;
+				return true;
+			}
+		}
 		if (key == GLFW.GLFW_KEY_ESCAPE) {
 			if (naming) naming = false;
 			else close();
@@ -1014,6 +1036,9 @@ public final class MessagesScreen extends Screen {
 			if (line.codePointCount(0, line.length()) < ChatService.MAX_TEXT) line.appendCodePoint(Character.isISOControl(cp) ? ' ' : cp);
 		});
 		draft = line.toString();
+		// As on Discord, :name: turns into its emoji as soon as the closing colon is typed.
+		String closed = Emojis.closeShortcode(draft);
+		if (closed != null) draft = closed;
 		ChatService service = Messages.service();
 		if (service != null) service.typing(selected);
 	}
@@ -1021,7 +1046,7 @@ public final class MessagesScreen extends Screen {
 	private void submit() {
 		ChatService service = Messages.service();
 		if (service == null || selected == null || draft.isBlank()) return;
-		service.send(selected, draft);
+		service.send(selected, Emojis.replaceShortcodes(draft));
 		draft = "";
 		msgScroll = 0f;
 	}

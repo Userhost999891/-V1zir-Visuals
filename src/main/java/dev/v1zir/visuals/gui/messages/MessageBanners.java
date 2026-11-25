@@ -159,8 +159,8 @@ public final class MessageBanners {
 		String title = banner.count > 1 ? name + " · " + banner.count + " messages" : name;
 		title = TextWrap.ellipsize(bold, title, 7.2f, right - whenW - 6f - tx);
 		Render2D.textMiddle(ctx, bold, title, tx, y + 13f, 7.2f, 0xF7FFFFFF);
-		String body = TextWrap.ellipsize(font, banner.message.text(), 6.3f, right - keyW - tx);
-		Render2D.textMiddle(ctx, font, body, tx, y + 25.5f, 6.3f, 0xD9FFFFFF);
+		String body = TextWrap.ellipsize(font, EmojiText.of(banner.message.text()), 6.3f, right - keyW - tx);
+		EmojiText.drawMiddle(ctx, font, body, tx, y + 25.5f, 6.3f, 0xD9FFFFFF);
 	}
 
 	/** A click on a banner opens its conversation at its message; true when one was clicked. */

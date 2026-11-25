@@ -84,10 +84,11 @@ klika, przewija i pisze (pasek z wstecz, dalej, odśwież i adresem); Escape zmn
 Silnik to wbudowany MCEF Modern, więc niczego nie trzeba instalować; przy pierwszym włączeniu pobiera
 Chromium (ok. 150 MB) do `config/mcef-modern`.
 
-### Czat
-Emotki jak na Discordzie: `:sob:`, `:skull:`, `:heart:` i reszta nazw z Discorda (ok. 1900 emotek). Dwukropek
-i dwie litery otwierają nad polem czatu listę pasujących emotek (strzałki wybierają, Tab albo Enter wstawia).
-Emotki w czacie są kolorowe, a wysyłane jako zwykłe emoji Unicode, więc inni widzą je u siebie.
+### Messages – emotki
+W naszym czacie (Messages) emotki jak na Discordzie: `:sob:`, `:skull:`, `:heart:` i reszta nazw z Discorda
+(ok. 1900 emotek). Dwukropek i dwie litery otwierają nad polem pisania listę pasujących emotek (strzałki
+wybierają, Tab albo Enter wstawia), a `:nazwa:` zamienia się w emotkę od razu po wpisaniu drugiego dwukropka.
+W dymkach, podglądzie rozmowy i powiadomieniach emotki są kolorowe. Czat Minecrafta zostaje bez zmian.
 
 ### Spotify
 Bez konfiguracji: Windows 10/11 (systemowe sterowanie multimediami), macOS (aplikacja Spotify)
@@ -150,6 +151,6 @@ Licencje dołączonych fontów: zobacz `LICENSE-ASSETS.md`.
 - **Przeglądarka w HUD** działa dzięki modowi **MCEF Modern** autorstwa **DimasKama** (na bazie MCEF od montoyo i
   CinemaMod Group), wbudowanemu w moda – nie trzeba niczego doinstalowywać. Licencja LGPL-2.1,
   https://github.com/DimasKama/mcef-modern
-- **Emotki w czacie**: grafiki **Twemoji** (Twitter, Inc i współtwórcy, CC-BY 4.0), dane emotek z **emoji-data**
+- **Emotki w Messages**: grafiki **Twemoji** (Twitter, Inc i współtwórcy, CC-BY 4.0), dane emotek z **emoji-data**
   (Cal Henderson, MIT) i skróty w stylu Discorda z **emojibase** (Miles Johnson, MIT).
 - Szczegóły i licencje: `THIRD_PARTY_NOTICES.md`.
