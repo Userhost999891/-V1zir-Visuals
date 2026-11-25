@@ -16,6 +16,18 @@ repositories {
 		name = 'Maven Central mirror'
 		url = 'https://maven-central.storage-download.googleapis.com/maven2/'
 	}
+	// MCEF Modern (the Browser HUD's Chromium), from Modrinth's Maven.
+	exclusiveContent {
+		forRepository {
+			maven {
+				name = 'Modrinth'
+				url = 'https://api.modrinth.com/maven'
+			}
+		}
+		filter {
+			includeGroup 'maven.modrinth'
+		}
+	}
 	// Sodium's config API (GPU in Sodium's Video Settings).
 	maven {
 		name = 'CaffeineMC'
@@ -69,6 +81,12 @@ dependencies {
 	// MP3 decoding for the player's own sounds (JLayer, LGPL), inside the mod's jar as a jar of its own.
 	implementation "javazoom:jlayer:1.0.1"
 	include "javazoom:jlayer:1.0.1"
+	// The Browser HUD's Chromium: MCEF Modern by DimasKama (LGPL-2.1), inside the mod's jar as a jar of its own, so
+	// nothing has to be installed. It downloads Chromium for the system the first time the browser is used.
+	modImplementation "maven.modrinth:mcef-modern:${project.mcef_modern_version}"
+	include "maven.modrinth:mcef-modern:${project.mcef_modern_version}"
+	// java-cef's API (navigation: load, back, forward, reload), which MCEF Modern brings inside its own jar.
+	compileOnly "me.friwi:jcef-api:${project.jcef_api_version}"
 	// Sodium's config API, to be built against only: with Sodium there, its Video Settings get the GPU page
 	// (SodiumGpuOption); the oldest 0.8 release for 1.21.11, whose API the later ones keep.
 	modCompileOnly "net.caffeinemc:sodium-fabric-api:0.8.0+mc1.21.11"

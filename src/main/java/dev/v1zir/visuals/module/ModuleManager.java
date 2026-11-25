@@ -42,6 +42,7 @@ import dev.v1zir.visuals.module.impl.hud.PerformanceModule;
 import dev.v1zir.visuals.module.impl.hud.PotionsModule;
 import dev.v1zir.visuals.module.impl.hud.ServerInfoModule;
 import dev.v1zir.visuals.module.impl.hud.SpeedModule;
+import dev.v1zir.visuals.module.impl.hud.BrowserModule;
 import dev.v1zir.visuals.module.impl.hud.SpotifyLyricsModule;
 import dev.v1zir.visuals.module.impl.hud.SpotifyModule;
 import dev.v1zir.visuals.module.impl.hud.VoiceChatMusicModule;
@@ -182,6 +183,7 @@ public final class ModuleManager {
 		register(new SpotifyModule());
 		register(new VoiceChatMusicModule());
 		register(new SpotifyLyricsModule());
+		register(new BrowserModule());
 		// impl.knives
 		register(new KnivesModule());
 		register(new CosmeticsModule());
