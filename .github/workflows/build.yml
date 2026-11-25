@@ -62,35 +62,6 @@ jobs:
           echo "=== CODE where the server list pings"
           javap -c -p -cp "$jar" 'net.minecraft.client.gui.screen.multiplayer.MultiplayerServerListWidget$ServerEntry' 2>&1 | grep -n -B4 -A2 "NetworkingBackend" | head -40 || true
 
-      # Temporary: MCEF (Keksuccino's fork) for 1.21.11 on Modrinth, its versions, its mod file and its API, for the
-      # Browser HUD that bundles it.
-      - name: MCEF API
-        if: always()
-        run: |
-          for slug in mcef-keksuccino mcef-modern; do
-            curl -sSf -A "v1zir-visuals-ci" -o /tmp/$slug.json "https://api.modrinth.com/v2/project/$slug/version?loaders=%5B%22fabric%22%5D&game_versions=%5B%221.21.11%22%5D" || continue
-            SLUG=$slug python3 - <<'PY'
-          import json, os
-          slug = os.environ['SLUG']
-          versions = json.load(open(f'/tmp/{slug}.json'))
-          for v in versions[:6]:
-              f = next(f for f in v['files'] if f['primary'])
-              print('MCEF-VERSION', slug, v['version_number'], v['id'], v['date_published'][:10], f['filename'], f['size'])
-          if versions:
-              f = next(f for f in versions[0]['files'] if f['primary'])
-              open(f'/tmp/{slug}.url', 'w').write(f['url'])
-          PY
-            [ -f /tmp/$slug.url ] || continue
-            curl -sSfL -A "v1zir-visuals-ci" -o /tmp/$slug.jar "$(cat /tmp/$slug.url)" || continue
-            echo "=== MCEF JAR $slug"; unzip -l /tmp/$slug.jar | grep -v '\$' | head -150
-            echo "=== MCEF MOD JSON $slug"; unzip -p /tmp/$slug.jar fabric.mod.json
-            rm -rf /tmp/x-$slug && mkdir -p /tmp/x-$slug && (cd /tmp/x-$slug && unzip -q -o /tmp/$slug.jar)
-            for nested in /tmp/x-$slug/META-INF/jars/*.jar; do [ -f "$nested" ] && echo "nested: $nested"; done
-            for cls in $(cd /tmp/x-$slug && find . -name '*.class' ! -name '*$*' | grep -i 'mcef' | sed 's#^\./##; s#\.class$##; s#/#.#g' | sort | head -80); do
-              echo "=== MCEF CLASS $cls"; javap -p -cp /tmp/x-$slug "$cls" 2>&1 | head -80
-            done
-          done
-
   client:
     name: Dev client
     runs-on: ubuntu-24.04
