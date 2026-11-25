@@ -29,14 +29,15 @@ import java.util.List;
  * Escape brings it back to the HUD. Chromium is MCEF Modern's, bundled in the mod (the first start downloads it).
  */
 public final class BrowserModule extends HudModule {
-	private static final float BASE_W = 200f;
-	private static final float BASE_H = 112.5f;
+	/** Room kept between the window and the edges of the game's window. */
+	private static final float MARGIN = 6f;
 	private static final float BAR = 14f;
 	private static final String[] LINKS = {"Google", "YouTube", "Discord"};
 	private static final int[] LINK_ICONS = {Icons.SEARCH, Icons.PLAY, Icons.MESSAGE_CIRCLE};
 
 	public final ModeSetting home = add(new ModeSetting("Home", "YouTube", LINKS));
-	public final NumberSetting size = add(new NumberSetting("Size", 1.0, 0.6, 2.2, 0.05).suffix("x"));
+	/** The page's width as a share of the game window's; its height follows at 16:9, so it looks the same at any window size. */
+	public final NumberSetting size = add(new NumberSetting("Width", 30, 12, 70, 1).suffix("%"));
 	public final NumberSetting opacity = add(new NumberSetting("Opacity", 1.0, 0.4, 1.0, 0.05));
 	/** Opens the browser full screen from the game, besides a click on it with the chat open. */
 	public final KeySetting openKey = add(new KeySetting("Full screen key", GLFW.GLFW_KEY_UNKNOWN));
@@ -101,9 +102,19 @@ public final class BrowserModule extends HudModule {
 	@Override
 	protected void render(DrawContext ctx, float tickDelta, float x, float y) {
 		Browser.start(Browser.home(home.get()));
-		float s = size.f();
-		width = BASE_W * s;
-		height = BASE_H * s + BAR + 3f;
+		// Sized to the game window: a share of its width, the page at 16:9, never more than the window has room for.
+		float screenW = mc.getWindow().getScaledWidth();
+		float screenH = mc.getWindow().getScaledHeight();
+		float pageW = Math.max(96f, screenW * size.f() / 100f);
+		pageW = Math.min(pageW, screenW - MARGIN * 2f - 6f);
+		float pageH = pageW * 9f / 16f;
+		float roomH = screenH - MARGIN * 2f - BAR - 3f;
+		if (pageH > roomH) {
+			pageH = Math.max(54f, roomH);
+			pageW = pageH * 16f / 9f;
+		}
+		width = pageW + 6f;
+		height = pageH + BAR + 3f;
 		Render2D.setAlpha(opacity.f());
 		panel(ctx, x, y, width, height, 7f);
 		// The bar: the quick links, then where the page is.

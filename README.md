@@ -79,7 +79,7 @@ powiadomienia (**Dynamic Island** u góry ekranu – włączanie modułów, otwa
 zmiana utworu – albo klasyczne dymki). Wszystko przesuwa się w edytorze HUD.
 
 **Browser** – mała przeglądarka Chromium na HUD z podglądem strony na żywo i skrótami do wyszukiwarki,
-YouTube i Discorda. Przy otwartym czacie kliknięcie w okno powiększa je na cały ekran, gdzie się w nim
+YouTube i Discorda; jej rozmiar idzie za oknem gry (Width – procent szerokości ekranu, strona w 16:9). Przy otwartym czacie kliknięcie w okno powiększa je na cały ekran, gdzie się w nim
 klika, przewija i pisze (pasek z wstecz, dalej, odśwież i adresem); Escape zmniejsza je z powrotem.
 Silnik to wbudowany MCEF Modern, więc niczego nie trzeba instalować; przy pierwszym włączeniu pobiera
 Chromium (ok. 150 MB) do `config/mcef-modern`.
