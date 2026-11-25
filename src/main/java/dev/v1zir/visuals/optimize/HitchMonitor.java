@@ -146,9 +146,9 @@ public final class HitchMonitor {
 		if (hitchTime > 0L && hitchOurs * 3L > hitchTime) {
 			int most = 0;
 			for (int i = 1; i < hitchParts.length; i++) if (hitchParts[i] > hitchParts[most]) most = i;
-			return "V1zir's " + PARTS[most] + " (turn off heavy modules there)";
+			return "Aesthetic Visuals' " + PARTS[most] + " (turn off heavy modules there)";
 		}
-		return "Minecraft itself (chunks loading, the server, other mods), not V1zir";
+		return "Minecraft itself (chunks loading, the server, other mods), not Aesthetic Visuals";
 	}
 
 	private static void hitch(long now, long frame) {
@@ -168,7 +168,7 @@ public final class HitchMonitor {
 			if (spent[i] >= 1_000_000L) parts.append(", ").append(PARTS[i]).append(' ').append(spent[i] / 1_000_000L).append(" ms");
 		}
 		long pause = pauseNanos;
-		String card = GpuTimer.measured() ? "; V1zir on the graphics card " + gpuParts(0.5f) : "";
+		String card = GpuTimer.measured() ? "; Aesthetic Visuals on the graphics card " + gpuParts(0.5f) : "";
 		V1zir.LOGGER.info("Hitch: a frame took {} ms (usually {} ms); V1zir's own work {} ms{}{}{}", frame / 1_000_000L,
 			String.format(Locale.ROOT, "%.1f", usual / 1.0e6f), ours / 1_000_000L, parts, pause > 0L ? "; garbage collection " + pause / 1_000_000L + " ms" : "", card);
 	}

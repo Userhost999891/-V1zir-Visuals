@@ -385,7 +385,7 @@ public final class MessagesScreen extends Screen {
 			boolean ok = ChatService.NAME.matcher(newName).matches();
 			Render2D.circle(ctx, fx + fw - 9f, cy, 6.5f, ok ? Theme.accent() : ColorUtil.withAlpha(0xFFFFFF, 26));
 			Render2D.icon(ctx, Icons.CHEVRON_RIGHT, fx + fw - 8.5f, cy, 6f, ok ? 0xFFFFFFFF : 0x80FFFFFF);
-			String hint = error ? nameError : "Friends need V1zir Visuals to get messages";
+			String hint = error ? nameError : "Friends need Aesthetic Visuals to get messages";
 			Render2D.textMiddle(ctx, font, hint, fx + 4f, nameFieldY + 25f, 5.2f, error ? RED : 0x66FFFFFF);
 			Render2D.setAlpha(a);
 		}
@@ -554,7 +554,7 @@ public final class MessagesScreen extends Screen {
 			preview = "typing…";
 			previewColor = Theme.accent();
 		} else if (last == null) {
-			preview = contact.notFound(now) ? "Not on V1zir Visuals yet" : "Say hi";
+			preview = contact.notFound(now) ? "Not on Aesthetic Visuals yet" : "Say hi";
 			previewColor = 0x66FFFFFF;
 		} else {
 			preview = (last.out() ? "You: " : "") + last.text();
@@ -587,7 +587,7 @@ public final class MessagesScreen extends Screen {
 		Render2D.circle(ctx, cx, cy - 26f, 20f, ColorUtil.withAlpha(Theme.accent(), 40));
 		Render2D.icon(ctx, Icons.MESSAGE_CIRCLE, cx, cy - 26f, 18f, Theme.accent());
 		Render2D.textCentered(ctx, Fonts.semibold(), "Your messages", cx, cy + 2f, 9f, 0xF2FFFFFF);
-		Render2D.textCentered(ctx, font, "Private chat with friends who play with V1zir Visuals.", cx, cy + 16f, 6f, 0x99FFFFFF);
+		Render2D.textCentered(ctx, font, "Private chat with friends who play with Aesthetic Visuals.", cx, cy + 16f, 6f, 0x99FFFFFF);
 		Render2D.textCentered(ctx, font, "End-to-end encrypted: only you and they can read it.", cx, cy + 25f, 6f, 0x99FFFFFF);
 		String label = "New message";
 		emptyButtonW = Fonts.semibold().width(label, 6.5f) + 28f;
@@ -629,7 +629,7 @@ public final class MessagesScreen extends Screen {
 			status = "Online";
 			statusColor = GREEN;
 		} else if (contact.notFound(now)) {
-			status = "Not on V1zir Visuals yet: messages wait until they are";
+			status = "Not on Aesthetic Visuals yet: messages wait until they are";
 			statusColor = AMBER;
 		} else if (contact.lastSeen() > 0L) {
 			status = "Last seen " + ago(contact.lastSeen(), now);

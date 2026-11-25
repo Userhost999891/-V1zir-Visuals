@@ -38,7 +38,7 @@ import java.util.function.Supplier;
  * mark stays a while longer, fades, a health notice shows over a deep teal glow of huge discs far out of focus; as it
  * goes, a few large discs of warm light come, and the lens pulls focus: they shrink and go as the dust they were comes
  * sharp, fine pale specks and a cloud of golden ones, a few near ones drifting by soft and bright; a dark stage under
- * a spotlight comes up under the dust, where "Welcome back to V1zir" asks who is
+ * a spotlight comes up under the dust, where "Welcome back to Aesthetic" asks who is
  * playing: Add an account at the left, then the accounts by their heads, coming one after another from the left, the
  * one in focus growing larger with its name, as the console's. Picking one plays as it: the others go at once, it grows
  * a little and fades with the words, and the home comes in (ConsoleMenu, its row spreading from the middle over the
@@ -295,7 +295,7 @@ public final class BootScreen extends Screen implements KeyNavigation {
 		SdfFont semibold = Fonts.semibold();
 		float titleSize = Math.max(9f, Math.min(40f, h * 0.044f));
 		float titleIn = smooth(since / 0.3f) * all;
-		Render2D.textCentered(ctx, font, "Welcome back to V1zir", w / 2f, Render2D.middle(font, h * 0.167f, titleSize), titleSize,
+		Render2D.textCentered(ctx, font, "Welcome back to Aesthetic", w / 2f, Render2D.middle(font, h * 0.167f, titleSize), titleSize,
 			ColorUtil.fade(0xFFFFFFFF, titleIn));
 		float subSize = Math.max(6f, Math.min(20f, h * 0.024f));
 		float subIn = smooth((since - 0.6f) / 0.3f) * all;

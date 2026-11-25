@@ -26,7 +26,7 @@ public final class PerformanceModule extends HudModule {
 	public final BoolSetting graph = add(new BoolSetting("Graph", true));
 	public final BoolSetting stats = add(new BoolSetting("Min / avg", true));
 	/** What V1zir's own effects take of each frame on the graphics card, and the costliest of them. */
-	public final BoolSetting cost = add(new BoolSetting("V1zir GPU cost", true));
+	public final BoolSetting cost = add(new BoolSetting("Mod GPU cost", true));
 
 	private final Sparkline frames = new Sparkline(BARS);
 	private final float[] worst = new float[BARS];
@@ -114,7 +114,7 @@ public final class PerformanceModule extends HudModule {
 		if (showCost) {
 			float sy = cy + 4f;
 			float sx = x + 8f;
-			sx += Render2D.textMiddle(ctx, font, "V1zir GPU", sx, sy, 6f, Theme.textFaint()) + 3f;
+			sx += Render2D.textMiddle(ctx, font, "Mod GPU", sx, sy, 6f, Theme.textFaint()) + 3f;
 			gpu.set(GpuTimer.effects());
 			Render2D.textMiddle(ctx, bold, gpu.text(), sx, sy, 6.5f, Theme.textDim());
 			int part = GpuTimer.costliest();

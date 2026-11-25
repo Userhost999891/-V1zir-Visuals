@@ -8,7 +8,7 @@ import org.slf4j.LoggerFactory;
 
 public final class V1zir {
 	public static final String MOD_ID = "v1zir";
-	public static final String NAME = "V1zir Visuals";
+	public static final String NAME = "Aesthetic Visuals";
 	public static final Logger LOGGER = LoggerFactory.getLogger(NAME);
 
 	private V1zir() {

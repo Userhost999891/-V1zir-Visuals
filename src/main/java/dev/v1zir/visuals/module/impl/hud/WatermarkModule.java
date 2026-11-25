@@ -26,7 +26,7 @@ public final class WatermarkModule extends HudModule {
 	public final BoolSetting showPing = add(new BoolSetting("Ping", true));
 	public final BoolSetting showTime = add(new BoolSetting("Time", true));
 
-	private static final String TITLE = "V1zir";
+	private static final String TITLE = "Aesthetic";
 	private static final int SECTIONS = 5;
 	private static final Render2D.TextStyle TITLE_STYLE = new Render2D.TextStyle();
 	/** This frame's sections (icon and text); texts are cached strings, so building them allocates nothing. */

@@ -180,7 +180,8 @@ public final class TargetEspModule extends Module implements WorldEffect {
 
 	/**
 	 * A target facing the camera over the target's chest: four thick, soft arcs round a ring, with gaps between them and
-	 * rounded ends, turning slowly. Beyond a few blocks it grows with the distance, so it keeps about its size on screen
+	 * rounded ends, spinning round it (a turn in about three seconds at Speed 1) while the arcs breathe a little longer
+	 * and shorter. Beyond a few blocks it grows with the distance, so it keeps about its size on screen
 	 * while the target gets small; it closes in a little on every hit.
 	 */
 	private void reticle(Vec3d pos, float w, float h, float t, float s, float hit, double dist, int c1, int c2) {
@@ -204,13 +205,14 @@ public final class TargetEspModule extends Module implements WorldEffect {
 		double grow = Math.pow(Math.max(1.0, dist / 4.0), 0.85);
 		double radius = (w * 0.55 + 0.2) * s * grow * nearer * (1.0 - 0.15 * hit) * (1.0 + 0.025 * Math.sin(t * 2.6));
 		float width = (float) (radius * 0.16);
-		double spin = t * 0.5;
+		double spin = t * 2.2;
+		double arc = ARC * (1.0 + 0.14 * Math.sin(t * 3.1));
 		for (int q = 0; q < 4; q++) {
 			double mid = spin + Math.PI / 4 + q * Math.PI / 2;
 			double px = 0, py = 0, pz = 0;
 			int pc = c1;
 			for (int i = 0; i <= ARC_STEPS; i++) {
-				double angle = mid - ARC + 2 * ARC * i / ARC_STEPS;
+				double angle = mid - arc + 2 * arc * i / ARC_STEPS;
 				double dx = Math.cos(angle) * radius, dy = Math.sin(angle) * radius;
 				double x = cx + right.x * dx + up.x * dy, y = cy + right.y * dx + up.y * dy, z = cz + right.z * dx + up.z * dy;
 				// Each arc shades from the first colour into the second along its length.

@@ -44,7 +44,7 @@ import java.util.List;
  * and drawn pixel for pixel. Render thread only.
  */
 public final class LoadingScreen {
-	private static final String NAME = "V1zir Visuals";
+	private static final String NAME = "Aesthetic Visuals";
 	private static final String BOLD = "/assets/v1zir/fonts/inter_bold.ttf";
 	private static final String MARK_FILE = "/assets/v1zir/textures/gui/logo.png";
 

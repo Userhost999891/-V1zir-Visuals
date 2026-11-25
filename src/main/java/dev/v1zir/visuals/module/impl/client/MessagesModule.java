@@ -27,7 +27,7 @@ public final class MessagesModule extends Module {
 	public final BoolSetting editProfile = add(new BoolSetting("Edit profile", false));
 
 	public MessagesModule() {
-		super("Messages", "Private, end-to-end encrypted chat with other V1zir Visuals players", Category.SETTINGS);
+		super("Messages", "Private, end-to-end encrypted chat with other Aesthetic Visuals players", Category.SETTINGS);
 		setEnabled(true, false);
 	}
 

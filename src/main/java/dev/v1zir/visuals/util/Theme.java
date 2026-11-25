@@ -7,7 +7,7 @@ import dev.v1zir.visuals.module.impl.client.ThemeModule;
 public final class Theme {
 	public enum Preset {
 		/** The default: warm amber into a soft deep orange over a neutral matte dark. */
-		V1ZIR("V1zir", 0xFFF6A64B, 0xFFE8693F, 0xFF0F0F11),
+		V1ZIR("Aesthetic", 0xFFF6A64B, 0xFFE8693F, 0xFF0F0F11),
 		MIDNIGHT("Midnight", 0xFF5B8CFF, 0xFF8F6BFF, 0xFF0B0E17),
 		NEVERLOSE("Neverlose", 0xFF00A6FF, 0xFF00E1FF, 0xFF070B12),
 		FATALITY("Fatality", 0xFFE5175F, 0xFF8A2BE2, 0xFF120A14),

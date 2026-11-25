@@ -78,7 +78,7 @@ public final class Fonts {
 		return ui(Weight.BOLD);
 	}
 
-	/** Display face for big headings such as the "V1zir Visuals" logo. */
+	/** Display face for big headings such as the "Aesthetic Visuals" logo. */
 	public static SdfFont title() {
 		if (title == null) title = SdfFont.load("montserrat_extrabold", path("montserrat_extrabold"), 72).withFallback(fallback());
 		return title;

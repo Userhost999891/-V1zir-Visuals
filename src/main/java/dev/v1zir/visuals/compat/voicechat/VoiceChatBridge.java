@@ -45,7 +45,7 @@ public final class VoiceChatBridge implements InvocationHandler {
 			case "equals":
 				return proxy == args[0];
 			case "toString":
-				return "V1zir Visuals voice chat music";
+				return V1zir.NAME + " voice chat music";
 			default:
 				if (method.isDefault()) return InvocationHandler.invokeDefault(proxy, method, args);
 				Class<?> type = method.getReturnType();

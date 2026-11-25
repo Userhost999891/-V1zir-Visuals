@@ -12,7 +12,7 @@ import dev.v1zir.visuals.util.Theme;
 import net.minecraft.client.gui.DrawContext;
 
 /**
- * Top bar of the window: the logo, "V1zir Visuals" with a version tag, the HUD editor button and the
+ * Top bar of the window: the logo, "Aesthetic Visuals" with a version tag, the HUD editor button and the
  * search field. A hairline fading out towards both ends separates it from the content.
  * The logo is the shared brand mark (render/ui/Logo), drawn at 20x20 GUI pixels.
  */
@@ -22,7 +22,7 @@ final class TopBar {
 	private static final float SEARCH_H = 17f;
 	private static final String PLACEHOLDER = "Search modules";
 	private static final String SHORTCUT = "Ctrl F";
-	private static final String BRAND = "V1zir Visuals";
+	private static final String BRAND = "Aesthetic Visuals";
 
 	private final String version = V1zir.version();
 	private final Anim searchFocus = new Anim(0f, 18f);

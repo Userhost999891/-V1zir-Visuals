@@ -2,7 +2,7 @@
 	"schemaVersion": 1,
 	"id": "v1zir",
 	"version": "${version}",
-	"name": "V1zir Visuals",
+	"name": "Aesthetic Visuals",
 	"description": "Client-side visuals: shader sky presets, custom main menu, click GUI, HUD and PvP visual effects with crisp SDF font rendering.",
 	"authors": ["V1zir"],
 	"contact": {},

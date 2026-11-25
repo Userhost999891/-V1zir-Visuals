@@ -2,7 +2,7 @@
 	"schemaVersion": 1,
 	"id": "v1zir-gametest",
 	"version": "1.0.0",
-	"name": "V1zir Visuals Client Test",
+	"name": "Aesthetic Visuals Client Test",
 	"environment": "client",
 	"entrypoints": {
 		"fabric-client-gametest": [

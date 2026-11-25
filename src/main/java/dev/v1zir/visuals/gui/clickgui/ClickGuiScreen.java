@@ -106,7 +106,7 @@ public final class ClickGuiScreen extends Screen {
 	private float doneW;
 
 	public ClickGuiScreen() {
-		super(Text.literal("V1zir Visuals"));
+		super(Text.literal(dev.v1zir.visuals.V1zir.NAME));
 		ClickGuiModule gui = ModuleManager.get(ClickGuiModule.class);
 		open = new Anim(0f, 9f * (gui != null ? gui.speed() : 1f));
 		List<ModuleCard> clientCards = new ArrayList<>();

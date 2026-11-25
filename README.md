@@ -1,4 +1,4 @@
-# V1zir Visuals
+# Aesthetic Visuals
 
 Wizualny mod kliencki dla **Minecraft 1.21.11 (Fabric)**: shaderowe niebo z presetami, własne
 animowane menu główne, Click GUI w stylu CatLean / Nursultan, HUD i efekty PvP. Cały interfejs
