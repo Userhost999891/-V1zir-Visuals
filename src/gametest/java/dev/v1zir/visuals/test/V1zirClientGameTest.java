@@ -90,6 +90,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.hud.DebugHud;
 import net.minecraft.client.gui.screen.AccessibilityOnboardingScreen;
 import net.minecraft.client.gui.screen.TitleScreen;
+import net.minecraft.client.gui.screen.ChatScreen;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.screen.ingame.CreativeInventoryScreen;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
@@ -195,6 +196,7 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			knives(context, singleplayer);
 			cosmetics(context, singleplayer);
 			winter(context, singleplayer);
+			chatEmoji(context);
 			packs(context, singleplayer);
 			reflections(context, singleplayer);
 			farWater(context, singleplayer);
@@ -2222,6 +2224,27 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 			cosmetics.cape.reset();
 		});
 		context.waitTicks(5);
+	}
+
+	/**
+	 * Emoji in chat: ":so" opens the suggestions over the chat box, Tab puts the first in, more is typed with
+	 * :shortcodes: and sent; the chat line comes back with the emoji in colour.
+	 */
+	private static void chatEmoji(ClientGameTestContext context) {
+		context.setScreen(() -> new ChatScreen(":so", false));
+		context.waitTicks(5);
+		context.takeScreenshot("chat-emoji-suggestions");
+		context.getInput().pressKey(GLFW.GLFW_KEY_TAB);
+		context.getInput().typeChars("lol :skull: :heart: :thinking: :fire: :joy: :+1:");
+		context.waitTicks(3);
+		context.takeScreenshot("chat-emoji-typed");
+		context.getInput().pressKey(GLFW.GLFW_KEY_ENTER);
+		context.waitTicks(10);
+		context.setScreen(() -> new ChatScreen("", false));
+		context.waitTicks(5);
+		context.takeScreenshot("chat-emoji");
+		context.setScreen(() -> null);
+		context.waitTicks(3);
 	}
 
 	/**

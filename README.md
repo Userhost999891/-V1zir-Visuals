@@ -132,3 +132,12 @@ assets/v1zir/shaders GLSL: sky_lib.glsl (wszystkie presety nieba), kształty SDF
 ```
 
 Licencje dołączonych fontów: zobacz `LICENSE-ASSETS.md`.
+
+## Podziękowania
+
+- **Przeglądarka w HUD** działa dzięki modowi **MCEF Modern** autorstwa **DimasKama** (na bazie MCEF od montoyo i
+  CinemaMod Group), wbudowanemu w moda – nie trzeba niczego doinstalowywać. Licencja LGPL-2.1,
+  https://github.com/DimasKama/mcef-modern
+- **Emotki w czacie**: grafiki **Twemoji** (Twitter, Inc i współtwórcy, CC-BY 4.0), dane emotek z **emoji-data**
+  (Cal Henderson, MIT) i skróty w stylu Discorda z **emojibase** (Miles Johnson, MIT).
+- Szczegóły i licencje: `THIRD_PARTY_NOTICES.md`.
