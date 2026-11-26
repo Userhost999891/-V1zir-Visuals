@@ -13,65 +13,54 @@ in vec3 style;
 
 out vec4 fragColor;
 
-// The blurred world behind, spread wider by four taps around the pixel: frosted glass scatters what is behind it
-// further than a clear blur does.
-vec3 frosted(vec2 uv) {
-	vec2 o = ScreenInfo.zw * 5.0;
-	vec3 c = texture(Sampler0, uv).rgb * 0.36;
-	c += texture(Sampler0, uv + vec2(o.x, o.y * 0.5)).rgb * 0.16;
-	c += texture(Sampler0, uv + vec2(-o.x * 0.5, o.y)).rgb * 0.16;
-	c += texture(Sampler0, uv + vec2(-o.x, -o.y * 0.5)).rgb * 0.16;
-	c += texture(Sampler0, uv + vec2(o.x * 0.5, -o.y)).rgb * 0.16;
-	return c;
-}
-
 void main() {
 	float d = v1zirShapeDistance(localPos, shape, style.z);
+	// Which way the edge faces on screen (y up), taken before anything is discarded: derivatives need the whole quad.
+	vec2 grad = vec2(dFdx(d), dFdy(d));
 	float coverage = v1zirShapeCoverage(d, shape, style);
 	if (coverage <= 0.0) discard;
 	int flags = int(style.y);
-	bool frost = (flags & V1ZIR_FROST) != 0;
-	bool matte = (flags & V1ZIR_MATTE) != 0;
-	// Sampler0 holds the blurred world behind the GUI (same orientation as the framebuffer).
-	vec2 uv = gl_FragCoord.xy * ScreenInfo.zw;
-	vec3 backdrop = frost ? frosted(uv) : texture(Sampler0, uv).rgb;
-	float luma = dot(backdrop, vec3(0.2126, 0.7152, 0.0722));
 	vec3 col;
-	if (frost) {
-		// Matte glass: the world behind loses most of its colour and its bright parts are held down, so the glass
-		// reads as one soft diffuse surface and light text keeps its contrast; under the tint a faint milky haze.
-		backdrop = mix(vec3(luma), backdrop, 0.6) * (1.0 - 0.4 * smoothstep(0.35, 1.0, luma));
-		col = mix(backdrop, vertexColor.rgb, vertexColor.a);
-		col = mix(col, vec3(0.74, 0.76, 0.8), 0.045);
+	if ((flags & V1ZIR_FROST) != 0) {
+		// Clear glass (Sampler0: the frame behind the GUI, sharp). Its middle is flat and lets the world through as it
+		// is; along the edge a rounded bevel bends the light like a lens, drawing the world in from further inside and
+		// splitting its colours a little, as thick glass does, and reflects more than it lets through there.
+		float bevel = clamp(min(shape.x, shape.y) * 0.9, 2.5, 12.0);
+		// 0 where the flat middle begins, 1 at the rim.
+		float t = clamp(1.0 + d / bevel, 0.0, 1.0);
+		float bend = t * t * t;
+		vec2 n = dot(grad, grad) > 1e-12 ? normalize(grad) : vec2(0.0);
+		vec2 shift = -n * bend * bevel * 0.85 * GuiTime.y;
+		vec2 px = ScreenInfo.zw;
+		col.r = texture(Sampler0, (gl_FragCoord.xy + shift) * px).r;
+		col.g = texture(Sampler0, (gl_FragCoord.xy + shift * 1.12) * px).g;
+		col.b = texture(Sampler0, (gl_FragCoord.xy + shift * 1.25) * px).b;
+		// The little the glass takes from the light (Panel opacity), and the steep bevel's reflection.
+		col = mix(col, vertexColor.rgb, vertexColor.a);
+		col = mix(col, vec3(1.0), bend * 0.12);
+		// The rim catches the light: bright where it faces it (the top left), faint across from it.
+		float rim = smoothstep(0.35, 1.0, t);
+		float facing = dot(n, vec2(-0.6, 0.8));
+		col += rim * (pow(max(facing, 0.0), 2.0) * 0.5 + pow(max(-facing, 0.0), 2.0) * 0.16);
+		// The thin bright line of the pane's very edge.
+		col += (1.0 - smoothstep(0.0, 1.2, -d)) * 0.12;
 	} else {
-		// Black glass: the smooth blur behind, a little desaturated and with bright skies pulled down, under the
-		// tint. No grain and no veil: the surface is clean.
-		backdrop = mix(vec3(luma), backdrop, 0.8) * (1.0 - 0.35 * smoothstep(0.45, 1.0, luma));
+		// Black glass (Sampler0: the blurred world): the blur, a little desaturated and with bright skies pulled down,
+		// under the tint. No grain and no veil: the surface is clean.
+		vec3 backdrop = texture(Sampler0, gl_FragCoord.xy * ScreenInfo.zw).rgb;
+		float l = dot(backdrop, vec3(0.2126, 0.7152, 0.0722));
+		backdrop = mix(vec3(l), backdrop, 0.8) * (1.0 - 0.35 * smoothstep(0.45, 1.0, l));
 		col = mix(backdrop, vertexColor.rgb, vertexColor.a);
-	}
-	if (matte) {
-		// Where the panel is (0 at its top, 1 at its bottom). Light falls on it from above: its inner edge catches
-		// it, brighter at the top; matte glass also takes a soft, even sheen over its upper part (no gloss).
-		float v = clamp((localPos.y + shape.y) / max(2.0 * shape.y, 1.0), 0.0, 1.0);
-		if (frost) {
-			col += 0.026 * (1.0 - smoothstep(0.0, 0.6, v));
-			float inner = 1.0 - smoothstep(0.5, 3.0, -d);
-			col += inner * mix(0.05, 0.012, v);
-		} else {
+		// Its inner edge catches a faint light, brighter at the top.
+		if ((flags & V1ZIR_MATTE) != 0) {
+			float v = clamp((localPos.y + shape.y) / max(2.0 * shape.y, 1.0), 0.0, 1.0);
 			float inner = 1.0 - smoothstep(0.5, 2.5, -d);
 			col += inner * mix(0.035, 0.0, v);
 		}
 	}
-	if ((flags & V1ZIR_LIT) != 0) col += v1zirCursorLight(gl_FragCoord.xy, frost ? 170.0 : 150.0) * (frost ? 0.045 : 0.035);
-	if (frost) {
-		// The frost's fine grain, fixed to the glass (it moves with it and never crawls), and faint. Counted from a
-		// little outside the top left corner: the anti-aliased rim lies just past the shape, and the hash wants no
-		// negative coordinates.
-		col += v1zirGrain((localPos + shape.xy + 4.0) * GuiTime.y) * 0.018;
-	} else {
-		// Half a step of dither against banding in the dark tint: below what the eye can see as grain.
-		col += v1zirGrain(gl_FragCoord.xy) * (1.0 / 255.0);
-	}
+	if ((flags & V1ZIR_LIT) != 0) col += v1zirCursorLight(gl_FragCoord.xy, 150.0) * 0.04;
+	// Half a step of dither against banding: below what the eye can see as grain.
+	col += v1zirGrain(gl_FragCoord.xy) * (1.0 / 255.0);
 	// Vertex alpha is the tint strength; the fade of the whole panel arrives in the thickness channel.
 	float fade = clamp(style.x / 16.0, 0.0, 1.0);
 	fragColor = vec4(col, coverage * fade) * ColorModulator;

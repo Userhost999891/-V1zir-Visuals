@@ -246,8 +246,10 @@ public final class ClickGuiScreen extends Screen {
 		if (gui == null || gui.dimBackground.on()) {
 			Render2D.setAlpha(t * (1f - edit));
 			boolean inWorld = client != null && client.world != null;
-			// The close animations (WindowTransition) redraw this backdrop while they fade it.
-			if (inWorld && BackdropBlur.available()) Render2D.glass(ctx, 0, 0, width, height, 0, 0x34000000);
+			// The close animations (WindowTransition) redraw this backdrop while they fade it. Behind clear glass the
+			// world stays sharp, only a little dimmed.
+			if (inWorld && Theme.style() == Theme.Style.GLASS) Render2D.rect(ctx, 0, 0, width, height, 0x30000000);
+			else if (inWorld && BackdropBlur.available()) Render2D.glass(ctx, 0, 0, width, height, 0, 0x34000000);
 			else Render2D.rect(ctx, 0, 0, width, height, inWorld ? 0x80000000 : 0xB0000000);
 		}
 		Render2D.setAlpha(t * (1f - edit));

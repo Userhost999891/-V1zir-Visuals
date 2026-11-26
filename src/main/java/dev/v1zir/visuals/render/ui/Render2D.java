@@ -163,7 +163,7 @@ public final class Render2D {
 								   float px, float py, float pw, float ph) {
 		Matrix3x2f m = ctx.getMatrices();
 		boolean opaque = alpha >= 1f && m.m01 == 0f && m.m10 == 0f
-			&& (Theme.style() == Theme.Style.MATTE_GLASS ? BackdropBlur.available() : Theme.panelOpacity() >= 1f);
+			&& (Theme.style() == Theme.Style.GLASS ? BackdropBlur.available() : Theme.panelOpacity() >= 1f);
 		// Inside this inset a rounded rectangle of that radius covers every pixel, past its anti-aliased rim.
 		float inset = radius * 0.3f + 1f;
 		if (!opaque || pw <= inset * 2f || ph <= inset * 2f) {
@@ -195,20 +195,27 @@ public final class Render2D {
 	}
 
 	/**
-	 * flags: ShapeElement.MATTE and/or LIT on top of a fill; in the Matte glass style a MATTE glass is frosted too
-	 * (ShapeElement.FROST), which can also be asked for on its own.
+	 * flags: ShapeElement.MATTE and/or LIT on top of a fill; in the Glass style a MATTE glass is clear glass
+	 * (ShapeElement.FROST: the frame behind it, sharp, bent at its edges), which can also be asked for on its own.
 	 */
 	public static void glass(DrawContext ctx, float x, float y, float w, float h, float radius, int corners, int flags, int tint) {
 		if (BackdropBlur.available()) {
-			if ((flags & ShapeElement.MATTE) != 0 && Theme.style() == Theme.Style.MATTE_GLASS) flags |= ShapeElement.FROST;
+			if ((flags & ShapeElement.MATTE) != 0 && Theme.style() == Theme.Style.GLASS) flags |= ShapeElement.FROST;
 			Matrix3x2f pose = pose(ctx);
 			ScreenRect scissor = scissor(ctx);
 			ScreenRect bounds = bounds(x - 2, y - 2, w + 4, h + 4, pose, scissor);
 			if (bounds == null || alpha <= 0.01f) return;
-			BackdropBlur.request(bounds);
+			TextureSetup backdrop;
+			if ((flags & ShapeElement.FROST) != 0) {
+				BackdropBlur.requestSharp();
+				backdrop = BackdropBlur.sharpSetup();
+			} else {
+				BackdropBlur.request(bounds);
+				backdrop = BackdropBlur.textureSetup();
+			}
 			// Vertex alpha is the tint strength, so the global fade travels in the (unused for fills)
 			// thickness channel: the blur itself fades in instead of popping in at the end of a fade.
-			ctx.state.addSimpleElement(new ShapeElement(V1zirPipelines.GLASS, BackdropBlur.textureSetup(), pose, scissor, bounds,
+			ctx.state.addSimpleElement(new ShapeElement(V1zirPipelines.GLASS, backdrop, pose, scissor, bounds,
 				x, y, w, h, radius, 0, GLASS_FADE * alpha, flags, corners, tint, tint, tint, tint, 0f, 0f, 0f, 0f));
 		} else {
 			int fill = ColorUtil.withAlpha(tint, Math.max(ColorUtil.alpha(tint), 225));
@@ -216,7 +223,7 @@ public final class Render2D {
 		}
 	}
 
-	/** A UI panel (fill and rim, no shadow) drawn in the Theme style: Normal (solid black) or Matte glass (frosted glass). */
+	/** A UI panel (fill and rim, no shadow) drawn in the Theme style: Normal (solid black) or Glass (clear glass). */
 	public static void panel(DrawContext ctx, float x, float y, float w, float h, float radius) {
 		panel(ctx, x, y, w, h, radius, 0, 0);
 	}
@@ -228,13 +235,14 @@ public final class Render2D {
 	/** flags: ShapeElement.LIT lets the surface and its rim catch the cursor light. */
 	public static void panel(DrawContext ctx, float x, float y, float w, float h, float radius, int corners, int flags) {
 		int surface = ShapeElement.FILL | ShapeElement.MATTE | flags;
-		if (Theme.style() == Theme.Style.MATTE_GLASS) {
+		if (Theme.style() == Theme.Style.GLASS) {
 			glass(ctx, x, y, w, h, radius, corners, surface, Theme.glassTint());
-			// The frosted edge: a little brighter where the light falls on it from above.
-			int top = ColorUtil.withAlpha(0xFFFFFF, 30);
-			int bottom = ColorUtil.withAlpha(0xFFFFFF, 12);
+			// The glass's bright edge, lit from the top left and fading towards the bottom right.
+			int lit = ColorUtil.withAlpha(0xFFFFFF, 120);
+			int side = ColorUtil.withAlpha(0xFFFFFF, 64);
+			int shade = ColorUtil.withAlpha(0xFFFFFF, 24);
 			shape(ctx, V1zirPipelines.SHAPE, TextureSetup.empty(), x, y, w, h, radius, 0, 1f, ShapeElement.OUTLINE | flags, corners,
-				top, top, bottom, bottom);
+				lit, side, shade, side);
 			return;
 		}
 		// One flat black: no gradient, no gloss.

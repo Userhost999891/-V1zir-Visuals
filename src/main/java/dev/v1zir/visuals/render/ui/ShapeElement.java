@@ -35,9 +35,8 @@ public record ShapeElement(
 	/** Flag: the shape catches the soft light that follows the cursor (FrameUniforms.cursor). */
 	public static final int LIT = 16;
 	/**
-	 * Flag for glass (Render2D.glass): matte, frosted glass, the Matte glass style. The world behind is spread wider,
-	 * loses most of its colour and lies under a faint milky haze with fine grain fixed to the shape; with MATTE too, a
-	 * soft sheen over the upper part and an inner edge that catches the light.
+	 * Flag for glass (Render2D.glass): clear glass, the Glass style. The frame behind shows through sharp; along the
+	 * edge a rounded bevel bends it like a lens and splits its colours a little, and the rim catches the light.
 	 */
 	public static final int FROST = 32;
 

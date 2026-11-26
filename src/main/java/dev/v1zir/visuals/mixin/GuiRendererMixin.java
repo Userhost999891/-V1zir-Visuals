@@ -31,6 +31,8 @@ public abstract class GuiRendererMixin {
 		WallpaperRenderer.renderPending();
 		if (WindowTransition.wantsBlur()) BackdropBlur.request();
 		GpuTimer.begin(GpuTimer.BLUR);
+		// What clear glass shows through: the frame as it is before the GUI.
+		BackdropBlur.copySharpIfRequested();
 		BackdropBlur.runIfRequested();
 		GpuTimer.end(GpuTimer.BLUR);
 		GpuTimer.begin(GpuTimer.GUI);

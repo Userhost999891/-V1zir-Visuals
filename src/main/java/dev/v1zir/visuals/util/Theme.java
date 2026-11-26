@@ -59,10 +59,10 @@ public final class Theme {
 		}
 	}
 
-	/** How panels are drawn: solid black, or matte glass (frosted glass over a blur of the world, ShapeElement.FROST). */
+	/** How panels are drawn: solid black, or clear glass that bends the light at its edges (ShapeElement.FROST). */
 	public enum Style {
 		NORMAL("Normal"),
-		MATTE_GLASS("Matte glass");
+		GLASS("Glass");
 
 		private final String title;
 
@@ -83,8 +83,8 @@ public final class Theme {
 
 		public static Style byTitle(String title) {
 			for (Style style : values()) if (style.title.equals(title)) return style;
-			// Matte glass took the place of the Blur style.
-			return "Blur".equals(title) ? MATTE_GLASS : NORMAL;
+			// Glass took the place of the Blur, Matte glass and Glassmorphism styles.
+			return "Blur".equals(title) || "Matte glass".equals(title) || "Glassmorphism".equals(title) ? GLASS : NORMAL;
 		}
 	}
 
@@ -173,11 +173,16 @@ public final class Theme {
 	}
 
 	/**
-	 * The tint of the Matte glass style: the black of the panels, less of it than in the solid style, so that the frost
-	 * shows through (Panel opacity sets how much).
+	 * What the glass of the Glass style takes from the light passing through it: hardly anything, as clear glass does
+	 * (Panel opacity sets it: 0.11 at the default 0.85, none at the lowest).
 	 */
 	public static int glassTint() {
-		return ColorUtil.withAlpha(black(), Math.round(255 * Math.min(0.9f, Math.max(0.5f, panelOpacity() * 0.8f))));
+		return ColorUtil.withAlpha(black(), Math.round(255 * Math.max(0f, (panelOpacity() - 0.3f) * 0.2f)));
+	}
+
+	/** Whether panels are glass (the Glass style): their cards and rims are drawn lighter on it. */
+	private static boolean glass() {
+		return style() == Style.GLASS;
 	}
 
 	/** The Normal style's panel: solid black. */
@@ -190,14 +195,14 @@ public final class Theme {
 		return ColorUtil.withAlpha(ColorUtil.brighten(black(), 0.03f), Math.round(255 * Math.max(0.9f, panelOpacity())));
 	}
 
-	/** Raised sub-surface (sidebar, cards): a breath lighter than the black under it. */
+	/** Raised sub-surface (sidebar, cards): a breath lighter than the black under it; on glass, a lighter pane. */
 	public static int raised() {
-		return 0x09FFFFFF;
+		return glass() ? 0x16FFFFFF : 0x09FFFFFF;
 	}
 
 	/** A raised surface that is lit: hovered, or an enabled module (a trace of the accent mixes in). */
 	public static int raisedLit() {
-		return ColorUtil.withAlpha(ColorUtil.lerp(0xFFFFFFFF, accent(), 0.12f), 16);
+		return ColorUtil.withAlpha(ColorUtil.lerp(0xFFFFFFFF, accent(), 0.12f), glass() ? 34 : 16);
 	}
 
 	/** Recessed well (tracks, fields) cut into a surface. */
@@ -205,9 +210,9 @@ public final class Theme {
 		return 0x40000000;
 	}
 
-	/** Soft 1 px rim of panels and cards. */
+	/** Soft 1 px rim of panels and cards; brighter on glass, whose edges catch the light. */
 	public static int outline() {
-		return ColorUtil.withAlpha(0xFFFFFF, 18);
+		return ColorUtil.withAlpha(0xFFFFFF, glass() ? 40 : 18);
 	}
 
 	public static int text() {

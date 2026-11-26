@@ -39,9 +39,10 @@ krawędzie w każdej skali GUI), rozmyte "szklane" panele i własne fonty render
   Enter (włącz/wyłącz), Shift+Enter (ustawienia), Tab (zakładki).
 - **Profile konfiguracji** w stopce paska bocznego: przełączanie, nowy profil (kopia obecnych
   ustawień), zmiana nazwy i usuwanie; zapisywane w `config/v1zir/configs`.
-- **Settings**: motywy (domyślny V1zir – pomarańczowy gradient), styl paneli GUI i HUD – **Matte glass**
-  (matowe, oszronione szkło nad rozmytym światem: przytłumione kolory, mleczna mgiełka, miękkie światło
-  z góry i drobne ziarno; domyślny) albo Normal (pełna czerń), edytor motywu, animacje
+- **Settings**: motywy (domyślny V1zir – pomarańczowy gradient), styl paneli GUI i HUD – **Glass**
+  (prawdziwe, przezroczyste szkło: świat widać przez nie ostro, a zaokrąglone krawędzie tafli załamują go
+  jak soczewka, z lekkim tęczowym rozszczepieniem i błyskiem światła na brzegu; domyślny) albo Normal
+  (pełna czerń), edytor motywu, animacje
   otwierania (Normal, 3D) i zamykania (Fade out, **3D Frost** – okno pęka jak szkło),
   skala interfejsu, karty Main Menu i Custom UI oraz sekcja **Performance**.
 

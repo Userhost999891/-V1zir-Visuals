@@ -1204,12 +1204,12 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 
 		// Custom UI: the restyled survival inventory, in every Theme style.
 		context.setScreen(() -> new InventoryScreen(MinecraftClient.getInstance().player));
-		for (Theme.Style style : new Theme.Style[]{Theme.Style.MATTE_GLASS, Theme.Style.NORMAL}) {
+		for (Theme.Style style : new Theme.Style[]{Theme.Style.GLASS, Theme.Style.NORMAL}) {
 			context.runOnClient(client -> ModuleManager.get(ThemeModule.class).style.set(style.title()));
 			context.waitTicks(10);
 			context.takeScreenshot("custom-inventory-" + style.name().toLowerCase());
 		}
-		context.runOnClient(client -> ModuleManager.get(ThemeModule.class).style.set(Theme.Style.MATTE_GLASS.title()));
+		context.runOnClient(client -> ModuleManager.get(ThemeModule.class).style.set(Theme.Style.GLASS.title()));
 		context.setScreen(() -> null);
 	}
 
@@ -2598,8 +2598,8 @@ public class V1zirClientGameTest implements FabricClientGameTest {
 		context.takeScreenshot("clickgui-search");
 		context.getInput().pressKey(GLFW.GLFW_KEY_ESCAPE);
 
-		// Every panel style of the Theme module, ending on Matte glass (the default) for the screenshots after.
-		for (Theme.Style style : new Theme.Style[]{Theme.Style.NORMAL, Theme.Style.MATTE_GLASS}) {
+		// Every panel style of the Theme module, ending on Glass (the default) for the screenshots after.
+		for (Theme.Style style : new Theme.Style[]{Theme.Style.NORMAL, Theme.Style.GLASS}) {
 			context.runOnClient(client -> ModuleManager.get(ThemeModule.class).style.set(style.title()));
 			context.waitTicks(8);
 			context.takeScreenshot("clickgui-style-" + style.name().toLowerCase());

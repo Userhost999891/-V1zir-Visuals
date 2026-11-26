@@ -292,7 +292,8 @@ public final class MessagesScreen extends Screen {
 		boolean inWorld = client != null && client.world != null;
 		Render2D.setAlpha(t);
 		if (!inWorld) renderPanoramaBackground(ctx, deltaTicks);
-		if (inWorld && BackdropBlur.available()) Render2D.glass(ctx, 0, 0, width, height, 0, 0x34000000);
+		if (inWorld && Theme.style() == Theme.Style.GLASS) Render2D.rect(ctx, 0, 0, width, height, 0x30000000);
+		else if (inWorld && BackdropBlur.available()) Render2D.glass(ctx, 0, 0, width, height, 0, 0x34000000);
 		else Render2D.rect(ctx, 0, 0, width, height, inWorld ? 0x80000000 : 0x8C000000);
 
 		layout();

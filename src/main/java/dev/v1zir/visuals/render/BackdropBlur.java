@@ -60,6 +60,16 @@ public final class BackdropBlur {
 	private static int margin;
 	private static DynamicUniformStorage<BlurData> storage;
 	private static final BlurData BLUR = new BlurData();
+	/** The frame as it is before the GUI, sharp and full size: what clear glass (the Glass style) shows through. */
+	private static GpuTexture sharp;
+	private static GpuTextureView sharpView;
+	private static TextureSetup sharpSetup;
+	private static int sharpWidth = -1;
+	private static int sharpHeight = -1;
+	private static boolean sharpRequested;
+	/** Outside a world, the title screen's wallpaper, which clear glass reads as it is. */
+	private static GpuTextureView wallpaperView;
+	private static TextureSetup wallpaperSetup;
 
 	private BackdropBlur() {
 	}
@@ -158,6 +168,57 @@ public final class BackdropBlur {
 		sourceWidth = width;
 		sourceHeight = height;
 		setup = TextureSetup.of(views[0], RenderSystem.getSamplerCache().get(FilterMode.LINEAR));
+	}
+
+	/** Asks for this frame's copy of what lies behind the GUI: a clear glass panel is being drawn. */
+	public static void requestSharp() {
+		sharpRequested = true;
+	}
+
+	/** What clear glass samples: the frame behind the GUI, sharp (outside a world, the title screen's wallpaper). */
+	public static TextureSetup sharpSetup() {
+		if (V1zir.mc().world == null) {
+			WallpaperTarget wallpaper = WallpaperRenderer.backdropTarget();
+			if (wallpaper != null) {
+				GpuTextureView view = wallpaper.view();
+				if (view != wallpaperView || wallpaperSetup == null) {
+					wallpaperView = view;
+					wallpaperSetup = TextureSetup.of(view, RenderSystem.getSamplerCache().get(FilterMode.LINEAR));
+				}
+				return wallpaperSetup;
+			}
+		}
+		Framebuffer fb = V1zir.mc().getFramebuffer();
+		ensureSharp(fb.textureWidth, fb.textureHeight);
+		return sharpSetup;
+	}
+
+	private static void ensureSharp(int width, int height) {
+		width = Math.max(1, width);
+		height = Math.max(1, height);
+		if (width == sharpWidth && height == sharpHeight && sharpSetup != null) return;
+		if (sharpView != null) sharpView.close();
+		if (sharp != null) sharp.close();
+		sharp = RenderSystem.getDevice().createTexture("V1zir glass backdrop", 15, TextureFormat.RGBA8, width, height, 1, 1);
+		sharpView = RenderSystem.getDevice().createTextureView(sharp);
+		sharpWidth = width;
+		sharpHeight = height;
+		sharpSetup = TextureSetup.of(sharpView, RenderSystem.getSamplerCache().get(FilterMode.LINEAR));
+	}
+
+	/**
+	 * Called right before the GUI is drawn: copies the frame for the clear glass drawn in it (one copy of the frame,
+	 * cheaper than the blur). Outside a world the glass reads the wallpaper instead, which needs no copy.
+	 */
+	public static void copySharpIfRequested() {
+		if (!sharpRequested) return;
+		sharpRequested = false;
+		if (V1zir.mc().world == null || RenderSystem.outputColorTextureOverride != null) return;
+		Framebuffer fb = V1zir.mc().getFramebuffer();
+		if (fb.textureWidth <= 0 || fb.textureHeight <= 0) return;
+		ensureSharp(fb.textureWidth, fb.textureHeight);
+		RenderSystem.getDevice().createCommandEncoder().copyTextureToTexture(fb.getColorAttachment(), sharp, 0, 0, 0, 0, 0,
+			fb.textureWidth, fb.textureHeight);
 	}
 
 	/** Called right before the GUI is drawn. */
