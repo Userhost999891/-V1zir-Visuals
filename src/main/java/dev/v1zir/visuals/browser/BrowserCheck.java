@@ -136,8 +136,14 @@ public final class BrowserCheck {
 		}
 	}
 
+	/** Letters and digits as the game sends them: the key down, its character, the key up. */
 	private static void typeText(String text) {
-		for (char c : text.toCharArray()) Browser.charTyped(new CharInput(c, 0));
+		for (char c : text.toCharArray()) {
+			KeyInput key = new KeyInput(Character.toUpperCase(c), 0, 0);
+			Browser.keyPressed(key);
+			Browser.charTyped(new CharInput(c, 0));
+			Browser.keyReleased(key);
+		}
 	}
 
 	private static void press(int key, int scanCode, int modifiers) {

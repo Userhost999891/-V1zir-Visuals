@@ -15,7 +15,8 @@ import java.lang.reflect.Method;
  * scan code field, which the events MCEF makes from the game's keys leave at 0, so Backspace, Enter, the arrows and
  * every shortcut (Ctrl+A, C, V, X, Z) reached the page as no key at all (letters come as characters and worked).
  * The events are made here with a field of that name holding the key's real scan code (JNI finds a subclass's field
- * before its parent's), and sent by JCEF's own method; Enter also brings its character, which pages need to send a
+ * before its parent's), and sent by JCEF's own method; on Linux JCEF reads the key from the event's character
+ * instead, which carries the key's X keysym (keysym). Enter also brings its character, which pages need to send a
  * form or start a new line.
  */
 final class BrowserKeys {
@@ -48,7 +49,7 @@ final class BrowserKeys {
 		Component source = browser.getUIComponent();
 		int modifiers = awtModifiers(input.modifiers());
 		long scan = scanCode(input.key(), input.scancode());
-		if (!send(browser, new ScanKeyEvent(source, KeyEvent.KEY_PRESSED, modifiers, vk, KeyEvent.CHAR_UNDEFINED, scan))) return false;
+		if (!send(browser, new ScanKeyEvent(source, KeyEvent.KEY_PRESSED, modifiers, vk, keysym(vk), scan))) return false;
 		// The character Enter types: forms are sent and lines broken on it, not on the key.
 		if (vk == KeyEvent.VK_ENTER) send(browser, new ScanKeyEvent(source, KeyEvent.KEY_TYPED, modifiers, KeyEvent.VK_UNDEFINED, '\r', scan));
 		return true;
@@ -59,7 +60,7 @@ final class BrowserKeys {
 		if (vk == KeyEvent.VK_UNDEFINED) return false;
 		long scan = scanCode(input.key(), input.scancode());
 		return send(browser, new ScanKeyEvent(browser.getUIComponent(), KeyEvent.KEY_RELEASED, awtModifiers(input.modifiers()), vk,
-			KeyEvent.CHAR_UNDEFINED, scan));
+			keysym(vk), scan));
 	}
 
 	/** JCEF's own (protected) way of sending a key event to the page, found up the browser's classes. */
@@ -133,6 +134,41 @@ final class BrowserKeys {
 			case GLFW.GLFW_KEY_INSERT -> 0x152;
 			case GLFW.GLFW_KEY_DELETE -> 0x153;
 			default -> 0;
+		};
+	}
+
+	/**
+	 * The character a pressed or released key carries. JCEF reads the key from it where it does not read the scan code
+	 * (Linux, macOS): as an X keysym on Linux, which for letters, digits and most punctuation is the character itself,
+	 * the other keys having keysyms of their own. CHAR_UNDEFINED there, 0xFFFF, is the keysym of Delete, which every
+	 * letter (with Ctrl too) was taken for. Windows takes the key from the scan code and ignores this.
+	 */
+	private static char keysym(int vk) {
+		if (vk >= KeyEvent.VK_A && vk <= KeyEvent.VK_Z || vk >= KeyEvent.VK_0 && vk <= KeyEvent.VK_9) return (char) vk;
+		if (vk >= KeyEvent.VK_F1 && vk <= KeyEvent.VK_F12) return (char) (0xFFBE + vk - KeyEvent.VK_F1);
+		if (vk >= KeyEvent.VK_NUMPAD0 && vk <= KeyEvent.VK_NUMPAD9) return (char) (0xFFB0 + vk - KeyEvent.VK_NUMPAD0);
+		return switch (vk) {
+			case KeyEvent.VK_SPACE, KeyEvent.VK_COMMA, KeyEvent.VK_MINUS, KeyEvent.VK_PERIOD, KeyEvent.VK_SLASH, KeyEvent.VK_SEMICOLON,
+				KeyEvent.VK_EQUALS, KeyEvent.VK_OPEN_BRACKET, KeyEvent.VK_BACK_SLASH, KeyEvent.VK_CLOSE_BRACKET -> (char) vk;
+			case KeyEvent.VK_QUOTE -> '\'';
+			case KeyEvent.VK_BACK_QUOTE -> '`';
+			case KeyEvent.VK_HOME -> (char) 0xFF50;
+			case KeyEvent.VK_PAGE_UP -> (char) 0xFF55;
+			case KeyEvent.VK_PAGE_DOWN -> (char) 0xFF56;
+			case KeyEvent.VK_END -> (char) 0xFF57;
+			case KeyEvent.VK_INSERT -> (char) 0xFF63;
+			case KeyEvent.VK_MULTIPLY -> (char) 0xFFAA;
+			case KeyEvent.VK_ADD -> (char) 0xFFAB;
+			case KeyEvent.VK_SUBTRACT -> (char) 0xFFAD;
+			case KeyEvent.VK_DECIMAL -> (char) 0xFFAE;
+			case KeyEvent.VK_DIVIDE -> (char) 0xFFAF;
+			case KeyEvent.VK_SHIFT -> (char) 0xFFE1;
+			case KeyEvent.VK_CONTROL -> (char) 0xFFE3;
+			case KeyEvent.VK_CAPS_LOCK -> (char) 0xFFE5;
+			case KeyEvent.VK_ALT -> (char) 0xFFE9;
+			case KeyEvent.VK_META -> (char) 0xFFEB;
+			// Backspace, Delete, Enter, Escape, Tab and the arrows JCEF knows by their key code.
+			default -> (char) 0;
 		};
 	}
 
