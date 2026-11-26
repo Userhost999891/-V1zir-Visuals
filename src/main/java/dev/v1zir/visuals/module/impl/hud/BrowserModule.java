@@ -15,6 +15,7 @@ import dev.v1zir.visuals.module.setting.ModeSetting;
 import dev.v1zir.visuals.module.setting.NumberSetting;
 import dev.v1zir.visuals.render.font.Fonts;
 import dev.v1zir.visuals.render.font.Icons;
+import dev.v1zir.visuals.render.ui.ImageElement;
 import dev.v1zir.visuals.render.ui.Render2D;
 import dev.v1zir.visuals.util.ColorUtil;
 import dev.v1zir.visuals.util.Theme;
@@ -47,6 +48,13 @@ public final class BrowserModule extends HudModule {
 	 * (Discord, YouTube) instead of a squeezed one with scrollbars. Lower shows the text larger.
 	 */
 	public final NumberSetting pageWidth = add(new NumberSetting("Page width", 1280, 640, 1920, 40).suffix(" px"));
+	/**
+	 * The page rendered at twice the window's resolution and drawn smaller, four pixels averaged into each: small text
+	 * and pictures come out smooth instead of jagged. Up to a page of 2880 pixels across.
+	 */
+	public final BoolSetting supersample = add(new BoolSetting("Supersample", true));
+	/** Crisper text and edges in the window, sharpened by contrast (no halos). */
+	public final ModeSetting sharpen = add(new ModeSetting("Sharpen", "Medium", "Off", "Low", "Medium", "High"));
 	public final NumberSetting opacity = add(new NumberSetting("Opacity", 1.0, 0.4, 1.0, 0.05));
 	/**
 	 * Messages written to the player on Discord as banners in the game (DiscordAlerts): Discord's app runs in a hidden
@@ -178,19 +186,26 @@ public final class BrowserModule extends HudModule {
 			String shown = Fonts.medium().trim(host, 5f, hostW);
 			Render2D.textMiddle(ctx, Fonts.medium(), shown, x + width - 5f - Fonts.medium().width(shown, 5f), linkY + 5f, 5f, Theme.textFaint());
 		}
-		viewX = x + 3f;
-		viewY = y + BAR;
-		viewW = width - 6f;
-		viewH = height - BAR - 3f;
-		// The page at the HUD window's own resolution (full screen sets its own size while it is open).
+		// The page on whole screen pixels, so it is drawn pixel for pixel and never blurred between two.
+		double scale = mc.getWindow().getScaleFactor();
+		int pixelX = (int) Math.round((x + 3f) * scale);
+		int pixelY = (int) Math.round((y + BAR) * scale);
+		int pixelW = (int) Math.round((width - 6f) * scale);
+		int pixelH = (int) Math.round((height - BAR - 3f) * scale);
+		viewX = (float) (pixelX / scale);
+		viewY = (float) (pixelY / scale);
+		viewW = (float) (pixelW / scale);
+		viewH = (float) (pixelH / scale);
+		// The page at the HUD window's own resolution, or twice it to be drawn smaller (full screen sets its own size).
 		if (!(mc.currentScreen instanceof BrowserScreen)) {
-			double scale = mc.getWindow().getScaleFactor();
-			Browser.resize((int) Math.round(viewW * scale), (int) Math.round(viewH * scale));
-			Browser.fitWidth(pageWidth.i());
+			int ss = supersample.on() && pixelW * 2 <= 2880 ? 2 : 1;
+			Browser.resize(pixelW * ss, pixelH * ss);
+			Browser.fitWidth(pageWidth.i(), ss);
 		}
 		GpuTextureView view = Browser.view();
 		if (view != null) {
-			Render2D.image(ctx, TextureSetup.of(view, RenderSystem.getSamplerCache().get(FilterMode.LINEAR)), viewX, viewY, viewW, viewH, 5f, 0xFFFFFFFF);
+			Render2D.image(ctx, TextureSetup.of(view, RenderSystem.getSamplerCache().get(FilterMode.LINEAR)), viewX, viewY, viewW, viewH, 5f, 0xFFFFFFFF,
+				0f, 0f, 1f, 1f, sharpenFlags());
 			if (pointer && mx >= viewX && mx <= viewX + viewW && my >= viewY && my <= viewY + viewH) {
 				Render2D.outline(ctx, viewX, viewY, viewW, viewH, 5f, 1.2f, ColorUtil.withAlpha(Theme.accent(), 200));
 				Render2D.textCentered(ctx, Fonts.semibold(), "Click to open", viewX + viewW / 2f, viewY + viewH - 9f, 6f, 0xEEFFFFFF);
@@ -268,6 +283,15 @@ public final class BrowserModule extends HudModule {
 		}
 		if (!line.isEmpty()) lines.add(Fonts.medium().trim(line, size, max));
 		return lines;
+	}
+
+	private int sharpenFlags() {
+		return switch (sharpen.get()) {
+			case "Low" -> ImageElement.SHARPEN_LOW;
+			case "Medium" -> ImageElement.SHARPEN_MEDIUM;
+			case "High" -> ImageElement.SHARPEN_HIGH;
+			default -> 0;
+		};
 	}
 
 	private static String timeLeft(int seconds) {

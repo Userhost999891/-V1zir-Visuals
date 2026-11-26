@@ -23,6 +23,13 @@ public record ImageElement(
 ) implements SimpleGuiElementRenderState {
 	/** Flag: pixel art (skins), every texel a crisp square with anti-aliased edges. */
 	public static final int PIXEL_ART = 16;
+	/**
+	 * Flags: sharpened (the browser's page), low, medium or high: edges made crisper by how much room their contrast
+	 * leaves (no halos). SHARPEN_LOW | SHARPEN_MEDIUM is high.
+	 */
+	public static final int SHARPEN_LOW = 32;
+	public static final int SHARPEN_MEDIUM = 64;
+	public static final int SHARPEN_HIGH = SHARPEN_LOW | SHARPEN_MEDIUM;
 	/** How far the quad reaches past the image, for the anti-aliased rim; gui_image.vsh derives the half size from it. */
 	static final float PAD = 2f;
 	private static final float UV_SCALE = 16384f;

@@ -20,7 +20,7 @@ vec4 v1zirPremultiplied(ivec2 p) {
 }
 
 // A texture region (album art, the logo, a skin's or a mob's face) stretched over a rounded rectangle;
-// the vertex colour tints it and carries its opacity. Flags: 1 pixel art.
+// the vertex colour tints it and carries its opacity. Flags: 1 pixel art, 2 and 4 sharpened (low, medium, both high).
 void main() {
 	float d = v1zirShapeDistance(localPos, shape, style.z);
 	float coverage = v1zirShapeCoverage(d, shape, style);
@@ -31,8 +31,24 @@ void main() {
 	if (coverage <= 0.0) discard;
 	vec2 size = vec2(textureSize(Sampler0, 0));
 	int f = int(flags);
+	int sharpen = (f / 2) % 4;
 	vec4 texel = vec4(0.0);
-	if ((f & 1) != 0) {
+	if (sharpen > 0) {
+		// Sharpened (the browser's page): five taps a screen pixel apart (each the box of four texels when the page
+		// was rendered at twice the size it is drawn), the centre pushed away from its neighbours by as much as the
+		// room its contrast leaves, so text and edges get crisper without halos or noise in flat areas.
+		vec4 c = texture(Sampler0, uv);
+		vec3 n = texture(Sampler0, uv - fy).rgb;
+		vec3 s = texture(Sampler0, uv + fy).rgb;
+		vec3 e = texture(Sampler0, uv + fx).rgb;
+		vec3 w = texture(Sampler0, uv - fx).rgb;
+		vec3 lo = min(c.rgb, min(min(n, s), min(e, w)));
+		vec3 hi = max(c.rgb, max(max(n, s), max(e, w)));
+		vec3 room = sqrt(clamp(min(lo, 1.0 - hi) / max(hi, vec3(1e-4)), 0.0, 1.0));
+		vec3 lobe = -room * mix(0.09, 0.2, float(sharpen - 1) / 2.0);
+		vec3 rgb = (c.rgb + (n + s + e + w) * lobe) / (1.0 + 4.0 * lobe);
+		texel = vec4(clamp(rgb, 0.0, 1.0), c.a);
+	} else if ((f & 1) != 0) {
 		// Pixel art: every texel a crisp square whose edges blend over one screen pixel, at any scale. The
 		// blend is premultiplied, so transparent texels (a skin's hat) leave no dark fringe, and it never
 		// reaches past the region into the neighbouring parts of the skin.

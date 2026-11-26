@@ -233,8 +233,16 @@ public final class Browser {
 	 * per site) and once a second besides, in case a page reset it.
 	 */
 	public static void fitWidth(int cssWidth) {
+		fitWidth(cssWidth, 1.0);
+	}
+
+	/**
+	 * As fitWidth(cssWidth), for a page rendered at supersample times the size it is drawn at: the zoom may go up to
+	 * that, so the page looks no larger than at 100% once drawn smaller.
+	 */
+	public static void fitWidth(int cssWidth, double supersample) {
 		if (browser == null || width <= 0) return;
-		zoom(cssWidth <= 0 ? 1.0 : Math.min(1.0, width / (double) cssWidth));
+		zoom(cssWidth <= 0 ? supersample : Math.min(supersample, width / (double) cssWidth));
 	}
 
 	/** The page at the given zoom (1 = 100%); see fitWidth. */
