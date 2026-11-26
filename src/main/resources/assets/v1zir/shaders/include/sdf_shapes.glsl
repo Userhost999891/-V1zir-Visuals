@@ -30,8 +30,9 @@ float v1zirShapeDistance(vec2 p, vec4 shape, float mask) {
 // Mode flags on top of the shape kind in the low 3 bits (see ShapeElement).
 const int V1ZIR_MATTE = 8;
 const int V1ZIR_LIT = 16;
-// Glass only: matte, frosted glass (the Matte glass style).
-const int V1ZIR_FROST = 32;
+// Glass only: clear glass (the frame behind, sharp) and frosted glass (the blurred world), both with a rounded edge.
+const int V1ZIR_CLEAR = 32;
+const int V1ZIR_FROSTED = 64;
 
 // Coverage for the given mode: 0 fill, 1 outline, 2 soft shadow / glow
 float v1zirShapeCoverage(float d, vec4 shape, vec3 style) {

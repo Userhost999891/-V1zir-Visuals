@@ -28,7 +28,7 @@ public final class ThemeModule extends Module {
 	public final ColorSetting accent = add(new ColorSetting("Accent", 0xFFF6A64B, false).visibleIf(this::custom));
 	public final ColorSetting accent2 = add(new ColorSetting("Accent 2", 0xFFE8693F, false).visibleIf(this::custom));
 	public final NumberSetting panelOpacity = add(new NumberSetting("Panel opacity", 0.85, 0.3, 1.0, 0.01));
-	/** Panel style of the GUI and the HUD: Normal (solid black) or Glass (clear glass that bends the light at its edges). */
+	/** Panel style of the GUI and the HUD: Normal (solid black) or Glass (frosted glass panels and clear glass buttons). */
 	public final ModeSetting style = add(new ModeSetting("Style", Theme.Style.GLASS.title(), Theme.Style.titles()));
 	public final NumberSetting blurStrength = add(new NumberSetting("Blur strength", 0.75, 0.0, 1.0, 0.05).visibleIf(() -> !style.is(Theme.Style.NORMAL.title())));
 	/** Set once Glass, which took the place of Blur, Matte glass and Glassmorphism, was turned on for this config; Normal can be chosen again after. */

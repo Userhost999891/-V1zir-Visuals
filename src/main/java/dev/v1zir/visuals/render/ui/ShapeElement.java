@@ -35,10 +35,15 @@ public record ShapeElement(
 	/** Flag: the shape catches the soft light that follows the cursor (FrameUniforms.cursor). */
 	public static final int LIT = 16;
 	/**
-	 * Flag for glass (Render2D.glass): clear glass, the Glass style. The frame behind shows through sharp; along the
-	 * edge a rounded bevel bends it like a lens and splits its colours a little, and the rim catches the light.
+	 * Flag for glass (Render2D.glass): clear glass (the Glass style's buttons). The frame behind shows through sharp;
+	 * along the edge a rounded bevel bends it like a lens, and the edge catches the light.
 	 */
-	public static final int FROST = 32;
+	public static final int CLEAR = 32;
+	/**
+	 * Flag for glass: frosted glass (the Glass style's panels). The frost diffuses the world behind and a thin tint and
+	 * a milky haze lie over it, so what is on the pane stays readable; the edge is the same rounded glass edge.
+	 */
+	public static final int FROSTED = 64;
 
 	/** How far the quad reaches past the shape: a shadow fades out exactly at its softness, edges need room to anti-alias. */
 	public static float padding(int mode, float softness) {

@@ -59,7 +59,7 @@ public final class Theme {
 		}
 	}
 
-	/** How panels are drawn: solid black, or clear glass that bends the light at its edges (ShapeElement.FROST). */
+	/** How panels are drawn: solid black, or glass: frosted panels and clear buttons with rounded glass edges. */
 	public enum Style {
 		NORMAL("Normal"),
 		GLASS("Glass");
@@ -173,11 +173,11 @@ public final class Theme {
 	}
 
 	/**
-	 * What the glass of the Glass style takes from the light passing through it: hardly anything, as clear glass does
-	 * (Panel opacity sets it: 0.11 at the default 0.85, none at the lowest).
+	 * The thin tint of the Glass style's frosted panels, which keeps what is on them readable over a bright world
+	 * (Panel opacity sets it: 0.38 at the default 0.85).
 	 */
-	public static int glassTint() {
-		return ColorUtil.withAlpha(black(), Math.round(255 * Math.max(0f, (panelOpacity() - 0.3f) * 0.2f)));
+	public static int frostTint() {
+		return ColorUtil.withAlpha(black(), Math.round(255 * Math.min(0.7f, Math.max(0.15f, panelOpacity() * 0.45f))));
 	}
 
 	/** Whether panels are glass (the Glass style): their cards and rims are drawn lighter on it. */

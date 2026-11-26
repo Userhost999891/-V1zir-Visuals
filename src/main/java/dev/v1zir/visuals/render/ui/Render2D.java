@@ -196,17 +196,20 @@ public final class Render2D {
 
 	/**
 	 * flags: ShapeElement.MATTE and/or LIT on top of a fill; in the Glass style a MATTE glass is clear glass
-	 * (ShapeElement.FROST: the frame behind it, sharp, bent at its edges), which can also be asked for on its own.
+	 * (ShapeElement.CLEAR: the frame behind it, sharp, bent at its edges). ShapeElement.FROSTED asks for frosted glass
+	 * with the same edge (the Glass style's panels).
 	 */
 	public static void glass(DrawContext ctx, float x, float y, float w, float h, float radius, int corners, int flags, int tint) {
 		if (BackdropBlur.available()) {
-			if ((flags & ShapeElement.MATTE) != 0 && Theme.style() == Theme.Style.GLASS) flags |= ShapeElement.FROST;
+			if ((flags & (ShapeElement.MATTE | ShapeElement.FROSTED)) == ShapeElement.MATTE && Theme.style() == Theme.Style.GLASS) {
+				flags |= ShapeElement.CLEAR;
+			}
 			Matrix3x2f pose = pose(ctx);
 			ScreenRect scissor = scissor(ctx);
 			ScreenRect bounds = bounds(x - 2, y - 2, w + 4, h + 4, pose, scissor);
 			if (bounds == null || alpha <= 0.01f) return;
 			TextureSetup backdrop;
-			if ((flags & ShapeElement.FROST) != 0) {
+			if ((flags & ShapeElement.CLEAR) != 0 && (flags & ShapeElement.FROSTED) == 0) {
 				BackdropBlur.requestSharp();
 				backdrop = BackdropBlur.sharpSetup();
 			} else {
@@ -223,7 +226,7 @@ public final class Render2D {
 		}
 	}
 
-	/** A UI panel (fill and rim, no shadow) drawn in the Theme style: Normal (solid black) or Glass (clear glass). */
+	/** A UI panel (fill and rim, no shadow) drawn in the Theme style: Normal (solid black) or Glass (frosted glass). */
 	public static void panel(DrawContext ctx, float x, float y, float w, float h, float radius) {
 		panel(ctx, x, y, w, h, radius, 0, 0);
 	}
@@ -236,11 +239,11 @@ public final class Render2D {
 	public static void panel(DrawContext ctx, float x, float y, float w, float h, float radius, int corners, int flags) {
 		int surface = ShapeElement.FILL | ShapeElement.MATTE | flags;
 		if (Theme.style() == Theme.Style.GLASS) {
-			glass(ctx, x, y, w, h, radius, corners, surface, Theme.glassTint());
-			// The glass's bright edge, lit from the top left and fading towards the bottom right.
-			int lit = ColorUtil.withAlpha(0xFFFFFF, 120);
-			int side = ColorUtil.withAlpha(0xFFFFFF, 64);
-			int shade = ColorUtil.withAlpha(0xFFFFFF, 24);
+			glass(ctx, x, y, w, h, radius, corners, surface | ShapeElement.FROSTED, Theme.frostTint());
+			// The pane's fine outline, lit from the top left and fading towards the bottom right.
+			int lit = ColorUtil.withAlpha(0xFFFFFF, 70);
+			int side = ColorUtil.withAlpha(0xFFFFFF, 36);
+			int shade = ColorUtil.withAlpha(0xFFFFFF, 14);
 			shape(ctx, V1zirPipelines.SHAPE, TextureSetup.empty(), x, y, w, h, radius, 0, 1f, ShapeElement.OUTLINE | flags, corners,
 				lit, side, shade, side);
 			return;
