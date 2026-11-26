@@ -81,9 +81,11 @@ public final class ArrayListModule extends HudModule {
 			Render2D.setAlpha(t);
 			int accent = Theme.accentWave(index * 0.08f);
 			if (background.on()) {
-				// Glass: each row is a bar of frosted glass.
+				// Glass: the rows are flat strips of frosted glass that join into one surface. Each reaches a little into the
+				// row under it, which covers that again with the same frost, so no seam shows where they meet.
 				if (Theme.style() == Theme.Style.GLASS && BackdropBlur.available()) {
-					Render2D.glass(ctx, rx + slide, cy, w, rowH * t, 0f, 0, ShapeElement.FILL | ShapeElement.FROSTED, Theme.frostTint());
+					float overlap = index < shown.size() - 1 ? 0.75f : 0f;
+					Render2D.glass(ctx, rx + slide, cy, w, rowH * t + overlap, 0f, 0, ShapeElement.FILL | ShapeElement.FROSTED, Theme.frostTint());
 				} else {
 					Render2D.rect(ctx, rx + slide, cy, w, rowH * t, Theme.panel());
 				}
