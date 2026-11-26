@@ -173,11 +173,11 @@ public final class Theme {
 	}
 
 	/**
-	 * The thin tint of the Glass style's frosted panels, which keeps what is on them readable over a bright world
-	 * (Panel opacity sets it: 0.38 at the default 0.85).
+	 * The tint of the Glass style's frosted panels, which keeps what is on them, dim text too, readable over a bright
+	 * world (Panel opacity sets it: 0.53 at the default 0.85).
 	 */
 	public static int frostTint() {
-		return ColorUtil.withAlpha(black(), Math.round(255 * Math.min(0.7f, Math.max(0.15f, panelOpacity() * 0.45f))));
+		return ColorUtil.withAlpha(black(), Math.round(255 * Math.min(0.8f, Math.max(0.2f, panelOpacity() * 0.62f))));
 	}
 
 	/** Whether panels are glass (the Glass style): their cards and rims are drawn lighter on it. */
@@ -197,12 +197,12 @@ public final class Theme {
 
 	/** Raised sub-surface (sidebar, cards): a breath lighter than the black under it; on glass, a lighter pane. */
 	public static int raised() {
-		return glass() ? 0x16FFFFFF : 0x09FFFFFF;
+		return glass() ? 0x12FFFFFF : 0x09FFFFFF;
 	}
 
 	/** A raised surface that is lit: hovered, or an enabled module (a trace of the accent mixes in). */
 	public static int raisedLit() {
-		return ColorUtil.withAlpha(ColorUtil.lerp(0xFFFFFFFF, accent(), 0.12f), glass() ? 34 : 16);
+		return ColorUtil.withAlpha(ColorUtil.lerp(0xFFFFFFFF, accent(), 0.12f), glass() ? 28 : 16);
 	}
 
 	/** Recessed well (tracks, fields) cut into a surface. */

@@ -57,9 +57,9 @@ void main() {
 			// and the fine grain of the frost, fixed to the pane.
 			c = texture(Sampler0, (gl_FragCoord.xy + shift) * px).rgb;
 			float l = dot(c, LUMA);
-			c = mix(vec3(l), c, 0.85) * (1.0 - 0.3 * smoothstep(0.5, 1.0, l));
+			c = mix(vec3(l), c, 0.85) * (1.0 - 0.45 * smoothstep(0.4, 1.0, l));
 			c = mix(c, vertexColor.rgb, vertexColor.a);
-			c = mix(c, vec3(0.86, 0.89, 0.93), 0.07);
+			c = mix(c, vec3(0.86, 0.89, 0.93), 0.04);
 			c += v1zirGrain((localPos + hs + 4.0) * GuiTime.y) * 0.01;
 		}
 		// The edge reflects more than it lets through, catches the light where it faces it (the top left) and is in
