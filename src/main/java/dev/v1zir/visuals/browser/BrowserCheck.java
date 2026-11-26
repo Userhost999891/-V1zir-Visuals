@@ -32,6 +32,10 @@ public final class BrowserCheck {
 
 	public static void register() {
 		if (!Boolean.getBoolean("v1zir.prodcheck")) return;
+		// Errors in Chromium's callbacks are printed by JNI to System.err, which the game's logging loses on that thread:
+		// for the check it writes straight to the process's error stream.
+		System.setErr(new java.io.PrintStream(new java.io.FileOutputStream(java.io.FileDescriptor.err), true,
+			java.nio.charset.StandardCharsets.UTF_8));
 		ClientLifecycleEvents.CLIENT_STARTED.register(client -> {
 			boolean all = true;
 			for (String name : CLASSES) {

@@ -98,6 +98,7 @@ jobs:
           shopt -s nullglob
           grep "V1ZIR-PROD" /tmp/production.log || true
           echo "=== Chromium's thread"; grep -A 30 "Browser (Chromium's thread)" /tmp/production.log | head -120 || true
+          echo "=== Errors on AWT's event thread"; grep -n -A 25 'Exception in thread "AWT-EventQueue' /tmp/production.log | grep -v "^.*V1ZIR-PROD" | head -150 || true
           for f in build/run/production/crash-reports/*.txt build/run/production/hs_err*.log; do echo "=== $f"; cat "$f"; done
           echo "=== latest.log (end)"; tail -n 120 build/run/production/logs/latest.log || true
 
