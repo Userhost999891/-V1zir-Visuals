@@ -4,7 +4,6 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import dev.v1zir.visuals.V1zir;
 import dev.v1zir.visuals.gui.messages.MessageBanners;
-import net.dimaskama.mcef.api.MCEFApi;
 import net.dimaskama.mcef.api.MCEFBrowser;
 import org.cef.CefClient;
 import org.cef.browser.CefBrowser;
@@ -14,7 +13,6 @@ import org.cef.callback.CefQueryCallback;
 import org.cef.handler.CefMessageRouterHandlerAdapter;
 import org.jetbrains.annotations.Nullable;
 
-import java.lang.reflect.Field;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -101,10 +99,8 @@ public final class DiscordAlerts {
 	 * Gives MCEF's client the message router that notifications arrive by, before the first page is made (pages made
 	 * before a router is added do not get its function). Called once MCEF is ready.
 	 */
-	static void prepare(MCEFApi api) {
+	static void prepare(CefClient client) {
 		if (router != null) return;
-		CefClient client = client(api);
-		if (client == null) return;
 		try {
 			CefMessageRouter made = CefMessageRouter.create(new CefMessageRouter.CefMessageRouterConfig("v1zirQuery", "v1zirQueryCancel"),
 				new CefMessageRouterHandlerAdapter() {
@@ -127,19 +123,6 @@ public final class DiscordAlerts {
 			router = made;
 		} catch (Throwable t) {
 			V1zir.LOGGER.warn("Discord alerts are off: the browser's message router could not be added", t);
-		}
-	}
-
-	/** MCEF's one client, which its pages share (a private field of MCEF Modern's API object). */
-	@Nullable
-	private static CefClient client(MCEFApi api) {
-		try {
-			Field field = api.getClass().getDeclaredField("client");
-			field.setAccessible(true);
-			return (CefClient) field.get(api);
-		} catch (ReflectiveOperationException | RuntimeException e) {
-			V1zir.LOGGER.warn("Discord alerts are off: MCEF's client was not found", e);
-			return null;
 		}
 	}
 

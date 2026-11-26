@@ -92,6 +92,10 @@ jobs:
           set -o pipefail
           ./gradlew runProductionCheck --stacktrace 2>&1 | tee /tmp/production.log
           grep -q "V1ZIR-PROD classes ok" /tmp/production.log
+          # Chromium's callbacks failing on its thread (AWT's event thread): the focus loop's overflowed stack was one.
+          if grep -q 'Exception in thread "AWT-EventQueue' /tmp/production.log; then
+            echo "::error::Errors on Chromium's thread (AWT's event thread), see the production log"; exit 1
+          fi
       - name: Production log
         if: always()
         run: |

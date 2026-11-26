@@ -8,8 +8,10 @@ import net.minecraft.client.gui.Click;
 import net.minecraft.client.input.CharInput;
 import net.minecraft.client.input.KeyInput;
 import net.minecraft.client.input.MouseInput;
+import org.cef.CefClient;
 import org.jetbrains.annotations.Nullable;
 
+import java.lang.reflect.Field;
 import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 
@@ -71,14 +73,34 @@ public final class Browser {
 			}
 			MCEFApi api = future.getNow(null);
 			if (api == null) return;
-			// Before the first page: pages get the message router's function only when it was there before them.
-			DiscordAlerts.prepare(api);
+			// Before the first page, which asks for focus as it loads (FocusLoop), and gets the message router's
+			// function only when the router was there before it (DiscordAlerts).
+			CefClient client = client(api);
+			if (client != null) {
+				FocusLoop.guard(client);
+				DiscordAlerts.prepare(client);
+			}
 			browser = api.createBrowser(first, false);
+			// Without MCEF's field, the page's own client, as soon as the page exists.
+			if (client == null) FocusLoop.guard(browser.getCefBrowser().getClient());
 			width = -1;
 			height = -1;
 		} catch (Throwable t) {
 			failure = describe(t);
 			V1zir.LOGGER.warn("Browser could not start", t);
+		}
+	}
+
+	/** MCEF's one client, which its pages share (a private field of MCEF Modern's API object); null if not found. */
+	@Nullable
+	private static CefClient client(MCEFApi api) {
+		try {
+			Field field = api.getClass().getDeclaredField("client");
+			field.setAccessible(true);
+			return (CefClient) field.get(api);
+		} catch (ReflectiveOperationException | RuntimeException e) {
+			V1zir.LOGGER.warn("Browser: MCEF's client was not found (no Discord alerts)", e);
+			return null;
 		}
 	}
 

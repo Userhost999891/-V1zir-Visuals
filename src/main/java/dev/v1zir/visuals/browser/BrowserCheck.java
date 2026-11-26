@@ -5,6 +5,7 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.input.CharInput;
 import net.minecraft.client.input.KeyInput;
 import org.lwjgl.glfw.GLFW;
 
@@ -13,18 +14,25 @@ import java.util.Locale;
 /**
  * CI's check of the Browser HUD in a real game (Loom's production run, -Dv1zir.prodcheck=true): whether the browser's
  * libraries are there and where the loader took them from, then Chromium downloaded and started, its progress
- * printed every second, and the game closed. Lines start with V1ZIR-PROD.
+ * printed every second, a page painted, a notification from a page received (Discord alerts), keys typed into a page,
+ * and the game closed. Lines start with V1ZIR-PROD.
  */
 public final class BrowserCheck {
 	/** Ten minutes at most for the download and the start. */
 	private static final int TIMEOUT_TICKS = 20 * 60 * 10;
+	/** One field that takes focus, in a form that goes to example.com with what was typed in it as q. */
+	private static final String TYPING_PAGE = "data:text/html," + java.net.URLEncoder.encode(
+		"<form action='https://example.com/'><input name='q' autofocus></form>", java.nio.charset.StandardCharsets.UTF_8)
+		.replace("+", "%20");
 	private static final String[] CLASSES = {"net.dimaskama.mcef.api.MCEFApi", "me.friwi.jcefmaven.IProgressHandler",
 		"me.friwi.jcefmaven.CefAppBuilder", "org.cef.CefApp", "org.cef.browser.CefBrowser"};
 
 	private static int ticks = -1;
 	private static int painted;
-	/** Ticks since the test notification was sent, or -1 before. */
+	/** Ticks since the test notification was sent, or -1 before and after. */
 	private static int noted = -1;
+	/** Ticks since the typing page was asked for, or -1 before. */
+	private static int typing = -1;
 	private static String last = "";
 
 	private BrowserCheck() {
@@ -87,25 +95,61 @@ public final class BrowserCheck {
 			}
 			if (noted >= 0 && DiscordAlerts.received() > 0) {
 				print("discord alert received");
-				// Keys as the full screen browser sends them: Backspace, Enter and Ctrl+A, with their scan codes.
-				Browser.focus(true);
-				for (int[] key : new int[][]{{GLFW.GLFW_KEY_BACKSPACE, 14, 0}, {GLFW.GLFW_KEY_ENTER, 28, 0}, {GLFW.GLFW_KEY_A, 30, GLFW.GLFW_MOD_CONTROL}}) {
-					KeyInput input = new KeyInput(key[0], key[1], key[2]);
-					Browser.keyPressed(input);
-					Browser.keyReleased(input);
-				}
-				print("keys sent " + (BrowserKeys.works() ? "with scan codes" : "MCEF's way"));
-				finish(client, "browser ok");
+				noted = -1;
+				Browser.load(TYPING_PAGE);
+				typing = 0;
 			} else if (noted >= 0 && ++noted > 400) {
 				finish(client, "browser ok, but the test notification did not arrive");
+				return;
 			}
+			if (typing >= 0) type(client);
 		}
 		if (status.startsWith("Browser failed")) finish(client, "browser failed: " + status);
 		if (ticks > TIMEOUT_TICKS) finish(client, "browser timed out: " + line);
 	}
 
+	/**
+	 * Typing as in the full screen browser, on a page of one field that takes focus: "abc", Ctrl+A, "v1zirx", Backspace
+	 * and Enter, which sends the form. The address it goes to shows what arrived: q=v1zir when every key worked.
+	 */
+	private static void type(MinecraftClient client) {
+		typing++;
+		if (typing == 60) {
+			Browser.focus(true);
+			typeText("abc");
+			press(GLFW.GLFW_KEY_A, 30, GLFW.GLFW_MOD_CONTROL);
+			typeText("v1zirx");
+			press(GLFW.GLFW_KEY_BACKSPACE, 14, 0);
+			press(GLFW.GLFW_KEY_ENTER, 28, 0);
+			print("keys sent " + (BrowserKeys.works() ? "with scan codes" : "MCEF's way"));
+		}
+		if (typing <= 60) return;
+		String url = Browser.url();
+		if (url.contains("v1zir")) {
+			String verdict = url.contains("abcv1zir") ? "Ctrl+A did NOT select the text"
+				: url.contains("v1zirx") ? "Backspace did NOT work" : "Ctrl+A, letters, Backspace and Enter all work";
+			print("typing reached the page: " + verdict + " (" + url + ")");
+			finish(client, "browser ok");
+		} else if (typing > 60 + 300) {
+			print("typing did not reach the page (" + url + ")");
+			finish(client, "browser ok");
+		}
+	}
+
+	private static void typeText(String text) {
+		for (char c : text.toCharArray()) Browser.charTyped(new CharInput(c, 0));
+	}
+
+	private static void press(int key, int scanCode, int modifiers) {
+		KeyInput input = new KeyInput(key, scanCode, modifiers);
+		Browser.keyPressed(input);
+		Browser.keyReleased(input);
+	}
+
 	private static void finish(MinecraftClient client, String result) {
 		if (ticks < 0) return;
+		// Each focus a page asks for while it already has it (FocusLoop): without the cut, an overflowed stack.
+		print("focus loops cut: " + FocusLoop.cut());
 		print(result);
 		ticks = -1;
 		Browser.close();
