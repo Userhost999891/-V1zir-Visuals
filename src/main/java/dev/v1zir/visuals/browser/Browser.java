@@ -90,9 +90,35 @@ public final class Browser {
 	private static void prepareAwt() {
 		try {
 			ClassLoader loader = Browser.class.getClassLoader();
-			java.awt.EventQueue.invokeLater(() -> Thread.currentThread().setContextClassLoader(loader));
+			java.awt.EventQueue.invokeLater(() -> {
+				Thread thread = Thread.currentThread();
+				thread.setContextClassLoader(loader);
+				// Chromium's callbacks failing there printed only "Exception in thread ...": the whole error, logged.
+				thread.setUncaughtExceptionHandler((t, e) -> logAwt(e));
+			});
 		} catch (Throwable t) {
 			V1zir.LOGGER.debug("AWT's event thread not prepared", t);
+		}
+	}
+
+	/** An error on AWT's event thread, written out whole (to the log, or to the process's own error stream if that fails). */
+	private static void logAwt(Throwable error) {
+		java.io.StringWriter text = new java.io.StringWriter();
+		try {
+			error.printStackTrace(new java.io.PrintWriter(text, true));
+		} catch (Throwable t) {
+			text.append(error.getClass().getName()).append(" (its stack could not be printed: ").append(String.valueOf(t)).append(')');
+		}
+		try {
+			V1zir.LOGGER.error("Browser (Chromium's thread): {}", text);
+		} catch (Throwable t) {
+			try {
+				java.io.FileOutputStream err = new java.io.FileOutputStream(java.io.FileDescriptor.err);
+				err.write(("Browser (Chromium's thread): " + text + System.lineSeparator()).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+				err.flush();
+			} catch (Throwable ignored) {
+				// Nowhere left to write it.
+			}
 		}
 	}
 
