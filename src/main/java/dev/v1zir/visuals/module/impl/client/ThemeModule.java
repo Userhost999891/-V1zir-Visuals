@@ -28,9 +28,11 @@ public final class ThemeModule extends Module {
 	public final ColorSetting accent = add(new ColorSetting("Accent", 0xFFF6A64B, false).visibleIf(this::custom));
 	public final ColorSetting accent2 = add(new ColorSetting("Accent 2", 0xFFE8693F, false).visibleIf(this::custom));
 	public final NumberSetting panelOpacity = add(new NumberSetting("Panel opacity", 0.85, 0.3, 1.0, 0.01));
-	/** Panel style: Normal (solid black) or Blur (black glass over a smooth blur of the world). */
-	public final ModeSetting style = add(new ModeSetting("Style", Theme.Style.NORMAL.title(), Theme.Style.titles()));
+	/** Panel style of the GUI and the HUD: Normal (solid black) or Matte glass (frosted glass over a blur of the world). */
+	public final ModeSetting style = add(new ModeSetting("Style", Theme.Style.MATTE_GLASS.title(), Theme.Style.titles()));
 	public final NumberSetting blurStrength = add(new NumberSetting("Blur strength", 0.75, 0.0, 1.0, 0.05).visibleIf(() -> !style.is(Theme.Style.NORMAL.title())));
+	/** Set once Matte glass, which took the place of Blur, was turned on for this config; Normal can be chosen again after. */
+	private final BoolSetting matteGlassGiven = add(new BoolSetting("Matte glass given", false).visibleIf(() -> false));
 	public final ModeSetting font = add(new ModeSetting("Font", "Inter", "Inter", "Montserrat", "Rubik", "Nunito", "Comfortaa"));
 	public final BoolSetting textShadow = add(new BoolSetting("Text shadow", true));
 	/** The game's loading screen (at start and when the resource packs reload) in the client's style instead of Mojang's. */
@@ -48,6 +50,10 @@ public final class ThemeModule extends Module {
 
 	@Override
 	public void onTick() {
+		if (!matteGlassGiven.on()) {
+			matteGlassGiven.set(true);
+			style.set(Theme.Style.MATTE_GLASS.title());
+		}
 		// The "button": done once, then off again.
 		if (openPictures.on()) {
 			openPictures.set(false);

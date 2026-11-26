@@ -59,10 +59,10 @@ public final class Theme {
 		}
 	}
 
-	/** How panels are drawn. */
+	/** How panels are drawn: solid black, or matte glass (frosted glass over a blur of the world, ShapeElement.FROST). */
 	public enum Style {
 		NORMAL("Normal"),
-		BLUR("Blur");
+		MATTE_GLASS("Matte glass");
 
 		private final String title;
 
@@ -83,7 +83,8 @@ public final class Theme {
 
 		public static Style byTitle(String title) {
 			for (Style style : values()) if (style.title.equals(title)) return style;
-			return NORMAL;
+			// Matte glass took the place of the Blur style.
+			return "Blur".equals(title) ? MATTE_GLASS : NORMAL;
 		}
 	}
 
@@ -166,9 +167,17 @@ public final class Theme {
 		return ColorUtil.lerp(0xFF030304, preset().base(), 0.3f);
 	}
 
-	/** Main panel colour of the Blur style: a deep black tint over the blur, so it reads as dark glass, not grey frost. */
+	/** A dark panel colour for plain backgrounds (the array list's rows in the Normal style). */
 	public static int panel() {
 		return ColorUtil.withAlpha(black(), Math.round(255 * Math.max(0.72f, panelOpacity())));
+	}
+
+	/**
+	 * The tint of the Matte glass style: the black of the panels, less of it than in the solid style, so that the frost
+	 * shows through (Panel opacity sets how much).
+	 */
+	public static int glassTint() {
+		return ColorUtil.withAlpha(black(), Math.round(255 * Math.min(0.9f, Math.max(0.5f, panelOpacity() * 0.8f))));
 	}
 
 	/** The Normal style's panel: solid black. */

@@ -155,8 +155,10 @@ public final class DynamicIsland {
 		float alpha = Render2D.alpha();
 		Render2D.setAlpha(alpha * shown);
 		Render2D.shadow(ctx, x, top + 2f, w, h, r, 10f, 0x70000000);
-		Render2D.glass(ctx, x, top, w, h, r, 0, ShapeElement.FILL | ShapeElement.MATTE, 0xEC060608);
-		Render2D.outline(ctx, x, top, w, h, r, 1f, 0x1CFFFFFF);
+		// In the Matte glass style a pill of the same frost as the panels; otherwise near black glass.
+		boolean matteGlass = Theme.style() == Theme.Style.MATTE_GLASS;
+		Render2D.glass(ctx, x, top, w, h, r, 0, ShapeElement.FILL | ShapeElement.MATTE, matteGlass ? Theme.glassTint() : 0xEC060608);
+		Render2D.outline(ctx, x, top, w, h, r, 1f, matteGlass ? 0x22FFFFFF : 0x1CFFFFFF);
 
 		// The old contents leave quickly, the new ones come in after them and settle from a little smaller.
 		float cy = top + h / 2f;

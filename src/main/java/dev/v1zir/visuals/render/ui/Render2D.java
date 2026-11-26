@@ -163,7 +163,7 @@ public final class Render2D {
 								   float px, float py, float pw, float ph) {
 		Matrix3x2f m = ctx.getMatrices();
 		boolean opaque = alpha >= 1f && m.m01 == 0f && m.m10 == 0f
-			&& (Theme.style() == Theme.Style.BLUR ? BackdropBlur.available() : Theme.panelOpacity() >= 1f);
+			&& (Theme.style() == Theme.Style.MATTE_GLASS ? BackdropBlur.available() : Theme.panelOpacity() >= 1f);
 		// Inside this inset a rounded rectangle of that radius covers every pixel, past its anti-aliased rim.
 		float inset = radius * 0.3f + 1f;
 		if (!opaque || pw <= inset * 2f || ph <= inset * 2f) {
@@ -194,9 +194,13 @@ public final class Render2D {
 		glass(ctx, x, y, w, h, radius, 0, ShapeElement.FILL, tint);
 	}
 
-	/** flags: ShapeElement.MATTE and/or LIT on top of a fill. */
+	/**
+	 * flags: ShapeElement.MATTE and/or LIT on top of a fill; in the Matte glass style a MATTE glass is frosted too
+	 * (ShapeElement.FROST), which can also be asked for on its own.
+	 */
 	public static void glass(DrawContext ctx, float x, float y, float w, float h, float radius, int corners, int flags, int tint) {
 		if (BackdropBlur.available()) {
+			if ((flags & ShapeElement.MATTE) != 0 && Theme.style() == Theme.Style.MATTE_GLASS) flags |= ShapeElement.FROST;
 			Matrix3x2f pose = pose(ctx);
 			ScreenRect scissor = scissor(ctx);
 			ScreenRect bounds = bounds(x - 2, y - 2, w + 4, h + 4, pose, scissor);
@@ -212,7 +216,7 @@ public final class Render2D {
 		}
 	}
 
-	/** A UI panel (fill and rim, no shadow) drawn in the Theme style: Normal (solid matte grey) or Blur (matte frost). */
+	/** A UI panel (fill and rim, no shadow) drawn in the Theme style: Normal (solid black) or Matte glass (frosted glass). */
 	public static void panel(DrawContext ctx, float x, float y, float w, float h, float radius) {
 		panel(ctx, x, y, w, h, radius, 0, 0);
 	}
@@ -224,13 +228,18 @@ public final class Render2D {
 	/** flags: ShapeElement.LIT lets the surface and its rim catch the cursor light. */
 	public static void panel(DrawContext ctx, float x, float y, float w, float h, float radius, int corners, int flags) {
 		int surface = ShapeElement.FILL | ShapeElement.MATTE | flags;
-		if (Theme.style() == Theme.Style.BLUR) {
-			glass(ctx, x, y, w, h, radius, corners, surface, Theme.panel());
-		} else {
-			// One flat matte grey: no gradient, no gloss; the grain gives it its texture.
-			int fill = Theme.solidPanel();
-			shape(ctx, V1zirPipelines.SHAPE, TextureSetup.empty(), x, y, w, h, radius, 0, 0, surface, corners, fill, fill, fill, fill);
+		if (Theme.style() == Theme.Style.MATTE_GLASS) {
+			glass(ctx, x, y, w, h, radius, corners, surface, Theme.glassTint());
+			// The frosted edge: a little brighter where the light falls on it from above.
+			int top = ColorUtil.withAlpha(0xFFFFFF, 30);
+			int bottom = ColorUtil.withAlpha(0xFFFFFF, 12);
+			shape(ctx, V1zirPipelines.SHAPE, TextureSetup.empty(), x, y, w, h, radius, 0, 1f, ShapeElement.OUTLINE | flags, corners,
+				top, top, bottom, bottom);
+			return;
 		}
+		// One flat black: no gradient, no gloss.
+		int fill = Theme.solidPanel();
+		shape(ctx, V1zirPipelines.SHAPE, TextureSetup.empty(), x, y, w, h, radius, 0, 0, surface, corners, fill, fill, fill, fill);
 		// Thin, even rim: a soft edge all around instead of a glossy highlight on top.
 		int rim = Theme.outline();
 		shape(ctx, V1zirPipelines.SHAPE, TextureSetup.empty(), x, y, w, h, radius, 0, 1f, ShapeElement.OUTLINE | flags, corners,

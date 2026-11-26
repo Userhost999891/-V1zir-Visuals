@@ -34,6 +34,12 @@ public record ShapeElement(
 	public static final int MATTE = 8;
 	/** Flag: the shape catches the soft light that follows the cursor (FrameUniforms.cursor). */
 	public static final int LIT = 16;
+	/**
+	 * Flag for glass (Render2D.glass): matte, frosted glass, the Matte glass style. The world behind is spread wider,
+	 * loses most of its colour and lies under a faint milky haze with fine grain fixed to the shape; with MATTE too, a
+	 * soft sheen over the upper part and an inner edge that catches the light.
+	 */
+	public static final int FROST = 32;
 
 	/** How far the quad reaches past the shape: a shadow fades out exactly at its softness, edges need room to anti-alias. */
 	public static float padding(int mode, float softness) {
