@@ -181,6 +181,12 @@ public final class Messages {
 	public static void openLatest(Screen parent) {
 		if (service == null) return;
 		MessageBanners.Banner banner = MessageBanners.newest();
+		// The newest banner is Discord's: Discord opens in the browser.
+		if (banner != null && banner.discord()) {
+			dev.v1zir.visuals.module.impl.hud.BrowserModule.openDiscord();
+			dev.v1zir.visuals.browser.DiscordAlerts.open(banner);
+			return;
+		}
 		Conversation conversation = banner != null ? banner.conversation() : null;
 		Message message = banner != null ? banner.message() : null;
 		if (conversation == null) {

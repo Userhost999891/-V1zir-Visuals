@@ -21,6 +21,8 @@ public final class BrowserCheck {
 
 	private static int ticks = -1;
 	private static int painted;
+	/** Ticks since the test notification was sent, or -1 before. */
+	private static int noted = -1;
 	private static String last = "";
 
 	private BrowserCheck() {
@@ -69,9 +71,19 @@ public final class BrowserCheck {
 		}
 		if (Browser.ready()) {
 			Browser.resize(640, 360);
+			Browser.fitWidth(1280);
+			DiscordAlerts.tick(true);
 			if (Browser.view() != null && ++painted == 40) {
 				print("browser painted " + Browser.url());
+				// A notification from a page, as Discord's would come: it must reach the mod by the message router.
+				Browser.execute(DiscordAlerts.SHIM + "new Notification('CI check',{body:'Discord alerts work'});");
+				noted = 0;
+			}
+			if (noted >= 0 && DiscordAlerts.received() > 0) {
+				print("discord alert received");
 				finish(client, "browser ok");
+			} else if (noted >= 0 && ++noted > 400) {
+				finish(client, "browser ok, but the test notification did not arrive");
 			}
 		}
 		if (status.startsWith("Browser failed")) finish(client, "browser failed: " + status);

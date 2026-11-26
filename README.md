@@ -85,6 +85,12 @@ klika, przewija i pisze (pasek z wstecz, dalej, odśwież i adresem); Escape zmn
 Silnik to wbudowany MCEF Modern, więc niczego nie trzeba instalować; przy pierwszym włączeniu pobiera
 Chromium (ok. 150 MB) do `config/mcef-modern`.
 
+**Discord alerts** (w module Browser, domyślnie włączone) – gdy ktoś napisze do ciebie na Discordzie, w grze
+pojawia się dymek z jego zdjęciem, nickiem i treścią; kliknięcie otwiera tę rozmowę w przeglądarce na cały ekran,
+a przycisk Discord w oknie przeglądarki pokazuje liczbę nieprzeczytanych. Bez bota i bez tokena: Discord działa
+w tle w przeglądarce moda, zalogowany raz na twoje konto, a mod pokazuje powiadomienia, które Discord i tak by
+wyświetlił (wiadomości prywatne i wzmianki, według twoich ustawień powiadomień w Discordzie).
+
 ### Messages – emotki
 W naszym czacie (Messages) emotki jak na Discordzie: `:sob:`, `:skull:`, `:heart:` i reszta nazw z Discorda
 (ok. 1900 emotek). Dwukropek i dwie litery otwierają nad polem pisania listę pasujących emotek (strzałki

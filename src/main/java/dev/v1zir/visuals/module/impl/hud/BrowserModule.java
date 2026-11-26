@@ -5,6 +5,10 @@ import com.mojang.blaze3d.textures.FilterMode;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import dev.v1zir.visuals.V1zir;
 import dev.v1zir.visuals.browser.Browser;
+import dev.v1zir.visuals.browser.DiscordAlerts;
+import dev.v1zir.visuals.gui.messages.MessageBanners;
+import dev.v1zir.visuals.module.ModuleManager;
+import dev.v1zir.visuals.module.setting.BoolSetting;
 import dev.v1zir.visuals.gui.browser.BrowserScreen;
 import dev.v1zir.visuals.module.setting.KeySetting;
 import dev.v1zir.visuals.module.setting.ModeSetting;
@@ -44,6 +48,12 @@ public final class BrowserModule extends HudModule {
 	 */
 	public final NumberSetting pageWidth = add(new NumberSetting("Page width", 1280, 640, 1920, 40).suffix(" px"));
 	public final NumberSetting opacity = add(new NumberSetting("Opacity", 1.0, 0.4, 1.0, 0.05));
+	/**
+	 * Messages written to the player on Discord as banners in the game (DiscordAlerts): Discord's app runs in a hidden
+	 * page while the browser is on, logged in once in the browser, and its notifications (direct messages and
+	 * mentions, as the account's settings say) show as banners; a click on one opens that conversation full screen.
+	 */
+	public final BoolSetting discordAlerts = add(new BoolSetting("Discord alerts", true));
 	/** Opens the browser full screen from the game, besides a click on it with the chat open. */
 	public final KeySetting openKey = add(new KeySetting("Full screen key", GLFW.GLFW_KEY_UNKNOWN));
 
@@ -78,8 +88,22 @@ public final class BrowserModule extends HudModule {
 	}
 
 	@Override
+	public void onTick() {
+		DiscordAlerts.tick(discordAlerts.on());
+	}
+
+	@Override
 	public void onKeyPressed(int key) {
 		if (openKey.isSet() && key == openKey.key()) openFullScreen();
+	}
+
+	/** Discord full screen in the browser (a click on a Discord banner); Discord's banners go. */
+	public static void openDiscord() {
+		BrowserModule module = ModuleManager.get(BrowserModule.class);
+		if (module == null || !module.isEnabled() || !Browser.ready()) return;
+		if (!host(Browser.url()).endsWith("discord.com")) Browser.load(Browser.DISCORD);
+		MessageBanners.clearDiscord();
+		if (!(mc.currentScreen instanceof BrowserScreen)) module.openFullScreen();
 	}
 
 	/** Opens the page full screen, growing out of the HUD window. */
@@ -136,6 +160,14 @@ public final class BrowserModule extends HudModule {
 			Render2D.round(ctx, lx, linkY, w, 10f, 5f, here ? ColorUtil.withAlpha(Theme.accent(), 70) : hover ? 0x22FFFFFF : 0x10FFFFFF);
 			Render2D.icon(ctx, LINK_ICONS[i], lx + 5.5f, linkY + 5f, 6f, here ? Theme.accent() : Theme.textDim());
 			Render2D.textMiddle(ctx, Fonts.medium(), LINKS[i], lx + 10f, linkY + 5f, 5.5f, here ? Theme.text() : Theme.textDim());
+			// Unread direct messages and mentions on Discord, from its title.
+			int unread = "Discord".equals(LINKS[i]) ? DiscordAlerts.unread() : 0;
+			if (unread > 0) {
+				String count = unread > 99 ? "99+" : String.valueOf(unread);
+				float bw = Math.max(8f, Fonts.semibold().width(count, 4.8f) + 4f);
+				Render2D.round(ctx, lx + w - bw / 2f - 1f, linkY - 2.5f, bw, 7f, 3.5f, 0xFFED4245);
+				Render2D.textCentered(ctx, Fonts.semibold(), count, lx + w - 1f, Render2D.middle(Fonts.semibold(), linkY + 1f, 4.8f), 4.8f, 0xFFFFFFFF);
+			}
 			linkX[i] = lx;
 			linkW[i] = w;
 			lx += w + 3f;

@@ -70,6 +70,8 @@ public final class Browser {
 			}
 			MCEFApi api = future.getNow(null);
 			if (api == null) return;
+			// Before the first page: pages get the message router's function only when it was there before them.
+			DiscordAlerts.prepare(api);
 			browser = api.createBrowser(first, false);
 			width = -1;
 			height = -1;
@@ -174,7 +176,41 @@ public final class Browser {
 		browser.resize(w, h);
 	}
 
+	/**
+	 * One more page, never shown: size w by h, drawing once a second at most (Discord's app in the background,
+	 * DiscordAlerts). Null before MCEF is ready.
+	 */
+	@Nullable
+	public static MCEFBrowser createHidden(String url, int w, int h) {
+		try {
+			MCEFApi api = MCEFApi.initialize().getFuture().getNow(null);
+			if (api == null) return null;
+			MCEFBrowser page = api.createBrowser(url, false);
+			page.resize(w, h);
+			try {
+				page.getCefBrowser().setWindowlessFrameRate(1);
+			} catch (Throwable ignored) {
+				// The default rate, then.
+			}
+			return page;
+		} catch (Throwable t) {
+			V1zir.LOGGER.warn("Hidden page not opened", t);
+			return null;
+		}
+	}
+
+	/** Runs a script in the page the player sees. */
+	public static void execute(String script) {
+		if (browser == null) return;
+		try {
+			browser.getCefBrowser().executeJavaScript(script, url(), 0);
+		} catch (Throwable t) {
+			V1zir.LOGGER.debug("Script not run", t);
+		}
+	}
+
 	public static void close() {
+		DiscordAlerts.stop();
 		if (browser != null) {
 			try {
 				browser.close();
