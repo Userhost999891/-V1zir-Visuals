@@ -1,0 +1,134 @@
+plugins {
+	id 'fabric-loom' version "${loom_version}"
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+	archivesName = project.archives_base_name
+}
+
+repositories {
+	mavenCentral()
+	// See settings.gradle: Maven Central's artifacts again, for when it answers a CI runner "not found".
+	maven {
+		name = 'Maven Central mirror'
+		url = 'https://maven-central.storage-download.googleapis.com/maven2/'
+	}
+	// MCEF Modern (the Browser HUD's Chromium), from Modrinth's Maven.
+	exclusiveContent {
+		forRepository {
+			maven {
+				name = 'Modrinth'
+				url = 'https://api.modrinth.com/maven'
+			}
+		}
+		filter {
+			includeGroup 'maven.modrinth'
+		}
+	}
+	// Sodium's config API (GPU in Sodium's Video Settings).
+	maven {
+		name = 'CaffeineMC'
+		url = 'https://maven.caffeinemc.net/releases'
+		content {
+			includeGroup 'net.caffeinemc'
+		}
+	}
+}
+
+loom {
+	accessWidenerPath = file('src/main/resources/v1zir.accesswidener')
+
+	mods {
+		v1zir {
+			sourceSet sourceSets.main
+		}
+	}
+}
+
+// Client game test (src/gametest): ./gradlew runClientGameTest starts the real client, walks through
+// the menu, sky presets, HUD and Click GUI and saves screenshots to build/run/clientGameTest/screenshots.
+fabricApi {
+	configureTests {
+		createSourceSet = true
+		modId = 'v1zir-gametest'
+		enableGameTests = false
+	}
+}
+
+loom {
+	runs {
+		clientGameTest {
+			// As in Fabric API's own CI; with the packet synchronizer on, world loading stalls at "Preparing spawn area".
+			vmArg '-Dfabric.client.gametest.disableNetworkSynchronizer=true'
+			// Messages stays off the network: the test gives it an in-game relay (and tries the real one on its own).
+			vmArg '-Dv1zir.messages.relay=loopback'
+			// CI's run with Sodium: its jar as one more mod, which Fabric Loader remaps as it loads it, as from the
+			// mods folder (Loom's own remapping takes only mods built with a Loom no newer than this one).
+			def sodium = System.getenv('V1ZIR_SODIUM_JAR')
+			if (sodium) vmArg "-Dfabric.addMods=${sodium}"
+		}
+	}
+}
+
+dependencies {
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+	// MP3 decoding for the player's own sounds (JLayer, LGPL), inside the mod's jar as a jar of its own.
+	implementation "javazoom:jlayer:1.0.1"
+	include "javazoom:jlayer:1.0.1"
+	// The Browser HUD's Chromium: MCEF Modern by DimasKama (LGPL-2.1), inside the mod's jar as a jar of its own, so
+	// nothing has to be installed. It downloads Chromium for the system the first time the browser is used.
+	modImplementation "maven.modrinth:mcef-modern:${project.mcef_modern_version}"
+	include "maven.modrinth:mcef-modern:${project.mcef_modern_version}"
+	// MCEF's own libraries, java-cef's API and jcefmaven (which downloads Chromium), are inside its jar, two jars deep
+	// in ours; a launcher that does not open jars that deep loses them ("NoClassDefFoundError: jcefmaven"). They sit
+	// in the mod's jar directly as well (the loader keeps one copy of each).
+	implementation "me.friwi:jcef-api:${project.jcef_api_version}"
+	include "me.friwi:jcef-api:${project.jcef_api_version}"
+	implementation("me.friwi:jcefmaven:${project.jcefmaven_version}") {
+		transitive = false
+	}
+	include "me.friwi:jcefmaven:${project.jcefmaven_version}"
+	// A real game with the built jar in its mods (as players run it), for CI: the browser's libraries are checked and
+	// Chromium is downloaded and started (BrowserCheck, with -Dv1zir.prodcheck).
+	productionRuntimeMods "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+	// Sodium's config API, to be built against only: with Sodium there, its Video Settings get the GPU page
+	// (SodiumGpuOption); the oldest 0.8 release for 1.21.11, whose API the later ones keep.
+	modCompileOnly "net.caffeinemc:sodium-fabric-api:0.8.0+mc1.21.11"
+}
+
+processResources {
+	def props = [version: project.version, minecraft_version: project.minecraft_version, loader_version: project.loader_version]
+	inputs.properties props
+
+	filesMatching('fabric.mod.json') {
+		expand props
+	}
+}
+
+tasks.withType(JavaCompile).configureEach {
+	it.options.release = 21
+	it.options.encoding = 'UTF-8'
+}
+
+java {
+	sourceCompatibility = JavaVersion.VERSION_21
+	targetCompatibility = JavaVersion.VERSION_21
+}
+
+jar {
+	from('LICENSE-ASSETS.md')
+}
+
+tasks.register('runProductionCheck', net.fabricmc.loom.task.prod.ClientProductionRunTask) {
+	jvmArgs.add('-Dv1zir.prodcheck=true')
+	// Every exception the JVM throws, with the method and the thread, into the run folder: errors in Chromium's
+	// callbacks print only "Exception in thread ...", so CI's log takes them from here.
+	jvmArgs.add('-Xlog:exceptions=info:file=exceptions.log:uptime,tid')
+	runDir = layout.buildDirectory.dir('run/production')
+}

@@ -1,0 +1,299 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build mod
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build
+        run: ./gradlew build --stacktrace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v1zir-visuals-jar
+          path: build/libs/
+          # A private repository has 500 MB for artifacts on the free plan: the jar is kept two weeks.
+          retention-days: 14
+      - name: Jars inside the mod
+        run: |
+          jar=$(ls build/libs/*.jar | grep -v -- -sources | head -1)
+          echo "mod jar: $jar"; unzip -l "$jar" | grep "META-INF/jars/" || true
+          rm -rf /tmp/nest && mkdir -p /tmp/nest && unzip -q -o "$jar" 'META-INF/jars/*' -d /tmp/nest
+          for j in /tmp/nest/META-INF/jars/*.jar; do echo "== $(basename "$j")"; unzip -l "$j" | grep "META-INF/jars/" || true; done
+      # Temporary: method signatures of the mapped 1.21.11 classes the mod hooks into, so mixin
+      # targets can be checked against the real game (javap prints declarations and bytecode only).
+      - name: API signatures
+        if: always()
+        run: |
+          jar=$(find .gradle ~/.gradle -path '*minecraftMaven*' -name 'minecraft-*.jar' ! -name '*sources*' 2>/dev/null | head -1)
+          echo "mapped jar: $jar"
+          sig() { javap -p -cp "$jar" "$@" 2>&1 || true; }
+          code() { javap -c -p -cp "$jar" "$1" 2>&1 | awk -v m="$2" 'index($0, " " m "(") && /\(/ {p=1} p {print} p && /^$/ {p=0}'; }
+          for c in net.minecraft.client.render.item.HeldItemRenderer net.minecraft.client.render.entity.feature.HeldItemFeatureRenderer \
+                   net.minecraft.client.render.entity.PlayerEntityRenderer net.minecraft.client.render.entity.EntityRenderManager \
+                   net.minecraft.client.render.RenderSetup\$Builder net.minecraft.entity.PlayerLikeEntity \
+                   net.minecraft.client.render.entity.state.BipedEntityRenderState net.minecraft.client.render.entity.state.PlayerEntityRenderState \
+                   net.minecraft.client.render.entity.feature.CapeFeatureRenderer net.minecraft.client.render.entity.feature.FeatureRenderer \
+                   net.minecraft.client.gui.screen.ingame.InventoryScreen net.minecraft.client.util.ScreenshotRecorder \
+                   net.minecraft.client.texture.NativeImage net.minecraft.client.network.MultiplayerServerListPinger \
+                   net.minecraft.client.network.ServerInfo net.minecraft.network.NetworkingBackend 'net.minecraft.client.network.ServerInfo$Status' \
+                   net.minecraft.client.option.KeyBinding net.minecraft.client.util.InputUtil 'net.minecraft.client.util.InputUtil$Key' \
+                   'net.minecraft.client.util.InputUtil$Type' net.minecraft.client.gui.Click net.minecraft.client.input.MouseInput \
+                   net.minecraft.client.input.KeyInput net.minecraft.client.Mouse net.minecraft.client.input.KeyboardInput \
+                   net.minecraft.client.input.Input net.minecraft.util.PlayerInput \
+                   net.minecraft.client.gui.screen.option.GameOptionsScreen net.minecraft.client.gui.screen.option.VideoOptionsScreen \
+                   net.minecraft.client.gui.widget.OptionListWidget net.minecraft.entity.Entity net.minecraft.state.State com.mojang.blaze3d.systems.RenderSystem \
+                   net.minecraft.client.render.RenderLayers net.minecraft.client.render.BlockRenderLayer \
+                   net.minecraft.client.texture.SpriteContents net.minecraft.world.chunk.PalettedContainer \
+                   net.minecraft.client.gui.screen.ChatScreen net.minecraft.client.gui.screen.ChatInputSuggestor \
+                   net.minecraft.client.gui.hud.ChatHud net.minecraft.client.gui.widget.TextFieldWidget \
+                   net.minecraft.text.Style net.minecraft.client.font.FontManager; do
+            echo "=== SIG $c"; sig "$c"
+          done
+          echo "=== CODE HeldItemFeatureRenderer.renderItem"; code net.minecraft.client.render.entity.feature.HeldItemFeatureRenderer renderItem
+          echo "=== CODE where the server list pings"
+          javap -c -p -cp "$jar" 'net.minecraft.client.gui.screen.multiplayer.MultiplayerServerListWidget$ServerEntry' 2>&1 | grep -n -B4 -A2 "NetworkingBackend" | head -40 || true
+
+  production:
+    name: Production client
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install Xvfb and Mesa
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q xvfb libgl1-mesa-dri
+      # The built jar in a real game, as players run it (Loom's production run): the Browser HUD's libraries, then
+      # Chromium downloaded and started. BrowserCheck prints V1ZIR-PROD lines and closes the game.
+      - name: Run the built jar
+        timeout-minutes: 30
+        env:
+          LP_NUM_THREADS: 2
+        run: |
+          set -o pipefail
+          ./gradlew runProductionCheck --stacktrace 2>&1 | tee /tmp/production.log
+          grep -q "V1ZIR-PROD classes ok" /tmp/production.log
+          # Chromium's callbacks failing on its thread (AWT's event thread): the focus loop's overflowed stack was one.
+          if grep -q 'Exception in thread "AWT-EventQueue' /tmp/production.log; then
+            echo "::error::Errors on Chromium's thread (AWT's event thread), see the production log"; exit 1
+          fi
+      - name: Production log
+        if: always()
+        run: |
+          shopt -s nullglob
+          grep "V1ZIR-PROD" /tmp/production.log || true
+          echo "=== Chromium's thread"; grep -A 30 "Browser (Chromium's thread)" /tmp/production.log | head -120 || true
+          echo "=== Errors on AWT's event thread"; grep -n -A 25 'Exception in thread "AWT-EventQueue' /tmp/production.log | grep -v "^.*V1ZIR-PROD" | head -150 || true
+          ex=build/run/production/exceptions.log
+          if [ -f "$ex" ]; then
+            echo "=== Exceptions thrown, by kind"; grep -o "Exception <a '[^']*'" "$ex" | sort | uniq -c | sort -rn | head -40
+            edt=$(grep -o "for thread 0x[0-9a-f]* (AWT-EventQueue-0)" "$ex" | head -1 | awk '{print $3}')
+            echo "=== Exceptions on AWT's event thread ($edt)"
+            if [ -n "$edt" ]; then grep -B 2 "for thread $edt" "$ex" | grep -v "^--$" | head -400; fi
+          fi
+          for f in build/run/production/crash-reports/*.txt build/run/production/hs_err*.log; do echo "=== $f"; cat "$f"; done
+          echo "=== latest.log (end)"; tail -n 120 build/run/production/logs/latest.log || true
+
+  client:
+    name: Dev client
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install Xvfb and Mesa
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q xvfb libgl1-mesa-dri imagemagick
+      - name: Run dev client (client game test)
+        timeout-minutes: 40
+        env:
+          # Leave CPU for the integrated server; llvmpipe takes every core by default.
+          LP_NUM_THREADS: 2
+        run: |
+          # Two thread dumps of the client JVM if world loading stalls, to diagnose the hang.
+          (log=build/run/clientGameTest/logs/latest.log
+          for _ in $(seq 1 120); do
+            sleep 5
+            if [ -f "$log" ] && [ "$(grep -c 'Preparing spawn area' "$log")" -ge 30 ]; then
+              for i in 1 2; do
+                for p in $(jps -l | awk '/devlaunchinjector|KnotClient/ {print $1}'); do jstack -l "$p" > "/tmp/thread-dump-$i.txt" 2>&1; done
+                sleep 10
+              done
+              break
+            fi
+          done) &
+          xvfb-run -a -s "-screen 0 1920x1080x24" ./gradlew runClientGameTest --stacktrace
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dev-client-logs
+          path: |
+            build/run/clientGameTest/logs/
+            build/run/clientGameTest/crash-reports/
+            build/run/clientGameTest/v1zir-*.jfr
+          retention-days: 7
+      - name: Profile summary
+        if: always()
+        run: |
+          shopt -s nullglob
+          files=(build/run/clientGameTest/v1zir-*.jfr)
+          if [ ${#files[@]} -gt 0 ]; then python3 .github/scripts/jfr_summary.py "${files[@]}"; fi
+      - name: Screenshot previews
+        if: always()
+        run: |
+          shopt -s nullglob
+          for f in build/run/clientGameTest/crash-reports/*.txt; do echo "=== $f"; cat "$f"; done
+          for f in /tmp/thread-dump-*.txt; do echo "=== $f"; cat "$f"; done
+          for f in build/run/clientGameTest/screenshots/*.png; do
+            convert "$f" -resize 800x450 -quality 72 /tmp/preview.jpg
+            echo "V1ZIR-PREVIEW-BEGIN $(basename "$f")"
+            base64 -w 4000 /tmp/preview.jpg
+            echo "V1ZIR-PREVIEW-END"
+          done
+
+  media-bridge:
+    name: Windows media bridge
+    runs-on: windows-latest
+    # Informative only (always passes): the log shows whether the now playing script loads the media controls on a
+    # stock Windows PowerShell; "BRIDGE OK" or "BRIDGE FAILED" with the reason.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run now_playing.ps1 for a few seconds
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+          $info = New-Object System.Diagnostics.ProcessStartInfo $ps
+          # The same arguments as the game (WindowsMediaSource), multi-threaded apartment included.
+          $info.Arguments = '-NoLogo -NoProfile -NonInteractive -MTA -ExecutionPolicy Bypass -File src\main\resources\assets\v1zir\media\now_playing.ps1'
+          $info.RedirectStandardInput = $true
+          $info.RedirectStandardOutput = $true
+          $info.RedirectStandardError = $true
+          $info.UseShellExecute = $false
+          $p = [System.Diagnostics.Process]::Start($info)
+          $out = $p.StandardOutput.ReadLineAsync()
+          if (-not $out.Wait(15000)) { Write-Host 'BRIDGE FAILED: no report within 15 s'; $p.Kill(); Write-Host ('stderr: ' + $p.StandardError.ReadToEnd()); exit 0 }
+          Write-Host ('First report: ' + $out.Result)
+          # It keeps reporting through a refresh command and its own refreshes of the media controls (every second).
+          $p.StandardInput.WriteLine('refresh')
+          $p.StandardInput.Flush()
+          $reports = 0
+          $watch = [System.Diagnostics.Stopwatch]::StartNew()
+          while ($watch.ElapsedMilliseconds -lt 3500) {
+            $next = $p.StandardOutput.ReadLineAsync()
+            if (-not $next.Wait(3000) -or $null -eq $next.Result) { break }
+            $reports++
+          }
+          Write-Host ('Reports in 3.5 s after a refresh: ' + $reports)
+          if ($reports -lt 5) { Write-Host 'BRIDGE FAILED: it stopped reporting after a refresh' }
+          $p.StandardInput.Close()
+          if (-not $p.WaitForExit(5000)) { $p.Kill() }
+          $err = $p.StandardError.ReadToEnd()
+          if ($err) { Write-Host ('stderr: ' + $err) }
+          if ($null -eq $out.Result -or -not $out.Result.StartsWith('{') -or $reports -lt 5) { Write-Host 'BRIDGE FAILED' } else { Write-Host 'BRIDGE OK' }
+          exit 0
+      # Informative too: a fake media player (title, artist, timeline, a cover that comes late, a pause) with the
+      # bridge reading it, as the game runs it and in a single-threaded apartment; the log shows every report.
+      - name: Bridge against a fake player
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+          foreach ($apartment in 'MTA', 'STA') {
+            Write-Host "===== bridge in an $apartment ====="
+            & $ps -NoLogo -NoProfile -ExecutionPolicy Bypass -File .github\media-bridge-test.ps1 -Apartment $apartment
+          }
+          exit 0
+
+  gpu-preference:
+    name: Windows GPU preference
+    runs-on: windows-latest
+    # The GPU option of Video Settings on a real Windows registry: its class as it is, written and read back through
+    # reg.exe as in the game, for this Java and for a path with spaces, keeping Windows' own settings ("V1ZIR-GPU-PREF OK").
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: GPU preference in the registry
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          javac -d gpu-out src/main/java/dev/v1zir/visuals/optimize/GpuPreference.java
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          java -cp gpu-out .github/gpu/GpuPreferenceCheck.java
+          exit $LASTEXITCODE
+
+  sodium:
+    name: Dev client with Sodium
+    runs-on: ubuntu-24.04
+    # The dev client with Sodium in it (its newest release for 1.21.11, from Modrinth, added with fabric.addMods so that
+    # Fabric Loader remaps it as it loads it, as from the mods folder): Sodium's Video Settings, which take the place of
+    # the game's, get V1zir Visuals' GPU page; the test opens it ("V1ZIR-SODIUM", a screenshot).
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install Xvfb and Mesa
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q xvfb libgl1-mesa-dri imagemagick
+      - name: Download Sodium
+        run: |
+          curl -sSf -A "v1zir-visuals-ci" -o /tmp/sodium.json \
+            'https://api.modrinth.com/v2/project/sodium/version?loaders=%5B%22fabric%22%5D&game_versions=%5B%221.21.11%22%5D'
+          python3 - <<'PY'
+          import json
+          versions = json.load(open('/tmp/sodium.json'))
+          version = next((v for v in versions if v['version_type'] == 'release'), versions[0])
+          file = next(f for f in version['files'] if f['primary'])
+          print('Sodium', version['version_number'], file['filename'])
+          open('/tmp/sodium-url', 'w').write(file['url'])
+          PY
+          mkdir -p ci-mods
+          curl -sSfL -A "v1zir-visuals-ci" -o ci-mods/sodium.jar "$(cat /tmp/sodium-url)"
+      - name: Run dev client with Sodium
+        timeout-minutes: 20
+        env:
+          LP_NUM_THREADS: 2
+          V1ZIR_SODIUM: '1'
+          V1ZIR_SODIUM_JAR: ${{ github.workspace }}/ci-mods/sodium.jar
+        run: xvfb-run -a -s "-screen 0 1920x1080x24" ./gradlew runClientGameTest --stacktrace
+      - name: Screenshot previews
+        if: always()
+        run: |
+          shopt -s nullglob
+          for f in build/run/clientGameTest/crash-reports/*.txt; do echo "=== $f"; cat "$f"; done
+          for f in build/run/clientGameTest/screenshots/*.png; do
+            convert "$f" -resize 800x450 -quality 72 /tmp/preview.jpg
+            echo "V1ZIR-PREVIEW-BEGIN $(basename "$f")"
+            base64 -w 4000 /tmp/preview.jpg
+            echo "V1ZIR-PREVIEW-END"
+          done
