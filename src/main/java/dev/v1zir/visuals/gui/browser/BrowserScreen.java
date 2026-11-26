@@ -99,6 +99,8 @@ public final class BrowserScreen extends Screen {
 		if (t > 0.999f && !closing) {
 			double scale = client.getWindow().getScaleFactor();
 			Browser.resize((int) Math.round(pageW * scale), (int) Math.round(pageH * scale));
+			// Full screen the page is at its own size (enlarged on screens wider than 1920 pixels, as their systems do).
+			Browser.zoom(Math.max(1.0, Math.min(2.0, pageW * scale / 1920.0)));
 		}
 		float frameY = pageY - BAR * t;
 		Render2D.shadow(ctx, pageX - 3f, frameY - 3f, pageW + 6f, pageH + BAR * t + 6f, 10f, 14f, ColorUtil.withAlpha(0, Math.round(140 * t)));

@@ -32,6 +32,13 @@ public final class Browser {
 	private static String first = GOOGLE;
 	private static int width = -1;
 	private static int height = -1;
+	/** The zoom level the page was given last, the page it was given for, and frames since (zoom goes per site). */
+	private static double zoomLevel = Double.NaN;
+	private static String zoomedUrl = "";
+	private static int zoomFrames;
+	/** The page the scrollbars were last made thin and dark on, and frames since. */
+	private static String styledUrl = "";
+	private static int styleFrames;
 	/** Progress and when it was sampled, and how fast it goes (per second, smoothed), for secondsLeft. */
 	private static float sampleProgress = -1f;
 	private static long sampleTime;
@@ -178,6 +185,61 @@ public final class Browser {
 		browser = null;
 		width = -1;
 		height = -1;
+		zoomLevel = Double.NaN;
+		zoomedUrl = "";
+		styledUrl = "";
+	}
+
+	/**
+	 * Lays the page out as if it were cssWidth pixels wide, scaled to fit the browser's width (never enlarged above its
+	 * own size): in a small window a page keeps the layout it has on a computer instead of a squeezed one with
+	 * scrollbars. Called every frame the page is drawn; Chromium only hears of a change, of a new page (it keeps zoom
+	 * per site) and once a second besides, in case a page reset it.
+	 */
+	public static void fitWidth(int cssWidth) {
+		if (browser == null || width <= 0) return;
+		zoom(cssWidth <= 0 ? 1.0 : Math.min(1.0, width / (double) cssWidth));
+	}
+
+	/** The page at the given zoom (1 = 100%); see fitWidth. */
+	public static void zoom(double factor) {
+		if (browser == null) return;
+		double level = Math.log(Math.max(0.25, Math.min(4.0, factor))) / Math.log(1.2);
+		String now = url();
+		boolean changed = Double.isNaN(zoomLevel) || Math.abs(level - zoomLevel) > 1.0e-3 || !now.equals(zoomedUrl);
+		if (changed || ++zoomFrames >= 60) {
+			zoomFrames = 0;
+			zoomLevel = level;
+			zoomedUrl = now;
+			try {
+				browser.getCefBrowser().setZoomLevel(level);
+			} catch (Throwable t) {
+				V1zir.LOGGER.debug("Zoom not set", t);
+			}
+		}
+		styleScrollbars(now);
+	}
+
+	/**
+	 * Thin, dark scrollbars instead of Chromium's broad white ones, on every page: set on the page's root element from
+	 * script (allowed under a page's content security policy), when a page opens and again a little later, once it
+	 * has loaded.
+	 */
+	private static void styleScrollbars(String now) {
+		boolean fresh = !now.equals(styledUrl);
+		if (fresh) {
+			styledUrl = now;
+			styleFrames = 0;
+		}
+		styleFrames++;
+		if (!fresh && styleFrames != 45 && styleFrames != 180) return;
+		try {
+			browser.getCefBrowser().executeJavaScript("(function(){var r=document.documentElement;if(!r)return;"
+				+ "r.style.setProperty('scrollbar-width','thin');r.style.setProperty('scrollbar-color','rgba(255,255,255,0.28) transparent');})();",
+				now, 0);
+		} catch (Throwable t) {
+			V1zir.LOGGER.debug("Scrollbars not styled", t);
+		}
 	}
 
 	// ------------------------------------------------------------------ navigation

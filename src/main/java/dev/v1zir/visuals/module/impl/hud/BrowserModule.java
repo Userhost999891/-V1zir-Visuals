@@ -38,6 +38,11 @@ public final class BrowserModule extends HudModule {
 	public final ModeSetting home = add(new ModeSetting("Home", "YouTube", LINKS));
 	/** The page's width as a share of the game window's; its height follows at 16:9, so it looks the same at any window size. */
 	public final NumberSetting size = add(new NumberSetting("Width", 30, 12, 70, 1).suffix("%"));
+	/**
+	 * How wide the page is laid out in the window, scaled down to fit it: a page keeps the layout it has on a computer
+	 * (Discord, YouTube) instead of a squeezed one with scrollbars. Lower shows the text larger.
+	 */
+	public final NumberSetting pageWidth = add(new NumberSetting("Page width", 1280, 640, 1920, 40).suffix(" px"));
 	public final NumberSetting opacity = add(new NumberSetting("Opacity", 1.0, 0.4, 1.0, 0.05));
 	/** Opens the browser full screen from the game, besides a click on it with the chat open. */
 	public final KeySetting openKey = add(new KeySetting("Full screen key", GLFW.GLFW_KEY_UNKNOWN));
@@ -149,6 +154,7 @@ public final class BrowserModule extends HudModule {
 		if (!(mc.currentScreen instanceof BrowserScreen)) {
 			double scale = mc.getWindow().getScaleFactor();
 			Browser.resize((int) Math.round(viewW * scale), (int) Math.round(viewH * scale));
+			Browser.fitWidth(pageWidth.i());
 		}
 		GpuTextureView view = Browser.view();
 		if (view != null) {
