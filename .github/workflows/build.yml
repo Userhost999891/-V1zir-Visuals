@@ -99,6 +99,13 @@ jobs:
           grep "V1ZIR-PROD" /tmp/production.log || true
           echo "=== Chromium's thread"; grep -A 30 "Browser (Chromium's thread)" /tmp/production.log | head -120 || true
           echo "=== Errors on AWT's event thread"; grep -n -A 25 'Exception in thread "AWT-EventQueue' /tmp/production.log | grep -v "^.*V1ZIR-PROD" | head -150 || true
+          ex=build/run/production/exceptions.log
+          if [ -f "$ex" ]; then
+            echo "=== Exceptions thrown, by kind"; grep -o "Exception <a '[^']*'" "$ex" | sort | uniq -c | sort -rn | head -40
+            edt=$(grep -o "for thread 0x[0-9a-f]* (AWT-EventQueue-0)" "$ex" | head -1 | awk '{print $3}')
+            echo "=== Exceptions on AWT's event thread ($edt)"
+            if [ -n "$edt" ]; then grep -B 2 "for thread $edt" "$ex" | grep -v "^--$" | head -400; fi
+          fi
           for f in build/run/production/crash-reports/*.txt build/run/production/hs_err*.log; do echo "=== $f"; cat "$f"; done
           echo "=== latest.log (end)"; tail -n 120 build/run/production/logs/latest.log || true
 

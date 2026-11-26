@@ -127,8 +127,8 @@ jar {
 
 tasks.register('runProductionCheck', net.fabricmc.loom.task.prod.ClientProductionRunTask) {
 	jvmArgs.add('-Dv1zir.prodcheck=true')
-	// Chromium's message loop runs on AWT's event thread (JCEF's windowless mode); with Java's default 1 MB stack it
-	// overflows. Chrome links its own main thread with 8 MB.
-	jvmArgs.add('-Xss16m')
+	// Every exception the JVM throws, with the method and the thread, into the run folder: errors in Chromium's
+	// callbacks print only "Exception in thread ...", so CI's log takes them from here.
+	jvmArgs.add('-Xlog:exceptions=info:file=exceptions.log:uptime,tid')
 	runDir = layout.buildDirectory.dir('run/production')
 }
