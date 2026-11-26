@@ -5,6 +5,8 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.input.KeyInput;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.Locale;
 
@@ -81,6 +83,14 @@ public final class BrowserCheck {
 			}
 			if (noted >= 0 && DiscordAlerts.received() > 0) {
 				print("discord alert received");
+				// Keys as the full screen browser sends them: Backspace, Enter and Ctrl+A, with their scan codes.
+				Browser.focus(true);
+				for (int[] key : new int[][]{{GLFW.GLFW_KEY_BACKSPACE, 14, 0}, {GLFW.GLFW_KEY_ENTER, 28, 0}, {GLFW.GLFW_KEY_A, 30, GLFW.GLFW_MOD_CONTROL}}) {
+					KeyInput input = new KeyInput(key[0], key[1], key[2]);
+					Browser.keyPressed(input);
+					Browser.keyReleased(input);
+				}
+				print("keys sent " + (BrowserKeys.works() ? "with scan codes" : "MCEF's way"));
 				finish(client, "browser ok");
 			} else if (noted >= 0 && ++noted > 400) {
 				finish(client, "browser ok, but the test notification did not arrive");

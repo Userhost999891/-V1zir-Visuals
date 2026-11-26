@@ -61,6 +61,7 @@ public final class Browser {
 		if (browser != null || failure != null) return;
 		if (!started) first = url;
 		try {
+			if (!started) prepareAwt();
 			started = true;
 			CompletableFuture<MCEFApi> future = MCEFApi.initialize().getFuture();
 			if (future.isCompletedExceptionally()) {
@@ -78,6 +79,20 @@ public final class Browser {
 		} catch (Throwable t) {
 			failure = describe(t);
 			V1zir.LOGGER.warn("Browser could not start", t);
+		}
+	}
+
+	/**
+	 * Chromium's callbacks run on AWT's event thread. MCEF starts Chromium from a thread of Java's common pool, which
+	 * on newer Java (25) is an "innocuous" thread whose class loader cannot see the mods' classes; an event thread
+	 * made from it inherits that. It is made here instead, from the game's thread, and given the mod's class loader.
+	 */
+	private static void prepareAwt() {
+		try {
+			ClassLoader loader = Browser.class.getClassLoader();
+			java.awt.EventQueue.invokeLater(() -> Thread.currentThread().setContextClassLoader(loader));
+		} catch (Throwable t) {
+			V1zir.LOGGER.debug("AWT's event thread not prepared", t);
 		}
 	}
 
@@ -346,12 +361,15 @@ public final class Browser {
 		if (browser != null) browser.onMouseScrolled(x, y, amount);
 	}
 
+	/** A key for the page, with its real scan code so that Backspace, Enter and shortcuts work on Windows (BrowserKeys). */
 	public static void keyPressed(KeyInput input) {
-		if (browser != null) browser.onKeyPressed(input);
+		if (browser == null) return;
+		if (!BrowserKeys.pressed(browser.getCefBrowser(), input)) browser.onKeyPressed(input);
 	}
 
 	public static void keyReleased(KeyInput input) {
-		if (browser != null) browser.onKeyReleased(input);
+		if (browser == null) return;
+		if (!BrowserKeys.released(browser.getCefBrowser(), input)) browser.onKeyReleased(input);
 	}
 
 	public static void charTyped(CharInput input) {

@@ -62,6 +62,11 @@ public final class BrowserModule extends HudModule {
 	 * mentions, as the account's settings say) show as banners; a click on one opens that conversation full screen.
 	 */
 	public final BoolSetting discordAlerts = add(new BoolSetting("Discord alerts", true));
+	/**
+	 * Whether the account has been in Discord's app in the browser (logged in): the hidden Discord page opens only after
+	 * that, so a browser never used for Discord runs no second page. Kept in the config, not shown.
+	 */
+	public final BoolSetting discordUsed = add(new BoolSetting("Discord used", false).visibleIf(() -> false));
 	/** Opens the browser full screen from the game, besides a click on it with the chat open. */
 	public final KeySetting openKey = add(new KeySetting("Full screen key", GLFW.GLFW_KEY_UNKNOWN));
 
@@ -97,7 +102,9 @@ public final class BrowserModule extends HudModule {
 
 	@Override
 	public void onTick() {
-		DiscordAlerts.tick(discordAlerts.on());
+		// In Discord's app (a conversation or a server open): the account is logged in, so alerts can run from now on.
+		if (!discordUsed.on() && Browser.ready() && Browser.url().contains("discord.com/channels/")) discordUsed.set(true);
+		DiscordAlerts.tick(discordAlerts.on() && discordUsed.on());
 	}
 
 	@Override
