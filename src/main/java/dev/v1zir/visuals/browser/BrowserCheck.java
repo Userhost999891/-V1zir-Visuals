@@ -57,8 +57,9 @@ public final class BrowserCheck {
 	private static void tick(MinecraftClient client) {
 		if (ticks < 0) return;
 		ticks++;
-		if (ticks == 40) Browser.start(Browser.GOOGLE);
 		if (ticks < 40) return;
+		// Asked every tick, as the HUD window does every frame: the page opens once Chromium is ready.
+		Browser.start(Browser.GOOGLE);
 		String status = Browser.ready() ? "ready" : Browser.status();
 		float progress = Browser.progress();
 		String line = status + (progress >= 0f ? String.format(Locale.ROOT, " (%.0f%%)", progress * 100f) : "");
