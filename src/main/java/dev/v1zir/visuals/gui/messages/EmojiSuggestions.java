@@ -69,7 +69,7 @@ final class EmojiSuggestions {
 		float h = HEADER + shown.size() * ROW + 3f;
 		panelX = x;
 		panelY = bottom - h;
-		Render2D.round(ctx, panelX, panelY, WIDTH, h, 6f, 0xF40E0E11);
+		Render2D.round(ctx, panelX, panelY, WIDTH, h, 6f, 0xFF0E0E11);
 		Render2D.outline(ctx, panelX, panelY, WIDTH, h, 6f, 0.8f, 0x24FFFFFF);
 		Render2D.textMiddle(ctx, font, "EMOJI MATCHING :" + query, panelX + 8f, panelY + HEADER / 2f + 1f, 5f, 0xFF8C8C96);
 		int accent = Theme.accent();
